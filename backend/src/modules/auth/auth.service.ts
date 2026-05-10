@@ -9,10 +9,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import ms from 'ms';
 
 import { UsersService } from '../users/users.service';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
+import { UserIpLog } from '../../database/entities/user-ip-log.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ErrorCode } from '../../common/enums/error-code.enum';
@@ -28,7 +30,18 @@ export class AuthService {
     private refreshTokensRepository: Repository<RefreshToken>,
     @InjectRepository(UserSettings)
     private userSettingsRepository: Repository<UserSettings>,
+    @InjectRepository(UserIpLog)
+    private userIpLogsRepository: Repository<UserIpLog>,
   ) {}
+
+  async logIpAddress(userId: string, ip: string, userAgent: string) {
+    const log = this.userIpLogsRepository.create({
+      userId,
+      ipAddress: ip,
+      userAgent,
+    });
+    await this.userIpLogsRepository.save(log);
+  }
 
   async register(dto: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(dto.email);
@@ -63,7 +76,7 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string, userAgent?: string) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException({
@@ -85,6 +98,47 @@ export class AuthService {
         code: ErrorCode.ACCOUNT_INACTIVE,
         message: 'Account is inactive',
       });
+    }
+
+    if (ip) {
+      await this.logIpAddress(user.id, ip, userAgent || '');
+    }
+
+    await this.usersService.updateLastSeen(user.id);
+
+    return this.generateTokens(user);
+  }
+
+  async googleLogin(googleUser: any, ip?: string, userAgent?: string) {
+    if (!googleUser) {
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Google authentication failed',
+      });
+    }
+
+    let user = await this.usersService.findByEmail(googleUser.email);
+
+    if (!user) {
+      // Create new user if not exists
+      const username = googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
+      user = await this.usersService.create({
+        email: googleUser.email,
+        fullName: googleUser.fullName,
+        username,
+        avatarUrl: googleUser.picture,
+        isVerified: true,
+        // No password for social login users
+        passwordHash: 'social_login_no_password',
+      });
+
+      // Create default settings
+      const settings = this.userSettingsRepository.create({ userId: user.id });
+      await this.userSettingsRepository.save(settings);
+    }
+
+    if (ip) {
+      await this.logIpAddress(user.id, ip, userAgent || '');
     }
 
     await this.usersService.updateLastSeen(user.id);
@@ -133,10 +187,8 @@ export class AuthService {
     });
 
     // Save refresh token hash
-    const expiresAt = new Date();
-    const refreshExpiresStr = this.configService.get('jwt.refreshExpires') || '7d';
-    const days = parseInt(refreshExpiresStr) || 7;
-    expiresAt.setDate(expiresAt.getDate() + days);
+    const refreshExpires = this.configService.get('jwt.refreshExpires') || '7d';
+    const expiresAt = new Date(Date.now() + ms(refreshExpires));
 
     const tokenHash = crypto
       .createHash('sha256')

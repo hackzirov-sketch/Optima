@@ -1,7 +1,8 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
@@ -12,8 +13,13 @@ import redisConfig from './config/redis.config';
 import jwtConfig from './config/jwt.config';
 import githubConfig from './config/github.config';
 import r2Config from './config/r2.config';
+import googleConfig from './config/google.config';
+
+// Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+
+// Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -21,14 +27,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // ── Config (global) ────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [
-        appConfig,
-        databaseConfig,
-        redisConfig,
-        jwtConfig,
-        githubConfig,
-        r2Config,
-      ],
+      load: [appConfig, databaseConfig, redisConfig, jwtConfig, githubConfig, r2Config, googleConfig],
       envFilePath: '.env',
     }),
 
@@ -38,12 +37,11 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         type: 'postgres',
         url: config.get('DATABASE_URL'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false, // migration ishlatamiz
+        synchronize: false,   // migration ishlatamiz
         logging: config.get('NODE_ENV') === 'development',
-        ssl:
-          config.get('NODE_ENV') === 'production'
-            ? { rejectUnauthorized: false }
-            : false,
+        ssl: config.get('NODE_ENV') === 'production'
+          ? { rejectUnauthorized: false }
+          : false,
       }),
       inject: [ConfigService],
     }),
@@ -60,15 +58,15 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
     // ── Rate Limiting ─────────────────────────────
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1000, limit: 10 }, // 10 req/sec
-      { name: 'medium', ttl: 10000, limit: 50 }, // 50 req/10sec
-      { name: 'long', ttl: 60000, limit: 200 }, // 200 req/min
+      { name: 'short',  ttl: 1000,  limit: 10  },  // 10 req/sec
+      { name: 'medium', ttl: 10000, limit: 50  },  // 50 req/10sec
+      { name: 'long',   ttl: 60000, limit: 200 },  // 200 req/min
     ]),
 
     // ── Event Emitter (internal) ───────────────────
     EventEmitterModule.forRoot({ wildcard: true }),
 
-    // ── Feature Modules ─────────────────────────────
+    // ── Feature Modules ────────────────────────────
     AuthModule,
     UsersModule,
   ],
@@ -76,6 +74,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

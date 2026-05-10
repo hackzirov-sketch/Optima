@@ -9,14 +9,16 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
+import { UserIpLog } from '../../database/entities/user-ip-log.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
-    TypeOrmModule.forFeature([RefreshToken, UserSettings]),
+    TypeOrmModule.forFeature([RefreshToken, UserSettings, UserIpLog]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -29,7 +31,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtRefreshStrategy],
+  providers: [AuthService, JwtStrategy, JwtRefreshStrategy, GoogleStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}

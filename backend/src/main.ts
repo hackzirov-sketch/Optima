@@ -4,12 +4,10 @@ import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    rawBody: true, // GitHub webhook signature verification uchun
+    rawBody: true,  // GitHub webhook signature verification uchun
   });
 
   const config = app.get(ConfigService);
@@ -17,7 +15,7 @@ async function bootstrap() {
   // ── Security ──────────────────────────────────────
   app.use(helmet());
   app.enableCors({
-    origin: config.get('FRONTEND_URL') || '*',
+    origin: config.get('FRONTEND_URL'),
     credentials: true,
   });
 
@@ -27,21 +25,19 @@ async function bootstrap() {
   // ── Validation ────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // extra fieldlarni tashlaydi
+      whitelist: true,          // extra fieldlarni tashlaydi
       forbidNonWhitelisted: true,
-      transform: true, // DTO type casting
+      transform: true,          // DTO type casting
       transformOptions: {
         enableImplicitConversion: true,
       },
     }),
   );
 
-  // ── Global Interceptors & Filters ─────────────────
+  // ── Serialization (exclude: password_hash va hokazo) ─
   app.useGlobalInterceptors(
-    new ResponseInterceptor(),
-    new ClassSerializerInterceptor(app.get(Reflector)),
+    new ClassSerializerInterceptor(app.get(Reflector))
   );
-  app.useGlobalFilters(new AllExceptionsFilter());
 
   // ── Swagger ───────────────────────────────────────
   if (config.get('NODE_ENV') !== 'production') {
@@ -74,7 +70,9 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
-  console.log(`🚀 UPZ API running on: http://localhost:${port}/api/v1`);
-  console.log(`📖 Swagger docs: http://localhost:${port}/docs`);
+  const Reflex = process.env.API_PREFIX;
+  console.log(`🚀 UPZ API running on: http://localhost:${port}/${Reflex}`);
+  console.log(`📖 Swagger docs: http://localhost:${port}/${Reflex}/docs`);
+  console.log(`Environment: ${Reflex}`);
 }
 bootstrap();

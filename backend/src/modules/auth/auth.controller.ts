@@ -1,12 +1,17 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpCode,
   HttpStatus,
   UseGuards,
+  Req,
+  Ip,
+  Headers,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -30,8 +35,30 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user and return tokens' })
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent: string,
+  ) {
+    return this.authService.login(dto, ip, userAgent);
+  }
+
+  @Public()
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Login with Google' })
+  async googleAuth(@Req() req) {}
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  async googleAuthRedirect(
+    @Req() req,
+    @Ip() ip: string,
+    @Headers('user-agent') userAgent: string,
+  ) {
+    return this.authService.googleLogin(req.user, ip, userAgent);
   }
 
   @Public()
