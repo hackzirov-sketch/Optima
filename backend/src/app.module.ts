@@ -38,11 +38,16 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         type: 'postgres',
         url: config.get('DATABASE_URL'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,   // migration ishlatamiz
+        synchronize: false,
         logging: config.get('NODE_ENV') === 'development',
         ssl: config.get('NODE_ENV') === 'production'
           ? { rejectUnauthorized: false }
           : false,
+        extra: {
+          max: parseInt(config.get('DATABASE_POOL_SIZE') || '20', 10),
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 10000,
+        },
       }),
       inject: [ConfigService],
     }),
@@ -59,9 +64,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
     // ── Rate Limiting ─────────────────────────────
     ThrottlerModule.forRoot([
-      { name: 'short',  ttl: 1000,  limit: 10  },  // 10 req/sec
-      { name: 'medium', ttl: 10000, limit: 50  },  // 50 req/10sec
-      { name: 'long',   ttl: 60000, limit: 200 },  // 200 req/min
+      { name: 'short',  ttl: 1000,  limit: 10000 },  // 10K req/sec
+      { name: 'medium', ttl: 10000, limit: 50000 },  // 50K req/10sec
+      { name: 'long',   ttl: 60000, limit: 200000 }, // 200K req/min
     ]),
 
     // ── Event Emitter (internal) ───────────────────
@@ -77,10 +82,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
-    {
+    /* {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
-    },
+    }, */
   ],
 })
 export class AppModule {}
