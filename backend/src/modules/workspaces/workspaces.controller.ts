@@ -12,8 +12,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Workspaces')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
-@Controller()
+@Controller('workspaces')
 export class WorkspacesController {
   constructor(
     private readonly workspacesService: WorkspacesService,
@@ -22,25 +21,25 @@ export class WorkspacesController {
   ) {}
 
   // ── Workspaces ──────────────────────────────────
-  @Post('workspaces')
+  @Post()
   @ApiOperation({ summary: 'Create a new workspace' })
   createWorkspace(@CurrentUser('id') userId: string, @Body() dto: CreateWorkspaceDto) {
     return this.workspacesService.create(userId, dto);
   }
 
-  @Get('workspaces')
+  @Get()
   @ApiOperation({ summary: 'Get all workspaces for current user' })
   getWorkspaces(@CurrentUser('id') userId: string) {
     return this.workspacesService.findAllForUser(userId);
   }
 
-  @Get('workspaces/:slug')
+  @Get(':slug')
   @ApiOperation({ summary: 'Get workspace by slug' })
   getWorkspaceBySlug(@Param('slug') slug: string) {
     return this.workspacesService.findBySlug(slug);
   }
 
-  @Patch('workspaces/:wsId')
+  @Patch(':wsId')
   @ApiOperation({ summary: 'Update workspace settings' })
   updateWorkspace(
     @Param('wsId') wsId: string,
@@ -50,20 +49,20 @@ export class WorkspacesController {
     return this.workspacesService.update(wsId, userId, dto);
   }
 
-  @Delete('workspaces/:wsId')
+  @Delete(':wsId')
   @ApiOperation({ summary: 'Delete a workspace' })
   deleteWorkspace(@Param('wsId') wsId: string, @CurrentUser('id') userId: string) {
     return this.workspacesService.remove(wsId, userId);
   }
 
   // ── Members ─────────────────────────────────────
-  @Get('workspaces/:wsId/members')
+  @Get(':wsId/members')
   @ApiOperation({ summary: 'Get workspace members' })
   getMembers(@Param('wsId') wsId: string) {
     return this.membersService.findAll(wsId);
   }
 
-  @Patch('workspaces/:wsId/members/:userId')
+  @Patch(':wsId/members/:userId')
   @ApiOperation({ summary: 'Update member role' })
   updateMemberRole(
     @Param('wsId') wsId: string,
@@ -74,7 +73,7 @@ export class WorkspacesController {
     return this.membersService.updateRole(wsId, targetUserId, dto, requesterId);
   }
 
-  @Delete('workspaces/:wsId/members/:userId')
+  @Delete(':wsId/members/:userId')
   @ApiOperation({ summary: 'Remove a member from workspace' })
   removeMember(
     @Param('wsId') wsId: string,
@@ -85,7 +84,7 @@ export class WorkspacesController {
   }
 
   // ── Invitations ─────────────────────────────────
-  @Post('workspaces/:wsId/invitations')
+  @Post(':wsId/invitations')
   @ApiOperation({ summary: 'Invite a new member' })
   inviteMember(
     @Param('wsId') wsId: string,
@@ -95,13 +94,13 @@ export class WorkspacesController {
     return this.invitationsService.create(wsId, inviterId, dto);
   }
 
-  @Get('workspaces/:wsId/invitations')
+  @Get(':wsId/invitations')
   @ApiOperation({ summary: 'Get pending invitations for workspace' })
   getInvitations(@Param('wsId') wsId: string) {
     return this.invitationsService.findAllForWorkspace(wsId);
   }
 
-  @Delete('workspaces/:wsId/invitations/:id')
+  @Delete(':wsId/invitations/:id')
   @ApiOperation({ summary: 'Revoke an invitation' })
   revokeInvitation(
     @Param('wsId') wsId: string,
@@ -111,13 +110,13 @@ export class WorkspacesController {
     return this.invitationsService.remove(wsId, invitationId, requesterId);
   }
 
-  @Post('invitations/:token/accept')
+  @Post('/invitations/:token/accept')
   @ApiOperation({ summary: 'Accept a workspace invitation' })
   acceptInvitation(@Param('token') token: string, @CurrentUser('id') userId: string) {
     return this.invitationsService.accept(token, userId);
   }
 
-  @Post('invitations/:token/decline')
+  @Post('/invitations/:token/decline')
   @ApiOperation({ summary: 'Decline a workspace invitation' })
   declineInvitation(@Param('token') token: string, @CurrentUser('id') userId: string) {
     return this.invitationsService.decline(token, userId);
