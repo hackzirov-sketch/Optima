@@ -1,46 +1,48 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
+import { ValidationPipe, ClassSerializerInterceptor, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
-    rawBody: true,  // GitHub webhook signature verification uchun
+    rawBody: true,
   });
 
   const config = app.get(ConfigService);
+  const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
 
   // ── Security ──────────────────────────────────────
   app.use(helmet());
   app.enableCors({
-    origin: config.get('FRONTEND_URL'),
+    origin: config.get('app.frontendUrl'),
     credentials: true,
   });
 
   // ── Global prefix ─────────────────────────────────
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(prefix);
 
   // ── Validation ────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,          // extra fieldlarni tashlaydi
+      whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true,          // DTO type casting
+      transform: true,
       transformOptions: {
         enableImplicitConversion: true,
       },
     }),
   );
 
-  // ── Serialization (exclude: password_hash va hokazo) ─
+  // ── Serialization ─────────────────────────────────
   app.useGlobalInterceptors(
     new ClassSerializerInterceptor(app.get(Reflector))
   );
 
   // ── Swagger ───────────────────────────────────────
-  if (config.get('NODE_ENV') !== 'production') {
+  if (config.get('app.nodeEnv') !== 'production') {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('UPZ API')
       .setDescription('Universal Productivity Zone — API Documentation')
@@ -63,16 +65,16 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document, {
+    // SwaggerModule.setup odatda global prefixni hisobga olmaydi, shuning uchun uni yo'lga qo'shamiz
+    SwaggerModule.setup(`${prefix}/docs`, app, document, {
       swaggerOptions: { persistAuthorization: true },
     });
   }
 
-  const port = config.get<number>('PORT', 3000);
+  const port = config.get<number>('app.port') || 3000;
   await app.listen(port);
-  const Reflex = process.env.API_PREFIX;
-  console.log(`🚀 UPZ API running on: http://localhost:${port}/${Reflex}`);
-  console.log(`📖 Swagger docs: http://localhost:${port}/${Reflex}/docs`);
-  console.log(`Environment: ${Reflex}`);
+  
+  logger.log(`🚀 UPZ API running on: http://localhost:${port}/${prefix}`);
+  logger.log(`📖 Swagger docs: http://localhost:${port}/${prefix}/docs`);
 }
 bootstrap();

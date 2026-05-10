@@ -18,6 +18,7 @@ import googleConfig from './config/google.config';
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { GithubModule } from './modules/github/github.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -69,6 +70,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // ── Feature Modules ────────────────────────────
     AuthModule,
     UsersModule,
+    GithubModule,
   ],
   providers: [
     {

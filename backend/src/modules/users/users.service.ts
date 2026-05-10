@@ -40,6 +40,10 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async update(id: string, data: Partial<User>): Promise<void> {
+    await this.usersRepository.update(id, data);
+  }
+
   async updateLastSeen(userId: string): Promise<void> {
     await this.usersRepository.update(userId, { lastSeen: new Date() });
   }
