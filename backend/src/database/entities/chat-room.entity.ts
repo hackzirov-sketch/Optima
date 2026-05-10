@@ -1,0 +1,88 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+} from 'typeorm';
+import { ChatRoomType } from '../../common/enums';
+import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
+import { Project } from './project.entity';
+import { User } from './user.entity';
+import { ChatMessage } from './chat-message.entity';
+
+@Entity('chat_rooms')
+export class ChatRoom {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'workspace_id' })
+  workspaceId: string;
+
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace: Workspace;
+
+  @Column({ name: 'group_id', nullable: true })
+  groupId: string;
+
+  @ManyToOne(() => Group, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'group_id' })
+  group: Group;
+
+  @Column({ name: 'project_id', nullable: true })
+  projectId: string;
+
+  @ManyToOne(() => Project, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'project_id' })
+  project: Project;
+
+  @Column({
+    type: 'enum',
+    enum: ChatRoomType,
+    default: ChatRoomType.GROUP,
+  })
+  type: ChatRoomType;
+
+  @Column({ length: 200, nullable: true })
+  name: string;
+
+  @Column({ name: 'avatar_url', type: 'text', nullable: true })
+  avatarUrl: string;
+
+  @Column({ type: 'text', nullable: true })
+  description: string;
+
+  @Column({ name: 'is_archived', default: false })
+  isArchived: boolean;
+
+  @Column({ name: 'is_read_only', default: false })
+  isReadOnly: boolean;
+
+  @Column({ name: 'last_message_id', nullable: true })
+  lastMessageId: string;
+
+  @ManyToOne(() => ChatMessage, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'last_message_id' })
+  lastMessage: ChatMessage;
+
+  @Column({ name: 'last_message_at', type: 'timestamptz', nullable: true })
+  lastMessageAt: Date;
+
+  @Column({ name: 'created_by' })
+  createdById: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by' })
+  createdBy: User;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  updatedAt: Date;
+}
