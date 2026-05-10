@@ -12,6 +12,8 @@ import {
 import { GroupType } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { User } from './user.entity';
+import { GroupMember } from './group-member.entity';
+import { OneToMany } from 'typeorm';
 
 @Entity('groups')
 @Unique(['workspaceId', 'slug'])
@@ -63,4 +65,7 @@ export class Group {
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy: string;
+
+  @OneToMany(() => GroupMember, (member) => member.group)
+  members: GroupMember[];
 }

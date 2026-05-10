@@ -26,6 +26,32 @@ export class UsersService {
     }
     return user;
   }
+  
+  async findByIdWithRelations(id: string): Promise<User> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['settings', 'workspaceMemberships', 'workspaceMemberships.workspace'],
+    });
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found',
+      });
+    }
+    
+    // Formatting workspace memberships so it's cleaner in the response
+    const workspaces = user.workspaceMemberships.map(m => ({
+      role: m.role,
+      joinedAt: m.joinedAt,
+      ...m.workspace
+    }));
+    
+    // Remove the verbose array and attach the clean workspaces array
+    user.workspaceMemberships = undefined as any;
+    (user as any).workspaces = workspaces;
+
+    return user;
+  }
       
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });

@@ -13,9 +13,9 @@ export class UsersController {
   constructor(private usersService: UsersService) {}
 
   @Get('me')
-  @ApiOperation({ summary: 'Get current user profile' })
-  getMe(@CurrentUser() user: User) {
-    return user;
+  @ApiOperation({ summary: 'Get current user profile with workspaces' })
+  getMe(@CurrentUser('id') userId: string) {
+    return this.usersService.findByIdWithRelations(userId);
   }
 
   @Patch('me')

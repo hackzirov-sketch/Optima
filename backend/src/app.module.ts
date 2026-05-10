@@ -20,6 +20,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { GithubModule } from './modules/github/github.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
+import { GroupsModule } from './modules/groups/groups.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -78,6 +80,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     UsersModule,
     GithubModule,
     WorkspacesModule,
+    GroupsModule,
+    ProjectsModule,
   ],
   providers: [
     {
