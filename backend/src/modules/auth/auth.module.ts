@@ -1,4 +1,4 @@
-import { Module, Global } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,7 +21,6 @@ import { GithubStrategy } from './strategies/github.strategy';
 import { EncryptionService } from '../../common/services/encryption.service';
 import { AuthProcessor } from './processors/auth.processor';
 
-@Global()
 @Module({
   imports: [
     UsersModule,

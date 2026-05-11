@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WorkspacesController } from './workspaces.controller';
+import { InvitationsController } from './invitations.controller';
 import { WorkspacesService } from './workspaces.service';
 import { MembersService } from './members.service';
 import { InvitationsService } from './invitations.service';
@@ -15,7 +16,7 @@ import { UsersModule } from '../users/users.module';
     TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvitation, User]),
     UsersModule,
   ],
-  controllers: [WorkspacesController],
+  controllers: [WorkspacesController, InvitationsController],
   providers: [WorkspacesService, MembersService, InvitationsService],
   exports: [WorkspacesService, MembersService],
 })

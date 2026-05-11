@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { WorkspacesService } from './workspaces.service';
 import { MembersService } from './members.service';
@@ -7,7 +7,6 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Workspaces')
@@ -83,7 +82,12 @@ export class WorkspacesController {
     return this.membersService.remove(wsId, targetUserId, requesterId);
   }
 
-  // ── Invitations ─────────────────────────────────
+  // ── Invitations (workspace-scoped) ──────────────
+  // NOTE: accept/decline routelari InvitationsController ga ko'chirilgan
+  //       → /invitations/:token/accept  va  /invitations/:token/decline
+  //       Sabab: bu yerda edi /workspaces/invitations/:token/accept
+  //              NestJS :wsId parametrini "invitations" sifatida match qilardi.
+
   @Post(':wsId/invitations')
   @ApiOperation({ summary: 'Invite a new member' })
   inviteMember(
@@ -108,17 +112,5 @@ export class WorkspacesController {
     @CurrentUser('id') requesterId: string,
   ) {
     return this.invitationsService.remove(wsId, invitationId, requesterId);
-  }
-
-  @Post('/invitations/:token/accept')
-  @ApiOperation({ summary: 'Accept a workspace invitation' })
-  acceptInvitation(@Param('token') token: string, @CurrentUser('id') userId: string) {
-    return this.invitationsService.accept(token, userId);
-  }
-
-  @Post('/invitations/:token/decline')
-  @ApiOperation({ summary: 'Decline a workspace invitation' })
-  declineInvitation(@Param('token') token: string, @CurrentUser('id') userId: string) {
-    return this.invitationsService.decline(token, userId);
   }
 }

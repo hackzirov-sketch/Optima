@@ -98,14 +98,17 @@ export class AuthService {
 
     // 2. Optimized Bcrypt (Lower rounds for high RPS, 10 is usually standard balance)
     // For 100K RPS, you really need to offload hashing to a separate microservice or worker pool
-    const passwordHash = await bcrypt.hash(dto.password, 4);
+const passwordHash = await bcrypt.hash(dto.password, 10);
 
     // 3. Save core user only
+    // Dev mode da email verification skip qilinadi — test osonroq bo'lsin
+    const isDev = this.configService.get<string>('NODE_ENV') === 'development';
     const user = await this.usersService.create({
       fullName: dto.fullName,
       username: dto.username,
       email: dto.email,
       passwordHash,
+      isVerified: isDev, // dev: true (auto-verify), prod: false (email required)
     });
 
     // 4. Offload heavy tasks to Queue (Settings, Email sending)

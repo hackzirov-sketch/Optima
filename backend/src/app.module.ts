@@ -22,6 +22,7 @@ import { GithubModule } from './modules/github/github.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -60,6 +61,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       useFactory: (config: ConfigService) => ({
         connection: {
           url: config.get('REDIS_URL'),
+          password: config.get('REDIS_PASSWORD') || undefined,
         },
       }),
       inject: [ConfigService],
@@ -67,9 +69,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
     // ── Rate Limiting ─────────────────────────────
     ThrottlerModule.forRoot([
-      { name: 'short',  ttl: 1000,  limit: 10000 },  // 10K req/sec
-      { name: 'medium', ttl: 10000, limit: 50000 },  // 50K req/10sec
-      { name: 'long',   ttl: 60000, limit: 200000 }, // 200K req/min
+      { name: 'short',  ttl: 1000,  limit: 20  },   // 20 req/sec
+      { name: 'medium', ttl: 10000, limit: 100 },   // 100 req/10sec
+      { name: 'long',   ttl: 60000, limit: 300 },   // 300 req/min
     ]),
 
     // ── Event Emitter (internal) ───────────────────
@@ -82,16 +84,17 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     WorkspacesModule,
     GroupsModule,
     ProjectsModule,
+    TasksModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
-    /* {
+    {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
-    }, */
+    },
   ],
 })
 export class AppModule {}
