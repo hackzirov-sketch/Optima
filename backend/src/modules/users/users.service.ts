@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
+import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -14,6 +15,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(UserSettings)
     private settingsRepository: Repository<UserSettings>,
+    @InjectRepository(RefreshToken)
+    private refreshTokensRepository: Repository<RefreshToken>,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -89,5 +92,17 @@ export class UsersService {
       });
     }
     return settings;
+  }
+
+  async updateAvatar(userId: string, avatarUrl: string): Promise<User> {
+    await this.usersRepository.update(userId, { avatarUrl });
+    return this.findById(userId);
+  }
+
+  async softDeleteAccount(userId: string): Promise<void> {
+    await this.findById(userId);
+    await this.refreshTokensRepository.delete({ userId });
+    await this.usersRepository.update(userId, { deletedBy: userId });
+    await this.usersRepository.softDelete(userId);
   }
 }

@@ -25,6 +25,25 @@ export class StorageService {
     });
   }
 
+  async uploadBuffer(
+    buffer: Buffer,
+    key: string,
+    contentType: string,
+  ): Promise<{ key: string; url: string }> {
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+    return {
+      key,
+      url: `${this.publicUrl}/${key}`,
+    };
+  }
+
   async uploadBase64(base64Data: string, prefix = 'pushes'): Promise<{ key: string; url: string }> {
     // Remove data URI prefix if present
     const base64Content = base64Data.replace(/^data:.*,/, '');

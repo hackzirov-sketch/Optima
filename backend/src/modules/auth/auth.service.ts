@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   BadRequestException,
@@ -15,6 +16,7 @@ import * as crypto from 'crypto';
 import ms from 'ms';
 
 import { UsersService } from '../users/users.service';
+import { RedisService } from '../../redis/redis.service';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
 import { UserIpLog } from '../../database/entities/user-ip-log.entity';
@@ -29,10 +31,13 @@ import { User } from '../../database/entities/user.entity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private redisService: RedisService,
     private encryptionService: EncryptionService,
     @InjectQueue('auth') private authQueue: Queue,
     @InjectRepository(RefreshToken)
@@ -96,9 +101,8 @@ export class AuthService {
       });
     }
 
-    // 2. Optimized Bcrypt (Lower rounds for high RPS, 10 is usually standard balance)
-    // For 100K RPS, you really need to offload hashing to a separate microservice or worker pool
-const passwordHash = await bcrypt.hash(dto.password, 10);
+    const bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 12;
+    const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
 
     // 3. Save core user only
     // Dev mode da email verification skip qilinadi — test osonroq bo'lsin
@@ -121,7 +125,9 @@ const passwordHash = await bcrypt.hash(dto.password, 10);
         attempts: 3,
       });
     } catch (error) {
-      console.error('BullMQ Error (Redis might be down):', error.message);
+      this.logger.warn(
+        `BullMQ on-register queue failed (Redis may be down): ${error instanceof Error ? error.message : error}`,
+      );
       // In high-load test, we continue even if background task fails to be queued
     }
 
@@ -293,16 +299,33 @@ const passwordHash = await bcrypt.hash(dto.password, 10);
     return this.generateTokens(storedToken.user);
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, accessToken?: string) {
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     await this.refreshTokensRepository.update(
       { tokenHash },
       { revokedAt: new Date() },
     );
+
+    if (accessToken) {
+      try {
+        const secret = this.configService.get<string>('jwt.accessSecret');
+        const decoded = this.jwtService.verify<{ jti?: string; exp?: number }>(
+          accessToken,
+          { secret },
+        );
+        if (decoded?.jti && decoded?.exp) {
+          const ttl = Math.max(1, decoded.exp - Math.floor(Date.now() / 1000));
+          await this.redisService.blacklistAccessToken(decoded.jti, ttl);
+        }
+      } catch {
+        // ignore malformed access token on logout
+      }
+    }
   }
 
   private async generateTokens(user: User) {
-    const payload = { sub: user.id, email: user.email };
+    const jti = crypto.randomUUID();
+    const payload = { sub: user.id, email: user.email, jti };
 
     const accessToken = await this.jwtService.signAsync(payload);
 

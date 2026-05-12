@@ -16,6 +16,7 @@ import { TaskTag } from '../../database/entities/task-tag.entity';
 import { Tag } from '../../database/entities/tag.entity';
 import { ProjectColumn } from '../../database/entities/project-column.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { TaskPush } from '../../database/entities/task-push.entity';
 
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -43,6 +44,8 @@ export class TasksService {
     private readonly columnRepo: Repository<ProjectColumn>,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
+    @InjectRepository(TaskPush)
+    private readonly taskPushRepo: Repository<TaskPush>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -351,6 +354,19 @@ export class TasksService {
       relations: ['user'],
       order: { createdAt: 'DESC' },
       take: 100,
+    });
+  }
+
+  async getPushesForTask(projectId: string, taskId: string, userId: string) {
+    const task = await this.getTask(taskId);
+    if (task.projectId !== projectId) {
+      throw new NotFoundException('Task not found in this project');
+    }
+    await this.assertMember(task.workspaceId, userId);
+
+    return this.taskPushRepo.find({
+      where: { taskId },
+      order: { createdAt: 'DESC' },
     });
   }
 

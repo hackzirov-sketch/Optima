@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../users/users.service';
+import { RedisService } from '../../../redis/redis.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     private usersService: UsersService,
+    private redisService: RedisService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -18,7 +20,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: { sub: string; jti?: string }) {
+    if (payload.jti && (await this.redisService.isAccessTokenBlacklisted(payload.jti))) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_REVOKED,
+        message: 'Token has been revoked',
+      });
+    }
+
     const user = await this.usersService.findById(payload.sub);
     if (!user || !user.isActive) {
       throw new UnauthorizedException({

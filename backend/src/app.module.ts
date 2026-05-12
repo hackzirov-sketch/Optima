@@ -15,6 +15,8 @@ import githubConfig from './config/github.config';
 import r2Config from './config/r2.config';
 import googleConfig from './config/google.config';
 
+import { RedisModule } from './redis/redis.module';
+
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -23,6 +25,10 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { PushesModule } from './modules/pushes/pushes.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -77,6 +83,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // ── Event Emitter (internal) ───────────────────
     EventEmitterModule.forRoot({ wildcard: true }),
 
+    RedisModule,
+
     // ── Feature Modules ────────────────────────────
     AuthModule,
     UsersModule,
@@ -85,6 +93,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     GroupsModule,
     ProjectsModule,
     TasksModule,
+    PushesModule,
+    ChatModule,
+    NotificationsModule,
+    AnalyticsModule,
   ],
   providers: [
     {

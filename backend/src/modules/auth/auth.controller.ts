@@ -89,6 +89,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AuthGuard('jwt-refresh'))
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
@@ -99,9 +100,18 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Revoke refresh token and logout' })
-  async logout(@Body() dto: RefreshTokenDto) {
-    await this.authService.logout(dto.refreshToken);
+  @ApiOperation({
+    summary: 'Revoke refresh token and blacklist current access token',
+  })
+  async logout(
+    @Body() dto: RefreshTokenDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    let accessToken: string | undefined;
+    if (authorization?.toLowerCase().startsWith('bearer ')) {
+      accessToken = authorization.slice(7).trim();
+    }
+    await this.authService.logout(dto.refreshToken, accessToken);
     return { message: 'Logged out successfully' };
   }
 }

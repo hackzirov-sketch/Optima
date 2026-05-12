@@ -9,6 +9,7 @@ import { TaskTag } from '../../database/entities/task-tag.entity';
 import { Tag } from '../../database/entities/tag.entity';
 import { ProjectColumn } from '../../database/entities/project-column.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { TaskPush } from '../../database/entities/task-push.entity';
 
 import { TasksService } from './tasks.service';
 import { TasksController } from './tasks.controller';
@@ -24,6 +25,7 @@ import { TasksController } from './tasks.controller';
       Tag,
       ProjectColumn,
       WorkspaceMember,
+      TaskPush,
     ]),
   ],
   controllers: [TasksController],

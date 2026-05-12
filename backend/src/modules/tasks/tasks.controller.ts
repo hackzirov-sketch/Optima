@@ -26,6 +26,18 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
+  @Get('projects/:projectId/tasks/:taskId/pushes')
+  @ApiOperation({ summary: 'List pushes linked to a task' })
+  @ApiParam({ name: 'projectId' })
+  @ApiParam({ name: 'taskId' })
+  getPushes(
+    @Param('projectId') projectId: string,
+    @Param('taskId') taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tasksService.getPushesForTask(projectId, taskId, userId);
+  }
+
   // ─── CRUD ──────────────────────────────────────────────────────────────────
 
   @Post('tasks')
