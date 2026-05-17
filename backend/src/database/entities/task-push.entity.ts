@@ -106,7 +106,7 @@ export class TaskPush {
   reviewedAt: Date;
 
   @Column({ name: 'rejected_reason', type: 'text', nullable: true })
-  rejectedReason: string;
+  rejectedReason: string | null;
 
   @Column({ name: 'cli_version', length: 20, nullable: true })
   cliVersion: string;

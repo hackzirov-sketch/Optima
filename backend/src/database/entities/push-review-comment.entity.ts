@@ -59,14 +59,14 @@ export class PushReviewComment {
   isResolved: boolean;
 
   @Column({ name: 'resolved_by', nullable: true })
-  resolvedById: string;
+  resolvedById: string | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'resolved_by' })
   resolvedBy: User;
 
   @Column({ name: 'resolved_at', type: 'timestamptz', nullable: true })
-  resolvedAt: Date;
+  resolvedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
