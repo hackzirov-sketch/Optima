@@ -118,5 +118,8 @@ export class TaskPush {
   updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
-  deletedAt: Date;
+  deletedAt: Date | null;
+
+  @Column({ name: 'is_deleted', default: false })
+  isDeleted: boolean;
 }

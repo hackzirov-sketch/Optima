@@ -163,8 +163,11 @@ export class Task {
   updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
-  deletedAt: Date;
+  deletedAt: Date | null;
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
-  deletedBy: string;
+  deletedBy: string | null;
+
+  @Column({ name: 'is_deleted', default: false })
+  isDeleted: boolean;
 }

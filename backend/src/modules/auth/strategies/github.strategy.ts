@@ -21,10 +21,14 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     done: Function,
   ): Promise<any> {
     const { username, displayName, emails, photos, id } = profile;
+    const nameParts = (displayName || username || '').trim().split(' ');
+    const firstName = nameParts[0] || username;
+    const lastName = nameParts.slice(1).join(' ') || '';
     const user = {
       githubId: id,
       username: username,
-      fullName: displayName || username,
+      firstName,
+      lastName,
       email: emails?.[0]?.value,
       avatarUrl: photos?.[0]?.value,
       accessToken,

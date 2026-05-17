@@ -102,7 +102,7 @@ export class UsersService {
   async softDeleteAccount(userId: string): Promise<void> {
     await this.findById(userId);
     await this.refreshTokensRepository.delete({ userId });
-    await this.usersRepository.update(userId, { deletedBy: userId });
+    await this.usersRepository.update(userId, { deletedBy: userId, isDeleted: true });
     await this.usersRepository.softDelete(userId);
   }
 }

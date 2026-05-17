@@ -108,7 +108,8 @@ export class AuthService {
     // Dev mode da email verification skip qilinadi — test osonroq bo'lsin
     const isDev = this.configService.get<string>('NODE_ENV') === 'development';
     const user = await this.usersService.create({
-      fullName: dto.fullName,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
       username: dto.username,
       email: dto.email,
       passwordHash,
@@ -137,7 +138,7 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto, ip?: string, userAgent?: string) {
+  async login(dto: LoginDto, ip?: string, userAgent?: string, deviceName?: string) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException({
@@ -174,7 +175,7 @@ export class AuthService {
 
     await this.usersService.updateLastSeen(user.id);
 
-    return this.generateTokens(user);
+    return this.generateTokens(user, ip, userAgent, deviceName);
   }
 
   async googleLogin(googleUser: any, ip?: string, userAgent?: string) {
@@ -191,7 +192,8 @@ export class AuthService {
       const username = googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
       user = await this.usersService.create({
         email: googleUser.email,
-        fullName: googleUser.fullName,
+        firstName: googleUser.firstName,
+        lastName: googleUser.lastName,
         username,
         avatarUrl: googleUser.picture,
         isVerified: true,
@@ -211,7 +213,7 @@ export class AuthService {
 
     await this.usersService.updateLastSeen(user.id);
 
-    return this.generateTokens(user);
+    return this.generateTokens(user, ip, userAgent);
   }
 
   async githubLogin(githubUser: any, ip?: string, userAgent?: string) {
@@ -242,7 +244,8 @@ export class AuthService {
       if (!user) {
         user = await this.usersService.create({
           email: githubUser.email,
-          fullName: githubUser.fullName,
+          firstName: githubUser.firstName,
+          lastName: githubUser.lastName,
           username: githubUser.username,
           avatarUrl: githubUser.avatarUrl,
           isVerified: true,
@@ -273,7 +276,7 @@ export class AuthService {
 
     if (user) {
       await this.usersService.updateLastSeen(user.id);
-      return this.generateTokens(user);
+      return this.generateTokens(user, ip, userAgent);
     } else {
       throw new UnauthorizedException('Failed to link or create user');
     }
@@ -293,17 +296,24 @@ export class AuthService {
       });
     }
 
+    // Revoke old token
     storedToken.revokedAt = new Date();
     await this.refreshTokensRepository.save(storedToken);
 
-    return this.generateTokens(storedToken.user);
+    // Issue new token, keeping same IP/UA so session continuity is maintained
+    return this.generateTokens(
+      storedToken.user,
+      storedToken.ipAddress ?? undefined,
+      storedToken.userAgent ?? undefined,
+      storedToken.deviceName ?? undefined,
+    );
   }
 
   async logout(refreshToken: string, accessToken?: string) {
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     await this.refreshTokensRepository.update(
       { tokenHash },
-      { revokedAt: new Date() },
+      { revokedAt: new Date(), isDeleted: true },
     );
 
     if (accessToken) {
@@ -323,7 +333,33 @@ export class AuthService {
     }
   }
 
-  private async generateTokens(user: User) {
+  private async generateTokens(
+    user: User,
+    ip?: string,
+    userAgent?: string,
+    deviceName?: string,
+  ) {
+    // ── MAX 5 active sessions per account ──────────────────────────────
+    const activeCount = await this.refreshTokensRepository.count({
+      where: {
+        userId: user.id,
+        revokedAt: undefined as any,
+        isDeleted: false,
+      },
+    });
+    if (activeCount >= 5) {
+      // Revoke the oldest active session to enforce the 5-device limit
+      const oldest = await this.refreshTokensRepository.find({
+        where: { userId: user.id, revokedAt: undefined as any, isDeleted: false },
+        order: { createdAt: 'ASC' },
+        take: 1,
+      });
+      if (oldest.length > 0) {
+        oldest[0].revokedAt = new Date();
+        await this.refreshTokensRepository.save(oldest[0]);
+      }
+    }
+
     const jti = crypto.randomUUID();
     const payload = { sub: user.id, email: user.email, jti };
 
@@ -346,6 +382,11 @@ export class AuthService {
       userId: user.id,
       tokenHash,
       expiresAt,
+      ipAddress: ip ?? null,
+      userAgent: userAgent ?? null,
+      deviceName: deviceName ?? null,
+      lastUsedAt: new Date(),
+      isDeleted: false,
     });
     await this.refreshTokensRepository.save(refreshTokenEntity);
 
