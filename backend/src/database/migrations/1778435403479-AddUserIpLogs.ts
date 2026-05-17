@@ -4,12 +4,12 @@ export class AddUserIpLogs1778435403479 implements MigrationInterface {
     name = 'AddUserIpLogs1778435403479'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX "public"."idx_users_email"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_users_username"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_tasks_project"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_tasks_project_status"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_messages_room"`);
-        await queryRunner.query(`DROP INDEX "public"."idx_notifications_unread"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_users_email"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_users_username"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_tasks_project"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_tasks_project_status"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_messages_room"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "public"."idx_notifications_unread"`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
