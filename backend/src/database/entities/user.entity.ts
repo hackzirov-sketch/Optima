@@ -34,9 +34,9 @@ export class User {
   @Column({ name: 'phone_number', type: 'bigint', nullable: true })
   phoneNumber: number | null;
 
-  @Column({ name: 'password_hash' })
+  @Column({ name: 'password_hash', type: 'varchar', nullable: true })
   @Exclude()
-  passwordHash: string;
+  passwordHash: string | null;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
   avatarUrl: string | null;
@@ -63,6 +63,12 @@ export class User {
 
   @Column({ name: 'is_verified', default: false })
   isVerified: boolean;
+
+  @Column({ type: 'simple-array', default: 'local' })
+  providers: string[];
+
+  @Column({ name: 'needs_password_setup', default: false })
+  needsPasswordSetup: boolean;
 
   @Column({ name: 'is_deleted', default: false })
   isDeleted: boolean;

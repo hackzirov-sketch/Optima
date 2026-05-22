@@ -26,6 +26,7 @@ import { EncryptionService } from '../../common/services/encryption.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { User } from '../../database/entities/user.entity';
 
@@ -52,11 +53,12 @@ export class AuthService {
     private userVerificationsRepository: Repository<UserVerification>,
   ) {}
 
-  async logIpAddress(userId: string, ip: string, userAgent: string) {
+  async logIpAddress(userId: string, ip: string, userAgent: string, provider: string = 'unknown') {
     const log = this.userIpLogsRepository.create({
       userId,
       ipAddress: ip,
       userAgent,
+      provider,
     });
     await this.userIpLogsRepository.save(log);
   }
@@ -74,10 +76,29 @@ export class AuthService {
       });
     }
 
-    await this.usersService.update(verification.userId, { isVerified: true });
-    await this.userVerificationsRepository.delete({ userId: verification.userId });
+    const user = verification.user;
 
-    return { success: true, message: 'Email verified successfully' };
+    const updateData: Partial<User> = { isVerified: true };
+    if (!user.passwordHash) {
+      updateData.needsPasswordSetup = true;
+      user.needsPasswordSetup = true;
+    }
+
+    await this.usersService.update(user.id, updateData);
+    await this.userVerificationsRepository.delete({ userId: user.id });
+
+    // Generate tokens so user can proceed to set password or dashboard
+    const { accessToken, refreshToken, user: authUser } = await this.generateTokens(user);
+
+    return { 
+      success: true, 
+      message: 'Email verified successfully',
+      redirect: !user.passwordHash ? '/set-password' : undefined,
+      requiresPasswordSetup: !user.passwordHash,
+      accessToken,
+      refreshToken,
+      user: authUser
+    };
   }
 
   /**
@@ -114,6 +135,8 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       isVerified: isDev, // dev: true (auto-verify), prod: false (email required)
+      providers: ['local'],
+      needsPasswordSetup: false,
     });
 
     // 4. Offload heavy tasks to Queue (Settings, Email sending)
@@ -147,6 +170,21 @@ export class AuthService {
       });
     }
 
+    if (!user.passwordHash) {
+      // Background task to send a new verification email for OTP
+      await this.authQueue.add('on-register', {
+        userId: user.id,
+        email: user.email,
+      });
+
+      throw new UnauthorizedException({
+        code: ErrorCode.PASSWORD_SETUP_REQUIRED,
+        message: 'This account was created using Google/GitHub. Verification code sent.',
+        requiresPasswordSetup: true,
+        redirect: '/verify',
+      });
+    }
+
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException({
@@ -156,9 +194,16 @@ export class AuthService {
     }
 
     if (!user.isVerified) {
+      // Background task to send a new verification email
+      await this.authQueue.add('on-register', {
+        userId: user.id,
+        email: user.email,
+      });
+
       throw new UnauthorizedException({
-        code: ErrorCode.ACCOUNT_INACTIVE,
-        message: 'Please verify your email address first',
+        code: ErrorCode.PENDING_VERIFICATION,
+        message: 'Please verify your email address. A new code has been sent.',
+        redirect: '/verify',
       });
     }
 
@@ -170,12 +215,12 @@ export class AuthService {
     }
 
     if (ip) {
-      await this.logIpAddress(user.id, ip, userAgent || '');
+      await this.logIpAddress(user.id, ip, userAgent || '', 'local');
     }
 
     await this.usersService.updateLastSeen(user.id);
 
-    return this.generateTokens(user, ip, userAgent, deviceName);
+    return this.generateTokens(user, ip, userAgent, deviceName, 'local');
   }
 
   async googleLogin(googleUser: any, ip?: string, userAgent?: string) {
@@ -192,12 +237,14 @@ export class AuthService {
       const username = googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
       user = await this.usersService.create({
         email: googleUser.email,
-        firstName: googleUser.firstName,
-        lastName: googleUser.lastName,
+        firstName: googleUser.firstName || googleUser.email.split('@')[0],
+        lastName: googleUser.lastName || '',
         username,
         avatarUrl: googleUser.picture,
         isVerified: true,
-        passwordHash: 'social_login_no_password',
+        passwordHash: null,
+        providers: ['google'],
+        needsPasswordSetup: true,
       });
 
       // Background task for social login settings too
@@ -208,12 +255,12 @@ export class AuthService {
     }
 
     if (ip) {
-      await this.logIpAddress(user.id, ip, userAgent || '');
+      await this.logIpAddress(user.id, ip, userAgent || '', 'google');
     }
 
     await this.usersService.updateLastSeen(user.id);
 
-    return this.generateTokens(user, ip, userAgent);
+    return this.generateTokens(user, ip, userAgent, undefined, 'google');
   }
 
   async githubLogin(githubUser: any, ip?: string, userAgent?: string) {
@@ -244,12 +291,14 @@ export class AuthService {
       if (!user) {
         user = await this.usersService.create({
           email: githubUser.email,
-          firstName: githubUser.firstName,
-          lastName: githubUser.lastName,
+          firstName: githubUser.firstName || githubUser.email.split('@')[0],
+          lastName: githubUser.lastName || '',
           username: githubUser.username,
           avatarUrl: githubUser.avatarUrl,
           isVerified: true,
-          passwordHash: 'social_login_no_password',
+          passwordHash: null,
+          providers: ['github'],
+          needsPasswordSetup: true,
         });
 
         await this.authQueue.add('on-register', {
@@ -271,15 +320,39 @@ export class AuthService {
     }
 
     if (user && ip) {
-      await this.logIpAddress(user.id, ip, userAgent || '');
+      await this.logIpAddress(user.id, ip, userAgent || '', 'github');
     }
 
     if (user) {
       await this.usersService.updateLastSeen(user.id);
-      return this.generateTokens(user, ip, userAgent);
+      return this.generateTokens(user, ip, userAgent, undefined, 'github');
     } else {
       throw new UnauthorizedException('Failed to link or create user');
     }
+  }
+
+  async setPassword(userId: string, dto: SetPasswordDto) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException();
+
+    const bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 12;
+    const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
+
+    const providers = user.providers || [];
+    if (!providers.includes('local')) {
+      providers.push('local');
+    }
+
+    await this.usersService.update(userId, {
+      passwordHash,
+      providers,
+      needsPasswordSetup: false,
+    });
+
+    return {
+      success: true,
+      message: 'Password set successfully',
+    };
   }
 
   async refresh(refreshToken: string) {
@@ -306,6 +379,7 @@ export class AuthService {
       storedToken.ipAddress ?? undefined,
       storedToken.userAgent ?? undefined,
       storedToken.deviceName ?? undefined,
+      storedToken.provider ?? 'jwt-refresh',
     );
   }
 
@@ -338,6 +412,7 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
     deviceName?: string,
+    provider?: string,
   ) {
     // ── MAX 5 active sessions per account ──────────────────────────────
     const activeCount = await this.refreshTokensRepository.count({
@@ -385,12 +460,15 @@ export class AuthService {
       ipAddress: ip ?? null,
       userAgent: userAgent ?? null,
       deviceName: deviceName ?? null,
+      provider: provider ?? null,
       lastUsedAt: new Date(),
       isDeleted: false,
     });
     await this.refreshTokensRepository.save(refreshTokenEntity);
 
     return {
+      success: true,
+      requiresPasswordSetup: user.needsPasswordSetup,
       accessToken,
       refreshToken,
       user,

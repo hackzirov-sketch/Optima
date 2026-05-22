@@ -36,11 +36,15 @@ export class AuthProcessor extends WorkerHost {
     
     this.logger.log(`Processing background tasks for user ${userId}`);
 
-    // 1. Create default settings
-    const settings = this.userSettingsRepository.create({ userId });
-    await this.userSettingsRepository.save(settings);
+    // 1. Create default settings if not exist
+    const existingSettings = await this.userSettingsRepository.findOne({ where: { userId } });
+    if (!existingSettings) {
+      const settings = this.userSettingsRepository.create({ userId });
+      await this.userSettingsRepository.save(settings);
+    }
 
-    // 2. Generate and send verification code
+    // 2. Generate and send verification code (cleanup old ones first)
+    await this.userVerificationsRepository.delete({ userId });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 

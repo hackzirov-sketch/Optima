@@ -25,6 +25,9 @@ export class UserIpLog {
   @Column({ name: 'ip_address', type: 'varchar', length: 45 })
   ipAddress: string;
 
+  @Column({ name: 'provider', type: 'varchar', length: 50, nullable: true })
+  provider: string;
+
   @Column({ name: 'user_agent', type: 'text', nullable: true })
   userAgent: string;
 

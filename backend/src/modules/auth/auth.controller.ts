@@ -18,12 +18,21 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  @Post('set-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Set password for social login accounts' })
+  async setPassword(@Req() req, @Body() dto: SetPasswordDto) {
+    return this.authService.setPassword(req.user.id, dto);
+  }
 
   @Public()
   @Post('register')

@@ -42,6 +42,9 @@ export class RefreshToken {
   @Column({ name: 'user_agent', type: 'text', nullable: true })
   userAgent: string | null;
 
+  @Column({ name: 'provider', type: 'varchar', length: 50, nullable: true })
+  provider: string | null;
+
   @Column({ name: 'last_used_at', type: 'timestamptz', nullable: true })
   lastUsedAt: Date | null;
 
