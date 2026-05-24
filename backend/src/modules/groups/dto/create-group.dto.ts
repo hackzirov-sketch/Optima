@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsBoolean, IsUUID, IsEnum } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsUUID,
+  IsEnum,
+} from 'class-validator';
 import { GroupType } from '../../../common/enums';
 
 export class CreateGroupDto {

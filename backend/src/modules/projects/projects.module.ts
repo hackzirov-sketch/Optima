@@ -9,7 +9,12 @@ import { GroupMember } from '../../database/entities/group-member.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, ProjectColumn, WorkspaceMember, GroupMember]),
+    TypeOrmModule.forFeature([
+      Project,
+      ProjectColumn,
+      WorkspaceMember,
+      GroupMember,
+    ]),
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

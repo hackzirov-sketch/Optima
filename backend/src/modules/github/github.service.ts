@@ -14,7 +14,9 @@ export class GithubService {
   ): void {
     const secret = this.configService.get<string>('github.webhookSecret');
     if (!secret) {
-      this.logger.warn('GITHUB_APP_WEBHOOK_SECRET not set — skipping signature verification');
+      this.logger.warn(
+        'GITHUB_APP_WEBHOOK_SECRET not set — skipping signature verification',
+      );
       return;
     }
 
@@ -41,7 +43,10 @@ export class GithubService {
 
     switch (event) {
       case 'push': {
-        const p = payload as { ref?: string; repository?: { full_name?: string } };
+        const p = payload as {
+          ref?: string;
+          repository?: { full_name?: string };
+        };
         this.logger.debug(`push ref=${p.ref} repo=${p.repository?.full_name}`);
         break;
       }

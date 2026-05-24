@@ -8,7 +8,11 @@ export class AddDependencyDto {
   @IsNotEmpty()
   dependsOnId: string;
 
-  @ApiProperty({ enum: DependencyType, default: DependencyType.BLOCKS, required: false })
+  @ApiProperty({
+    enum: DependencyType,
+    default: DependencyType.BLOCKS,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(DependencyType)
   type?: DependencyType = DependencyType.BLOCKS;

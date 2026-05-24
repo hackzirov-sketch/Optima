@@ -33,11 +33,13 @@ export class AuthProcessor extends WorkerHost {
 
   private async handleOnRegister(data: { userId: string; email: string }) {
     const { userId, email } = data;
-    
+
     this.logger.log(`Processing background tasks for user ${userId}`);
 
     // 1. Create default settings if not exist
-    const existingSettings = await this.userSettingsRepository.findOne({ where: { userId } });
+    const existingSettings = await this.userSettingsRepository.findOne({
+      where: { userId },
+    });
     if (!existingSettings) {
       const settings = this.userSettingsRepository.create({ userId });
       await this.userSettingsRepository.save(settings);
@@ -56,7 +58,7 @@ export class AuthProcessor extends WorkerHost {
     await this.userVerificationsRepository.save(verification);
 
     await this.mailService.sendVerificationEmail(email, code);
-    
+
     this.logger.log(`Finished background tasks for user ${userId}`);
   }
 }

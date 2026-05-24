@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, IsNull } from 'typeorm';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
@@ -24,21 +29,37 @@ export class InvitationsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(workspaceId: string, inviterId: string, dto: InviteMemberDto): Promise<WorkspaceInvitation> {
-    const workspace = await this.workspaceRepo.findOne({ where: { id: workspaceId } });
+  async create(
+    workspaceId: string,
+    inviterId: string,
+    dto: InviteMemberDto,
+  ): Promise<WorkspaceInvitation> {
+    const workspace = await this.workspaceRepo.findOne({
+      where: { id: workspaceId },
+    });
     if (!workspace) throw new NotFoundException('Workspace not found');
 
-    const inviter = await this.memberRepo.findOne({ where: { workspaceId, userId: inviterId } });
-    if (!inviter || (inviter.role !== WorkspaceRole.OWNER && inviter.role !== WorkspaceRole.ADMIN)) {
-       throw new ConflictException({
-         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-         message: 'Not authorized to invite members',
-       });
+    const inviter = await this.memberRepo.findOne({
+      where: { workspaceId, userId: inviterId },
+    });
+    if (
+      !inviter ||
+      (inviter.role !== WorkspaceRole.OWNER &&
+        inviter.role !== WorkspaceRole.ADMIN)
+    ) {
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Not authorized to invite members',
+      });
     }
 
-    const existingUser = await this.userRepo.findOne({ where: { email: dto.email } });
+    const existingUser = await this.userRepo.findOne({
+      where: { email: dto.email },
+    });
     if (existingUser) {
-      const alreadyMember = await this.memberRepo.findOne({ where: { workspaceId, userId: existingUser.id } });
+      const alreadyMember = await this.memberRepo.findOne({
+        where: { workspaceId, userId: existingUser.id },
+      });
       if (alreadyMember) {
         throw new ConflictException({
           code: ErrorCode.ALREADY_MEMBER,
@@ -47,18 +68,18 @@ export class InvitationsService {
       }
     }
 
-    const existingInvite = await this.invitationRepo.findOne({ 
-      where: { 
-        workspaceId, 
+    const existingInvite = await this.invitationRepo.findOne({
+      where: {
+        workspaceId,
         email: dto.email,
         acceptedAt: IsNull(),
         declinedAt: IsNull(),
-      } 
+      },
     });
-    
+
     if (existingInvite && existingInvite.expiresAt > new Date()) {
-       // Already invited
-       return existingInvite;
+      // Already invited
+      return existingInvite;
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -78,17 +99,19 @@ export class InvitationsService {
     // TODO: Send email
   }
 
-  async findAllForWorkspace(workspaceId: string): Promise<WorkspaceInvitation[]> {
+  async findAllForWorkspace(
+    workspaceId: string,
+  ): Promise<WorkspaceInvitation[]> {
     return this.invitationRepo.find({
       where: { workspaceId, acceptedAt: IsNull(), declinedAt: IsNull() },
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 
   async accept(token: string, userId: string): Promise<WorkspaceMember> {
-    const invitation = await this.invitationRepo.findOne({ 
+    const invitation = await this.invitationRepo.findOne({
       where: { token },
-      relations: ['workspace'] 
+      relations: ['workspace'],
     });
 
     if (!invitation) {
@@ -114,13 +137,15 @@ export class InvitationsService {
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user || user.email !== invitation.email) {
-       throw new ConflictException({
-         code: ErrorCode.INVALID_CREDENTIALS,
-         message: 'Invitation email does not match user email',
-       });
+      throw new ConflictException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Invitation email does not match user email',
+      });
     }
 
-    const alreadyMember = await this.memberRepo.findOne({ where: { workspaceId: invitation.workspaceId, userId } });
+    const alreadyMember = await this.memberRepo.findOne({
+      where: { workspaceId: invitation.workspaceId, userId },
+    });
     if (alreadyMember) {
       throw new ConflictException({
         code: ErrorCode.ALREADY_MEMBER,
@@ -165,26 +190,38 @@ export class InvitationsService {
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user || user.email !== invitation.email) {
-       throw new ConflictException({
-         code: ErrorCode.INVALID_CREDENTIALS,
-         message: 'Invitation email does not match user email',
-       });
+      throw new ConflictException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Invitation email does not match user email',
+      });
     }
 
     invitation.declinedAt = new Date();
     await this.invitationRepo.save(invitation);
   }
 
-  async remove(workspaceId: string, id: string, requesterId: string): Promise<void> {
-    const inviter = await this.memberRepo.findOne({ where: { workspaceId, userId: requesterId } });
-    if (!inviter || (inviter.role !== WorkspaceRole.OWNER && inviter.role !== WorkspaceRole.ADMIN)) {
-       throw new ConflictException({
-         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-         message: 'Not authorized to delete invitations',
-       });
+  async remove(
+    workspaceId: string,
+    id: string,
+    requesterId: string,
+  ): Promise<void> {
+    const inviter = await this.memberRepo.findOne({
+      where: { workspaceId, userId: requesterId },
+    });
+    if (
+      !inviter ||
+      (inviter.role !== WorkspaceRole.OWNER &&
+        inviter.role !== WorkspaceRole.ADMIN)
+    ) {
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Not authorized to delete invitations',
+      });
     }
 
-    const invitation = await this.invitationRepo.findOne({ where: { id, workspaceId } });
+    const invitation = await this.invitationRepo.findOne({
+      where: { id, workspaceId },
+    });
     if (!invitation) throw new NotFoundException('Invitation not found');
 
     await this.invitationRepo.remove(invitation);

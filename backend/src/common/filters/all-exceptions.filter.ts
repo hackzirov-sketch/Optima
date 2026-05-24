@@ -8,12 +8,15 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ErrorCode } from '../enums/error-code.enum';
+import { ConfigService } from '@nestjs/config';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost) {
+  constructor(private readonly configService: ConfigService) {}
+
+  catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -32,17 +35,43 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details = exceptionResponse.errors || null;
 
       // Handle class-validator errors
-      if (status === HttpStatus.BAD_REQUEST && Array.isArray(exceptionResponse.message)) {
+      if (
+        status === HttpStatus.BAD_REQUEST &&
+        Array.isArray(exceptionResponse.message)
+      ) {
         message = 'Validation failed';
         code = ErrorCode.VALIDATION_ERROR;
         details = exceptionResponse.message;
       }
+    } else if (
+      exception?.name === 'TokenError' ||
+      exception?.name === 'AuthorizationError' ||
+      exception?.name === 'OAuthError'
+    ) {
+      message = exception.message || 'Authentication failed';
+      code = ErrorCode.INVALID_CREDENTIALS;
     } else {
       // Log non-HTTP errors for debugging
       this.logger.error(
         'Unhandled Exception',
         exception instanceof Error ? exception.stack : exception,
       );
+    }
+
+    // Handle OAuth callback redirects
+    const isOAuthCallback =
+      request.url.includes('/callback') && request.method === 'GET';
+    const isOAuthError =
+      exception?.name === 'TokenError' ||
+      exception?.name === 'AuthorizationError' ||
+      exception?.name === 'OAuthError';
+
+    if (isOAuthCallback || isOAuthError) {
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL') ||
+        this.configService.get<string>('app.frontendUrl');
+      const errorMsg = encodeURIComponent(message);
+      return response.redirect(`${frontendUrl}/login?error=${errorMsg}`);
     }
 
     response.status(status).json({

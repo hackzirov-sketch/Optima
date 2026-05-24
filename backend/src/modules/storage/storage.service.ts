@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -44,13 +49,16 @@ export class StorageService {
     };
   }
 
-  async uploadBase64(base64Data: string, prefix = 'pushes'): Promise<{ key: string; url: string }> {
+  async uploadBase64(
+    base64Data: string,
+    prefix = 'pushes',
+  ): Promise<{ key: string; url: string }> {
     // Remove data URI prefix if present
     const base64Content = base64Data.replace(/^data:.*,/, '');
     const buffer = Buffer.from(base64Content, 'base64');
-    
+
     const key = `${prefix}/${uuidv4()}.patch`;
-    
+
     await this.s3Client.send(
       new PutObjectCommand({
         Bucket: this.bucketName,
@@ -66,12 +74,15 @@ export class StorageService {
     };
   }
 
-  async getPresignedDownloadUrl(key: string, expiresIn = 3600): Promise<string> {
+  async getPresignedDownloadUrl(
+    key: string,
+    expiresIn = 3600,
+  ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: key,
     });
-    
+
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
 

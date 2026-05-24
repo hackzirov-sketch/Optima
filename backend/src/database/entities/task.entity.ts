@@ -9,11 +9,7 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import {
-  TaskType,
-  PriorityLevel,
-  TaskStatus,
-} from '../../common/enums';
+import { TaskType, PriorityLevel, TaskStatus } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { Project } from './project.entity';
 import { Group } from './group.entity';

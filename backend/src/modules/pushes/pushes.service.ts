@@ -48,9 +48,15 @@ export class PushesService {
     private readonly config: ConfigService,
   ) {}
 
-  private async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
-    const m = await this.wsMemberRepo.findOne({ where: { workspaceId, userId } });
-    if (!m) throw new ForbiddenException('You are not a member of this workspace');
+  private async assertMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember> {
+    const m = await this.wsMemberRepo.findOne({
+      where: { workspaceId, userId },
+    });
+    if (!m)
+      throw new ForbiddenException('You are not a member of this workspace');
     return m;
   }
 
@@ -76,7 +82,10 @@ export class PushesService {
   }
 
   private artifactTtlDays(): number {
-    const n = parseInt(this.config.get<string>('PUSH_ARTIFACT_TTL_DAYS') || '7', 10);
+    const n = parseInt(
+      this.config.get<string>('PUSH_ARTIFACT_TTL_DAYS') || '7',
+      10,
+    );
     return Number.isNaN(n) ? 7 : Math.min(90, Math.max(1, n));
   }
 
@@ -105,9 +114,13 @@ export class PushesService {
 
     await this.assertMember(task.workspaceId, userId);
 
-    const repo = await this.repoEntity.findOne({ where: { id: dto.repositoryId } });
+    const repo = await this.repoEntity.findOne({
+      where: { id: dto.repositoryId },
+    });
     if (!repo || repo.workspaceId !== task.workspaceId) {
-      throw new BadRequestException('Repository does not belong to this task workspace');
+      throw new BadRequestException(
+        'Repository does not belong to this task workspace',
+      );
     }
 
     const push = this.pushRepo.create({
@@ -124,7 +137,10 @@ export class PushesService {
     const saved = await this.pushRepo.save(push);
 
     try {
-      const { key, url } = await this.storage.uploadBase64(dto.diffBundleBase64, 'pushes');
+      const { key, url } = await this.storage.uploadBase64(
+        dto.diffBundleBase64,
+        'pushes',
+      );
       const expires = new Date();
       expires.setDate(expires.getDate() + this.artifactTtlDays());
 
@@ -157,12 +173,19 @@ export class PushesService {
     return push;
   }
 
-  async presignedDownload(pushId: string, userId: string): Promise<{ url: string; expiresIn: number }> {
+  async presignedDownload(
+    pushId: string,
+    userId: string,
+  ): Promise<{ url: string; expiresIn: number }> {
     const push = await this.loadPush(pushId);
     await this.assertPushVisible(push, userId);
-    if (!push.storageKey) throw new BadRequestException('No artifact for this push');
+    if (!push.storageKey)
+      throw new BadRequestException('No artifact for this push');
     const expiresIn = 3600;
-    const url = await this.storage.getPresignedDownloadUrl(push.storageKey, expiresIn);
+    const url = await this.storage.getPresignedDownloadUrl(
+      push.storageKey,
+      expiresIn,
+    );
     return { url, expiresIn };
   }
 
@@ -174,7 +197,9 @@ export class PushesService {
     this.assertReviewer(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
-      throw new BadRequestException('Push cannot be approved in its current state');
+      throw new BadRequestException(
+        'Push cannot be approved in its current state',
+      );
     }
 
     push.status = PushStatus.APPROVED;
@@ -203,7 +228,9 @@ export class PushesService {
     this.assertReviewer(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
-      throw new BadRequestException('Push cannot be rejected in its current state');
+      throw new BadRequestException(
+        'Push cannot be rejected in its current state',
+      );
     }
 
     push.status = PushStatus.REJECTED;
@@ -255,9 +282,12 @@ export class PushesService {
     dto: UpdatePushCommentDto,
   ) {
     await this.getById(pushId, userId);
-    const c = await this.commentRepo.findOne({ where: { id: commentId, pushId } });
+    const c = await this.commentRepo.findOne({
+      where: { id: commentId, pushId },
+    });
     if (!c) throw new NotFoundException('Comment not found');
-    if (c.authorId !== userId) throw new ForbiddenException('You can only edit your own comments');
+    if (c.authorId !== userId)
+      throw new ForbiddenException('You can only edit your own comments');
 
     if (dto.content !== undefined) c.content = dto.content;
     if (dto.isResolved !== undefined) {
@@ -270,9 +300,12 @@ export class PushesService {
 
   async deleteComment(pushId: string, commentId: string, userId: string) {
     await this.getById(pushId, userId);
-    const c = await this.commentRepo.findOne({ where: { id: commentId, pushId } });
+    const c = await this.commentRepo.findOne({
+      where: { id: commentId, pushId },
+    });
     if (!c) throw new NotFoundException('Comment not found');
-    if (c.authorId !== userId) throw new ForbiddenException('You can only delete your own comments');
+    if (c.authorId !== userId)
+      throw new ForbiddenException('You can only delete your own comments');
     await this.commentRepo.delete({ id: commentId });
   }
 
@@ -283,7 +316,9 @@ export class PushesService {
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
-    const c = await this.commentRepo.findOne({ where: { id: commentId, pushId } });
+    const c = await this.commentRepo.findOne({
+      where: { id: commentId, pushId },
+    });
     if (!c) throw new NotFoundException('Comment not found');
     c.isResolved = true;
     c.resolvedById = userId;

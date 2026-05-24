@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  IsOptional,
+  IsEnum,
+  IsInt,
+  Min,
+} from 'class-validator';
 import { WorkspaceVisibility } from '../../../common/enums';
 
 export class CreateWorkspaceDto {
@@ -20,8 +28,24 @@ export class CreateWorkspaceDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ enum: WorkspaceVisibility, default: WorkspaceVisibility.PRIVATE, required: false })
+  @ApiProperty({
+    enum: WorkspaceVisibility,
+    default: WorkspaceVisibility.PRIVATE,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(WorkspaceVisibility)
   visibility?: WorkspaceVisibility;
+
+  @ApiProperty({ example: 10, required: false, description: 'Maximum number of members allowed in the workspace' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxMembers?: number;
+
+  @ApiProperty({ example: 20, required: false, description: 'Maximum number of projects allowed in the workspace' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxProjects?: number;
 }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Group } from '../../database/entities/group.entity';
@@ -26,7 +31,11 @@ export class GroupsService {
       where: { workspaceId: dto.workspaceId, userId },
     });
 
-    if (!wsMember || (wsMember.role !== WorkspaceRole.OWNER && wsMember.role !== WorkspaceRole.ADMIN)) {
+    if (
+      !wsMember ||
+      (wsMember.role !== WorkspaceRole.OWNER &&
+        wsMember.role !== WorkspaceRole.ADMIN)
+    ) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
         message: 'Only workspace admins or owners can create groups',
@@ -66,7 +75,10 @@ export class GroupsService {
     }
   }
 
-  async findAllInWorkspace(workspaceId: string, userId: string): Promise<Group[]> {
+  async findAllInWorkspace(
+    workspaceId: string,
+    userId: string,
+  ): Promise<Group[]> {
     const wsMember = await this.workspaceMemberRepo.findOne({
       where: { workspaceId, userId },
     });
@@ -75,7 +87,8 @@ export class GroupsService {
       throw new ForbiddenException('Not a member of this workspace');
     }
 
-    const qb = this.groupRepo.createQueryBuilder('group')
+    const qb = this.groupRepo
+      .createQueryBuilder('group')
       .leftJoin('group.members', 'member')
       .where('group.workspaceId = :workspaceId', { workspaceId })
       .andWhere('group.deletedAt IS NULL');
@@ -98,15 +111,25 @@ export class GroupsService {
     return group;
   }
 
-  async update(id: string, userId: string, dto: UpdateGroupDto): Promise<Group> {
+  async update(
+    id: string,
+    userId: string,
+    dto: UpdateGroupDto,
+  ): Promise<Group> {
     const group = await this.findById(id, userId);
 
     if (group.createdById !== userId) {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId },
       });
-      if (!wsMember || (wsMember.role !== WorkspaceRole.OWNER && wsMember.role !== WorkspaceRole.ADMIN)) {
-        throw new ForbiddenException('Only the group owner or workspace admin can update the group');
+      if (
+        !wsMember ||
+        (wsMember.role !== WorkspaceRole.OWNER &&
+          wsMember.role !== WorkspaceRole.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'Only the group owner or workspace admin can update the group',
+        );
       }
     }
 
@@ -121,8 +144,14 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId },
       });
-      if (!wsMember || (wsMember.role !== WorkspaceRole.OWNER && wsMember.role !== WorkspaceRole.ADMIN)) {
-        throw new ForbiddenException('Only the group owner or workspace admin can delete the group');
+      if (
+        !wsMember ||
+        (wsMember.role !== WorkspaceRole.OWNER &&
+          wsMember.role !== WorkspaceRole.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'Only the group owner or workspace admin can delete the group',
+        );
       }
     }
 
@@ -131,7 +160,11 @@ export class GroupsService {
     await this.groupRepo.save(group);
   }
 
-  async addMember(id: string, userIdToAdd: string, requesterId: string): Promise<GroupMember> {
+  async addMember(
+    id: string,
+    userIdToAdd: string,
+    requesterId: string,
+  ): Promise<GroupMember> {
     const group = await this.findById(id, requesterId);
 
     // Only owner/admin or group creator can add members
@@ -139,8 +172,14 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId: requesterId },
       });
-      if (!wsMember || (wsMember.role !== WorkspaceRole.OWNER && wsMember.role !== WorkspaceRole.ADMIN)) {
-        throw new ForbiddenException('Not authorized to add members to this group');
+      if (
+        !wsMember ||
+        (wsMember.role !== WorkspaceRole.OWNER &&
+          wsMember.role !== WorkspaceRole.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'Not authorized to add members to this group',
+        );
       }
     }
 
@@ -150,7 +189,9 @@ export class GroupsService {
     });
 
     if (!targetWsMember) {
-      throw new NotFoundException('Target user is not a member of the workspace');
+      throw new NotFoundException(
+        'Target user is not a member of the workspace',
+      );
     }
 
     const existingMember = await this.groupMemberRepo.findOne({
@@ -169,7 +210,11 @@ export class GroupsService {
     return this.groupMemberRepo.save(member);
   }
 
-  async removeMember(id: string, userIdToRemove: string, requesterId: string): Promise<void> {
+  async removeMember(
+    id: string,
+    userIdToRemove: string,
+    requesterId: string,
+  ): Promise<void> {
     const group = await this.findById(id, requesterId);
 
     // User can remove themselves, otherwise must be owner or admin
@@ -177,8 +222,14 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId: requesterId },
       });
-      if (!wsMember || (wsMember.role !== WorkspaceRole.OWNER && wsMember.role !== WorkspaceRole.ADMIN)) {
-        throw new ForbiddenException('Not authorized to remove members from this group');
+      if (
+        !wsMember ||
+        (wsMember.role !== WorkspaceRole.OWNER &&
+          wsMember.role !== WorkspaceRole.ADMIN)
+      ) {
+        throw new ForbiddenException(
+          'Not authorized to remove members from this group',
+        );
       }
     }
 

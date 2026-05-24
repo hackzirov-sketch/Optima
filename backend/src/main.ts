@@ -1,17 +1,25 @@
+import 'dotenv/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { ValidationPipe, ClassSerializerInterceptor, Logger } from '@nestjs/common';
+import {
+  ValidationPipe,
+  ClassSerializerInterceptor,
+  Logger,
+} from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const isProd = process.env.NODE_ENV === 'production';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
-    logger: isProd ? ['error', 'warn'] : ['log', 'error', 'warn', 'debug', 'verbose'],
+    logger: isProd
+      ? ['log', 'error', 'warn']
+      : ['log', 'error', 'warn', 'debug', 'verbose'],
   });
 
   app.set('trust proxy', 1);
@@ -42,9 +50,10 @@ async function bootstrap() {
   );
 
   // ── Serialization ─────────────────────────────────
-  app.useGlobalInterceptors(
-    new ClassSerializerInterceptor(app.get(Reflector))
-  );
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+
+  // ── Exception Filters ─────────────────────────────
+  app.useGlobalFilters(new AllExceptionsFilter(config));
 
   // ── Swagger ───────────────────────────────────────
   if (config.get('app.nodeEnv') !== 'production') {
@@ -78,7 +87,7 @@ async function bootstrap() {
 
   const port = config.get<number>('app.port') || 3000;
   await app.listen(port);
-  
+
   logger.log(`🚀 UPZ API running on: http://localhost:${port}/${prefix}`);
   logger.log(`📖 Swagger docs: http://localhost:${port}/${prefix}/docs`);
 }

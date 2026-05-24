@@ -30,7 +30,10 @@ export class NotificationsService {
   }
 
   async markAllRead(userId: string) {
-    await this.notifRepo.update({ userId, isRead: false }, { isRead: true, readAt: new Date() });
+    await this.notifRepo.update(
+      { userId, isRead: false },
+      { isRead: true, readAt: new Date() },
+    );
     return { updated: true };
   }
 }

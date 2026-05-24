@@ -21,7 +21,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; jti?: string }) {
-    if (payload.jti && (await this.redisService.isAccessTokenBlacklisted(payload.jti))) {
+    if (
+      payload.jti &&
+      (await this.redisService.isAccessTokenBlacklisted(payload.jti))
+    ) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_REVOKED,
         message: 'Token has been revoked',

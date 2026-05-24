@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -15,7 +23,10 @@ export class ProjectsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new project' })
-  createProject(@CurrentUser('id') userId: string, @Body() dto: CreateProjectDto) {
+  createProject(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateProjectDto,
+  ) {
     return this.projectsService.create(userId, dto);
   }
 

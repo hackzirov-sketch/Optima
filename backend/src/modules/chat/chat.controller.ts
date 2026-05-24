@@ -119,6 +119,10 @@ export class ChatController {
     @Param('emoji') emoji: string,
     @CurrentUser('id') userId: string,
   ) {
-    await this.chatService.removeReaction(messageId, userId, decodeURIComponent(emoji));
+    await this.chatService.removeReaction(
+      messageId,
+      userId,
+      decodeURIComponent(emoji),
+    );
   }
 }

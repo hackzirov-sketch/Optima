@@ -14,6 +14,7 @@ import { Queue } from 'bullmq';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import ms from 'ms';
+import { UAParser } from 'ua-parser-js';
 
 import { UsersService } from '../users/users.service';
 import { RedisService } from '../../redis/redis.service';
@@ -53,7 +54,12 @@ export class AuthService {
     private userVerificationsRepository: Repository<UserVerification>,
   ) {}
 
-  async logIpAddress(userId: string, ip: string, userAgent: string, provider: string = 'unknown') {
+  async logIpAddress(
+    userId: string,
+    ip: string,
+    userAgent: string,
+    provider: string = 'unknown',
+  ) {
     const log = this.userIpLogsRepository.create({
       userId,
       ipAddress: ip,
@@ -88,16 +94,20 @@ export class AuthService {
     await this.userVerificationsRepository.delete({ userId: user.id });
 
     // Generate tokens so user can proceed to set password or dashboard
-    const { accessToken, refreshToken, user: authUser } = await this.generateTokens(user);
+    const {
+      accessToken,
+      refreshToken,
+      user: authUser,
+    } = await this.generateTokens(user);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: 'Email verified successfully',
       redirect: !user.passwordHash ? '/set-password' : undefined,
       requiresPasswordSetup: !user.passwordHash,
       accessToken,
       refreshToken,
-      user: authUser
+      user: authUser,
     };
   }
 
@@ -114,7 +124,9 @@ export class AuthService {
       });
     }
 
-    const existingUsername = await this.usersService.findByUsername(dto.username);
+    const existingUsername = await this.usersService.findByUsername(
+      dto.username,
+    );
     if (existingUsername) {
       throw new ConflictException({
         code: ErrorCode.USERNAME_ALREADY_EXISTS,
@@ -122,7 +134,8 @@ export class AuthService {
       });
     }
 
-    const bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 12;
+    const bcryptRounds =
+      this.configService.get<number>('app.bcryptRounds') ?? 12;
     const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
 
     // 3. Save core user only
@@ -141,13 +154,17 @@ export class AuthService {
 
     // 4. Offload heavy tasks to Queue (Settings, Email sending)
     try {
-      await this.authQueue.add('on-register', {
-        userId: user.id,
-        email: user.email,
-      }, {
-        removeOnComplete: true,
-        attempts: 3,
-      });
+      await this.authQueue.add(
+        'on-register',
+        {
+          userId: user.id,
+          email: user.email,
+        },
+        {
+          removeOnComplete: true,
+          attempts: 3,
+        },
+      );
     } catch (error) {
       this.logger.warn(
         `BullMQ on-register queue failed (Redis may be down): ${error instanceof Error ? error.message : error}`,
@@ -161,7 +178,12 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto, ip?: string, userAgent?: string, deviceName?: string) {
+  async login(
+    dto: LoginDto,
+    ip?: string,
+    userAgent?: string,
+    deviceName?: string,
+  ) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException({
@@ -179,13 +201,17 @@ export class AuthService {
 
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
-        message: 'This account was created using Google/GitHub. Verification code sent.',
+        message:
+          'This account was created using Google/GitHub. Verification code sent.',
         requiresPasswordSetup: true,
         redirect: '/verify',
       });
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
@@ -234,7 +260,8 @@ export class AuthService {
     let user = await this.usersService.findByEmail(googleUser.email);
 
     if (!user) {
-      const username = googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
+      const username =
+        googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
       user = await this.usersService.create({
         email: googleUser.email,
         firstName: googleUser.firstName || googleUser.email.split('@')[0],
@@ -280,9 +307,13 @@ export class AuthService {
 
     if (githubAccount) {
       user = githubAccount.user;
-      githubAccount.accessTokenEncrypted = this.encryptionService.encrypt(githubUser.accessToken);
+      githubAccount.accessTokenEncrypted = this.encryptionService.encrypt(
+        githubUser.accessToken,
+      );
       if (githubUser.refreshToken) {
-        githubAccount.refreshTokenEncrypted = this.encryptionService.encrypt(githubUser.refreshToken);
+        githubAccount.refreshTokenEncrypted = this.encryptionService.encrypt(
+          githubUser.refreshToken,
+        );
       }
       await this.githubAccountsRepository.save(githubAccount);
     } else {
@@ -313,8 +344,12 @@ export class AuthService {
         username: githubUser.username,
         email: githubUser.email,
         avatarUrl: githubUser.avatarUrl,
-        accessTokenEncrypted: this.encryptionService.encrypt(githubUser.accessToken),
-        refreshTokenEncrypted: githubUser.refreshToken ? this.encryptionService.encrypt(githubUser.refreshToken) : undefined,
+        accessTokenEncrypted: this.encryptionService.encrypt(
+          githubUser.accessToken,
+        ),
+        refreshTokenEncrypted: githubUser.refreshToken
+          ? this.encryptionService.encrypt(githubUser.refreshToken)
+          : undefined,
       });
       await this.githubAccountsRepository.save(githubAccount);
     }
@@ -335,7 +370,8 @@ export class AuthService {
     const user = await this.usersService.findById(userId);
     if (!user) throw new UnauthorizedException();
 
-    const bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 12;
+    const bcryptRounds =
+      this.configService.get<number>('app.bcryptRounds') ?? 12;
     const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
 
     const providers = user.providers || [];
@@ -356,13 +392,20 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
     const storedToken = await this.refreshTokensRepository.findOne({
       where: { tokenHash },
       relations: ['user'],
     });
 
-    if (!storedToken || storedToken.revokedAt || new Date() > storedToken.expiresAt) {
+    if (
+      !storedToken ||
+      storedToken.revokedAt ||
+      new Date() > storedToken.expiresAt
+    ) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_INVALID,
         message: 'Invalid or expired refresh token',
@@ -384,7 +427,10 @@ export class AuthService {
   }
 
   async logout(refreshToken: string, accessToken?: string) {
-    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
     await this.refreshTokensRepository.update(
       { tokenHash },
       { revokedAt: new Date(), isDeleted: true },
@@ -407,6 +453,47 @@ export class AuthService {
     }
   }
 
+  async getSessions(userId: string) {
+    const sessions = await this.refreshTokensRepository.find({
+      where: { userId, revokedAt: undefined as any, isDeleted: false },
+      order: { lastUsedAt: 'DESC' },
+    });
+    
+    return sessions.map(s => ({
+      id: s.id,
+      deviceName: s.deviceName,
+      browser: s.deviceInfo?.browser,
+      os: s.deviceInfo?.os,
+      ipAddress: s.ipAddress,
+      location: s.location,
+      lastUsedAt: s.lastUsedAt,
+      createdAt: s.createdAt,
+      provider: s.provider,
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    const session = await this.refreshTokensRepository.findOne({
+      where: { id: sessionId, userId, isDeleted: false },
+    });
+    if (!session) {
+      throw new BadRequestException('Session not found or already revoked');
+    }
+    
+    session.revokedAt = new Date();
+    session.isDeleted = true;
+    await this.refreshTokensRepository.save(session);
+    return { success: true, message: 'Session revoked successfully' };
+  }
+
+  async revokeAllSessions(userId: string) {
+    await this.refreshTokensRepository.update(
+      { userId, isDeleted: false },
+      { revokedAt: new Date(), isDeleted: true },
+    );
+    return { success: true, message: 'All sessions revoked successfully' };
+  }
+
   private async generateTokens(
     user: User,
     ip?: string,
@@ -418,14 +505,18 @@ export class AuthService {
     const activeCount = await this.refreshTokensRepository.count({
       where: {
         userId: user.id,
-        revokedAt: undefined as any,
+        revokedAt: undefined,
         isDeleted: false,
       },
     });
     if (activeCount >= 5) {
       // Revoke the oldest active session to enforce the 5-device limit
       const oldest = await this.refreshTokensRepository.find({
-        where: { userId: user.id, revokedAt: undefined as any, isDeleted: false },
+        where: {
+          userId: user.id,
+          revokedAt: undefined,
+          isDeleted: false,
+        },
         order: { createdAt: 'ASC' },
         take: 1,
       });
@@ -445,7 +536,8 @@ export class AuthService {
       expiresIn: this.configService.get<string>('jwt.refreshExpires'),
     } as any);
 
-    const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
+    const refreshExpires =
+      this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
 
     const tokenHash = crypto
@@ -453,13 +545,35 @@ export class AuthService {
       .update(refreshToken)
       .digest('hex');
 
+    let browser: string | undefined;
+    let os: string | undefined;
+    let deviceNameDerived = deviceName;
+
+    if (userAgent) {
+      const parser = new UAParser(userAgent);
+      const res = parser.getResult();
+      browser = res.browser.name ? `${res.browser.name} ${res.browser.version || ''}`.trim() : undefined;
+      os = res.os.name ? `${res.os.name} ${res.os.version || ''}`.trim() : undefined;
+      
+      if (!deviceNameDerived) {
+        if (res.device.vendor && res.device.model) {
+          deviceNameDerived = `${res.device.vendor} ${res.device.model}`;
+        } else if (res.os.name) {
+          deviceNameDerived = res.os.name;
+        } else {
+          deviceNameDerived = 'Unknown Device';
+        }
+      }
+    }
+
     const refreshTokenEntity = this.refreshTokensRepository.create({
       userId: user.id,
       tokenHash,
       expiresAt,
       ipAddress: ip ?? null,
       userAgent: userAgent ?? null,
-      deviceName: deviceName ?? null,
+      deviceName: deviceNameDerived ?? null,
+      deviceInfo: { browser, os },
       provider: provider ?? null,
       lastUsedAt: new Date(),
       isDeleted: false,

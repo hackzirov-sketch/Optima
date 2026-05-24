@@ -8,7 +8,9 @@ export class EncryptionService {
   private readonly key: Buffer;
 
   constructor(private configService: ConfigService) {
-    const secret = this.configService.get<string>('github.encryptionKey') || 'default-secret-key-32-chars-long!!';
+    const secret =
+      this.configService.get<string>('github.encryptionKey') ||
+      'default-secret-key-32-chars-long!!';
     // Ensure the key is exactly 32 bytes
     this.key = crypto.scryptSync(secret, 'salt', 32);
   }

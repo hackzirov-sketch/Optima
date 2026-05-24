@@ -31,29 +31,30 @@ import { AuthProcessor } from './processors/auth.processor';
       name: 'auth',
     }),
     TypeOrmModule.forFeature([
-      RefreshToken, 
-      UserSettings, 
-      UserIpLog, 
+      RefreshToken,
+      UserSettings,
+      UserIpLog,
       GithubAccount,
-      UserVerification
+      UserVerification,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('jwt.accessSecret'),
-        signOptions: {
-          expiresIn: configService.get<string>('jwt.accessExpires'),
-        },
-      } as any),
+      useFactory: async (configService: ConfigService) =>
+        ({
+          secret: configService.get<string>('jwt.accessSecret'),
+          signOptions: {
+            expiresIn: configService.get<string>('jwt.accessExpires'),
+          },
+        }) as any,
       inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],
   providers: [
-    AuthService, 
-    JwtStrategy, 
-    JwtRefreshStrategy, 
-    GoogleStrategy, 
+    AuthService,
+    JwtStrategy,
+    JwtRefreshStrategy,
+    GoogleStrategy,
     GithubStrategy,
     EncryptionService,
     AuthProcessor, // Worker to handle background tasks

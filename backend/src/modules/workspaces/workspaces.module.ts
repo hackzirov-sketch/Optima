@@ -13,7 +13,12 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvitation, User]),
+    TypeOrmModule.forFeature([
+      Workspace,
+      WorkspaceMember,
+      WorkspaceInvitation,
+      User,
+    ]),
     UsersModule,
   ],
   controllers: [WorkspacesController, InvitationsController],

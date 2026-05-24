@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
@@ -28,14 +32,14 @@ export class MembersService {
       where: { workspaceId, userId },
       relations: ['user'],
     });
-    
+
     if (!member) {
       throw new NotFoundException({
         code: ErrorCode.NOT_WORKSPACE_MEMBER,
         message: 'Member not found in this workspace',
       });
     }
-    
+
     return member;
   }
 
@@ -43,24 +47,32 @@ export class MembersService {
     workspaceId: string,
     targetUserId: string,
     dto: UpdateMemberRoleDto,
-    requesterId: string
+    requesterId: string,
   ): Promise<WorkspaceMember> {
-    const workspace = await this.workspaceRepo.findOne({ where: { id: workspaceId } });
+    const workspace = await this.workspaceRepo.findOne({
+      where: { id: workspaceId },
+    });
     if (!workspace) throw new NotFoundException('Workspace not found');
 
-    const requester = await this.memberRepo.findOne({ where: { workspaceId, userId: requesterId } });
-    if (!requester || (requester.role !== WorkspaceRole.OWNER && requester.role !== WorkspaceRole.ADMIN)) {
-       throw new ConflictException({
-         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-         message: 'Not authorized to change roles',
-       });
+    const requester = await this.memberRepo.findOne({
+      where: { workspaceId, userId: requesterId },
+    });
+    if (
+      !requester ||
+      (requester.role !== WorkspaceRole.OWNER &&
+        requester.role !== WorkspaceRole.ADMIN)
+    ) {
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Not authorized to change roles',
+      });
     }
 
     if (workspace.ownerId === targetUserId && requesterId !== targetUserId) {
-       throw new ConflictException({
-         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-         message: 'Cannot change the role of the workspace owner',
-       });
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Cannot change the role of the workspace owner',
+      });
     }
 
     const member = await this.findOne(workspaceId, targetUserId);
@@ -68,30 +80,41 @@ export class MembersService {
     return this.memberRepo.save(member);
   }
 
-  async remove(workspaceId: string, targetUserId: string, requesterId: string): Promise<void> {
-    const workspace = await this.workspaceRepo.findOne({ where: { id: workspaceId } });
+  async remove(
+    workspaceId: string,
+    targetUserId: string,
+    requesterId: string,
+  ): Promise<void> {
+    const workspace = await this.workspaceRepo.findOne({
+      where: { id: workspaceId },
+    });
     if (!workspace) throw new NotFoundException('Workspace not found');
 
-    const requester = await this.memberRepo.findOne({ where: { workspaceId, userId: requesterId } });
+    const requester = await this.memberRepo.findOne({
+      where: { workspaceId, userId: requesterId },
+    });
     if (!requester) {
-       throw new NotFoundException('Requester not found in workspace');
+      throw new NotFoundException('Requester not found in workspace');
     }
 
     // A user can remove themselves (leave), or an owner/admin can remove them
     if (requesterId !== targetUserId) {
-       if (requester.role !== WorkspaceRole.OWNER && requester.role !== WorkspaceRole.ADMIN) {
-         throw new ConflictException({
-           code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-           message: 'Not authorized to remove members',
-         });
-       }
+      if (
+        requester.role !== WorkspaceRole.OWNER &&
+        requester.role !== WorkspaceRole.ADMIN
+      ) {
+        throw new ConflictException({
+          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+          message: 'Not authorized to remove members',
+        });
+      }
     }
 
     if (workspace.ownerId === targetUserId) {
-       throw new ConflictException({
-         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-         message: 'The workspace owner cannot be removed',
-       });
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'The workspace owner cannot be removed',
+      });
     }
 
     const member = await this.findOne(workspaceId, targetUserId);

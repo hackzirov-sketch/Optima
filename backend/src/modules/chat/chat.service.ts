@@ -40,12 +40,17 @@ export class ChatService {
   ) {}
 
   private async assertWsMember(workspaceId: string, userId: string) {
-    const m = await this.wsMemberRepo.findOne({ where: { workspaceId, userId } });
+    const m = await this.wsMemberRepo.findOne({
+      where: { workspaceId, userId },
+    });
     if (!m) throw new ForbiddenException('Not a workspace member');
     return m;
   }
 
-  private async assertRoomMember(roomId: string, userId: string): Promise<ChatMember> {
+  private async assertRoomMember(
+    roomId: string,
+    userId: string,
+  ): Promise<ChatMember> {
     const cm = await this.memberRepo.findOne({
       where: { roomId, userId, leftAt: IsNull() },
     });
@@ -64,15 +69,23 @@ export class ChatService {
       .filter((r) => r && r.workspaceId === workspaceId);
   }
 
-  async createRoom(workspaceId: string, userId: string, dto: CreateChatRoomDto) {
+  async createRoom(
+    workspaceId: string,
+    userId: string,
+    dto: CreateChatRoomDto,
+  ) {
     await this.assertWsMember(workspaceId, userId);
 
     if (dto.groupId) {
-      const g = await this.groupRepo.findOne({ where: { id: dto.groupId, workspaceId } });
+      const g = await this.groupRepo.findOne({
+        where: { id: dto.groupId, workspaceId },
+      });
       if (!g) throw new BadRequestException('Group not in this workspace');
     }
     if (dto.projectId) {
-      const p = await this.projectRepo.findOne({ where: { id: dto.projectId, workspaceId } });
+      const p = await this.projectRepo.findOne({
+        where: { id: dto.projectId, workspaceId },
+      });
       if (!p) throw new BadRequestException('Project not in this workspace');
     }
 
@@ -143,17 +156,23 @@ export class ChatService {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
     if (!msg) throw new NotFoundException('Message not found');
     await this.assertRoomMember(msg.roomId, userId);
-    if (msg.senderId !== userId) throw new ForbiddenException('You can only delete your own messages');
+    if (msg.senderId !== userId)
+      throw new ForbiddenException('You can only delete your own messages');
     msg.isDeleted = true;
     msg.deletedAt = new Date();
     await this.messageRepo.save(msg);
   }
 
-  async updateMessage(messageId: string, userId: string, dto: UpdateMessageDto) {
+  async updateMessage(
+    messageId: string,
+    userId: string,
+    dto: UpdateMessageDto,
+  ) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
     if (!msg || msg.isDeleted) throw new NotFoundException('Message not found');
     await this.assertRoomMember(msg.roomId, userId);
-    if (msg.senderId !== userId) throw new ForbiddenException('You can only edit your own messages');
+    if (msg.senderId !== userId)
+      throw new ForbiddenException('You can only edit your own messages');
     msg.content = dto.content;
     msg.isEdited = true;
     return this.messageRepo.save(msg);

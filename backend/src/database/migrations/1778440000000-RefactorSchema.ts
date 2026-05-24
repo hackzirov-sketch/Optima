@@ -38,7 +38,9 @@ export class RefactorSchema1778440000000 implements MigrationInterface {
     `);
 
     // Drop old full_name column
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "full_name"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "full_name"`,
+    );
 
     // Remove defaults (data migrated, defaults no longer needed)
     await queryRunner.query(
@@ -49,7 +51,9 @@ export class RefactorSchema1778440000000 implements MigrationInterface {
     );
 
     // phone varchar → phone_number bigint
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "phone"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "phone"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "users" ADD COLUMN "phone_number" bigint`,
     );
@@ -107,23 +111,49 @@ export class RefactorSchema1778440000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_first_name"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_user_active"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_user_active"`,
+    );
 
     // Restore refresh_tokens columns
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "is_deleted"`);
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "last_used_at"`);
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "user_agent"`);
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "location"`);
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "ip_address"`);
-    await queryRunner.query(`ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "device_name"`);
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "is_deleted"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "last_used_at"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "user_agent"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "location"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "ip_address"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "refresh_tokens" DROP COLUMN IF EXISTS "device_name"`,
+    );
 
     // Restore is_deleted from soft-delete tables
-    for (const table of ['workspaces', 'projects', 'tasks', 'task_pushes', 'groups']) {
-      await queryRunner.query(`ALTER TABLE "${table}" DROP COLUMN IF EXISTS "is_deleted"`);
+    for (const table of [
+      'workspaces',
+      'projects',
+      'tasks',
+      'task_pushes',
+      'groups',
+    ]) {
+      await queryRunner.query(
+        `ALTER TABLE "${table}" DROP COLUMN IF EXISTS "is_deleted"`,
+      );
     }
     // Restore users: drop new columns
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "is_deleted"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "phone_number"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "is_deleted"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "phone_number"`,
+    );
 
     // Restore users: recreate full_name from first + last
     await queryRunner.query(
@@ -133,10 +163,18 @@ export class RefactorSchema1778440000000 implements MigrationInterface {
       UPDATE "users"
       SET "full_name" = TRIM("first_name" || ' ' || "last_name")
     `);
-    await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "full_name" DROP DEFAULT`);
-    await queryRunner.query(`ALTER TABLE "users" ADD COLUMN "phone" character varying(20)`);
+    await queryRunner.query(
+      `ALTER TABLE "users" ALTER COLUMN "full_name" DROP DEFAULT`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD COLUMN "phone" character varying(20)`,
+    );
 
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "first_name"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "last_name"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "first_name"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "last_name"`,
+    );
   }
 }

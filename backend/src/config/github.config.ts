@@ -7,5 +7,7 @@ export default registerAs('github', () => ({
   clientId: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
   encryptionKey: process.env.ENCRYPTION_KEY,
-  callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:5001/api/v1/auth/github/callback',
+  callbackUrl:
+    process.env.GITHUB_CALLBACK_URL ||
+    'http://localhost:5001/api/v1/auth/github/callback',
 }));

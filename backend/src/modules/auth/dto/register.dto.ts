@@ -47,7 +47,10 @@ export class RegisterDto {
   @MaxLength(32)
   password: string;
 
-  @ApiPropertyOptional({ example: 998901234567, description: 'Phone number (digits only)' })
+  @ApiPropertyOptional({
+    example: 998901234567,
+    description: 'Phone number (digits only)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(10000000000)

@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsUUID, IsEnum, IsDateString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
 import { ProjectStatus, PriorityLevel } from '../../../common/enums';
 
 export class CreateProjectDto {
@@ -8,7 +15,10 @@ export class CreateProjectDto {
   @IsNotEmpty()
   workspaceId: string;
 
-  @ApiProperty({ required: false, example: '3a954c01-34a1-40e3-a927-ad8e96d8e615' })
+  @ApiProperty({
+    required: false,
+    example: '3a954c01-34a1-40e3-a927-ad8e96d8e615',
+  })
   @IsOptional()
   @IsUUID()
   groupId?: string;
@@ -23,17 +33,28 @@ export class CreateProjectDto {
   @IsNotEmpty()
   slug: string;
 
-  @ApiProperty({ required: false, example: 'Complete rewrite of the UPZ backend' })
+  @ApiProperty({
+    required: false,
+    example: 'Complete rewrite of the UPZ backend',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ enum: ProjectStatus, default: ProjectStatus.PLANNING, required: false })
+  @ApiProperty({
+    enum: ProjectStatus,
+    default: ProjectStatus.PLANNING,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(ProjectStatus)
   status?: ProjectStatus;
 
-  @ApiProperty({ enum: PriorityLevel, default: PriorityLevel.MEDIUM, required: false })
+  @ApiProperty({
+    enum: PriorityLevel,
+    default: PriorityLevel.MEDIUM,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(PriorityLevel)
   priority?: PriorityLevel;

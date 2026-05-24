@@ -38,7 +38,15 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // ── Config (global) ────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, jwtConfig, githubConfig, r2Config, googleConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        redisConfig,
+        jwtConfig,
+        githubConfig,
+        r2Config,
+        googleConfig,
+      ],
       envFilePath: '.env',
     }),
 
@@ -50,9 +58,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: false,
         logging: config.get('NODE_ENV') === 'development',
-        ssl: config.get('NODE_ENV') === 'production'
-          ? { rejectUnauthorized: false }
-          : false,
+        ssl:
+          config.get('NODE_ENV') === 'production'
+            ? { rejectUnauthorized: false }
+            : false,
         extra: {
           max: parseInt(config.get('DATABASE_POOL_SIZE') || '20', 10),
           idleTimeoutMillis: 30000,
@@ -75,9 +84,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
     // ── Rate Limiting ─────────────────────────────
     ThrottlerModule.forRoot([
-      { name: 'short',  ttl: 1000,  limit: 20  },   // 20 req/sec
-      { name: 'medium', ttl: 10000, limit: 100 },   // 100 req/10sec
-      { name: 'long',   ttl: 60000, limit: 300 },   // 300 req/min
+      { name: 'short', ttl: 1000, limit: 20 }, // 20 req/sec
+      { name: 'medium', ttl: 10000, limit: 100 }, // 100 req/10sec
+      { name: 'long', ttl: 60000, limit: 300 }, // 300 req/min
     ]),
 
     // ── Event Emitter (internal) ───────────────────

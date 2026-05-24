@@ -29,11 +29,15 @@ export class UsersService {
     }
     return user;
   }
-  
+
   async findByIdWithRelations(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({
       where: { id },
-      relations: ['settings', 'workspaceMemberships', 'workspaceMemberships.workspace'],
+      relations: [
+        'settings',
+        'workspaceMemberships',
+        'workspaceMemberships.workspace',
+      ],
     });
     if (!user) {
       throw new NotFoundException({
@@ -41,21 +45,21 @@ export class UsersService {
         message: 'User not found',
       });
     }
-    
+
     // Formatting workspace memberships so it's cleaner in the response
-    const workspaces = user.workspaceMemberships.map(m => ({
+    const workspaces = user.workspaceMemberships.map((m) => ({
       role: m.role,
       joinedAt: m.joinedAt,
-      ...m.workspace
+      ...m.workspace,
     }));
-    
+
     // Remove the verbose array and attach the clean workspaces array
     user.workspaceMemberships = undefined as any;
     (user as any).workspaces = workspaces;
 
     return user;
   }
-      
+
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
@@ -82,9 +86,14 @@ export class UsersService {
     return this.findById(userId);
   }
 
-  async updateSettings(userId: string, dto: UpdateSettingsDto): Promise<UserSettings> {
+  async updateSettings(
+    userId: string,
+    dto: UpdateSettingsDto,
+  ): Promise<UserSettings> {
     await this.settingsRepository.update({ userId }, dto);
-    const settings = await this.settingsRepository.findOne({ where: { userId } });
+    const settings = await this.settingsRepository.findOne({
+      where: { userId },
+    });
     if (!settings) {
       throw new NotFoundException({
         code: ErrorCode.INTERNAL_ERROR,
@@ -102,7 +111,10 @@ export class UsersService {
   async softDeleteAccount(userId: string): Promise<void> {
     await this.findById(userId);
     await this.refreshTokensRepository.delete({ userId });
-    await this.usersRepository.update(userId, { deletedBy: userId, isDeleted: true });
+    await this.usersRepository.update(userId, {
+      deletedBy: userId,
+      isDeleted: true,
+    });
     await this.usersRepository.softDelete(userId);
   }
 }

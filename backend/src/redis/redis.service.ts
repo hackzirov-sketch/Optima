@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -15,7 +11,8 @@ export class RedisService implements OnModuleDestroy {
 
   private getClient(): Redis {
     if (!this.client) {
-      const url = this.config.get<string>('redis.url') || 'redis://localhost:6379';
+      const url =
+        this.config.get<string>('redis.url') || 'redis://localhost:6379';
       const password = this.config.get<string>('redis.password');
       this.client = new Redis(url, {
         password: password || undefined,
@@ -43,7 +40,9 @@ export class RedisService implements OnModuleDestroy {
     try {
       await this.getClient().set(`upz:blacklist:${jti}`, '1', 'EX', ttlSeconds);
     } catch (e) {
-      this.logger.warn(`Redis blacklist set failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis blacklist set failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 

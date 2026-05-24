@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { WorkspacesService } from './workspaces.service';
 import { MembersService } from './members.service';
@@ -22,7 +30,10 @@ export class WorkspacesController {
   // ── Workspaces ──────────────────────────────────
   @Post()
   @ApiOperation({ summary: 'Create a new workspace' })
-  createWorkspace(@CurrentUser('id') userId: string, @Body() dto: CreateWorkspaceDto) {
+  createWorkspace(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateWorkspaceDto,
+  ) {
     return this.workspacesService.create(userId, dto);
   }
 
@@ -50,7 +61,10 @@ export class WorkspacesController {
 
   @Delete(':wsId')
   @ApiOperation({ summary: 'Delete a workspace' })
-  deleteWorkspace(@Param('wsId') wsId: string, @CurrentUser('id') userId: string) {
+  deleteWorkspace(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.workspacesService.remove(wsId, userId);
   }
 

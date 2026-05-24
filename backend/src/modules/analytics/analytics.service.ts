@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 
@@ -24,7 +28,9 @@ export class AnalyticsService {
   ) {}
 
   private async assertWsMember(workspaceId: string, userId: string) {
-    const m = await this.wsMemberRepo.findOne({ where: { workspaceId, userId } });
+    const m = await this.wsMemberRepo.findOne({
+      where: { workspaceId, userId },
+    });
     if (!m) throw new ForbiddenException('Not a workspace member');
     return m;
   }
@@ -49,8 +55,11 @@ export class AnalyticsService {
   }
 
   async projectAnalytics(projectId: string, userId: string) {
-    const project = await this.projectRepo.findOne({ where: { id: projectId } });
-    if (!project || project.deletedAt) throw new NotFoundException('Project not found');
+    const project = await this.projectRepo.findOne({
+      where: { id: projectId },
+    });
+    if (!project || project.deletedAt)
+      throw new NotFoundException('Project not found');
     await this.assertWsMember(project.workspaceId, userId);
 
     const totals = await this.projStatsRepo
@@ -67,8 +76,11 @@ export class AnalyticsService {
   }
 
   async projectDevelopers(projectId: string, userId: string) {
-    const project = await this.projectRepo.findOne({ where: { id: projectId } });
-    if (!project || project.deletedAt) throw new NotFoundException('Project not found');
+    const project = await this.projectRepo.findOne({
+      where: { id: projectId },
+    });
+    if (!project || project.deletedAt)
+      throw new NotFoundException('Project not found');
     await this.assertWsMember(project.workspaceId, userId);
 
     return this.projStatsRepo.find({

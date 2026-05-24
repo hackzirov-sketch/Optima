@@ -73,7 +73,10 @@ export class PushesController {
 
   @Get(':pushId/comments')
   @ApiOperation({ summary: 'List inline review comments' })
-  listComments(@Param('pushId') pushId: string, @CurrentUser('id') userId: string) {
+  listComments(
+    @Param('pushId') pushId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.pushesService.listComments(pushId, userId);
   }
 

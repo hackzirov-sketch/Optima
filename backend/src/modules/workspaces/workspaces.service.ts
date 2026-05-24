@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Workspace } from '../../database/entities/workspace.entity';
@@ -19,7 +24,9 @@ export class WorkspacesService {
   ) {}
 
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
-    const existing = await this.workspaceRepo.findOne({ where: { slug: dto.slug } });
+    const existing = await this.workspaceRepo.findOne({
+      where: { slug: dto.slug },
+    });
     if (existing) {
       throw new ConflictException({
         code: ErrorCode.WORKSPACE_SLUG_TAKEN,
@@ -88,13 +95,23 @@ export class WorkspacesService {
     return workspace;
   }
 
-  async update(id: string, userId: string, dto: UpdateWorkspaceDto): Promise<Workspace> {
+  async update(
+    id: string,
+    userId: string,
+    dto: UpdateWorkspaceDto,
+  ): Promise<Workspace> {
     const workspace = await this.findById(id);
-    
+
     // Authorization check would typically happen in a guard, but doing a basic check here
     if (workspace.ownerId !== userId) {
-      const member = await this.memberRepo.findOne({ where: { workspaceId: id, userId } });
-      if (!member || (member.role !== WorkspaceRole.OWNER && member.role !== WorkspaceRole.ADMIN)) {
+      const member = await this.memberRepo.findOne({
+        where: { workspaceId: id, userId },
+      });
+      if (
+        !member ||
+        (member.role !== WorkspaceRole.OWNER &&
+          member.role !== WorkspaceRole.ADMIN)
+      ) {
         throw new ConflictException({
           code: ErrorCode.INSUFFICIENT_PERMISSIONS,
           message: 'Not allowed to update workspace',
@@ -103,7 +120,9 @@ export class WorkspacesService {
     }
 
     if (dto.slug && dto.slug !== workspace.slug) {
-      const existing = await this.workspaceRepo.findOne({ where: { slug: dto.slug } });
+      const existing = await this.workspaceRepo.findOne({
+        where: { slug: dto.slug },
+      });
       if (existing) {
         throw new ConflictException({
           code: ErrorCode.WORKSPACE_SLUG_TAKEN,
@@ -118,7 +137,7 @@ export class WorkspacesService {
 
   async remove(id: string, userId: string): Promise<void> {
     const workspace = await this.findById(id);
-    
+
     if (workspace.ownerId !== userId) {
       throw new ConflictException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,

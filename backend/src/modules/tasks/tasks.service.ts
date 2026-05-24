@@ -53,9 +53,15 @@ export class TasksService {
   //  Internal helpers
   // ─────────────────────────────────────────────
 
-  private async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
-    const member = await this.wsMemberRepo.findOne({ where: { workspaceId, userId } });
-    if (!member) throw new ForbiddenException('You are not a member of this workspace');
+  private async assertMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember> {
+    const member = await this.wsMemberRepo.findOne({
+      where: { workspaceId, userId },
+    });
+    if (!member)
+      throw new ForbiddenException('You are not a member of this workspace');
     return member;
   }
 
@@ -72,12 +78,21 @@ export class TasksService {
     description: string,
     metadata?: object,
   ) {
-    const activity = this.activityRepo.create({ taskId, userId, type, description, metadata });
+    const activity = this.activityRepo.create({
+      taskId,
+      userId,
+      type,
+      description,
+      metadata,
+    });
     await this.activityRepo.save(activity);
   }
 
   /** Detect circular dependency using BFS */
-  private async hasCycle(taskId: string, newDependsOnId: string): Promise<boolean> {
+  private async hasCycle(
+    taskId: string,
+    newDependsOnId: string,
+  ): Promise<boolean> {
     // Starting from newDependsOnId, see if we can reach taskId following blocks chains
     const visited = new Set<string>();
     const queue = [newDependsOnId];
@@ -88,7 +103,9 @@ export class TasksService {
       if (visited.has(current)) continue;
       visited.add(current);
 
-      const deps = await this.dependencyRepo.find({ where: { taskId: current } });
+      const deps = await this.dependencyRepo.find({
+        where: { taskId: current },
+      });
       for (const d of deps) queue.push(d.dependsOnId);
     }
     return false;
@@ -148,7 +165,12 @@ export class TasksService {
       const saved = await queryRunner.manager.save(task);
       await queryRunner.commitTransaction();
 
-      await this.logActivity(saved.id, userId, 'task_created', `Task UPZ-${saved.taskNumber} created`);
+      await this.logActivity(
+        saved.id,
+        userId,
+        'task_created',
+        `Task UPZ-${saved.taskNumber} created`,
+      );
       return this.findById(saved.id, userId);
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -158,7 +180,11 @@ export class TasksService {
     }
   }
 
-  async findAll(projectId: string, userId: string, dto: FilterTasksDto): Promise<{ data: Task[]; total: number }> {
+  async findAll(
+    projectId: string,
+    userId: string,
+    dto: FilterTasksDto,
+  ): Promise<{ data: Task[]; total: number }> {
     // Find any task in project to get workspaceId for auth check
     const anyTask = await this.taskRepo.findOne({ where: { projectId } });
     if (anyTask) await this.assertMember(anyTask.workspaceId, userId);
@@ -171,18 +197,27 @@ export class TasksService {
       .where('task.projectId = :projectId', { projectId })
       .andWhere('task.deletedAt IS NULL');
 
-    if (dto.status)     qb.andWhere('task.status = :status', { status: dto.status });
-    if (dto.type)       qb.andWhere('task.type = :type', { type: dto.type });
-    if (dto.priority)   qb.andWhere('task.priority = :priority', { priority: dto.priority });
-    if (dto.assigneeId) qb.andWhere('task.assigneeId = :assigneeId', { assigneeId: dto.assigneeId });
-    if (dto.columnId)   qb.andWhere('task.columnId = :columnId', { columnId: dto.columnId });
-    if (dto.search)     qb.andWhere('task.title ILIKE :search', { search: `%${dto.search}%` });
+    if (dto.status)
+      qb.andWhere('task.status = :status', { status: dto.status });
+    if (dto.type) qb.andWhere('task.type = :type', { type: dto.type });
+    if (dto.priority)
+      qb.andWhere('task.priority = :priority', { priority: dto.priority });
+    if (dto.assigneeId)
+      qb.andWhere('task.assigneeId = :assigneeId', {
+        assigneeId: dto.assigneeId,
+      });
+    if (dto.columnId)
+      qb.andWhere('task.columnId = :columnId', { columnId: dto.columnId });
+    if (dto.search)
+      qb.andWhere('task.title ILIKE :search', { search: `%${dto.search}%` });
 
     if (dto.parentTaskId !== undefined) {
       if (dto.parentTaskId === null) {
         qb.andWhere('task.parentTaskId IS NULL');
       } else {
-        qb.andWhere('task.parentTaskId = :parentTaskId', { parentTaskId: dto.parentTaskId });
+        qb.andWhere('task.parentTaskId = :parentTaskId', {
+          parentTaskId: dto.parentTaskId,
+        });
       }
     }
 
@@ -206,11 +241,19 @@ export class TasksService {
     return task;
   }
 
-  async update(taskId: string, userId: string, dto: UpdateTaskDto): Promise<Task> {
+  async update(
+    taskId: string,
+    userId: string,
+    dto: UpdateTaskDto,
+  ): Promise<Task> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const old = { status: task.status, assigneeId: task.assigneeId, priority: task.priority };
+    const old = {
+      status: task.status,
+      assigneeId: task.assigneeId,
+      priority: task.priority,
+    };
 
     // Validate column belongs to this project
     if (dto.columnId) {
@@ -233,14 +276,19 @@ export class TasksService {
 
     // Activity logs for key changes
     if (dto.status && dto.status !== old.status) {
-      await this.logActivity(taskId, userId, 'status_changed',
+      await this.logActivity(
+        taskId,
+        userId,
+        'status_changed',
         `Status changed from ${old.status} to ${dto.status}`,
-        { old_value: old.status, new_value: dto.status });
+        { old_value: old.status, new_value: dto.status },
+      );
     }
     if (dto.assigneeId !== undefined && dto.assigneeId !== old.assigneeId) {
-      await this.logActivity(taskId, userId, 'assigned',
-        `Assignee changed`,
-        { old_value: old.assigneeId, new_value: dto.assigneeId });
+      await this.logActivity(taskId, userId, 'assigned', `Assignee changed`, {
+        old_value: old.assigneeId,
+        new_value: dto.assigneeId,
+      });
     }
 
     return saved;
@@ -256,7 +304,10 @@ export class TasksService {
       member.role === WorkspaceRole.ADMIN ||
       member.role === WorkspaceRole.LEAD;
 
-    if (!canDelete) throw new ForbiddenException('Only task creator, lead, admin or owner can delete tasks');
+    if (!canDelete)
+      throw new ForbiddenException(
+        'Only task creator, lead, admin or owner can delete tasks',
+      );
 
     task.deletedAt = new Date();
     task.deletedBy = userId;
@@ -272,14 +323,17 @@ export class TasksService {
     await this.assertMember(task.workspaceId, userId);
 
     const oldColumnId = task.columnId;
-    const oldStatus   = task.status;
+    const oldStatus = task.status;
 
     if (dto.columnId !== undefined) {
       if (dto.columnId) {
         const col = await this.columnRepo.findOne({
           where: { id: dto.columnId, projectId: task.projectId },
         });
-        if (!col) throw new NotFoundException('Target column not found in this project');
+        if (!col)
+          throw new NotFoundException(
+            'Target column not found in this project',
+          );
         task.columnId = dto.columnId;
 
         // Auto-sync status from column mapping if no explicit status given
@@ -303,9 +357,18 @@ export class TasksService {
     const saved = await this.taskRepo.save(task);
 
     if (saved.columnId !== oldColumnId || saved.status !== oldStatus) {
-      await this.logActivity(taskId, userId, 'task_moved',
+      await this.logActivity(
+        taskId,
+        userId,
+        'task_moved',
         `Task moved to column ${saved.columnId ?? 'none'} with status ${saved.status}`,
-        { old_column: oldColumnId, new_column: saved.columnId, old_status: oldStatus, new_status: saved.status });
+        {
+          old_column: oldColumnId,
+          new_column: saved.columnId,
+          old_status: oldStatus,
+          new_status: saved.status,
+        },
+      );
     }
 
     return saved;
@@ -319,7 +382,9 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const existing = await this.watcherRepo.findOne({ where: { taskId, userId } });
+    const existing = await this.watcherRepo.findOne({
+      where: { taskId, userId },
+    });
     if (existing) return { watching: true };
 
     const watcher = this.watcherRepo.create({ taskId, userId });
@@ -327,7 +392,10 @@ export class TasksService {
     return { watching: true };
   }
 
-  async unwatch(taskId: string, userId: string): Promise<{ watching: boolean }> {
+  async unwatch(
+    taskId: string,
+    userId: string,
+  ): Promise<{ watching: boolean }> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
@@ -374,7 +442,11 @@ export class TasksService {
   //  Dependencies
   // ─────────────────────────────────────────────
 
-  async addDependency(taskId: string, userId: string, dto: AddDependencyDto): Promise<TaskDependency> {
+  async addDependency(
+    taskId: string,
+    userId: string,
+    dto: AddDependencyDto,
+  ): Promise<TaskDependency> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
@@ -385,12 +457,16 @@ export class TasksService {
     // Ensure target task exists and is in the same workspace
     const target = await this.getTask(dto.dependsOnId);
     if (target.workspaceId !== task.workspaceId) {
-      throw new BadRequestException('Dependencies must be within the same workspace');
+      throw new BadRequestException(
+        'Dependencies must be within the same workspace',
+      );
     }
 
     // Cycle detection
     if (await this.hasCycle(taskId, dto.dependsOnId)) {
-      throw new ConflictException('Adding this dependency would create a cycle');
+      throw new ConflictException(
+        'Adding this dependency would create a cycle',
+      );
     }
 
     const existing = await this.dependencyRepo.findOne({
@@ -418,7 +494,11 @@ export class TasksService {
     });
   }
 
-  async removeDependency(taskId: string, dependencyId: string, userId: string): Promise<void> {
+  async removeDependency(
+    taskId: string,
+    dependencyId: string,
+    userId: string,
+  ): Promise<void> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
@@ -434,21 +514,34 @@ export class TasksService {
   //  Tags
   // ─────────────────────────────────────────────
 
-  async addTag(taskId: string, tagId: string, userId: string): Promise<TaskTag> {
+  async addTag(
+    taskId: string,
+    tagId: string,
+    userId: string,
+  ): Promise<TaskTag> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const tag = await this.tagRepo.findOne({ where: { id: tagId, workspaceId: task.workspaceId } });
+    const tag = await this.tagRepo.findOne({
+      where: { id: tagId, workspaceId: task.workspaceId },
+    });
     if (!tag) throw new NotFoundException('Tag not found in this workspace');
 
-    const existing = await this.taskTagRepo.findOne({ where: { taskId, tagId } });
-    if (existing) throw new ConflictException('Tag already attached to this task');
+    const existing = await this.taskTagRepo.findOne({
+      where: { taskId, tagId },
+    });
+    if (existing)
+      throw new ConflictException('Tag already attached to this task');
 
     const taskTag = this.taskTagRepo.create({ taskId, tagId });
     return this.taskTagRepo.save(taskTag);
   }
 
-  async removeTag(taskId: string, tagId: string, userId: string): Promise<void> {
+  async removeTag(
+    taskId: string,
+    tagId: string,
+    userId: string,
+  ): Promise<void> {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 

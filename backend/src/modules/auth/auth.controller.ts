@@ -9,6 +9,8 @@ import {
   Req,
   Ip,
   Headers,
+  Param,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -122,5 +124,26 @@ export class AuthController {
     }
     await this.authService.logout(dto.refreshToken, accessToken);
     return { message: 'Logged out successfully' };
+  }
+
+  @Get('sessions')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get all active sessions for current user' })
+  async getSessions(@Req() req) {
+    return this.authService.getSessions(req.user.id);
+  }
+
+  @Delete('sessions/:id')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Revoke a specific session by ID' })
+  async revokeSession(@Req() req, @Param('id') id: string) {
+    return this.authService.revokeSession(req.user.id, id);
+  }
+
+  @Delete('sessions')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Revoke all sessions' })
+  async revokeAllSessions(@Req() req) {
+    return this.authService.revokeAllSessions(req.user.id);
   }
 }

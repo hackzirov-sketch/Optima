@@ -30,7 +30,10 @@ export class CreateTaskDto {
   @IsUUID()
   columnId?: string;
 
-  @ApiProperty({ required: false, example: 'uuid-of-parent-task (for subtasks)' })
+  @ApiProperty({
+    required: false,
+    example: 'uuid-of-parent-task (for subtasks)',
+  })
   @IsOptional()
   @IsUUID()
   parentTaskId?: string;
@@ -61,12 +64,20 @@ export class CreateTaskDto {
   @IsEnum(TaskType)
   type?: TaskType;
 
-  @ApiProperty({ enum: PriorityLevel, default: PriorityLevel.MEDIUM, required: false })
+  @ApiProperty({
+    enum: PriorityLevel,
+    default: PriorityLevel.MEDIUM,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(PriorityLevel)
   priority?: PriorityLevel;
 
-  @ApiProperty({ enum: TaskStatus, default: TaskStatus.BACKLOG, required: false })
+  @ApiProperty({
+    enum: TaskStatus,
+    default: TaskStatus.BACKLOG,
+    required: false,
+  })
   @IsOptional()
   @IsEnum(TaskStatus)
   status?: TaskStatus;

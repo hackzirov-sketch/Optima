@@ -10,7 +10,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -47,7 +52,9 @@ export class TasksController {
   }
 
   @Get('projects/:projectId/tasks')
-  @ApiOperation({ summary: 'Get all tasks in a project (board view, paginated)' })
+  @ApiOperation({
+    summary: 'Get all tasks in a project (board view, paginated)',
+  })
   @ApiParam({ name: 'projectId', description: 'Project UUID' })
   findAll(
     @Param('projectId') projectId: string,
@@ -83,7 +90,9 @@ export class TasksController {
   // ─── Move (Kanban) ─────────────────────────────────────────────────────────
 
   @Patch('tasks/:taskId/move')
-  @ApiOperation({ summary: 'Move task to a different column / position / status' })
+  @ApiOperation({
+    summary: 'Move task to a different column / position / status',
+  })
   move(
     @Param('taskId') taskId: string,
     @CurrentUser('id') userId: string,
@@ -96,7 +105,10 @@ export class TasksController {
 
   @Get('tasks/:taskId/watchers')
   @ApiOperation({ summary: 'Get task watchers' })
-  getWatchers(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  getWatchers(
+    @Param('taskId') taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.getWatchers(taskId, userId);
   }
 
@@ -116,7 +128,10 @@ export class TasksController {
 
   @Get('tasks/:taskId/activities')
   @ApiOperation({ summary: 'Get activity / audit trail for a task' })
-  getActivities(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  getActivities(
+    @Param('taskId') taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.getActivities(taskId, userId);
   }
 
@@ -124,7 +139,10 @@ export class TasksController {
 
   @Get('tasks/:taskId/dependencies')
   @ApiOperation({ summary: 'Get task dependencies' })
-  getDependencies(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  getDependencies(
+    @Param('taskId') taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.getDependencies(taskId, userId);
   }
 

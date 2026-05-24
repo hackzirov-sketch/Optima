@@ -7,9 +7,7 @@ import { GroupMember } from '../../database/entities/group-member.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Group, GroupMember, WorkspaceMember]),
-  ],
+  imports: [TypeOrmModule.forFeature([Group, GroupMember, WorkspaceMember])],
   controllers: [GroupsController],
   providers: [GroupsService],
   exports: [GroupsService],
