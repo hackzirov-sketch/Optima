@@ -62,6 +62,7 @@ export class GroupsService {
       const member = this.groupMemberRepo.create({
         groupId: savedGroup.id,
         userId: userId,
+        role: wsMember.role,
       });
       await queryRunner.manager.save(member);
 
@@ -164,6 +165,7 @@ export class GroupsService {
     id: string,
     userIdToAdd: string,
     requesterId: string,
+    role?: WorkspaceRole,
   ): Promise<GroupMember> {
     const group = await this.findById(id, requesterId);
 
@@ -205,6 +207,7 @@ export class GroupsService {
     const member = this.groupMemberRepo.create({
       groupId: id,
       userId: userIdToAdd,
+      role: role || WorkspaceRole.JUNIOR,
     });
 
     return this.groupMemberRepo.save(member);

@@ -64,7 +64,7 @@ export class GroupsController {
     @CurrentUser('id') requesterId: string,
     @Body() dto: AddGroupMemberDto,
   ) {
-    return this.groupsService.addMember(id, dto.userId, requesterId);
+    return this.groupsService.addMember(id, dto.userId, requesterId, dto.role);
   }
 
   @Delete(':id/members/:userId')
