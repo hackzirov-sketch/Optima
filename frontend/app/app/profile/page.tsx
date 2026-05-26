@@ -5,7 +5,7 @@
 ﻿import { motion } from "framer-motion";
 import { Edit3, Award, Target, BookOpen, Briefcase, Star, GitBranch, Code2, Crown, ArrowRight, BadgeCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import Link from "next/navigation";
+import Link from "next/link";
 import { AppLayout } from "@/components/app/AppLayout";
 import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge } from "@/components/premium/PremiumAssets";
 import type { UserProfile } from "@/types";
@@ -36,7 +36,7 @@ const MOCK_REPOS = [
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t, i18n } = useTranslation();
   const daysSince = Math.floor((Date.now() - user.joinedAt) / 86400000);
   const skills = SKILLS_BY_PROFESSION[user.profession] ?? SKILLS_BY_PROFESSION.student;

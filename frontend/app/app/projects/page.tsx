@@ -16,7 +16,7 @@ import type { SmartTask, TaskView, UserProfile } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [view, setView] = useState<TaskView>("board");
@@ -38,11 +38,11 @@ export default function Page() {
   const tableRows = filteredTasks.map((task) => ({
     id: task.id,
     cells: [
-      <span className="font-black">{task.title}</span>,
-      <Pill tone="indigo">{task.status.replace("_", " ")}</Pill>,
-      <span>{task.assignee}</span>,
-      <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="title" className="font-black">{task.title}</span>,
+      <Pill key="status" tone="indigo">{task.status.replace("_", " ")}</Pill>,
+      <span key="assignee">{task.assignee}</span>,
+      <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
+      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
     ],
   }));
 

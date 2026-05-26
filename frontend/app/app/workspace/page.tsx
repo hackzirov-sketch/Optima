@@ -393,7 +393,7 @@ function taskMatchesPreset(taskText: string, filters: string[]) {
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [activeView, setActiveView] = useState<TaskView>(() => storage.getActiveView() ?? "board");
   const [activeBoard, setActiveBoard] = useState(() => storage.getActiveBoard() ?? "Roadmap");
@@ -511,11 +511,11 @@ export default function Page() {
   const taskRows = filteredTasks.map((task) => ({
     id: task.id,
     cells: [
-      <span className="font-black">{task.title}</span>,
-      <Pill tone="blue">{task.project}</Pill>,
-      <span>{task.assignee}</span>,
-      <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="title" className="font-black">{task.title}</span>,
+      <Pill key="project" tone="blue">{task.project}</Pill>,
+      <span key="assignee">{task.assignee}</span>,
+      <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
+      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
     ],
   }));
 

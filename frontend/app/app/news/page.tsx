@@ -17,7 +17,7 @@ const NEWS_TABS = ["personalized", "trending", "saved"] as const;
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<(typeof NEWS_TABS)[number]>("personalized");
   const [savedIds, setSavedIds] = useState(() => NEWS_ARTICLES.filter((article) => article.saved).map((article) => article.id));

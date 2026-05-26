@@ -38,7 +38,7 @@ const NOTIFICATION_KEYS = ["email", "push", "taskReminders", "chatMessages", "we
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("account");
   const [connected, setConnected] = useState<Record<string, boolean>>({});

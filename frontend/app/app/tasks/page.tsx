@@ -11,12 +11,12 @@ import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, S
 import { DataTable, FilterBar, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import { DOC_PAGES, FORM_FIELDS, SMART_TASKS, TIME_ENTRIES } from "@/data/ecosystemData";
 import { INITIAL_TASKS } from "@/data/mockData";
-import type { SmartTask, Task, Priority, UserProfile } from "@/types";
+import type { SmartTask, Task, Priority } from "@/types";
 import { storage } from "@/utils/storage";
+import { useAuth } from "@/hooks/useAuth";
 
-interface Props { user: UserProfile; onLogout: () => void; }
-
-export default function TasksNotesPage({ user, onLogout }: Props) {
+export default function TasksNotesPage() {
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTask, setNewTask] = useState("");
@@ -67,11 +67,11 @@ export default function TasksNotesPage({ user, onLogout }: Props) {
   const rows = filteredSmartTasks.map((task) => ({
     id: task.id,
     cells: [
-      <span className="font-black">{task.title}</span>,
-      <Pill tone="indigo">{task.status.replace("_", " ")}</Pill>,
-      <span>{task.assignee}</span>,
-      <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="title" className="font-black">{task.title}</span>,
+      <Pill key="status" tone="indigo">{task.status.replace("_", " ")}</Pill>,
+      <span key="assignee">{task.assignee}</span>,
+      <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
+      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
     ],
   }));
 

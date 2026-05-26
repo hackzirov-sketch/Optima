@@ -32,7 +32,7 @@ const MODES = ["learning", "projects", "tasks", "team"] as const;
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [messages, setMessages] = useState<AssistantMessage[]>(INITIAL_MESSAGES);
   const [draft, setDraft] = useState("");

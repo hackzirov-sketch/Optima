@@ -45,7 +45,7 @@ function formatKey(value: string) {
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [selectedPlan, setSelectedPlan] = useState("pro");
   const [notice, setNotice] = useState<string | null>(null);

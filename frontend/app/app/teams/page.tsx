@@ -217,7 +217,7 @@ function statusTone(status: string) {
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(OPTIMA_EMPLOYEES[0].id);

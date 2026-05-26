@@ -133,7 +133,7 @@ function MeetingCard({
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [activeId, setActiveId] = useState(MEETING_ROOMS[0]?.id ?? "");
   const [code, setCode] = useState("");

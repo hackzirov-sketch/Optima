@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import Link from "next/navigation";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppLayout } from "@/components/app/AppLayout";
@@ -94,7 +94,7 @@ const tooltipStyle = {
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [preset, setPreset] = useState("Launch");
   const [draggingId, setDraggingId] = useState<string | null>(null);

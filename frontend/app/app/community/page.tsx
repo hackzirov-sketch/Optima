@@ -19,7 +19,7 @@ const COMMUNITY_ASSETS = ["/emojis/laptop.svg", "/emojis/book.svg", "/emojis/roc
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [joinedGroups, setJoinedGroups] = useState(() => COMMUNITY_GROUPS.filter((group) => group.joined).map((group) => group.id));
   const [post, setPost] = useState("");

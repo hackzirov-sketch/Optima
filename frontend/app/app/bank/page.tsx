@@ -14,7 +14,7 @@ import type { UserProfile } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, onLogout } = useAuth();
+  const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
 
   return (
