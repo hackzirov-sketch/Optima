@@ -1,0 +1,1384 @@
+{
+  "header": {
+    "nav": {
+      "features": "Imkoniyatlar",
+      "howItWorks": "Qanday ishlaydi",
+      "forWhom": "Kim uchun",
+      "aiAssistant": "AI Yordamchi"
+    },
+    "login": "Kirish",
+    "getStarted": "Boshlash"
+  },
+  "hero": {
+    "badge": "Yagona Mahsuldorlik Platformasi",
+    "headline1": "Ishlang. O'rganing. Toping.",
+    "headline2": "Hammasi bir joyda.",
+    "subheadline": "Universal Productivity Zone foydalanuvchilarga ko'nikmalar o'rganish, ish topish, jamoalarni boshqarish, frilanser sifatida o'sish va AI bilan ishlashga yordam beradi — barchasi bitta shaxsiylashtirilgan ish maydonida.",
+    "getStarted": "Boshlash",
+    "exploreFeatures": "Imkoniyatlarni ko'rish"
+  },
+  "problem": {
+    "title": "Tarqoq ilovalar muammosi",
+    "subtitle": "Bugungi mutaxassislar ishlarini bajarish uchun o'nlab ilovalardan foydalanishga majbur.",
+    "tools": [
+      "O'rganish",
+      "Ish qidirish",
+      "Jamoa chati",
+      "Loyiha boshqaruvi",
+      "Fayl ulashish",
+      "Frilanserlik",
+      "To'lovlar",
+      "Mahsuldorlik"
+    ],
+    "conclusion": "Bitta platforma. Hammasi."
+  },
+  "solution": {
+    "title": "Kerakli hamma narsa, nihoyat birlashdi",
+    "subtitle": "UPZ kasbiy o'sish va kunlik ish uchun barcha muhim vositalarni yagona, izchil muhitda birlashtiradi.",
+    "modules": [
+      "Shaxsiylashtirilgan ish maydoni",
+      "Chat",
+      "Boshqaruv paneli",
+      "Vazifalar va eslatmalar",
+      "O'rganish",
+      "Frilanserlik",
+      "AI Yordamchi",
+      "Hamjamiyatlar",
+      "To'lovlar"
+    ]
+  },
+  "features": {
+    "title": "Har bir mutaxassis uchun kuchli imkoniyatlar",
+    "subtitle": "Ishlash, o'rganish va o'sish uchun kerak bo'lgan hamma narsa, chiroyli integratsiyalangan.",
+    "items": [
+      {
+        "title": "Shaxsiylashtirilgan ish maydoni",
+        "description": "Sizning rolingizga — dasturchi, dizayner yoki yaratuvchi — moslashuvchi muhit."
+      },
+      {
+        "title": "Chat tizimi",
+        "description": "Tashqi messenjer ilovalariga ehtiyoj qoldirmaydigan, jamoalar va mijozlar uchun ichki muloqot vositalari."
+      },
+      {
+        "title": "Boshqaruv paneli",
+        "description": "Barcha loyihalar, vazifalar va moliyaviy ko'rsatkichlar bo'yicha real vaqt tahlili."
+      },
+      {
+        "title": "Vazifalar va eslatmalar",
+        "description": "To'g'ridan-to'g'ri bilim bazangizga ulangan kuchli loyiha boshqaruvi."
+      },
+      {
+        "title": "O'rganish tizimi",
+        "description": "Martaba maqsadlaringizga moslashtirilgan integral kurslar va ko'nikma oshirish yo'llari."
+      },
+      {
+        "title": "Frilanserlik va yollash",
+        "description": "Bir xil platformada ish toping, iste'dod yollang va shartnomalarni boshqaring."
+      },
+      {
+        "title": "Kontent va ijtimoiy tarmoq vositalari",
+        "description": "Bir nechta kanallardagi kontent strategiyangizni rejalashtiring, jadvallashtiring va boshqaring."
+      },
+      {
+        "title": "Universal Bank",
+        "description": "Tashqi to'lov shluzsiz hisob-fakturalar, to'lovlar va moliyaviy hisobni boshqaring."
+      },
+      {
+        "title": "AI Yordamchi",
+        "description": "Xabarlar yaratish, loyihalarni rejalashtirish va ma'lumotlarni jamlashda yordam beruvchi AI."
+      }
+    ]
+  },
+  "howItWorks": {
+    "title": "3 oddiy qadamda boshlang",
+    "steps": [
+      {
+        "title": "Ro'yxatdan o'ting",
+        "desc": "Bir necha soniyada hisobingizni yarating"
+      },
+      {
+        "title": "Profilingizni sozlang",
+        "desc": "Kasbingizni, maqsadingizni va tajriba darajangizni tanlang"
+      },
+      {
+        "title": "Ish maydoningizni oling",
+        "desc": "To'liq shaxsiylashtirilgan mahsuldorlik muhitini qabul qiling"
+      }
+    ]
+  },
+  "forWhom": {
+    "title": "Har bir mutaxassis uchun qurilgan",
+    "subtitle": "Siz nima qilsangiz ham, UPZ sizga moslashadi.",
+    "personas": [
+      {
+        "role": "Dasturchilar",
+        "tags": [
+          "GitHub integratsiyasi",
+          "AI kodlash yordami",
+          "Loyiha paneli"
+        ]
+      },
+      {
+        "role": "O'qituvchilar",
+        "tags": [
+          "Kurs boshqaruvi",
+          "O'quvchi taraqqiyoti",
+          "Sinf vositalari"
+        ]
+      },
+      {
+        "role": "Talabalar",
+        "tags": [
+          "O'rganish yo'li",
+          "Eslatmalar",
+          "Vazifalar"
+        ]
+      },
+      {
+        "role": "Frilanserlar",
+        "tags": [
+          "Portfolio",
+          "Mijoz muloqoti",
+          "Daromad vositalari"
+        ]
+      },
+      {
+        "role": "Kontent yaratuvchilar",
+        "tags": [
+          "Media ish oqimi",
+          "Kontent rejalashtirish",
+          "Ijtimoiy tarmoq"
+        ]
+      },
+      {
+        "role": "SMM mutaxassislari",
+        "tags": [
+          "Kampaniya rejalashtirish",
+          "Tahlil",
+          "Ijtimoiy vositalar"
+        ]
+      },
+      {
+        "role": "Dizaynerlar",
+        "tags": [
+          "Loyiha fayllari",
+          "Fikr-mulohaza",
+          "Jamoa hamkorligi"
+        ]
+      },
+      {
+        "role": "Jamoalar va kompaniyalar",
+        "tags": [
+          "Jamoa nazorati",
+          "Loyiha boshqaruvi",
+          "Statistika"
+        ]
+      }
+    ]
+  },
+  "ai": {
+    "title": "AI mahsuldorlik hamkoringiz bilan tanishing",
+    "subtitle": "Ish hayotingizning har bir qismida aqlli yordam. Elektron xat yozishdan tortib butun loyiha tsiklini rejalashtirishgacha.",
+    "features": [
+      "Vazifa takliflari",
+      "O'rganishni qo'llab-quvvatlash",
+      "Loyiha rejalashtirish",
+      "Aqlli xulosa",
+      "Mahsuldorlik maslahatlari",
+      "Jamoa yordami"
+    ]
+  },
+  "freelancer": {
+    "title": "Noldan frilanser bo'ling",
+    "subtitle": "UPZ shunchaki frilanserlik bozori emas — bu yangi boshlovchidan ishlaydigan mutaxassisga to'liq yo'l.",
+    "steps": [
+      "O'rganish",
+      "Amaliyot",
+      "Portfolio yaratish",
+      "Jamoaga kirish",
+      "Haqiqiy loyihalar",
+      "Daromad"
+    ]
+  },
+  "cta": {
+    "title": "Bugun kelajak ish maydoningizni qurishni boshlang.",
+    "subtitle": "O'rganish, ishlash, hamkorlik va kasbiy o'sish uchun mo'ljallangan platformaga qo'shiling.",
+    "getStarted": "Boshlash",
+    "login": "Kirish",
+    "joinCount": "{{count}}+ mutaxassis bilan qo'shiling"
+  },
+  "footer": {
+    "tagline": "Universal Productivity Zone — tarqoq vositalaringizni almashtiruvchi yagona ish maydoni. Bir joyda ishlang, o'rganing va toping.",
+    "product": "Mahsulot",
+    "features": "Imkoniyatlar",
+    "howItWorks": "Qanday ishlaydi",
+    "pricing": "Narxlar",
+    "roadmap": "Yo'l xaritasi",
+    "community": "Hamjamiyat",
+    "blog": "Blog",
+    "discord": "Discord",
+    "twitter": "Twitter",
+    "github": "GitHub",
+    "legal": "Huquqiy",
+    "privacy": "Maxfiylik siyosati",
+    "terms": "Foydalanish shartlari",
+    "contact": "Aloqa",
+    "copyright": "© {{year}} Universal Productivity Zone. Barcha huquqlar himoyalangan."
+  },
+  "app": {
+    "nav": {
+      "core": "Asosiy",
+      "work": "Ish",
+      "growth": "O'sish",
+      "account": "Hisob",
+      "home": "Bosh sahifa",
+      "dashboard": "Panel",
+      "workspace": "Ish maydoni",
+      "chat": "Chat",
+      "meetings": "Meetings",
+      "projects": "Loyihalar",
+      "teams": "Jamoalar",
+      "tasks": "Vazifalar va eslatmalar",
+      "assistant": "AI yordamchi",
+      "community": "Hamjamiyat",
+      "news": "Yangiliklar",
+      "bank": "Universal Bank",
+      "premium": "Premium",
+      "pro": "Pro",
+      "profile": "Profil",
+      "settings": "Sozlamalar",
+      "live": "Jonli",
+      "zoneHealth": "Zona holati",
+      "logout": "Chiqish"
+    },
+    "professions": {
+      "developer": "Dasturchi",
+      "teacher": "O'qituvchi",
+      "student": "Talaba",
+      "freelancer": "Frilanser",
+      "designer": "Dizayner",
+      "smm": "SMM mutaxassisi",
+      "creator": "Kontent yaratuvchi"
+    },
+    "topbar": {
+      "synced": "Lokal saqlandi",
+      "tagline": "Ishlang, o'rganing, daromad qiling va hamkorlik qiling.",
+      "searchLong": "Foydalanuvchi, chat, vazifa, loyiha qidirish",
+      "searchShort": "UPZ ichida qidirish",
+      "openSearch": "Global qidiruvni ochish",
+      "closeSearch": "Qidiruvni yopish",
+      "commandReady": "Command center qidiruvi backendga ulashga tayyor.",
+      "noResults": "Mos foydalanuvchi, chat, vazifa yoki loyiha topilmadi.",
+      "notifications": "Bildirishnomalar",
+      "notificationsDesc": "Loyiha, chat, bank va yangiliklar yangilanishlari",
+      "markAllRead": "Hammasini o'qilgan qilish",
+      "localOnly": "Bildirishnomalar markazi MVP uchun lokal ishlaydi.",
+      "online": "Onlayn",
+      "toggleSidebar": "Yon panelni ochish",
+      "openNotifications": "Bildirishnomalarni ochish"
+    },
+    "dashboard": {
+      "eyebrow": "Bugungi command center",
+      "welcome": "Xush kelibsiz, {{name}}",
+      "description": "UPZ command center loyihalar, chat, AI, jamoalar, hamyon, bildirishnomalar va ish maydoni holatini bitta toza panelga jamlaydi.",
+      "askAI": "AI'dan so'rash",
+      "openChat": "Chatni ochish",
+      "heroTitle": "Kunni sokin va bog'langan ish maydonidan boshqaring.",
+      "heroDesc": "Chat QA'dan boshlang, loyiha demo yo'lini tekshiring, hamyon holatlarini tasdiqlang, keyin AI'dan launch reja oling.",
+      "continueProjects": "Loyihalarni davom ettirish",
+      "openWorkspace": "Ish maydonini ochish",
+      "launchReadiness": "Launch tayyorligi",
+      "trackerDesc": "MVP'dan product darajasiga polish kuzatuvi.",
+      "agenda": "Bugungi reja",
+      "agendaDesc": "Ish kuni uchun ixcham vaqt jadvali.",
+      "focusScore": "88% fokus ball",
+      "activeProjectsPill": "4 faol loyiha",
+      "teammatesOnlinePill": "2 jamoadosh onlayn",
+      "tasksDone": "Bajarilgan vazifalar",
+      "tasksTrend": "Bu hafta 8 ta",
+      "activeProjects": "Faol loyihalar",
+      "activeProjectsTrend": "1 ta yangi",
+      "teamMembers": "Jamoa a'zolari",
+      "teamMembersTrend": "2 ta onlayn",
+      "unreadAlerts": "O'qilmagan alertlar",
+      "unreadTrend": "Hozir muhim",
+      "nextActions": "Keyingi eng yaxshi amallar",
+      "nextActionsDesc": "Clickable command card'lar MVP'ni backend murakkabligisiz ham real his qildiradi.",
+      "ecosystemHealth": "Ekotizim modullari holati",
+      "ecosystemDesc": "To'liq UPZ tizimi uchun boyroq mock data.",
+      "backendReady": "Backendga tayyor",
+      "weeklyActivity": "Haftalik faollik",
+      "weeklyActivityDesc": "Ekotizim bo'yicha vazifalar va xabarlar.",
+      "productivityScore": "Mahsuldorlik balli",
+      "productivityDesc": "Shaxsiy analitika uchun trend grafigi.",
+      "commands": {
+        "chatTitle": "Chat polish'ni tekshirish",
+        "chatDesc": "Pinned xabarlar, qidiruv, reaksiyalar va mobil navigatsiya QA uchun tayyor.",
+        "projectTitle": "Loyiha demosini tayyorlash",
+        "projectDesc": "Command center, jamoalar, loyihalar, bank va assistant oqimini ko'rib chiqing.",
+        "walletTitle": "Hamyon eventlarini tekshirish",
+        "walletDesc": "Frilans to'lovi va pending payout holatlari Universal Bank'da ko'rinadi.",
+        "aiTitle": "AI'dan launch reja so'rash",
+        "aiDesc": "Product launch, onboarding va beta feedback uchun keyingi qadamlarni yarating.",
+        "todayTime": "Bugun 16:00",
+        "aiReady": "AI tayyor"
+      },
+      "agendaItems": {
+        "teamReview": "Jamoa async review",
+        "heroQa": "Landing hero QA",
+        "moderation": "Community moderation pass",
+        "demo": "Investor demo rehearsal"
+      },
+      "areas": {
+        "teams": "Jamoalar",
+        "project": "Loyiha",
+        "community": "Hamjamiyat",
+        "workspace": "Ish maydoni"
+      },
+      "progress": {
+        "productSystem": "UPZ Product System",
+        "internalExpansion": "Ichki app kengayishi",
+        "backendIntegration": "Backend integratsiyasi",
+        "mobileUx": "Mobil adaptive UX"
+      },
+      "moduleUsers": "{{count}} foydalanuvchi",
+      "chartTasks": "Vazifalar",
+      "chartMessages": "Xabarlar",
+      "chartScore": "Ball"
+    },
+    "chat": {
+      "openList": "Chat ro'yxatini ochish",
+      "startVoice": "Ovozli qo'ng'iroq boshlash",
+      "startVideo": "Video qo'ng'iroq boshlash",
+      "searchInChat": "Chat ichida qidirish",
+      "openMenu": "Chat menyusini ochish",
+      "online": "Onlayn",
+      "away": "Band",
+      "lastSeen": "Yaqinda ko'rindi",
+      "memberStatus": "{{members}} a'zo, {{online}} onlayn",
+      "muted": "Ovozsiz",
+      "viewProfile": "Profilni ko'rish",
+      "mute": "Bildirishnomani o'chirish",
+      "unmute": "Bildirishnomani yoqish",
+      "pinChat": "Chatni pin qilish",
+      "unpinChat": "Pin'dan olish",
+      "clearHistory": "Tarixni tozalash",
+      "deleteChat": "Chatni o'chirish",
+      "searchChats": "Chatlarni qidirish",
+      "pinned": "Pinned",
+      "allConversations": "Barcha suhbatlar",
+      "noChatsMatch": "Bu qidiruvga mos chat yo'q.",
+      "archived": "Arxiv",
+      "archivedDesc": "Yashirilgan chatlar uchun placeholder",
+      "categories": {
+        "all": "Hammasi",
+        "direct": "Shaxsiy",
+        "groups": "Guruhlar",
+        "teams": "Jamoa",
+        "projects": "Loyihalar",
+        "ai": "AI",
+        "saved": "Saqlangan"
+      },
+      "types": {
+        "1on1": "Shaxsiy",
+        "group": "Guruh",
+        "team": "Jamoa",
+        "project": "Loyiha",
+        "saved": "Saqlangan",
+        "ai": "AI"
+      },
+      "read": "O'qildi",
+      "today": "Bugun",
+      "pinnedMessage": "Pinned xabar",
+      "pinnedNotice": "Pinned xabar preview'i demoda lokal qoladi.",
+      "historyCleared": "Tarix tozalandi",
+      "historyClearedDesc": "Bu lokal MVP suhbatini qayta boshlash uchun yangi xabar yuboring.",
+      "noChatsLeft": "Chat qolmadi",
+      "noChatsLeftDesc": "Bu lokal MVP demo. localStorage tozalangandan keyin refresh mock chatlarni qaytaradi.",
+      "searchRoom": "{{room}} ichida qidirish",
+      "results": "{{count}} natija",
+      "closeSearch": "Chat qidiruvini yopish",
+      "noMessageFound": "Xabar topilmadi",
+      "noMessageFoundDesc": "Boshqa kalit so'z kiriting yoki barcha xabarlarni ko'rish uchun qidiruvni yoping.",
+      "profilePlaceholder": "{{name}} profili demo placeholder.",
+      "forwardComposer": "Forward composer'ga qo'yildi.",
+      "attachFile": "Fayl biriktirish",
+      "emojiPicker": "Emoji tanlashni ochish",
+      "voicePlaceholder": "Voice placeholder",
+      "sendMessage": "Xabar yuborish",
+      "isTyping": "yozyapti",
+      "replyingTo": "{{name}}ga javob",
+      "messageFallback": "xabar",
+      "editingMessage": "Xabar tahrirlanmoqda",
+      "pressEnterSave": "Saqlash uchun Enter bosing",
+      "mentionPlaceholder": "{{room}}ga xabar. Teammate mention uchun @ ishlating...",
+      "messagePlaceholder": "{{room}}ga xabar...",
+      "aiOnline": "UPZ AI onlayn",
+      "savedPrivate": "Shaxsiy saqlangan xabarlar",
+      "aiComposeTitle": "AI yozish yordamchisi",
+      "aiComposeDesc": "/ai dan keyin matn yozing, keyin uni tuzating yoki professional qiling.",
+      "aiFix": "Tuzatish",
+      "aiProfessional": "Professional",
+      "aiShorten": "Qisqartirish",
+      "aiTask": "Task qilish",
+      "aiComposeHint": "Maslahat: xabar yozishda /ai yozib matnni tuzatish yoki qisqartirish mumkin.",
+      "sent": "yuborildi",
+      "readStatus": "o'qildi",
+      "menu": {
+        "reply": "Javob berish",
+        "react": "Reaksiya",
+        "copy": "Nusxalash",
+        "forward": "Forward",
+        "pin": "Pin qilish",
+        "editOwn": "O'z xabarini tahrirlash",
+        "delete": "O'chirish",
+        "localActions": "Faqat lokal demo amallari"
+      },
+      "offline": "Offline",
+      "messageNotAvailable": "Xabar mavjud emas",
+      "noMessagesYet": "Hali xabar yo'q",
+      "you": "Siz",
+      "someone": "Kimdir",
+      "unknown": "Noma'lum",
+      "pinnedLabel": "Pinned",
+      "edited": "tahrirlangan",
+      "forwarded": "Forwarded: {{text}}",
+      "call": {
+        "voice": "Ovozli qo'ng'iroq",
+        "video": "Video qo'ng'iroq",
+        "groupVoice": "Guruh ovozli qo'ng'irog'i",
+        "groupVideo": "Guruh video qo'ng'irog'i",
+        "live": "Jonli",
+        "encryptedDemo": "UPZ secure demo",
+        "minimize": "Callni kichraytirish",
+        "expand": "Callni kattalashtirish",
+        "end": "Qo'ng'iroqni tugatish",
+        "secureLayer": "Secure demo qatlami",
+        "participants": "ishtirokchi",
+        "directVoiceDesc": "Telegramga o'xshash toza call surface: UPZ controllar, lokal state va backend talab qilinmaydi.",
+        "groupVoiceDesc": "Guruh ovozli calllari sokin stage, participant stack va team suhbatlari uchun tezkor controllar bilan ishlaydi.",
+        "telegramInspired": "Tanish call UX, UPZ stylega moslangan",
+        "people": "Odamlar",
+        "peopleDesc": "Lokal participant holatlari",
+        "invite": "Odam qo'shish",
+        "teammate": "Jamoadosh",
+        "muteMic": "Mikrofonni o'chirish",
+        "unmuteMic": "Mikrofonni yoqish",
+        "speakerOn": "Speaker yoqilgan",
+        "speakerOff": "Speaker o'chirilgan",
+        "stopVideo": "Videoni o'chirish",
+        "startVideo": "Videoni yoqish",
+        "switchToVideo": "Videoga o'tish",
+        "shareScreen": "Ekranni ulashish",
+        "backToChat": "Chatga qaytish",
+        "participantStatus": {
+          "speaking": "Gapiryapti",
+          "online": "Onlayn",
+          "muted": "Muted",
+          "listening": "Tinglayapti",
+          "cameraOff": "Kamera o'chiq",
+          "joining": "Kiryapti"
+        }
+      }
+    },
+    "meetings": {
+      "eyebrow": "Meetings",
+      "title": "Jamoa va mijoz qo'ng'iroqlari uchun lux video uchrashuvlar",
+      "description": "Instant call, scheduled session, team sync, screen sharing va kelajak calendar integratsiyasi uchun premium UPZ meeting room.",
+      "newMeeting": "Yangi meeting",
+      "schedule": "Rejalashtirish",
+      "liveRoom": "Jonli meeting room",
+      "readyRoom": "Tayyor room",
+      "roomDesc": "UPZ uchun moslangan tanish video-call layout: sokin control panel, participant tilelar, agenda, linklar va security demo holatlari.",
+      "copyLink": "Linkni copy qilish",
+      "inCall": "Qo'ng'iroqda",
+      "preview": "Preview",
+      "secureDemo": "Lokal MVP video demo. Kamera yoki backend kerak emas.",
+      "muteMic": "Mikrofonni o'chirish",
+      "unmuteMic": "Mikrofonni yoqish",
+      "stopCamera": "Kamerani o'chirish",
+      "startCamera": "Kamerani yoqish",
+      "shareScreen": "Ekranni ulashish",
+      "raiseHand": "Qo'l ko'tarish",
+      "leave": "Meetingdan chiqish",
+      "joinTitle": "Kod orqali kirish",
+      "joinDesc": "Meeting kodini kiriting yoki demo roomdan foydalaning.",
+      "codePlaceholder": "Meeting kodini kiriting",
+      "join": "Kirish",
+      "useDemoCode": "Demo kod",
+      "upcoming": "Kelasi qo'ng'iroqlar",
+      "upcomingDesc": "Team sync, project review va 1:1 client calllar.",
+      "hostedBy": "{{name}} host",
+      "peopleCount": "{{count}} kishi",
+      "trustTitle": "Meeting security qatlami",
+      "trustDesc": "Professional call control uchun MVP placeholderlar.",
+      "trust": {
+        "privateRooms": {
+          "title": "Private roomlar",
+          "desc": "Meeting kodlari lokal demo tokenlar."
+        },
+        "waitingRoom": {
+          "title": "Waiting room",
+          "desc": "Kelajakda host approve qilib kiritadi."
+        },
+        "hostControls": {
+          "title": "Host control",
+          "desc": "Mute, remove, pin va record placeholderlari."
+        }
+      },
+      "agendaTitle": "Meeting agenda",
+      "agendaDesc": "Visible talking pointlar callni fokusda ushlab turadi.",
+      "agendaMeta": "Notes va follow-up tasklar uchun tayyor.",
+      "modalTitle": "Meeting rejalashtirish",
+      "modalDesc": "Kelajak calendar integratsiyasi uchun demo meeting shell yarating.",
+      "meetingName": "Meeting nomi",
+      "meetingDate": "Sana",
+      "meetingTime": "Vaqt",
+      "meetingAgenda": "Agenda",
+      "createDemoMeeting": "Demo meeting yaratish",
+      "status": {
+        "live": "Jonli",
+        "upcoming": "Yaqinda",
+        "scheduled": "Rejada"
+      },
+      "toasts": {
+        "joined": "Instant meeting ochildi.",
+        "joinedCode": "Demo meeting kod orqali ochildi.",
+        "linkCopied": "Meeting link demo holatda copy qilindi.",
+        "scheduled": "Demo meeting rejalashtirildi."
+      }
+    },
+    "common": {
+      "cancel": "Bekor qilish"
+    },
+    "goals": {
+      "learn": "Ko'nikma o'rganish",
+      "find_work": "Ish topish",
+      "manage_team": "Jamoani boshqarish",
+      "build_portfolio": "Portfolio yaratish",
+      "freelance": "Freelance"
+    },
+    "experience": {
+      "beginner": "Boshlang'ich",
+      "intermediate": "O'rta",
+      "advanced": "Ilg'or"
+    },
+    "priority": {
+      "high": "Yuqori",
+      "medium": "O'rtacha",
+      "low": "Past"
+    },
+    "status": {
+      "connected": "Ulangan",
+      "placeholder": "Demo o'rinbosar",
+      "readyUi": "UI tayyor",
+      "readyui": "UI tayyor",
+      "completed": "Yakunlangan",
+      "processing": "Jarayonda",
+      "demo": "Demo",
+      "planned": "Rejada"
+    },
+    "search": {
+      "types": {
+        "User": "User",
+        "Chat": "Chat",
+        "Meeting": "Meeting",
+        "Task": "Vazifa",
+        "Project": "Project",
+        "Article": "Maqola",
+        "Wallet": "Hamyon",
+        "Premium": "Premium",
+        "Animation": "Animatsiya",
+        "Learning": "Learning",
+        "Team": "Team"
+      }
+    },
+    "premium": {
+      "eyebrow": "Premium hisoblar",
+      "title": "Jiddiy UPZ foydalanuvchilari uchun premium ustunliklar",
+      "description": "Ko'proq AI, yaxshiroq meetinglar, chuqur workspace control, verified community status va Universal Bank bonuslari bilan MVP pullik productga tayyor ko'rinadi.",
+      "upgrade": "Hisobni upgrade qilish",
+      "comparePlans": "Planlarni solishtirish",
+      "currentPlan": "Premium preview",
+      "heroTitle": "{{name}}, kuchliroq UPZ operating systemni oching.",
+      "heroDesc": "Premium UPZ ichida har kuni ishlaydigan, o'rganadigan, daromad qiladigan va hamkorlik qiladigan userlar uchun.",
+      "selectedPlan": "Tanlangan plan",
+      "whyTitle": "Premium nima uchun kerak",
+      "whyDesc": "Bu ustunliklar free MVP'ni sindirmasdan upgrade qilish uchun aniq sabab yaratadi.",
+      "stats": {
+        "ai": "AI usage boost",
+        "team": "Project va layoutlar",
+        "support": "Support javobi"
+      },
+      "checkoutTitle": "Upgrade oqimi",
+      "checkoutDesc": "Kelajak payment integratsiyasi uchun frontend-only checkout preview.",
+      "localOnly": "Lokal MVP preview. Hech qanday to'lov olinmaydi.",
+      "mockCheckout": "Mock checkout ochish",
+      "comparisonTitle": "Plan comparison",
+      "comparisonDesc": "Kelajak billing va backend limitlar uchun sodda product-ready struktura.",
+      "table": {
+        "feature": "Feature",
+        "free": "Free",
+        "pro": "Pro",
+        "team": "Team"
+      },
+      "checkoutNotes": {
+        "secure": "Stripe, local cardlar va Universal Bank uchun future-ready.",
+        "demo": "Bu tugma faqat lokal demo toast ko?rsatadi."
+      },
+      "toasts": {
+        "checkout": "Premium checkout lokal MVP preview.",
+        "compare": "Comparison table backend limitlar uchun tayyor."
+      },
+      "benefits": {
+        "ai": {
+          "title": "AI Power Mode",
+          "description": "Planning, learning, writing, project idea va team summary uchun yuqoriroq AI limitlar.",
+          "metric": "10x AI usage"
+        },
+        "workspace": {
+          "title": "Advanced Workspace",
+          "description": "Custom layoutlar, premium project viewlar, workspace template va chuqur integratsiyalar.",
+          "metric": "Custom layoutlar"
+        },
+        "meetings": {
+          "title": "Premium Meetings",
+          "description": "Uzunroq video calllar, recording placeholder, agenda notes va team meeting roomlar.",
+          "metric": "180 min roomlar"
+        },
+        "bank": {
+          "title": "Universal Bank Plus",
+          "description": "Past payout fee placeholder, freelance earning analytics, invoice va local payment priority.",
+          "metric": "Past fee"
+        },
+        "community": {
+          "title": "Verified Community",
+          "description": "Premium badge, private channel, mentor room, boosted post va priority moderation.",
+          "metric": "Verified badge"
+        },
+        "support": {
+          "title": "Priority Support",
+          "description": "Tez support lane, onboarding yordam, product guidance va premium roadmap access.",
+          "metric": "Priority lane"
+        }
+      },
+      "plans": {
+        "free": {
+          "name": "Free",
+          "period": "forever",
+          "badge": "Current MVP",
+          "description": "UPZni sinash va yengil personal workspace uchun.",
+          "cta": "Current plan",
+          "features": [
+            "Basic workspace",
+            "3 active project",
+            "Kuniga 20 AI action",
+            "30 min demo meeting",
+            "Community read access"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "period": "oyiga",
+          "badge": "Creatorlar uchun eng yaxshi",
+          "description": "Freelancer, student, creator va solo builderlar uchun kuchliroq plan.",
+          "cta": "Proga upgrade",
+          "features": [
+            "Unlimited projectlar",
+            "10x AI assistant usage",
+            "Premium meetinglar",
+            "Universal Bank Plus",
+            "Verified profile badge"
+          ]
+        },
+        "team": {
+          "name": "Team",
+          "period": "seat uchun",
+          "badge": "Teams",
+          "description": "Role, shared workspace, analytics va priority workflow kerak bo?lgan jamoalar uchun.",
+          "cta": "Team planni boshlash",
+          "features": [
+            "Pro ichidagi hammasi",
+            "Team rolelar",
+            "Shared project roomlar",
+            "Admin control",
+            "Priority support"
+          ]
+        }
+      }
+    },
+    "home": {
+      "welcome": "Xush kelibsiz, {{name}}",
+      "description": "Maqsad: {{goal}}. UPZ ish maydoni, loyihalar, community, yangiliklar, hamyon, jamoalar va AI yordamchini bitta yengil produktivlik tizimiga ulaydi.",
+      "tasksDoneCount": "{{done}}/{{total}} vazifa bajarildi",
+      "metrics": {
+        "focusScore": "Fokus balli",
+        "focusTrend": "Bu hafta 6%",
+        "openProjects": "Ochiq loyihalar",
+        "projectTrend": "1 ta yangi loyiha",
+        "unreadItems": "O'qilmaganlar",
+        "unreadTrend": "Chat va yangiliklarda"
+      },
+      "quickActions": "Tezkor amallar",
+      "quickActionsDesc": "Kengaytirilgan UPZ ekotizimiga tez kirish nuqtalari.",
+      "actions": {
+        "newTask": "Yangi vazifa",
+        "openChat": "Chatni ochish",
+        "workspace": "Workspace",
+        "dashboard": "Dashboard"
+      },
+      "todaysTasks": "Bugungi vazifalar",
+      "todaysTasksDesc": "Mahalliy vazifa holati mahsulot o'ssa ham ishlaydi.",
+      "viewAll": "Hammasini ko'rish",
+      "recentActivity": "So'nggi faollik",
+      "recentActivityDesc": "Kelajak backend eventlari uchun activity feed namunasi.",
+      "activity": {
+        "completedTask": "Vazifa bajarildi: loyiha talablarini tekshirish",
+        "newMessage": "Alex Kimdan yangi xabar",
+        "updatedNote": "Eslatma yangilandi: MVP Feature List",
+        "joinedChat": "UPZ Core Team chatiga qo'shildi",
+        "onboarding": "Onboarding yakunlandi"
+      },
+      "time": {
+        "twoHours": "2 soat oldin",
+        "threeHours": "3 soat oldin",
+        "fiveHours": "5 soat oldin",
+        "oneDay": "1 kun oldin"
+      }
+    },
+    "workspace": {
+      "eyebrow": "Ilg'or workspace",
+      "title": "{{profession}} command center",
+      "description": "Tablar, qayta tartiblanuvchi cardlar, integratsiya placeholderlari va layout boshqaruvi MVP workspaceni kengaytiradi.",
+      "addCard": "Card qo'shish",
+      "customize": "Moslash",
+      "tabs": {
+        "projects": "Loyihalar",
+        "tools": "Vositalar",
+        "layout": "Layout"
+      },
+      "projectWorkspace": "Loyiha workspace'i",
+      "projectWorkspaceDesc": "Cardlarni sudrab ko'ring: tartib MVPda lokal UI holati.",
+      "cards": {
+        "reposTitle": "GitHub repolari",
+        "reposDesc": "3 aktiv repo, 3 ochiq pull request, staging tayyor.",
+        "reposBadge": "GitHub",
+        "tasksTitle": "Dev task board",
+        "tasksDesc": "Sprint board: assignment, status, deadline va activity.",
+        "tasksBadge": "18 vazifa",
+        "filesTitle": "Workspace fayllari",
+        "filesDesc": "Drive, docs, brief, invoice va project assetlar bir hubda.",
+        "filesBadge": "Fayllar",
+        "calendarTitle": "Calendar sync",
+        "calendarDesc": "Standup, deadline, learning blok va review sessiyalar.",
+        "calendarBadge": "4 event"
+      },
+      "toolIntegrations": "Tool integratsiyalari",
+      "toolIntegrationsDesc": "GitHub, Drive, Slack, Calendar va kelajak providerlar uchun backend-ready cardlar.",
+      "integrations": {
+        "github": "Repo, issue, pull requestlar",
+        "drive": "Docs, fayllar, shared folderlar",
+        "slack": "Jamoa alertlari va channel sync",
+        "calendar": "Deadline va availability"
+      },
+      "layoutTitle": "Custom layout lokal saqlandi",
+      "layoutDesc": "Bu tab kelajak backend user layout, tab tanlovi, yashirilgan cardlar va integratsiya preferensiyalarini saqlashini ko'rsatadi.",
+      "previewLayout": "Layout sozlamalarini ko'rish"
+    },
+    "community": {
+      "eyebrow": "Community tizimi",
+      "title": "Kasbga asoslangan guruhlar, kanallar va muhokamalar",
+      "description": "Public communitylar UPZ userlariga workspace'dan chiqmasdan o'rganish, hamkorlik, moderatsiya va imkoniyat topish joyini beradi.",
+      "startDiscussion": "Muhokama boshlash",
+      "moderationQueue": "Moderatsiya navbati",
+      "publicGroups": "Kasblar bo'yicha public guruhlar",
+      "publicGroupsDesc": "Kasbiy spacelarga qo'shiling yoki chiqing. Count va membership MVPda lokal UI holati.",
+      "joined": "Qo'shilgan",
+      "public": "Public",
+      "membersCount": "{{count}} a'zo",
+      "leave": "Chiqish",
+      "join": "Qo'shilish",
+      "moderationUi": "Moderatsiya UI",
+      "moderationDesc": "Yengil queue va rol boshqaruvi bilan communityni toza saqlang.",
+      "review": "Ko'rib chiqish",
+      "threadsTitle": "Thread va muhokamalar",
+      "threadsDesc": "Strukturali community suhbatlari uchun thread-like muhokamalar.",
+      "startedBy": "{{author}} boshlagan - {{replies}} javob",
+      "status": {
+        "hot": "Qaynoq",
+        "open": "Ochiq",
+        "pinned": "Pinned"
+      },
+      "channelsTitle": "Kanallar",
+      "channelsDesc": "Broadcast uslubidagi joylar.",
+      "subscribers": "{{count}} obunachi",
+      "networkDepth": "Kasbiy network chuqurligi",
+      "networkDepthDesc": "Segmentatsiya, tavsiya va public discovery uchun qo'shimcha mock data.",
+      "groupsMetric": "{{count}} guruh",
+      "channelsMetric": "{{count}} kanal",
+      "mentorsMetric": "{{count}} mentor",
+      "postsMetric": "haftasiga {{count}} post",
+      "featuredCreators": "Featured creatorlar",
+      "featuredCreatorsDesc": "Community liderlari, mentorlar va public contributorlar.",
+      "postSystem": "Post va comment tizimi",
+      "postSystemDesc": "Backend-ready composer va comment modeli, MVP uchun sodda.",
+      "postPlaceholder": "Guruhingiz bilan savol, resurs yoki update ulashing...",
+      "publishPost": "Post chiqarish",
+      "youPrefix": "Siz: {{text}}",
+      "initialComments": {
+        "onboarding": "Bu onboardingga juda yordam beradi.",
+        "rituals": "Team rituallari uchun template qo'sha olamizmi?"
+      },
+      "groups": {
+        "dev": {
+          "name": "Developer gildiyasi",
+          "profession": "Developerlar",
+          "moderation": "3 ta post kutmoqda",
+          "description": "Code review, build log, ish takliflari va framework muhokamalari."
+        },
+        "design": {
+          "name": "Design Circle",
+          "profession": "Designerlar",
+          "moderation": "Toza",
+          "description": "Portfolio review, UI systemlar, motion va client workflowlar."
+        },
+        "teach": {
+          "name": "Teacher Hub",
+          "profession": "Teacherlar",
+          "moderation": "1 report",
+          "description": "Lesson planning, student engagement va classroom resurslari."
+        },
+        "freelance": {
+          "name": "Freelancer Market",
+          "profession": "Freelancerlar",
+          "moderation": "Toza",
+          "description": "Proposal, pricing, client operation va collaboration."
+        },
+        "creator": {
+          "name": "Creator Studio",
+          "profession": "Creatorlar",
+          "moderation": "2 flagged reply",
+          "description": "Content calendar, monetization, script, editing pipeline va audience growth."
+        },
+        "smm": {
+          "name": "Growth & SMM Lab",
+          "profession": "SMM",
+          "moderation": "Toza",
+          "description": "Campaign strategy, analytics, SEO, paid social va brand systemlar."
+        },
+        "student": {
+          "name": "Student Progress Club",
+          "profession": "Studentlar",
+          "moderation": "5 intro kutmoqda",
+          "description": "Learning accountability, portfolio, peer review va birinchi ishga tayyorlanish."
+        }
+      },
+      "threads": {
+        "t1": {
+          "title": "Kichik jamoalar project chatlarni qanday tartiblashi kerak?"
+        },
+        "t2": {
+          "title": "Haftalik productivity dashboardingizni ulashing"
+        },
+        "t3": {
+          "title": "Freelancerlar uchun eng yaxshi client handoff checklist"
+        },
+        "t4": {
+          "title": "Universal Bank invoice ichida nimalar bo'lishi kerak?"
+        },
+        "t5": {
+          "title": "Haqiqatan vaqt tejaydigan AI assistant promptlar"
+        },
+        "t6": {
+          "title": "Review uchun portfolio homepage tashlang"
+        }
+      },
+      "channels": {
+        "c1": {
+          "name": "UPZ Product Updates",
+          "category": "Official",
+          "last": "Workspace presetlar chiqarildi"
+        },
+        "c2": {
+          "name": "Remote Jobs Digest",
+          "category": "Career",
+          "last": "12 ta yangi verified role"
+        },
+        "c3": {
+          "name": "Learning Drops",
+          "category": "Education",
+          "last": "AI prompt design mini-course"
+        },
+        "c4": {
+          "name": "Freelance Deals Radar",
+          "category": "Market",
+          "last": "5 project request reviewda"
+        },
+        "c5": {
+          "name": "Design Systems Weekly",
+          "category": "Design",
+          "last": "SaaS teamlar uchun token naming patternlar"
+        },
+        "c6": {
+          "name": "Build in Public",
+          "category": "Startup",
+          "last": "MVP launch retrospektivalar"
+        }
+      }
+    },
+    "news": {
+      "eyebrow": "Yangiliklar tizimi",
+      "title": "Personal intelligence feed",
+      "description": "Kasbga mos yangiliklar, saqlangan maqolalar, trending mavzular va oddiy article view uchun toza o'qish yuzasi.",
+      "tuneFeed": "Feedni sozlash",
+      "tabs": {
+        "personalized": "Personal",
+        "trending": "Trending",
+        "saved": "Saqlangan"
+      },
+      "searchArticles": "Maqolalarni qidirish",
+      "feed": "Feed",
+      "personalizedFor": "{{profession}} uchun moslangan.",
+      "trending": "Trending",
+      "articleView": "Maqola view",
+      "articleViewDesc": "Save state bilan backend-ready maqola yuzasi.",
+      "save": "Saqlash",
+      "saved": "Saqlangan",
+      "readLabel": "{{time}} o'qish",
+      "productionBody": "Production UPZ backendda bu view author, source, tavsiyalar va kasbga mos personalizatsiyani qo'llaydi. MVPda esa hierarchy, o'qish ritmi va saved state ko'rsatiladi.",
+      "related": {
+        "recommended": "Tavsiya",
+        "role": "Rolingiz uchun",
+        "tasks": "Bog'liq vazifalar"
+      },
+      "articles": {
+        "n1": {
+          "title": "AI copilotlar project teammatega aylanmoqda",
+          "category": "AI",
+          "readTime": "5 min",
+          "summary": "AI assistantlar chat oynasidan task, planning va review looplariga o'tayotgani haqida amaliy qarash."
+        },
+        "n2": {
+          "title": "Remote work toollari workflow hub atrofida birlashmoqda",
+          "category": "Productivity",
+          "readTime": "4 min",
+          "summary": "Teamlar tarqoq app o'rniga yagona dashboardlarni afzal ko'rmoqda."
+        },
+        "n3": {
+          "title": "Freelance payment raillari local currency supportni kengaytirmoqda",
+          "category": "Freelance",
+          "readTime": "6 min",
+          "summary": "Yangi wallet UX contract, invoice va payout orasidagi masofani qisqartiradi."
+        },
+        "n4": {
+          "title": "Learning pathlar qisqaroq va adaptive bo'lmoqda",
+          "category": "Learning",
+          "readTime": "3 min",
+          "summary": "Skill platformlar user goaliga bog'langan personal practice looplarga o'tmoqda."
+        }
+      }
+    },
+    "bank": {
+      "eyebrow": "Universal Bank",
+      "title": "Hamyon, daromad va to'lov tarixi",
+      "description": "Freelance income, payout, lokal to'lovlar, crypto placeholderlar va subscription history uchun finance-ready UI qatlami.",
+      "withdraw": "Yechib olish",
+      "addMethod": "Method qo'shish",
+      "metrics": {
+        "balance": "Mavjud balans",
+        "balanceTrend": "Bugun +$1,240",
+        "earnings": "Freelance daromad",
+        "earningsTrend": "Bu oy 18%",
+        "payouts": "Kutilayotgan payoutlar",
+        "payoutsTrend": "2 ta jarayonda",
+        "crypto": "Crypto demo",
+        "cryptoTrend": "Placeholder rail"
+      },
+      "transactions": "Tranzaksiyalar",
+      "transactionsDesc": "Real backend recordlarga tayyor statusli payment history.",
+      "table": {
+        "transaction": "Tranzaksiya",
+        "amount": "Miqdor",
+        "status": "Status"
+      },
+      "paymentRails": "Payment rails",
+      "paymentRailsDesc": "Crypto va lokal to'lov metodlari MVPda placeholder.",
+      "estimatedFee": "taxminiy fee {{fee}}",
+      "transactionsData": {
+        "ub-1007": {
+          "title": "Client to'lovi - Landing redesign",
+          "type": "Freelance daromad",
+          "date": "Bugun"
+        },
+        "ub-1006": {
+          "title": "UPZ Pro workspace",
+          "type": "Subscription",
+          "date": "Kecha"
+        },
+        "ub-1005": {
+          "title": "Kartaga local payout",
+          "type": "Yechib olish",
+          "date": "3 May"
+        }
+      },
+      "paymentMethods": {
+        "0": {
+          "region": "O'zbekiston",
+          "fee": "1.2%"
+        },
+        "1": {
+          "region": "Global",
+          "fee": "2.4%"
+        },
+        "2": {
+          "region": "Crypto",
+          "fee": "Network"
+        },
+        "3": {
+          "region": "Local",
+          "fee": "Fixed"
+        }
+      }
+    },
+    "assistant": {
+      "eyebrow": "AI yordamchi",
+      "title": "Vazifa, learning va projectlar uchun productivity copilot",
+      "description": "Assistant app-wide qatlam sifatida: chat, suggestion, learning support, project idea va kelajak tool calllari.",
+      "generatePlan": "Plan yaratish",
+      "chatTitle": "AI bilan chat",
+      "chatDesc": "Lokal demo javobli MVP chat yuzasi.",
+      "inputPlaceholder": "UPZ AIdan istagan narsani so'rang...",
+      "messages": {
+        "welcome": "Salom, workspace'ingizni amallarga aylantirishda yordam beraman. Vazifa suggestion, learning yoki project idea so'rang.",
+        "focusPlan": "Bu hafta uchun fokus plan taklif qil.",
+        "focusAnswer": "Chat polishdan boshlang, keyin community moderationni chiqaring, so'ng wallet historyni projectlarga ulang.",
+        "demoResponse": "Demo javob: backend AI toollari tayyor bo'lganda task, project, learning profil va chat history bilan ulanaman."
+      },
+      "taskSuggestions": "Vazifa suggestionlari",
+      "taskSuggestionsDesc": "Keyingi backend iteratsiyasi uchun kontekst-aware promptlar.",
+      "suggestions": {
+        "createTasks": "Hozirgi projectlarimdan 5 ta vazifa yarat",
+        "learnNext": "Keyin nimani o'rganishimni tushuntir",
+        "saasIdea": "SaaS project idea yarat",
+        "teamActivity": "Team activityni summarize qil"
+      },
+      "modesTitle": "Assistant modelari",
+      "modesDesc": "Clutter AI cockpit o'rniga sodda va tushunarli modelar.",
+      "modeLabel": "Mode",
+      "modes": {
+        "learning": {
+          "title": "Learning",
+          "desc": "Conceptlarni tushuntiradi va study path quradi"
+        },
+        "projects": {
+          "title": "Projects",
+          "desc": "Scope, milestone va idea yaratadi"
+        },
+        "tasks": {
+          "title": "Tasks",
+          "desc": "Suggest, prioritize va summarize qiladi"
+        },
+        "team": {
+          "title": "Team",
+          "desc": "Standup va activity report tayyorlaydi"
+        }
+      },
+      "ideaGenerator": "AI idea generator",
+      "ideaGeneratorDesc": "Kelajak backend tool calllari uchun ko'proq mock prompt/output.",
+      "learningPaths": "Learning assistant pathlari",
+      "learningPathsDesc": "AI keyinchalik profession, goal va workspace activity asosida adaptive learning path tavsiya qiladi.",
+      "modulesCount": "{{count}} modul",
+      "complete": "{{progress}}% yakunlangan"
+    },
+    "teams": {
+      "eyebrow": "Team management",
+      "title": "Team yaratish, rol berish va chat ulash",
+      "description": "Admin, member, dashboard va team communication uchun scalable team qatlami.",
+      "createTeam": "Team yaratish",
+      "openTeamChat": "Team chatni ochish",
+      "dashboard": "Team dashboard",
+      "dashboardDesc": "Team health uchun yengil operating view.",
+      "metrics": {
+        "members": "A'zolar",
+        "openTasks": "Ochiq vazifalar",
+        "teamChats": "Team chatlar",
+        "thisWeek": "Bu hafta"
+      },
+      "linkedChat": "Ulangan chat",
+      "linkedChatDesc": "UPZ Core Team chati kelajak backend activity sync uchun dashboardga ulangan.",
+      "membersRoles": "A'zolar va rollar",
+      "membersRolesDesc": "Admin/member role display va add-member placeholder.",
+      "roles": {
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "focus": {
+        "frontend": "Frontend",
+        "design": "Design",
+        "delivery": "Delivery",
+        "marketing": "Marketing",
+        "product": "Product",
+        "backend": "Backend"
+      },
+      "modalTitle": "Team yaratish",
+      "modalDesc": "Kengaytirilgan component systemdan demo modal.",
+      "teamName": "Team nomi",
+      "inviteEmail": "Email orqali taklif",
+      "createDemoTeam": "Demo team yaratish"
+    },
+    "projects": {
+      "eyebrow": "Project management",
+      "title": "Kanban, assignment, deadline va activity",
+      "description": "Keyinchalik task, chat, team role, file va wallet invoice bilan ulanadigan production-ready project yuzasi.",
+      "createProject": "Project yaratish",
+      "deadlines": "Deadlinelar",
+      "kanban": "Kanban board",
+      "kanbanDesc": "Cardlar drag-and-drop behavior uchun joylashgan. MVP static column va hover affordance ishlatadi.",
+      "dueMay": "May {{day}} deadline",
+      "assignment": "Assignment",
+      "assignmentDesc": "Tasklarni team member va rollarga assign qiling.",
+      "tasksCount": "{{count}} vazifa",
+      "activityLog": "Activity log",
+      "activityLogDesc": "Har bir project action uchun kelajak audit stream.",
+      "recorded": "MVP activity streamga yozildi",
+      "modalTitle": "Project yaratish",
+      "modalDesc": "Kelajak backend integration uchun project modal placeholder.",
+      "projectName": "Project nomi",
+      "projectBrief": "Project brief",
+      "createDemoProject": "Demo project yaratish",
+      "columns": {
+        "todo": {
+          "title": "Qilish kerak",
+          "tasks": {
+            "0": "Project brief sozlash",
+            "1": "Beta testerlarni taklif qilish",
+            "2": "Payment copyni tasdiqlash",
+            "3": "Birinchi versiya animatsiya ishlatilishini hujjatlash"
+          }
+        },
+        "doing": {
+          "title": "Jarayonda",
+          "tasks": {
+            "0": "Community moderation UI qurish",
+            "1": "Wallet history ulash",
+            "2": "AI assistant promptlarini yozish",
+            "3": "News category modelni kengaytirish"
+          }
+        },
+        "review": {
+          "title": "Review",
+          "tasks": {
+            "0": "Chat mobile polish",
+            "1": "Workspace integration cardlar",
+            "2": "Team role permissionlar"
+          }
+        },
+        "done": {
+          "title": "Tayyor",
+          "tasks": {
+            "0": "MVP routelar",
+            "1": "Onboarding",
+            "2": "Profile setup",
+            "3": "Light shell migratsiya"
+          }
+        }
+      },
+      "activity": {
+        "0": "Sara Chat mobile polishni Reviewga o'tkazdi",
+        "1": "Alex Wallet historyni Lucaga assign qildi",
+        "2": "James Community beta uchun deadline yaratdi",
+        "3": "Aisha onboarding copyga comment yozdi",
+        "4": "Mira AI idea generator promptlarini qo'shdi",
+        "5": "Otabek project search datani uladi",
+        "6": "Luca Universal Bank transaction statelarini tasdiqladi"
+      }
+    },
+    "tasksNotes": {
+      "tabs": {
+        "tasks": "Vazifalar",
+        "notes": "Eslatmalar"
+      },
+      "addTaskPlaceholder": "Yangi vazifa qo'shing...",
+      "pending": "Kutilmoqda ({{count}})",
+      "completed": "Yakunlangan ({{count}})",
+      "noTasks": "Hali vazifa yo'q. Yuqoridan qo'shing!",
+      "newNote": "Yangi eslatma",
+      "editNote": "Eslatmani tahrirlash",
+      "noteTitlePlaceholder": "Eslatma sarlavhasi...",
+      "noteContentPlaceholder": "Eslatmani shu yerga yozing...",
+      "saveChanges": "O'zgarishlarni saqlash",
+      "createNote": "Eslatma yaratish"
+    },
+    "profile": {
+      "edit": "Tahrirlash",
+      "joinedToday": "Bugun qo'shilgan",
+      "joinedDays": "{{count}} kun oldin qo'shilgan",
+      "stats": {
+        "tasksDone": "Bajarilgan vazifa",
+        "projects": "Projectlar",
+        "streak": "Streak"
+      },
+      "skills": "Skillar",
+      "about": "Haqida",
+      "profession": "Kasb",
+      "mainGoal": "Asosiy maqsad",
+      "experience": "Tajriba",
+      "memberSince": "A'zo bo'lgan sana",
+      "certificates": "Sertifikatlar",
+      "addCertificate": "Sertifikat qo'shish",
+      "githubRepos": "GitHub repolar",
+      "updated": "{{time}} yangilangan"
+    },
+    "settings": {
+      "tabs": {
+        "account": "Account",
+        "notifications": "Bildirishnomalar",
+        "integrations": "Integratsiyalar"
+      },
+      "accountInfo": "Account ma'lumotlari",
+      "displayName": "Display name",
+      "email": "Email",
+      "username": "Username",
+      "profession": "Kasb",
+      "changeOnboarding": "(Onboardingda o'zgartiriladi)",
+      "saveChanges": "O'zgarishlarni saqlash",
+      "dangerZone": "Danger zone",
+      "deleteAccount": "Accountni o'chirish",
+      "deleteAccountDesc": "Bu amalni qaytarib bo'lmaydi",
+      "delete": "O'chirish",
+      "notificationPrefs": "Bildirishnoma sozlamalari",
+      "notifications": {
+        "email": {
+          "label": "Email bildirishnomalari",
+          "desc": "Email orqali update olish"
+        },
+        "push": {
+          "label": "Push bildirishnomalar",
+          "desc": "Browser push bildirishnomalari"
+        },
+        "taskReminders": {
+          "label": "Task reminderlar",
+          "desc": "Yaqin tasklar haqida eslatma"
+        },
+        "chatMessages": {
+          "label": "Chat xabarlari",
+          "desc": "Yangi xabarlar uchun alert"
+        },
+        "weeklyReport": {
+          "label": "Haftalik report",
+          "desc": "Har dushanba summary email"
+        },
+        "productUpdates": {
+          "label": "Product updatelar",
+          "desc": "Yangi UPZ featurelari haqida yangilik"
+        }
+      },
+      "integrationsIntro": "Workspaceni kuchaytirish uchun tashqi servislarni ulang. Demoda real credential kerak emas.",
+      "integrations": {
+        "github": "Repolar va code activityni tracking qilish",
+        "telegram": "Telegram bot orqali bildirishnoma olish",
+        "instagram": "IG analytics va post schedule tracking",
+        "youtube": "Channel stat va video performanceni kuzatish",
+        "gdrive": "Drive fayllaringizga kirish va boshqarish",
+        "mail": "Emailni bildirishnomalar uchun ulash",
+        "calendar": "Event va reminderlarni sync qilish",
+        "class": "Class va student grouplarni boshqarish"
+      },
+      "connect": "Ulash",
+      "disconnect": "Uzish"
+    },
+    "ecosystem": {
+      "modules": {
+        "Community": {
+          "name": "Community",
+          "status": "Kengaytirilgan"
+        },
+        "News": {
+          "name": "Yangiliklar",
+          "status": "Personal"
+        },
+        "Universal Bank": {
+          "name": "Universal Bank",
+          "status": "Hamyon demo"
+        },
+        "AI Assistant": {
+          "name": "AI yordamchi",
+          "status": "Copilot tayyor"
+        },
+        "Projects": {
+          "name": "Projectlar",
+          "status": "Kanban tayyor"
+        },
+        "Teams": {
+          "name": "Teamlar",
+          "status": "Rol modeli"
+        }
+      }
+    },
+    "mock": {
+      "tasks": {
+        "t1": "Loyiha talablarini tekshirish",
+        "t2": "Onboarding flow dizayn qilish",
+        "t3": "Project strukturani sozlash",
+        "t4": "API dokumentatsiya yozish",
+        "t5": "Investor deck tayyorlash"
+      },
+      "notes": {
+        "n1": {
+          "title": "MVP feature ro'yxati",
+          "content": "Dashboard, Chat, Tasks, Workspace, Profile, Settings. v1 uchun sodda saqlash."
+        },
+        "n2": {
+          "title": "Design system ranglari",
+          "content": "Background: #F7FAFC\nCards: #FFFFFF\nBorder: #E5E7EB\nText: #111827\nAccent: #6366F1 va #3B82F6"
+        },
+        "n3": {
+          "title": "Meeting notes - Sprint 1",
+          "content": "Landing page polish va internal app skeleton ustida fokus. Demo juma kuni tayyor."
+        }
+      },
+      "chatRooms": {
+        "r1": {
+          "name": "Alex Kim"
+        },
+        "r2": {
+          "name": "Sara Chen"
+        },
+        "r3": {
+          "name": "UPZ Core Team"
+        },
+        "r4": {
+          "name": "Landing Page Redesign",
+          "linkedTask": "Landing hero QA"
+        },
+        "r5": {
+          "name": "Freelancerlar networki"
+        }
+      },
+      "chatMessages": {
+        "m1": "Hey! Yangi project speclarini ko'rdingizmi?",
+        "m2": "Ha, hozir tekshirdim. Scope MVP uchun yetarlicha aniq.",
+        "m3": "Zo'r, ertaga ertalab sync qilamiz.",
+        "m4": "Ungacha PRni review qila olasizmi?",
+        "m5": "Design mockuplarni yangiladim.",
+        "m6": "Juda zo'r ko'rinadi! Rang palitrasi yoqdi.",
+        "m7": "Sprint review ertaga 10:00 da.",
+        "m8": "Demo flowni tayyorlayman va 7 minutdan oshirmayman.",
+        "m9": "Design assetlar tayyor ?",
+        "m10": "Marketing brief barcha stakeholderlarga yuborildi.",
+        "m11": "Hammaga rahmat, bu sprintda zo'r ish bo'ldi!",
+        "m12": "Wireframelar Figmada attached. Hero CTA varianti test qilinadi.",
+        "m13": "Tushunarli, bugun review qilaman.",
+        "m14": "Bu oy collabga qiziqqan bormi?",
+        "m15": "Men bor! Project nima?",
+        "m16": "SaaS startup uchun UX audit."
+      }
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "switchToLight": "Light modega o'tish",
+      "switchToDark": "Dark modega o'tish"
+    }
+  }
+}

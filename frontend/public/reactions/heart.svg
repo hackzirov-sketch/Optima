@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="Premium heart reaction">
+  <title>Premium heart reaction</title>
+  <defs>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#111827" flood-opacity="0.16"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="48" cy="48" r="40.32" fill="url(#bg)" filter="url(#softShadow)"/>
+  <circle cx="32.64" cy="26.880000000000003" r="11.52" fill="white" opacity="0.22"/>
+  <defs><linearGradient id="bg" x1="12" y1="10" x2="86" y2="90" gradientUnits="userSpaceOnUse"><stop stop-color="#F43F5E"/><stop offset="1" stop-color="#FB7185"/></linearGradient></defs>
+  <path d="M48 72S24 58 24 40c0-9 7-15 15-15 4 0 8 2 11 6 3-4 7-6 11-6 8 0 15 6 15 15 0 18-28 32-28 32Z" fill="white" opacity="0.94"/><path d="M35 36c2-4 6-6 10-6" stroke="#FFE4E6" stroke-width="4" stroke-linecap="round"/>
+</svg>

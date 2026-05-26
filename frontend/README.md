@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UPZ Frontend - Next.js
 
-## Getting Started
+O'zbekiston Professional Zumradi platformasi uchun frontend qism.
 
-First, run the development server:
+## Texnologiyalar
+
+- **Framework**: Next.js 15 (App Router)
+- **UI**: React 19, Tailwind CSS
+- **Components**: Radix UI, shadcn/ui
+- **State Management**: TanStack Query, Zustand
+- **Forms**: React Hook Form + Zod
+- **Animations**: Framer Motion
+- **i18n**: react-i18next
+- **Icons**: Lucide React, React Icons
+
+## O'rnatish
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Ishga tushirish
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Development:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Production build:
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Loyiha strukturasi
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+├── (auth)/
+│   └── onboarding/      # Onboarding wizard
+├── app/                 # Authenticated pages
+│   ├── home/
+│   ├── dashboard/
+│   ├── workspace/
+│   ├── chat/
+│   ├── meetings/
+│   ├── premium/
+│   ├── community/
+│   ├── news/
+│   ├── bank/
+│   ├── assistant/
+│   ├── teams/
+│   ├── projects/
+│   ├── tasks/
+│   ├── profile/
+│   └── settings/
+├── globals.css          # Global styles
+├── layout.tsx           # Root layout
+├── page.tsx             # Landing page
+└── providers.tsx        # React Query, Theme providers
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+components/
+├── ui/                  # Reusable UI components (shadcn)
+├── landing/             # Landing page components
+├── app/                 # App-specific components
+├── chat/                # Chat components
+└── premium/             # Premium page components
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+hooks/
+├── useAuth.ts           # Authentication hook
+└── ...                  # Other custom hooks
 
-## Deploy on Vercel
+lib/
+└── utils.ts             # Utility functions
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+types/
+└── index.ts             # TypeScript types
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+utils/
+└── storage.ts           # LocalStorage wrapper
+
+i18n/
+└── ...                  # Internationalization
+
+data/
+└── mockData.ts          # Mock data
+```
+
+## Environment Variables
+
+`.env.local` faylini yarating va quyidagi o'zgaruvchilarni qo'shing:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+## Backend Integration
+
+Backend API: `../backend` papkasida joylashgan NestJS proyekti bilan ishlaydi.
+
+Backend ishga tushirish:
+```bash
+cd ../backend
+npm install
+npm run start:dev
+```
+
+## Deployment
+
+Vercel yoki boshqa Next.js hosting platformalariga deploy qilish mumkin:
+
+```bash
+npm run build
+```
+
+## License
+
+Private

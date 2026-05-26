@@ -1,0 +1,1181 @@
+{
+  "header": {
+    "nav": {
+      "features": "Features",
+      "howItWorks": "How it Works",
+      "forWhom": "For Whom",
+      "aiAssistant": "AI Assistant"
+    },
+    "login": "Log in",
+    "getStarted": "Get Started"
+  },
+  "hero": {
+    "badge": "All-in-One Productivity Platform",
+    "headline1": "Work. Learn. Earn.",
+    "headline2": "All in one place.",
+    "subheadline": "Universal Productivity Zone helps users learn skills, find jobs, manage teams, grow as freelancers, and work with AI-powered productivity tools in one personalized workspace.",
+    "getStarted": "Get Started",
+    "exploreFeatures": "Explore Features"
+  },
+  "problem": {
+    "title": "The fragmented tool problem",
+    "subtitle": "Professionals today juggle dozens of apps just to get work done.",
+    "tools": [
+      "Learning",
+      "Job Search",
+      "Team Chat",
+      "Project Mgmt",
+      "File Sharing",
+      "Freelancing",
+      "Payments",
+      "Productivity"
+    ],
+    "conclusion": "One platform. All of it."
+  },
+  "solution": {
+    "title": "Everything you need, finally unified",
+    "subtitle": "UPZ brings together all the essential tools for professional growth and daily work into a single, cohesive environment designed to eliminate friction.",
+    "modules": [
+      "Personalized Workspace",
+      "Chat",
+      "Dashboard",
+      "Tasks & Notes",
+      "Learning",
+      "Freelancing",
+      "AI Assistant",
+      "Communities",
+      "Payments"
+    ]
+  },
+  "features": {
+    "title": "Powerful features for every professional",
+    "subtitle": "Everything you need to work, learn, and grow, beautifully integrated.",
+    "items": [
+      {
+        "title": "Personalized Workspace",
+        "description": "A tailored environment that adapts to your specific role, whether you're a developer, designer, or creator."
+      },
+      {
+        "title": "Chat System",
+        "description": "Built-in communication tools for teams and clients, eliminating the need for external messaging apps."
+      },
+      {
+        "title": "Dashboard",
+        "description": "Real-time analytics and overview of all your ongoing projects, tasks, and financial metrics."
+      },
+      {
+        "title": "Tasks & Notes",
+        "description": "Powerful project management connected directly to your knowledge base."
+      },
+      {
+        "title": "Learning System",
+        "description": "Integrated courses and skill-building paths tailored to your career goals."
+      },
+      {
+        "title": "Freelance & Hiring",
+        "description": "Find jobs, hire talent, and manage contracts all within the same platform."
+      },
+      {
+        "title": "Content & Social Tools",
+        "description": "Plan, schedule, and manage your content strategy across multiple channels."
+      },
+      {
+        "title": "Universal Bank",
+        "description": "Manage invoices, payments, and financial tracking natively without external gateways."
+      },
+      {
+        "title": "AI Assistant",
+        "description": "Context-aware AI that helps draft messages, plan projects, and summarize information."
+      }
+    ]
+  },
+  "howItWorks": {
+    "title": "Get started in 3 simple steps",
+    "steps": [
+      {
+        "title": "Sign Up",
+        "desc": "Create your account in seconds"
+      },
+      {
+        "title": "Set Your Profile",
+        "desc": "Choose your profession, goal, and experience level"
+      },
+      {
+        "title": "Get Your Workspace",
+        "desc": "Receive a fully personalized productivity environment"
+      }
+    ]
+  },
+  "forWhom": {
+    "title": "Built for every professional",
+    "subtitle": "Whatever you do, UPZ adapts to you.",
+    "personas": [
+      {
+        "role": "Developers",
+        "tags": [
+          "GitHub integration",
+          "AI coding help",
+          "Project dashboard"
+        ]
+      },
+      {
+        "role": "Teachers",
+        "tags": [
+          "Course management",
+          "Student progress",
+          "Class tools"
+        ]
+      },
+      {
+        "role": "Students",
+        "tags": [
+          "Learning path",
+          "Notes",
+          "Tasks"
+        ]
+      },
+      {
+        "role": "Freelancers",
+        "tags": [
+          "Portfolio",
+          "Client communication",
+          "Income tools"
+        ]
+      },
+      {
+        "role": "Content Creators",
+        "tags": [
+          "Media workflow",
+          "Content planning",
+          "Social integrations"
+        ]
+      },
+      {
+        "role": "SMM Specialists",
+        "tags": [
+          "Campaign planning",
+          "Analytics",
+          "Social tools"
+        ]
+      },
+      {
+        "role": "Designers",
+        "tags": [
+          "Project files",
+          "Feedback",
+          "Team collaboration"
+        ]
+      },
+      {
+        "role": "Teams & Companies",
+        "tags": [
+          "Team control",
+          "Project management",
+          "Stats"
+        ]
+      }
+    ]
+  },
+  "ai": {
+    "title": "Meet your AI productivity partner",
+    "subtitle": "Intelligent assistance for every part of your work life. From drafting emails to planning entire project lifecycles.",
+    "features": [
+      "Task suggestions",
+      "Learning support",
+      "Project planning",
+      "Smart summaries",
+      "Productivity tips",
+      "Team assistance"
+    ]
+  },
+  "freelancer": {
+    "title": "Become a freelancer from zero",
+    "subtitle": "UPZ isn't just a freelance marketplace — it's the complete path from beginner to earning professional.",
+    "steps": [
+      "Learn",
+      "Practice",
+      "Build Portfolio",
+      "Join Team",
+      "Real Projects",
+      "Earn"
+    ]
+  },
+  "cta": {
+    "title": "Start building your future workspace today.",
+    "subtitle": "Join a platform designed for learning, working, collaboration, and professional growth.",
+    "getStarted": "Get Started",
+    "login": "Log in",
+    "joinCount": "Join {{count}}+ professionals"
+  },
+  "footer": {
+    "tagline": "Universal Productivity Zone is the all-in-one workspace that replaces your scattered tools. Work, learn, and earn in one place.",
+    "product": "Product",
+    "features": "Features",
+    "howItWorks": "How it Works",
+    "pricing": "Pricing",
+    "roadmap": "Roadmap",
+    "community": "Community",
+    "blog": "Blog",
+    "discord": "Discord",
+    "twitter": "Twitter",
+    "github": "GitHub",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "contact": "Contact",
+    "copyright": "© {{year}} Universal Productivity Zone. All rights reserved."
+  },
+  "app": {
+    "nav": {
+      "core": "Core",
+      "work": "Work",
+      "growth": "Growth",
+      "account": "Account",
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "workspace": "Workspace",
+      "chat": "Chat",
+      "meetings": "Meetings",
+      "projects": "Projects",
+      "teams": "Teams",
+      "tasks": "Tasks & Notes",
+      "assistant": "AI Assistant",
+      "community": "Community",
+      "news": "News",
+      "bank": "Universal Bank",
+      "premium": "Premium",
+      "pro": "Pro",
+      "profile": "Profile",
+      "settings": "Settings",
+      "live": "Live",
+      "zoneHealth": "Zone health",
+      "logout": "Logout"
+    },
+    "professions": {
+      "developer": "Developer",
+      "teacher": "Teacher",
+      "student": "Student",
+      "freelancer": "Freelancer",
+      "designer": "Designer",
+      "smm": "SMM Specialist",
+      "creator": "Content Creator"
+    },
+    "topbar": {
+      "synced": "Synced locally",
+      "tagline": "Build, learn, earn, and collaborate in one workspace.",
+      "searchLong": "Search users, chats, tasks, projects",
+      "searchShort": "Search UPZ",
+      "openSearch": "Open global search",
+      "closeSearch": "Close search",
+      "commandReady": "Command center search is ready for backend wiring.",
+      "noResults": "No matching users, chats, tasks, or projects.",
+      "notifications": "Notifications",
+      "notificationsDesc": "Project, chat, bank, and news updates",
+      "markAllRead": "Mark all read",
+      "localOnly": "Notification center is local-only for this MVP.",
+      "online": "Online",
+      "toggleSidebar": "Toggle sidebar",
+      "openNotifications": "Open notifications"
+    },
+    "dashboard": {
+      "eyebrow": "Today command center",
+      "welcome": "Welcome back, {{name}}",
+      "description": "Your UPZ command center brings together projects, chat, AI, teams, wallet, notifications, and workspace health in one clean operating view.",
+      "askAI": "Ask AI",
+      "openChat": "Open chat",
+      "heroTitle": "Run the day from one calm, connected workspace.",
+      "heroDesc": "Start with chat QA, review the project demo path, confirm wallet states, then let AI generate a launch plan.",
+      "continueProjects": "Continue projects",
+      "openWorkspace": "Open workspace",
+      "launchReadiness": "Launch readiness",
+      "trackerDesc": "MVP-to-product polish tracker.",
+      "agenda": "Today's agenda",
+      "agendaDesc": "A compact timeline for the workday.",
+      "focusScore": "88% focus score",
+      "activeProjectsPill": "4 active projects",
+      "teammatesOnlinePill": "2 teammates online",
+      "tasksDone": "Tasks done",
+      "tasksTrend": "8 this week",
+      "activeProjects": "Active projects",
+      "activeProjectsTrend": "1 new",
+      "teamMembers": "Team members",
+      "teamMembersTrend": "2 online",
+      "unreadAlerts": "Unread alerts",
+      "unreadTrend": "Actionable now",
+      "nextActions": "Next best actions",
+      "nextActionsDesc": "Clickable command cards make the MVP feel actionable without backend complexity.",
+      "ecosystemHealth": "Ecosystem module health",
+      "ecosystemDesc": "Richer mock data for the full UPZ product system.",
+      "backendReady": "Backend-ready",
+      "weeklyActivity": "Weekly activity",
+      "weeklyActivityDesc": "Tasks and messages across the product ecosystem.",
+      "productivityScore": "Productivity score",
+      "productivityDesc": "Trend visualization for personal analytics.",
+      "commands": {
+        "chatTitle": "Review chat polish",
+        "chatDesc": "Pinned messages, search, reactions, and mobile navigation are ready for QA.",
+        "projectTitle": "Prepare project demo",
+        "projectDesc": "Walk through command center, teams, projects, bank, and assistant surfaces.",
+        "walletTitle": "Check wallet events",
+        "walletDesc": "Freelance payment and pending payout states are visible in Universal Bank.",
+        "aiTitle": "Ask AI for launch plan",
+        "aiDesc": "Generate next steps for product launch, onboarding, and beta feedback.",
+        "todayTime": "Today 16:00",
+        "aiReady": "AI ready"
+      },
+      "agendaItems": {
+        "teamReview": "Team async review",
+        "heroQa": "Landing hero QA",
+        "moderation": "Community moderation pass",
+        "demo": "Investor demo rehearsal"
+      },
+      "areas": {
+        "teams": "Teams",
+        "project": "Project",
+        "community": "Community",
+        "workspace": "Workspace"
+      },
+      "progress": {
+        "productSystem": "UPZ Product System",
+        "internalExpansion": "Internal App Expansion",
+        "backendIntegration": "Backend Integration",
+        "mobileUx": "Mobile Adaptive UX"
+      },
+      "moduleUsers": "{{count}} users",
+      "chartTasks": "Tasks",
+      "chartMessages": "Messages",
+      "chartScore": "Score"
+    },
+    "chat": {
+      "openList": "Open chat list",
+      "startVoice": "Start voice call",
+      "startVideo": "Start video call",
+      "searchInChat": "Search in chat",
+      "openMenu": "Open chat menu",
+      "online": "Online",
+      "away": "Away",
+      "lastSeen": "Last seen recently",
+      "memberStatus": "{{members}} members, {{online}} online",
+      "muted": "Muted",
+      "viewProfile": "View profile",
+      "mute": "Mute notifications",
+      "unmute": "Unmute notifications",
+      "pinChat": "Pin chat",
+      "unpinChat": "Unpin chat",
+      "clearHistory": "Clear history",
+      "deleteChat": "Delete chat",
+      "searchChats": "Search chats",
+      "pinned": "Pinned",
+      "allConversations": "All conversations",
+      "noChatsMatch": "No chats match that search.",
+      "archived": "Archived",
+      "archivedDesc": "Placeholder for hidden chats",
+      "categories": {
+        "all": "All",
+        "direct": "Direct",
+        "groups": "Groups",
+        "teams": "Teams",
+        "projects": "Projects",
+        "ai": "AI",
+        "saved": "Saved"
+      },
+      "types": {
+        "1on1": "Direct",
+        "group": "Group",
+        "team": "Team",
+        "project": "Project",
+        "saved": "Saved",
+        "ai": "AI"
+      },
+      "read": "Read",
+      "today": "Today",
+      "pinnedMessage": "Pinned message",
+      "pinnedNotice": "Pinned message preview stays local in this demo.",
+      "historyCleared": "History cleared",
+      "historyClearedDesc": "Send a new message to restart this local MVP conversation.",
+      "noChatsLeft": "No chats left",
+      "noChatsLeftDesc": "This is a local MVP demo. Refreshing after clearing localStorage will restore the mock chat set.",
+      "searchRoom": "Search in {{room}}",
+      "results": "{{count}} results",
+      "closeSearch": "Close chat search",
+      "noMessageFound": "No message found",
+      "noMessageFoundDesc": "Try another keyword or close chat search to see every message.",
+      "profilePlaceholder": "{{name}} profile preview is a demo placeholder.",
+      "forwardComposer": "Forward placed in the composer for this MVP demo.",
+      "attachFile": "Attach file",
+      "emojiPicker": "Open emoji picker",
+      "voicePlaceholder": "Voice message placeholder",
+      "sendMessage": "Send message",
+      "isTyping": "is typing",
+      "replyingTo": "Replying to {{name}}",
+      "messageFallback": "message",
+      "editingMessage": "Editing message",
+      "pressEnterSave": "Press Enter to save changes",
+      "mentionPlaceholder": "Message {{room}}. Use @ to mention teammates...",
+      "messagePlaceholder": "Message {{room}}...",
+      "aiOnline": "UPZ AI online",
+      "savedPrivate": "Private saved messages",
+      "aiComposeTitle": "AI writing assistant",
+      "aiComposeDesc": "Write text after /ai, then fix it or make it professional.",
+      "aiFix": "Fix",
+      "aiProfessional": "Professional",
+      "aiShorten": "Shorten",
+      "aiTask": "Make task",
+      "aiComposeHint": "Tip: type /ai while composing to fix, shorten, or polish your message.",
+      "sent": "sent",
+      "readStatus": "read",
+      "menu": {
+        "reply": "Reply",
+        "react": "React",
+        "copy": "Copy",
+        "forward": "Forward",
+        "pin": "Pin",
+        "editOwn": "Edit own message",
+        "delete": "Delete",
+        "localActions": "Local demo actions only"
+      },
+      "offline": "Offline",
+      "messageNotAvailable": "Message not available",
+      "noMessagesYet": "No messages yet",
+      "you": "You",
+      "someone": "Someone",
+      "unknown": "Unknown",
+      "pinnedLabel": "Pinned",
+      "edited": "edited",
+      "forwarded": "Forwarded: {{text}}",
+      "call": {
+        "voice": "Voice call",
+        "video": "Video call",
+        "groupVoice": "Group voice call",
+        "groupVideo": "Group video call",
+        "live": "Live",
+        "encryptedDemo": "UPZ secure demo",
+        "minimize": "Minimize call",
+        "expand": "Expand call",
+        "end": "End call",
+        "secureLayer": "Secure demo layer",
+        "participants": "participants",
+        "directVoiceDesc": "A clean Telegram-like call surface with UPZ controls, local state, and no backend requirement.",
+        "groupVoiceDesc": "Group voice calls use a calm stage, participant stack, and quick controls for team conversations.",
+        "telegramInspired": "Familiar call UX, adapted to UPZ style",
+        "people": "People",
+        "peopleDesc": "Local participant states",
+        "invite": "Invite people",
+        "teammate": "Teammate",
+        "muteMic": "Mute microphone",
+        "unmuteMic": "Unmute microphone",
+        "speakerOn": "Speaker on",
+        "speakerOff": "Speaker off",
+        "stopVideo": "Stop video",
+        "startVideo": "Start video",
+        "switchToVideo": "Switch to video",
+        "shareScreen": "Share screen",
+        "backToChat": "Back to chat",
+        "participantStatus": {
+          "speaking": "Speaking",
+          "online": "Online",
+          "muted": "Muted",
+          "listening": "Listening",
+          "cameraOff": "Camera off",
+          "joining": "Joining"
+        }
+      }
+    },
+    "meetings": {
+      "eyebrow": "Meetings",
+      "title": "Lux video meetings for teams and client calls",
+      "description": "A premium UPZ meeting room for instant calls, scheduled sessions, team syncs, screen sharing, and future calendar integration.",
+      "newMeeting": "New meeting",
+      "schedule": "Schedule",
+      "liveRoom": "Live meeting room",
+      "readyRoom": "Ready room",
+      "roomDesc": "A familiar video-call layout adapted for UPZ: calm controls, participant tiles, agenda, links, and mock security states.",
+      "copyLink": "Copy link",
+      "inCall": "In call",
+      "preview": "Preview",
+      "secureDemo": "Local MVP video demo. No camera or backend required.",
+      "muteMic": "Mute microphone",
+      "unmuteMic": "Unmute microphone",
+      "stopCamera": "Stop camera",
+      "startCamera": "Start camera",
+      "shareScreen": "Share screen",
+      "raiseHand": "Raise hand",
+      "leave": "Leave meeting",
+      "joinTitle": "Join by code",
+      "joinDesc": "Paste a meeting code or use a demo room.",
+      "codePlaceholder": "Enter meeting code",
+      "join": "Join",
+      "useDemoCode": "Use demo code",
+      "upcoming": "Upcoming calls",
+      "upcomingDesc": "Team syncs, project reviews, and 1:1 client calls.",
+      "hostedBy": "Hosted by {{name}}",
+      "peopleCount": "{{count}} people",
+      "trustTitle": "Meeting trust layer",
+      "trustDesc": "MVP placeholders for professional call controls.",
+      "trust": {
+        "privateRooms": {
+          "title": "Private rooms",
+          "desc": "Meeting codes are local demo tokens."
+        },
+        "waitingRoom": {
+          "title": "Waiting room",
+          "desc": "Future host approval before joining."
+        },
+        "hostControls": {
+          "title": "Host controls",
+          "desc": "Mute, remove, pin, and record placeholders."
+        }
+      },
+      "agendaTitle": "Meeting agenda",
+      "agendaDesc": "Keep calls focused with visible talking points.",
+      "agendaMeta": "Ready for notes and follow-up tasks.",
+      "modalTitle": "Schedule meeting",
+      "modalDesc": "Create a demo meeting shell for future calendar integration.",
+      "meetingName": "Meeting name",
+      "meetingDate": "Date",
+      "meetingTime": "Time",
+      "meetingAgenda": "Agenda",
+      "createDemoMeeting": "Create demo meeting",
+      "status": {
+        "live": "Live",
+        "upcoming": "Upcoming",
+        "scheduled": "Scheduled"
+      },
+      "toasts": {
+        "joined": "Instant meeting opened.",
+        "joinedCode": "Joined demo meeting by code.",
+        "linkCopied": "Meeting link copied in demo state.",
+        "scheduled": "Demo meeting scheduled."
+      }
+    },
+    "common": {
+      "cancel": "Cancel"
+    },
+    "goals": {
+      "learn": "Learn Skills",
+      "find_work": "Find Work",
+      "manage_team": "Manage Team",
+      "build_portfolio": "Build Portfolio",
+      "freelance": "Freelance"
+    },
+    "experience": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced"
+    },
+    "priority": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "status": {
+      "connected": "Connected",
+      "placeholder": "Placeholder",
+      "readyUi": "Ready UI",
+      "readyui": "Ready UI",
+      "completed": "Completed",
+      "processing": "Processing",
+      "demo": "Demo",
+      "planned": "Planned"
+    },
+    "search": {
+      "types": {
+        "User": "User",
+        "Chat": "Chat",
+        "Meeting": "Meeting",
+        "Task": "Task",
+        "Project": "Project",
+        "Article": "Article",
+        "Wallet": "Wallet",
+        "Premium": "Premium",
+        "Animation": "Animation",
+        "Learning": "Learning",
+        "Team": "Team"
+      }
+    },
+    "premium": {
+      "eyebrow": "Premium accounts",
+      "title": "Premium advantages for serious UPZ users",
+      "description": "Turn the MVP into a paid-product-ready experience with more AI, better meetings, deeper workspace controls, verified community status, and Universal Bank perks.",
+      "upgrade": "Upgrade account",
+      "comparePlans": "Compare plans",
+      "currentPlan": "Premium preview",
+      "heroTitle": "{{name}}, unlock the stronger UPZ operating system.",
+      "heroDesc": "Premium is designed for users who work, learn, earn, and collaborate daily inside UPZ.",
+      "selectedPlan": "Selected plan",
+      "whyTitle": "Why Premium matters",
+      "whyDesc": "These advantages create clear reasons to upgrade without making the free MVP feel broken.",
+      "stats": {
+        "ai": "AI usage boost",
+        "team": "Projects & layouts",
+        "support": "Support response"
+      },
+      "checkoutTitle": "Upgrade flow",
+      "checkoutDesc": "Frontend-only checkout preview for future payment integration.",
+      "localOnly": "Local MVP preview. No payment is processed.",
+      "mockCheckout": "Open mock checkout",
+      "comparisonTitle": "Plan comparison",
+      "comparisonDesc": "A simple product-ready structure for future billing and backend limits.",
+      "table": {
+        "feature": "Feature",
+        "free": "Free",
+        "pro": "Pro",
+        "team": "Team"
+      },
+      "checkoutNotes": {
+        "secure": "Future-ready for Stripe, local cards, and Universal Bank.",
+        "demo": "This button only shows a local demo toast."
+      },
+      "toasts": {
+        "checkout": "Premium checkout is a local MVP preview.",
+        "compare": "Comparison table is ready for backend limits."
+      },
+      "benefits": {
+        "ai": {
+          "title": "AI Power Mode",
+          "description": "Higher AI limits for planning, learning, writing, project ideas, and team summaries.",
+          "metric": "10x AI usage"
+        },
+        "workspace": {
+          "title": "Advanced Workspace",
+          "description": "Save custom layouts, premium project views, workspace templates, and deeper integrations.",
+          "metric": "Custom layouts"
+        },
+        "meetings": {
+          "title": "Premium Meetings",
+          "description": "Longer video calls, recording placeholders, agenda notes, and team meeting rooms.",
+          "metric": "180 min rooms"
+        },
+        "bank": {
+          "title": "Universal Bank Plus",
+          "description": "Lower payout fee placeholders, freelance earning analytics, invoices, and local payment priority.",
+          "metric": "Lower fees"
+        },
+        "community": {
+          "title": "Verified Community",
+          "description": "Premium badge, private channels, mentor rooms, boosted posts, and priority moderation.",
+          "metric": "Verified badge"
+        },
+        "support": {
+          "title": "Priority Support",
+          "description": "Fast support lane, onboarding help, product guidance, and premium roadmap access.",
+          "metric": "Priority lane"
+        }
+      },
+      "plans": {
+        "free": {
+          "name": "Free",
+          "period": "forever",
+          "badge": "Current MVP",
+          "description": "For trying UPZ and managing a light personal workspace.",
+          "cta": "Current plan",
+          "features": [
+            "Basic workspace",
+            "3 active projects",
+            "20 AI actions/day",
+            "30 min demo meetings",
+            "Community read access"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "period": "per month",
+          "badge": "Best for creators",
+          "description": "For freelancers, students, creators, and solo builders who want more power.",
+          "cta": "Upgrade to Pro",
+          "features": [
+            "Unlimited projects",
+            "10x AI assistant usage",
+            "Premium meetings",
+            "Universal Bank Plus",
+            "Verified profile badge"
+          ]
+        },
+        "team": {
+          "name": "Team",
+          "period": "per seat",
+          "badge": "Teams",
+          "description": "For teams that need roles, shared workspaces, analytics, and priority workflows.",
+          "cta": "Start team plan",
+          "features": [
+            "Everything in Pro",
+            "Team roles",
+            "Shared project rooms",
+            "Admin controls",
+            "Priority support"
+          ]
+        }
+      }
+    },
+    "home": {
+      "welcome": "Welcome back, {{name}}",
+      "description": "Goal: {{goal}}. UPZ now connects your workspace, projects, community, news, wallet, teams, and AI assistant into one light productivity system.",
+      "tasksDoneCount": "{{done}}/{{total}} tasks done",
+      "metrics": {
+        "focusScore": "Focus score",
+        "focusTrend": "6% this week",
+        "openProjects": "Open projects",
+        "projectTrend": "1 new project",
+        "unreadItems": "Unread items",
+        "unreadTrend": "Across chat and news"
+      },
+      "quickActions": "Quick actions",
+      "quickActionsDesc": "Fast entry points into the expanded UPZ ecosystem.",
+      "actions": {
+        "newTask": "New Task",
+        "openChat": "Open Chat",
+        "workspace": "Workspace",
+        "dashboard": "Dashboard"
+      },
+      "todaysTasks": "Today's tasks",
+      "todaysTasksDesc": "Simple task state still works locally while the product grows.",
+      "viewAll": "View all",
+      "recentActivity": "Recent activity",
+      "recentActivityDesc": "Activity feed pattern for future backend events.",
+      "activity": {
+        "completedTask": "Completed task: Review project requirements",
+        "newMessage": "New message from Alex Kim",
+        "updatedNote": "Updated note: MVP Feature List",
+        "joinedChat": "Joined UPZ Core Team chat",
+        "onboarding": "Onboarding completed"
+      },
+      "time": {
+        "twoHours": "2h ago",
+        "threeHours": "3h ago",
+        "fiveHours": "5h ago",
+        "oneDay": "1d ago"
+      }
+    },
+    "workspace": {
+      "eyebrow": "Advanced workspace",
+      "title": "{{profession}} command center",
+      "description": "Tabs, reorderable cards, integration placeholders, and layout controls extend the MVP workspace into a scalable user-customizable hub.",
+      "addCard": "Add card",
+      "customize": "Customize",
+      "tabs": {
+        "projects": "Projects",
+        "tools": "Tools",
+        "layout": "Layout"
+      },
+      "projectWorkspace": "Project workspace",
+      "projectWorkspaceDesc": "Drag cards to preview custom layout behavior. The order is local UI state in this MVP.",
+      "cards": {
+        "reposTitle": "GitHub Repos",
+        "reposDesc": "3 active repositories, 3 open pull requests, staging ready.",
+        "reposBadge": "GitHub",
+        "tasksTitle": "Dev Task Board",
+        "tasksDesc": "Sprint board with assignment, status, deadlines, and activity.",
+        "tasksBadge": "18 tasks",
+        "filesTitle": "Workspace Files",
+        "filesDesc": "Drive, docs, briefs, invoices, and project assets in one hub.",
+        "filesBadge": "Files",
+        "calendarTitle": "Calendar Sync",
+        "calendarDesc": "Upcoming standups, deadlines, learning blocks, and review sessions.",
+        "calendarBadge": "4 events"
+      },
+      "toolIntegrations": "Tool integrations",
+      "toolIntegrationsDesc": "Backend-ready integration cards for GitHub, Drive, Slack, Calendar, and future providers.",
+      "integrations": {
+        "github": "Repos, issues, pull requests",
+        "drive": "Docs, files, shared folders",
+        "slack": "Team alerts and channel sync",
+        "calendar": "Deadlines and availability"
+      },
+      "layoutTitle": "Custom layout saved locally",
+      "layoutDesc": "This tab demonstrates how a future backend can persist per-user workspace layouts, tab choices, hidden cards, and integration preferences.",
+      "previewLayout": "Preview layout settings"
+    },
+    "community": {
+      "eyebrow": "Community system",
+      "title": "Profession-based groups, channels, and discussions",
+      "description": "Public communities give every UPZ user a place to learn, collaborate, moderate, and discover opportunities without leaving their workspace.",
+      "startDiscussion": "Start discussion",
+      "moderationQueue": "Moderation queue",
+      "publicGroups": "Public groups by profession",
+      "publicGroupsDesc": "Join or leave profession spaces. Counts and membership are local UI state for the MVP.",
+      "joined": "Joined",
+      "public": "Public",
+      "membersCount": "{{count}} members",
+      "leave": "Leave",
+      "join": "Join",
+      "moderationUi": "Moderation UI",
+      "moderationDesc": "Keep communities clean with lightweight queues and role controls.",
+      "review": "Review",
+      "threadsTitle": "Threads and discussions",
+      "threadsDesc": "Thread-like discussions for structured community conversations.",
+      "startedBy": "Started by {{author}} - {{replies}} replies",
+      "status": {
+        "hot": "Hot",
+        "open": "Open",
+        "pinned": "Pinned"
+      },
+      "channelsTitle": "Channels",
+      "channelsDesc": "Broadcast-style spaces inspired by channel workflows.",
+      "subscribers": "{{count}} subscribers",
+      "networkDepth": "Profession network depth",
+      "networkDepthDesc": "More mock data for future segmentation, recommendations, and public discovery.",
+      "groupsMetric": "{{count}} groups",
+      "channelsMetric": "{{count}} channels",
+      "mentorsMetric": "{{count}} mentors",
+      "postsMetric": "{{count}} posts/week",
+      "featuredCreators": "Featured creators",
+      "featuredCreatorsDesc": "Community leaders, mentors, and public contributors.",
+      "postSystem": "Post and comment system",
+      "postSystemDesc": "A backend-ready composer and comments model, kept simple for the MVP demo.",
+      "postPlaceholder": "Share a question, resource, or update with your group...",
+      "publishPost": "Publish post",
+      "youPrefix": "You: {{text}}",
+      "initialComments": {
+        "onboarding": "This would help onboarding a lot.",
+        "rituals": "Can we add a template for team rituals?"
+      }
+    },
+    "news": {
+      "eyebrow": "News system",
+      "title": "Personalized intelligence feed",
+      "description": "A clean reading surface for profession-aware news, saved articles, trending topics, and lightweight article views.",
+      "tuneFeed": "Tune feed",
+      "tabs": {
+        "personalized": "Personalized",
+        "trending": "Trending",
+        "saved": "Saved"
+      },
+      "searchArticles": "Search articles",
+      "feed": "Feed",
+      "personalizedFor": "Personalized for {{profession}}.",
+      "trending": "Trending",
+      "articleView": "Article view",
+      "articleViewDesc": "A simple backend-ready article surface with save state.",
+      "save": "Save",
+      "saved": "Saved",
+      "readLabel": "{{time}} read",
+      "productionBody": "In a production UPZ backend, this view would support authors, sources, recommendations, and profession-based personalization. For the MVP, it demonstrates hierarchy, reading rhythm, and saved state without adding content infrastructure.",
+      "related": {
+        "recommended": "Recommended",
+        "role": "For your role",
+        "tasks": "Related tasks"
+      }
+    },
+    "bank": {
+      "eyebrow": "Universal Bank",
+      "title": "Wallet, earnings, and payment history",
+      "description": "A finance-ready UI layer for freelance income, payouts, local payments, crypto placeholders, and subscription history.",
+      "withdraw": "Withdraw",
+      "addMethod": "Add method",
+      "metrics": {
+        "balance": "Available balance",
+        "balanceTrend": "+$1,240 today",
+        "earnings": "Freelance earnings",
+        "earningsTrend": "18% this month",
+        "payouts": "Pending payouts",
+        "payoutsTrend": "2 processing",
+        "crypto": "Crypto demo",
+        "cryptoTrend": "Placeholder rail"
+      },
+      "transactions": "Transactions",
+      "transactionsDesc": "Payment history with statuses ready for real backend records.",
+      "table": {
+        "transaction": "Transaction",
+        "amount": "Amount",
+        "status": "Status"
+      },
+      "paymentRails": "Payment rails",
+      "paymentRailsDesc": "Crypto and local payment methods remain placeholders for MVP.",
+      "estimatedFee": "estimated fee {{fee}}"
+    },
+    "assistant": {
+      "eyebrow": "AI assistant",
+      "title": "A productivity copilot for tasks, learning, and projects",
+      "description": "The assistant is designed as an app-wide layer: chat, suggestions, learning support, project ideation, and future tool calls.",
+      "generatePlan": "Generate plan",
+      "chatTitle": "Chat with AI",
+      "chatDesc": "MVP chat surface with local demo responses.",
+      "inputPlaceholder": "Ask UPZ AI anything...",
+      "messages": {
+        "welcome": "Hi, I can help turn your workspace into actions. Ask for task suggestions, learning help, or project ideas.",
+        "focusPlan": "Suggest a focus plan for this week.",
+        "focusAnswer": "Start with chat polish, then ship community moderation, then connect wallet history to projects.",
+        "demoResponse": "Demo response: I would connect to your tasks, projects, learning profile, and chat history once backend AI tools are available."
+      },
+      "taskSuggestions": "Task suggestions",
+      "taskSuggestionsDesc": "Context-aware prompts for the next backend iteration.",
+      "suggestions": {
+        "createTasks": "Create 5 tasks from my current projects",
+        "learnNext": "Explain what I should learn next",
+        "saasIdea": "Generate a SaaS project idea",
+        "teamActivity": "Summarize my team activity"
+      },
+      "modesTitle": "Assistant modes",
+      "modesDesc": "Simple, discoverable modes instead of a cluttered AI cockpit.",
+      "modeLabel": "Mode",
+      "modes": {
+        "learning": {
+          "title": "Learning",
+          "desc": "Explain concepts and build study paths"
+        },
+        "projects": {
+          "title": "Projects",
+          "desc": "Generate scopes, milestones, and ideas"
+        },
+        "tasks": {
+          "title": "Tasks",
+          "desc": "Suggest, prioritize, and summarize"
+        },
+        "team": {
+          "title": "Team",
+          "desc": "Prepare standups and activity reports"
+        }
+      },
+      "ideaGenerator": "AI idea generator",
+      "ideaGeneratorDesc": "More mock prompt/output examples for future backend tool calls.",
+      "learningPaths": "Learning assistant paths",
+      "learningPathsDesc": "AI can later recommend adaptive learning paths based on profession, goals, and workspace activity.",
+      "modulesCount": "{{count}} modules",
+      "complete": "{{progress}}% complete"
+    },
+    "teams": {
+      "eyebrow": "Team management",
+      "title": "Create teams, assign roles, and link chats",
+      "description": "A scalable team layer for admins, members, dashboards, and team communication.",
+      "createTeam": "Create team",
+      "openTeamChat": "Open team chat",
+      "dashboard": "Team dashboard",
+      "dashboardDesc": "A lightweight operating view for team health.",
+      "metrics": {
+        "members": "Members",
+        "openTasks": "Open tasks",
+        "teamChats": "Team chats",
+        "thisWeek": "This week"
+      },
+      "linkedChat": "Linked chat",
+      "linkedChatDesc": "UPZ Core Team chat is connected to this dashboard for future backend activity sync.",
+      "membersRoles": "Members and roles",
+      "membersRolesDesc": "Admin/member role display with add-member placeholder.",
+      "roles": {
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "focus": {
+        "frontend": "Frontend",
+        "design": "Design",
+        "delivery": "Delivery",
+        "marketing": "Marketing",
+        "product": "Product",
+        "backend": "Backend"
+      },
+      "modalTitle": "Create team",
+      "modalDesc": "Demo modal from the expanded component system.",
+      "teamName": "Team name",
+      "inviteEmail": "Invite by email",
+      "createDemoTeam": "Create demo team"
+    },
+    "projects": {
+      "eyebrow": "Project management",
+      "title": "Kanban, assignment, deadlines, and activity",
+      "description": "A production-ready project surface that can later connect tasks, chat, team roles, files, and wallet invoices.",
+      "createProject": "Create project",
+      "deadlines": "Deadlines",
+      "kanban": "Kanban board",
+      "kanbanDesc": "Cards are arranged for drag-and-drop behavior. MVP uses static columns with hover affordances.",
+      "dueMay": "Due May {{day}}",
+      "assignment": "Assignment",
+      "assignmentDesc": "Assign tasks to team members and roles.",
+      "tasksCount": "{{count}} tasks",
+      "activityLog": "Activity log",
+      "activityLogDesc": "A future audit stream for every project action.",
+      "recorded": "Recorded in MVP activity stream",
+      "modalTitle": "Create project",
+      "modalDesc": "Project modal placeholder for future backend integration.",
+      "projectName": "Project name",
+      "projectBrief": "Project brief",
+      "createDemoProject": "Create demo project"
+    },
+    "tasksNotes": {
+      "tabs": {
+        "tasks": "Tasks",
+        "notes": "Notes"
+      },
+      "addTaskPlaceholder": "Add a new task...",
+      "pending": "Pending ({{count}})",
+      "completed": "Completed ({{count}})",
+      "noTasks": "No tasks yet. Add one above!",
+      "newNote": "New Note",
+      "editNote": "Edit Note",
+      "noteTitlePlaceholder": "Note title...",
+      "noteContentPlaceholder": "Write your note here...",
+      "saveChanges": "Save Changes",
+      "createNote": "Create Note"
+    },
+    "profile": {
+      "edit": "Edit",
+      "joinedToday": "Joined today",
+      "joinedDays": "Joined {{count}}d ago",
+      "stats": {
+        "tasksDone": "Tasks Done",
+        "projects": "Projects",
+        "streak": "Streak"
+      },
+      "skills": "Skills",
+      "about": "About",
+      "profession": "Profession",
+      "mainGoal": "Main Goal",
+      "experience": "Experience",
+      "memberSince": "Member Since",
+      "certificates": "Certificates",
+      "addCertificate": "Add certificate",
+      "githubRepos": "GitHub Repositories",
+      "updated": "Updated {{time}}"
+    },
+    "settings": {
+      "tabs": {
+        "account": "Account",
+        "notifications": "Notifications",
+        "integrations": "Integrations"
+      },
+      "accountInfo": "Account Information",
+      "displayName": "Display Name",
+      "email": "Email",
+      "username": "Username",
+      "profession": "Profession",
+      "changeOnboarding": "(Change in onboarding)",
+      "saveChanges": "Save Changes",
+      "dangerZone": "Danger Zone",
+      "deleteAccount": "Delete Account",
+      "deleteAccountDesc": "This action cannot be undone",
+      "delete": "Delete",
+      "notificationPrefs": "Notification Preferences",
+      "notifications": {
+        "email": {
+          "label": "Email Notifications",
+          "desc": "Receive updates via email"
+        },
+        "push": {
+          "label": "Push Notifications",
+          "desc": "Browser push notifications"
+        },
+        "taskReminders": {
+          "label": "Task Reminders",
+          "desc": "Get reminded about upcoming tasks"
+        },
+        "chatMessages": {
+          "label": "Chat Messages",
+          "desc": "Alerts for new messages"
+        },
+        "weeklyReport": {
+          "label": "Weekly Report",
+          "desc": "Summary email every Monday"
+        },
+        "productUpdates": {
+          "label": "Product Updates",
+          "desc": "News about new UPZ features"
+        }
+      },
+      "integrationsIntro": "Connect external services to enhance your workspace. No real credentials required in this demo.",
+      "integrations": {
+        "github": "Connect repos and track code activity",
+        "telegram": "Get notifications via Telegram bot",
+        "instagram": "Track your IG analytics and schedule posts",
+        "youtube": "Monitor channel stats and video performance",
+        "gdrive": "Access and manage your Drive files",
+        "mail": "Connect your email for notifications",
+        "calendar": "Sync events and schedule reminders",
+        "class": "Manage classes and student groups"
+      },
+      "connect": "Connect",
+      "disconnect": "Disconnect"
+    },
+    "ecosystem": {
+      "modules": {
+        "Community": {
+          "name": "Community",
+          "status": "Expanded"
+        },
+        "News": {
+          "name": "News",
+          "status": "Personalized"
+        },
+        "Universal Bank": {
+          "name": "Universal Bank",
+          "status": "Wallet demo"
+        },
+        "AI Assistant": {
+          "name": "AI Assistant",
+          "status": "Copilot ready"
+        },
+        "Projects": {
+          "name": "Projects",
+          "status": "Kanban ready"
+        },
+        "Teams": {
+          "name": "Teams",
+          "status": "Role model"
+        }
+      }
+    },
+    "mock": {
+      "tasks": {
+        "t1": "Review project requirements",
+        "t2": "Design onboarding flow",
+        "t3": "Set up project structure",
+        "t4": "Write API documentation",
+        "t5": "Prepare investor deck"
+      },
+      "notes": {
+        "n1": {
+          "title": "MVP Feature List",
+          "content": "Dashboard, Chat, Tasks, Workspace, Profile, Settings. Keep it simple for v1."
+        },
+        "n2": {
+          "title": "Design System Colors",
+          "content": "Background: #F7FAFC\nCards: #FFFFFF\nBorder: #E5E7EB\nText: #111827\nAccent: #6366F1 and #3B82F6"
+        },
+        "n3": {
+          "title": "Meeting Notes - Sprint 1",
+          "content": "Focus on landing page polish and internal app skeleton. Demo ready by Friday."
+        }
+      },
+      "chatRooms": {
+        "r1": {
+          "name": "Alex Kim"
+        },
+        "r2": {
+          "name": "Sara Chen"
+        },
+        "r3": {
+          "name": "UPZ Core Team"
+        },
+        "r4": {
+          "name": "Landing Page Redesign",
+          "linkedTask": "Landing hero QA"
+        },
+        "r5": {
+          "name": "Freelancers Network"
+        }
+      },
+      "chatMessages": {
+        "m1": "Hey! Have you seen the new project specs?",
+        "m2": "Yes, just checked them out. The scope feels tight enough for MVP.",
+        "m3": "Great, let's sync tomorrow morning.",
+        "m4": "Can you review the PR before then?",
+        "m5": "I updated the design mockups ??",
+        "m6": "They look amazing! Love the color palette.",
+        "m7": "Sprint review is tomorrow at 10 AM.",
+        "m8": "I'll prepare the demo flow and keep it under seven minutes.",
+        "m9": "Design assets are ready ?",
+        "m10": "Marketing brief sent to all stakeholders.",
+        "m11": "Thanks everyone, great work this sprint! ??",
+        "m12": "Wireframes attached in Figma. The hero CTA variant is the one to test.",
+        "m13": "Got it, will review today.",
+        "m14": "Anyone interested in a collab for this month?",
+        "m15": "I'm in! What's the project?",
+        "m16": "UX audit for a SaaS startup."
+      }
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "switchToLight": "Switch to light mode",
+      "switchToDark": "Switch to dark mode"
+    }
+  }
+}

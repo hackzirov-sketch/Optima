@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" role="img" aria-label="Premium applause reaction">
+  <title>Premium applause reaction</title>
+  <defs>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#111827" flood-opacity="0.16"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="48" cy="48" r="40.32" fill="url(#bg)" filter="url(#softShadow)"/>
+  <circle cx="32.64" cy="26.880000000000003" r="11.52" fill="white" opacity="0.22"/>
+  <defs><linearGradient id="bg" x1="12" y1="10" x2="86" y2="90" gradientUnits="userSpaceOnUse"><stop stop-color="#14B8A6"/><stop offset="1" stop-color="#22C55E"/></linearGradient></defs>
+  <rect x="30" y="34" width="16" height="34" rx="8" fill="white" opacity="0.92" transform="rotate(-18 30 34)"/><rect x="48" y="30" width="16" height="38" rx="8" fill="#ECFDF5" transform="rotate(14 48 30)"/><path d="M25 30l-6-6M72 30l7-8M22 50h-9M73 50h10" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+</svg>
