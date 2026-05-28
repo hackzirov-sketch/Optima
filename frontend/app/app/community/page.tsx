@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import { CheckSquare, GitBranch, Lightbulb, MessageSquare, Plus, ShieldCheck, Users } from "lucide-react";
@@ -25,6 +25,7 @@ export default function Page() {
   const [post, setPost] = useState("");
   const [userComments, setUserComments] = useState<string[]>([]);
   const [convertedThreadId, setConvertedThreadId] = useState(COMMUNITY_THREADS[0]?.id ?? "");
+
 
   const toggleGroup = (groupId: string) => {
     setJoinedGroups((current) => (current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId]));

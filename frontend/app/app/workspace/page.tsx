@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -397,7 +397,7 @@ export default function Page() {
   const { t } = useTranslation();
   const [activeView, setActiveView] = useState<TaskView>(() => storage.getActiveView() ?? "board");
   const [activeBoard, setActiveBoard] = useState(() => storage.getActiveBoard() ?? "Roadmap");
-  const [activeProfession, setActiveProfession] = useState<Profession>(() => storage.getWorkspaceProfession() ?? user.profession);
+  const [activeProfession, setActiveProfession] = useState<Profession>(() => storage.getWorkspaceProfession() ?? user?.profession ?? "student");
   const [query, setQuery] = useState("");
   const [focusFilter, setFocusFilter] = useState("All");
   const [notice, setNotice] = useState<string | null>(null);
@@ -459,6 +459,7 @@ export default function Page() {
   }, [focusFilter, professionTasks, query]);
 
   const workloadLanes = useMemo(() => {
+
     const workload = new Map<string, { owner: string; tasks: number; progress: number; risk: number; focus: string }>();
 
     filteredTasks.forEach((task) => {
@@ -621,7 +622,7 @@ export default function Page() {
     const milestone: WorkspaceMilestone = {
       id: `ms-${Date.now()}`,
       title: `${activePreset.label} operating milestone`,
-      owner: user.name.split(" ")[0] ?? "Owner",
+      owner: user?.name.split(" ")[0] ?? "Owner",
       target: `Improve ${activePreset.template}`,
       progress: 18,
       due: "Next 14 days",
@@ -688,7 +689,7 @@ export default function Page() {
       <PageShell>
         <PageHeader
           eyebrow="Power Workspace"
-          title={`${activePreset.template} for ${user.name}`}
+          title={`${activePreset.template} for ${user?.name}`}
           description="Control, create and save your workspace by profession. UPZ keeps boards, views, integrations and saved workspace states local for this MVP."
         >
           <ActionButton onClick={handleCreateItem}><Plus className="h-4 w-4" /> Create</ActionButton>

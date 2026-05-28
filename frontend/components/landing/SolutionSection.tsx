@@ -1,3 +1,4 @@
+'use client';
 import { motion } from "framer-motion";
 import { Layers, MessageSquare, BarChart3, CheckSquare, BookOpen, Briefcase, Bot, Users, Wallet } from "lucide-react";
 import { LottieAnimation } from "./LottieAnimation";

@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -32,6 +32,7 @@ export default function HomePage() {
   const { user, logout } = useAuth();
   const { t, i18n } = useTranslation();
   const [time, setTime] = useState(new Date());
+
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
@@ -50,9 +51,7 @@ export default function HomePage() {
   const completedCount = tasks.filter((task) => task.done).length;
   const dateStr = time.toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
   const timeStr = time.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
-  const goalLabel = user ? t(`app.goals.${user.goal}`, user.goal) : '';
-
-  if (!user) return null;
+  const goalLabel = user ? t(`app.goals.${user?.goal}`, user?.goal ?? "") : '';
 
   const toggleTask = (id: string) => {
     const updated = tasks.map((task) => (task.id === id ? { ...task, done: !task.done } : task));
@@ -65,7 +64,7 @@ export default function HomePage() {
       <PageShell>
         <PageHeader
           eyebrow={dateStr}
-          title={t("app.home.welcome", { name: user.name })}
+          title={t("app.home.welcome", { name: user?.name })}
           description={t("app.home.description", { goal: goalLabel })}
         >
           <div className="rounded-2xl bg-[#F7FAFC] px-4 py-3 text-right">

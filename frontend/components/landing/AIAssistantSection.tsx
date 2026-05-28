@@ -1,3 +1,4 @@
+'use client';
 import { motion } from "framer-motion";
 import { Sparkles, Brain, Clock, FileText, Lightbulb, Users } from "lucide-react";
 import { LottieAnimation } from "./LottieAnimation";

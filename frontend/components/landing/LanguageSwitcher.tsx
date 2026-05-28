@@ -1,3 +1,4 @@
+'use client';
 import { useTranslation } from "react-i18next";
 import { Globe } from "lucide-react";
 import { LANGUAGES, applyDir, type LangCode } from "@/i18n";

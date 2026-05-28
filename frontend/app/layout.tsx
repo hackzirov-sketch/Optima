@@ -1,11 +1,19 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { Providers } from './providers';
 
-const inter = Inter({ 
-  subsets: ['latin', 'cyrillic'],
-  weight: ['400', '500', '600', '700'],
+const inter = localFont({
+  src: [
+    { path: '../public/fonts/inter-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/inter-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../public/fonts/inter-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../public/fonts/inter-latin-700-normal.woff2', weight: '700', style: 'normal' },
+    { path: '../public/fonts/inter-cyrillic-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/inter-cyrillic-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../public/fonts/inter-cyrillic-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../public/fonts/inter-cyrillic-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-inter',
 });
 

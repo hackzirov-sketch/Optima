@@ -34,7 +34,7 @@ export function useAuth() {
 
   const login = (profile: UserProfile) => {
     storage.saveUser(profile);
-    storage.markOnboarded();
+    storage.setOnboarded();
     setUser(profile);
   };
 

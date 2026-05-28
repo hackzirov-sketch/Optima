@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import { Bot, CalendarClock, CheckSquare, Lightbulb, MessageSquare, Send, Sparkles, Wand2 } from "lucide-react";
@@ -37,6 +37,7 @@ export default function Page() {
   const [messages, setMessages] = useState<AssistantMessage[]>(INITIAL_MESSAGES);
   const [draft, setDraft] = useState("");
   const [previewTaskId, setPreviewTaskId] = useState(SMART_TASKS[0]?.id ?? "");
+
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const previewTask = SMART_TASKS.find((task) => task.id === previewTaskId) ?? SMART_TASKS[0];
   const drawerTask = SMART_TASKS.find((task) => task.id === drawerTaskId) ?? null;

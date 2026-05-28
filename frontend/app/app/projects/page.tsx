@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, Plus, Target, UserPlus, Zap } from "lucide-react";
@@ -25,6 +25,7 @@ export default function Page() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const filteredTasks = useMemo(() => {
+
     const normalized = query.trim().toLowerCase();
     if (!normalized) return SMART_TASKS;
     return SMART_TASKS.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.status} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));

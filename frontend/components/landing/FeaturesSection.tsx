@@ -1,3 +1,4 @@
+'use client';
 import { motion } from "framer-motion";
 import { Layers, BarChart3, Share2, Wallet, Bot, MessageSquare, BookOpen, Users, CheckSquare } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -59,6 +59,7 @@ export default function TasksNotesPage() {
   };
 
   const filteredSmartTasks = useMemo(() => {
+
     const normalized = query.trim().toLowerCase();
     if (!normalized) return SMART_TASKS;
     return SMART_TASKS.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));

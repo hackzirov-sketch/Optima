@@ -1,3 +1,4 @@
+'use client';
 import { motion } from "framer-motion";
 import { BookOpen, Target, FileStack, Users, Briefcase, DollarSign, ArrowDown } from "lucide-react";
 import { LottieAnimation } from "./LottieAnimation";

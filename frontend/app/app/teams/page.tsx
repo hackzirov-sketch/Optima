@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import {
@@ -242,8 +242,9 @@ export default function Page() {
     priority: "Medium" as OptimaTaskPriority,
     deadline: "Today 18:00",
     label: "Sprint",
-    reviewer: user.name,
+    reviewer: user?.name ?? "",
   });
+
 
   const selectedEmployee = OPTIMA_EMPLOYEES.find((employee) => employee.id === selectedEmployeeId) ?? OPTIMA_EMPLOYEES[0];
   const departmentFilter = ["All", ...DEPARTMENT_ANALYTICS.map((department) => department.name)];

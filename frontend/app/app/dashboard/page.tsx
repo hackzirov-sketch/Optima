@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import {
   ArrowUpRight,
@@ -99,6 +99,7 @@ export default function Page() {
   const [preset, setPreset] = useState("Launch");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [widgetOrder, setWidgetOrder] = useState(() => {
+
     const saved = storage.getDashboardLayout();
     return saved.length ? saved : DASHBOARD_WIDGETS.map((widget) => widget.id);
   });
@@ -129,7 +130,7 @@ export default function Page() {
       <PageShell>
         <PageHeader
           eyebrow={t("app.dashboard.eyebrow")}
-          title={t("app.dashboard.welcome", { name: user.name })}
+          title={t("app.dashboard.welcome", { name: user?.name })}
           description={t("app.dashboard.description")}
         >
           <Link href="/app/assistant">

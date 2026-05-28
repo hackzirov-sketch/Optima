@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 ﻿import { useMemo, useState } from "react";
 import { Bookmark, Flame, Newspaper, Search } from "lucide-react";
@@ -35,6 +35,7 @@ export default function Page() {
   }, [t]);
 
   const articles = useMemo(() => {
+
     return localizedArticles.filter((article) => {
       if (activeTab === "trending" && !article.trending) return false;
       if (activeTab === "saved" && !savedIds.includes(article.id)) return false;
@@ -76,7 +77,7 @@ export default function Page() {
 
         <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
           <SurfaceCard>
-            <SectionTitle icon={Newspaper} title={t("app.news.feed")} description={t("app.news.personalizedFor", { profession: t(`app.professions.${user.profession}`, user.profession) })} />
+            <SectionTitle icon={Newspaper} title={t("app.news.feed")} description={t("app.news.personalizedFor", { profession: t(`app.professions.${user?.profession}`, user?.profession ?? "") })} />
             <div className="space-y-3">
               {articles.map((article) => (
                 <button

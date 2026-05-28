@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 ﻿import { CreditCard, DollarSign, Download, Landmark, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
+
 
   return (
     <AppLayout user={user} title={t("app.nav.bank")} onLogout={onLogout}>

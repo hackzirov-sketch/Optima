@@ -1,3 +1,4 @@
+'use client';
 import { motion } from "framer-motion";
 import { Code, GraduationCap, UserCircle, Briefcase, Video, Megaphone, PenTool, Users } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";

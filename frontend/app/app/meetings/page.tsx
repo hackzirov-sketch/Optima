@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useMemo, useState } from "react";
 import {
@@ -146,6 +146,7 @@ export default function Page() {
   const [toast, setToast] = useState<string | null>(null);
 
   const activeMeeting = useMemo(() => MEETING_ROOMS.find((meeting) => meeting.id === activeId) ?? MEETING_ROOMS[0], [activeId]);
+
   const liveParticipants = inCall ? MEETING_PARTICIPANTS : MEETING_PARTICIPANTS.slice(0, 4);
 
   const showToast = (message: string) => {

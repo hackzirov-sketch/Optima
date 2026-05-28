@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -52,6 +52,7 @@ export default function Page() {
     productUpdates: true,
   });
 
+
   useEffect(() => {
     const saved = storage.getIntegrations();
     setConnected(saved ?? {});
@@ -95,9 +96,9 @@ export default function Page() {
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t("app.settings.accountInfo")}</h3>
 
               {[
-                { label: t("app.settings.displayName"), value: user.name, type: "text" },
+                { label: t("app.settings.displayName"), value: user?.name, type: "text" },
                 { label: t("app.settings.email"), value: "user@example.com", type: "email" },
-                { label: t("app.settings.username"), value: `@${user.name.toLowerCase().replace(/\s+/g, "_")}`, type: "text" },
+                { label: t("app.settings.username"), value: `@${user?.name.toLowerCase().replace(/\s+/g, "_")}`, type: "text" },
               ].map((field) => (
                 <div key={field.label}>
                   <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">{field.label}</label>
@@ -112,7 +113,7 @@ export default function Page() {
               <div>
                 <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">{t("app.settings.profession")}</label>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                  {t(`app.professions.${user.profession}`, user.profession)}
+                  {t(`app.professions.${user?.profession}`, user?.profession ?? "")}
                   <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{t("app.settings.changeOnboarding")}</span>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import {
@@ -48,6 +48,7 @@ export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const [selectedPlan, setSelectedPlan] = useState("pro");
+
   const [notice, setNotice] = useState<string | null>(null);
   const activePlan = PREMIUM_PLANS.find((plan) => plan.id === selectedPlan) ?? PREMIUM_PLANS[1];
 
@@ -85,7 +86,7 @@ export default function Page() {
                     {t("app.premium.currentPlan")}
                   </Pill>
                   <h2 className="mt-5 max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">
-                    {t("app.premium.heroTitle", { name: user.name })}
+                    {t("app.premium.heroTitle", { name: user?.name })}
                   </h2>
                   <p className="mt-3 max-w-xl text-sm leading-7 text-slate-300">{t("app.premium.heroDesc")}</p>
                 </div>

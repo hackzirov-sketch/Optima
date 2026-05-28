@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 ﻿import { motion } from "framer-motion";
 import { Edit3, Award, Target, BookOpen, Briefcase, Star, GitBranch, Code2, Crown, ArrowRight, BadgeCheck } from "lucide-react";
@@ -38,12 +38,15 @@ import { useAuth } from "@/hooks/useAuth";
 export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t, i18n } = useTranslation();
-  const daysSince = Math.floor((Date.now() - user.joinedAt) / 86400000);
-  const skills = SKILLS_BY_PROFESSION[user.profession] ?? SKILLS_BY_PROFESSION.student;
-  const profession = t(`app.professions.${user.profession}`, user.profession);
-  const goal = t(`app.goals.${user.goal}`, user.goal);
-  const experience = t(`app.experience.${user.experience}`, user.experience);
+
+
+  const daysSince = Math.floor((Date.now() - (user?.joinedAt ?? 0)) / 86400000);
+  const skills = SKILLS_BY_PROFESSION[user?.profession ?? 'student'] ?? SKILLS_BY_PROFESSION.student;
+  const profession = t(`app.professions.${user?.profession}`, user?.profession ?? "");
+  const goal = t(`app.goals.${user?.goal}`, user?.goal ?? "");
+  const experience = t(`app.experience.${user?.experience}`, user?.experience ?? "");
   const joinedLabel = daysSince === 0 ? t("app.profile.joinedToday") : t("app.profile.joinedDays", { count: daysSince });
+
 
   return (
     <AppLayout user={user} title={t("app.nav.profile")} onLogout={onLogout}>
@@ -57,7 +60,7 @@ export default function Page() {
           <div className="relative z-10 flex items-start gap-5">
             <PremiumAvatarRing className="h-20 w-20 flex-shrink-0 rounded-[24px] p-[3px]">
               <div className="relative flex h-full w-full items-center justify-center rounded-[21px] text-3xl font-bold text-white" style={{ background: "linear-gradient(135deg, #6366F1, #3B82F6)" }}>
-                {user.name.slice(0, 2).toUpperCase()}
+                {user?.name.slice(0, 2).toUpperCase()}
                 <PremiumStatusBadge status="available" size={24} className="absolute -bottom-2 -right-2 border-indigo-100" />
               </div>
             </PremiumAvatarRing>
@@ -65,7 +68,7 @@ export default function Page() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold text-[#111827]">{user.name}</h2>
+                    <h2 className="text-xl font-bold text-[#111827]">{user?.name}</h2>
                     <BadgeCheck className="h-5 w-5 text-blue-500" aria-label="Verified premium profile" />
                     <PremiumGradientBadge />
                   </div>
@@ -143,7 +146,7 @@ export default function Page() {
                 { label: t("app.profile.profession"), value: profession },
                 { label: t("app.profile.mainGoal"), value: goal },
                 { label: t("app.profile.experience"), value: experience },
-                { label: t("app.profile.memberSince"), value: new Date(user.joinedAt).toLocaleDateString(i18n.language, { month: "long", day: "numeric", year: "numeric" }) },
+                { label: t("app.profile.memberSince"), value: new Date(user?.joinedAt ?? 0).toLocaleDateString(i18n.language, { month: "long", day: "numeric", year: "numeric" }) },
               ].map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-3">
                   <span className="text-xs text-gray-500 dark:text-gray-400">{row.label}</span>
@@ -174,7 +177,7 @@ export default function Page() {
           </div>
         </motion.div>
 
-        {user.profession === "developer" && (
+        {user?.profession === "developer" && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-xl p-5 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100"><GitBranch className="h-4 w-4 text-gray-500 dark:text-gray-400" /> {t("app.profile.githubRepos")}</h3>
             <div className="space-y-3">

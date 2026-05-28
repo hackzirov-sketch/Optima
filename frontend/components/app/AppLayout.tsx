@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Sidebar } from "./Sidebar";
@@ -9,7 +9,7 @@ import { Topbar } from "./Topbar";
 import type { UserProfile } from "@/types";
 
 interface AppLayoutProps {
-  user: UserProfile;
+  user: UserProfile | null;
   title: string;
   children: React.ReactNode;
   onLogout: () => void;
@@ -18,8 +18,15 @@ interface AppLayoutProps {
 export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  if (!user) {
+    router.replace("/");
+    return null;
+  }
+
   const hideAssistantButton = pathname === "/app/chat" || pathname === "/app/assistant" || pathname === "/app/meetings";
 
   const handleToggleSidebar = () => {

@@ -1,6 +1,6 @@
 'use client';
 
-'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -19,6 +19,7 @@ import { MOCK_CHAT_ROOMS, MOCK_USERS } from "@/data/mockData";
 import { SMART_TASKS } from "@/data/ecosystemData";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
+import { useAuth } from "@/hooks/useAuth";
 
 
 
@@ -70,9 +71,11 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
   return { ...message, reactions: reactions.filter((reaction) => reaction.userIds.length > 0) };
 }
 
-export default function ChatPage(_: Props) {
+export default function ChatPage() {
+  const { user } = useAuth();
   const { t } = useTranslation();
-  const [, navigate] = useLocation();
+  const router = useRouter();
+  const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
   const [activeId, setActiveId] = useState(MOCK_CHAT_ROOMS[0]?.id ?? "");
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,6 +99,7 @@ export default function ChatPage(_: Props) {
     : undefined;
   const normalizedChatSearch = chatSearchQuery.trim().toLowerCase();
   const displayedMessages = useMemo(() => {
+
     if (!activeRoom) return [];
     if (!normalizedChatSearch) return activeRoom.messages;
     return activeRoom.messages.filter((message) => {
