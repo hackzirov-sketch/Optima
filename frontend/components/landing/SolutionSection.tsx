@@ -54,8 +54,8 @@ export function SolutionSection() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <div className="relative rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 shadow-xl flex items-center justify-center p-6" style={{ minHeight: "380px" }}>
-              <div style={{ width: "100%", height: "320px" }}>
+            <div className="relative rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 flex items-center justify-center p-6" style={{ minHeight: "380px" }}>
+              <div style={{ width: "100%", height: "520px" }}>
                 <LottieAnimation
                   url="/animations/rocket.json"
                   fallback={

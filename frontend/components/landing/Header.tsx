@@ -34,7 +34,7 @@ export function Header() {
       <div
         className={`container mx-auto flex h-16 items-center justify-between rounded-[24px] border px-3 transition-all duration-300 md:px-4 ${
           isScrolled
-            ? "border-[#E5E7EB] bg-white/90 shadow-lg shadow-slate-200/60 backdrop-blur-xl"
+            ? "border-[#E5E7EB] shadow-xl backdrop-blur-xl"
             : "border-white/80 bg-white/70 shadow-sm backdrop-blur-xl"
         }`}
       >
@@ -99,14 +99,14 @@ export function Header() {
         <div className="container mx-auto mt-2 rounded-[24px] border border-[#E5E7EB] bg-white p-4 shadow-xl md:hidden">
           <nav className="flex flex-col gap-1">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.href}
                 href={link.href}
                 className="rounded-2xl px-4 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F7FAFC]"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
           <div className="mt-4 grid gap-2">
