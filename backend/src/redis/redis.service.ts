@@ -46,6 +46,41 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  async setOAuthCode(
+    code: string,
+    tokens: { accessToken: string; refreshToken: string },
+  ): Promise<void> {
+    try {
+      await this.getClient().set(
+        `upz:oauth:${code}`,
+        JSON.stringify(tokens),
+        'EX',
+        60, // 60-second TTL — one-time use
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Redis OAuth code set failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  async getAndDeleteOAuthCode(
+    code: string,
+  ): Promise<{ accessToken: string; refreshToken: string } | null> {
+    try {
+      const key = `upz:oauth:${code}`;
+      const raw = await this.getClient().get(key);
+      if (!raw) return null;
+      await this.getClient().del(key); // one-time use
+      return JSON.parse(raw) as { accessToken: string; refreshToken: string };
+    } catch (e) {
+      this.logger.warn(
+        `Redis OAuth code get failed: ${e instanceof Error ? e.message : e}`,
+      );
+      return null;
+    }
+  }
+
   onModuleDestroy() {
     this.client?.disconnect();
     this.client = null;

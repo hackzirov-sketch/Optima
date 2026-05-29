@@ -12,9 +12,11 @@ import {
   Param,
   Delete,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -39,6 +41,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @Throttle({ default: { ttl: 3600000, limit: 10 } }) // 10 per hour
   @ApiOperation({ summary: 'Register a new user and send verification email' })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -46,6 +49,7 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address with 6-digit code' })
   async verifyEmail(@Body() dto: VerifyEmailDto) {
@@ -54,6 +58,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } }) // 5 per minute — brute force protection
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user and return tokens' })
   async login(
@@ -81,8 +86,10 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
   ) {
     const data = await this.authService.googleLogin(req.user, ip, userAgent);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/auth/callback?accessToken=${data.accessToken}&refreshToken=${data.refreshToken}`);
+    const frontendUrl = this.authService.getFrontendUrl();
+    // Store tokens behind a short-lived one-time code (60s) — never in the URL
+    const code = await this.authService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
   @Public()
@@ -102,8 +109,19 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
   ) {
     const data = await this.authService.githubLogin(req.user, ip, userAgent);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/auth/callback?accessToken=${data.accessToken}&refreshToken=${data.refreshToken}`);
+    const frontendUrl = this.authService.getFrontendUrl();
+    // Store tokens behind a short-lived one-time code (60s) — never in the URL
+    const code = await this.authService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
+  }
+
+  @Public()
+  @Post('exchange-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })
+  async exchangeOAuthCode(@Body() body: { code: string }) {
+    if (!body?.code) throw new BadRequestException('code is required');
+    return this.authService.exchangeOAuthSessionCode(body.code);
   }
 
   @Public()

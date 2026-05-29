@@ -12,12 +12,17 @@ function AuthCallbackContent() {
   const { login } = useAuth();
 
   useEffect(() => {
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
+    // Backend now sends a short-lived one-time `code` in the URL instead of
+    // actual tokens — prevents tokens from appearing in browser history / logs.
+    const code = searchParams.get('code');
 
-    if (accessToken && refreshToken) {
+    // Legacy fallback: support old ?accessToken=...&refreshToken=... URLs
+    // (can be removed once all environments are updated)
+    const legacyAccess = searchParams.get('accessToken');
+    const legacyRefresh = searchParams.get('refreshToken');
+
+    const handleTokens = (accessToken: string, refreshToken: string) => {
       setTokens(accessToken, refreshToken);
-      // Fetch user profile
       authApi.me().then(res => {
         if (res?.data) {
           login({
@@ -41,6 +46,26 @@ function AuthCallbackContent() {
       }).catch(() => {
         router.push('/auth/login');
       });
+    };
+
+    if (code) {
+      // Exchange one-time code for real tokens via POST (secure)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/exchange-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data?.accessToken && data?.refreshToken) {
+            handleTokens(data.accessToken, data.refreshToken);
+          } else {
+            router.push('/auth/login');
+          }
+        })
+        .catch(() => router.push('/auth/login'));
+    } else if (legacyAccess && legacyRefresh) {
+      handleTokens(legacyAccess, legacyRefresh);
     } else {
       router.push('/auth/login');
     }

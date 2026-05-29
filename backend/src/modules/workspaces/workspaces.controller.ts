@@ -45,8 +45,11 @@ export class WorkspacesController {
 
   @Get(':slug')
   @ApiOperation({ summary: 'Get workspace by slug' })
-  getWorkspaceBySlug(@Param('slug') slug: string) {
-    return this.workspacesService.findBySlug(slug);
+  getWorkspaceBySlug(
+    @Param('slug') slug: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.workspacesService.findBySlug(slug, userId);
   }
 
   @Patch(':wsId')

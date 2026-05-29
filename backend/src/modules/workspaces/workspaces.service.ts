@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -84,13 +85,20 @@ export class WorkspacesService {
     return workspace;
   }
 
-  async findBySlug(slug: string): Promise<Workspace> {
+  async findBySlug(slug: string, userId: string): Promise<Workspace> {
     const workspace = await this.workspaceRepo.findOne({ where: { slug } });
     if (!workspace || workspace.deletedAt) {
       throw new NotFoundException({
         code: ErrorCode.WORKSPACE_NOT_FOUND,
         message: 'Workspace not found',
       });
+    }
+    // Ensure requesting user is actually a member of this workspace
+    const member = await this.memberRepo.findOne({
+      where: { workspaceId: workspace.id, userId },
+    });
+    if (!member) {
+      throw new ForbiddenException('Access denied to this workspace');
     }
     return workspace;
   }

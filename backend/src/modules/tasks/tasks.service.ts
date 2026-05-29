@@ -1,14 +1,9 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike } from 'typeorm';
 
 import { Task } from '../../database/entities/task.entity';
+import { Project } from '../../database/entities/project.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
 import { TaskWatcher } from '../../database/entities/task-watcher.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
@@ -185,9 +180,12 @@ export class TasksService {
     userId: string,
     dto: FilterTasksDto,
   ): Promise<{ data: Task[]; total: number }> {
-    // Find any task in project to get workspaceId for auth check
-    const anyTask = await this.taskRepo.findOne({ where: { projectId } });
-    if (anyTask) await this.assertMember(anyTask.workspaceId, userId);
+    // Always check membership — even if the project has no tasks yet
+    const project = await this.columnRepo.manager.findOne(Project, {
+      where: { id: projectId },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    await this.assertMember(project.workspaceId, userId);
 
     const qb = this.taskRepo
       .createQueryBuilder('task')

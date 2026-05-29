@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, IsNull } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as bcrypt from 'bcrypt';
@@ -455,7 +455,7 @@ export class AuthService {
 
   async getSessions(userId: string) {
     const sessions = await this.refreshTokensRepository.find({
-      where: { userId, revokedAt: undefined as any, isDeleted: false },
+      where: { userId, revokedAt: IsNull(), isDeleted: false },
       order: { lastUsedAt: 'DESC' },
     });
     
@@ -505,7 +505,7 @@ export class AuthService {
     const activeCount = await this.refreshTokensRepository.count({
       where: {
         userId: user.id,
-        revokedAt: undefined,
+        revokedAt: IsNull(),
         isDeleted: false,
       },
     });
@@ -514,7 +514,7 @@ export class AuthService {
       const oldest = await this.refreshTokensRepository.find({
         where: {
           userId: user.id,
-          revokedAt: undefined,
+          revokedAt: IsNull(),
           isDeleted: false,
         },
         order: { createdAt: 'ASC' },
@@ -586,6 +586,43 @@ export class AuthService {
       accessToken,
       refreshToken,
       user,
+    };
+  } // end generateTokens
+
+  // ── OAuth session code helpers ────────────────────────────────────────────
+  // Instead of putting tokens in the redirect URL (visible in browser history,
+  // server logs, referrer headers), we store them in Redis behind a short-lived
+  // one-time code and only put the code in the URL.
+
+  getFrontendUrl(): string {
+    return (
+      this.configService.get<string>('app.frontendUrl') ||
+      process.env.FRONTEND_URL ||
+      'http://localhost:3001'
+    );
+  }
+
+  async createOAuthSessionCode(
+    accessToken: string,
+    refreshToken: string,
+  ): Promise<string> {
+    const code = crypto.randomUUID();
+    await this.redisService.setOAuthCode(code, { accessToken, refreshToken });
+    return code;
+  }
+
+  async exchangeOAuthSessionCode(code: string) {
+    const data = await this.redisService.getAndDeleteOAuthCode(code);
+    if (!data) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Invalid or expired session code',
+      });
+    }
+    return {
+      success: true,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
     };
   }
 }
