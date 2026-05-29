@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,7 +21,16 @@ export class MembersService {
     private readonly workspaceRepo: Repository<Workspace>,
   ) {}
 
-  async findAll(workspaceId: string): Promise<WorkspaceMember[]> {
+  async findAll(workspaceId: string, requesterId: string): Promise<WorkspaceMember[]> {
+    const requester = await this.memberRepo.findOne({
+      where: { workspaceId, userId: requesterId },
+    });
+    if (!requester) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'You are not a member of this workspace',
+      });
+    }
     return this.memberRepo.find({
       where: { workspaceId },
       relations: ['user'],

@@ -74,8 +74,11 @@ export class WorkspacesController {
   // ── Members ─────────────────────────────────────
   @Get(':wsId/members')
   @ApiOperation({ summary: 'Get workspace members' })
-  getMembers(@Param('wsId') wsId: string) {
-    return this.membersService.findAll(wsId);
+  getMembers(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.membersService.findAll(wsId, userId);
   }
 
   @Patch(':wsId/members/:userId')
@@ -117,8 +120,11 @@ export class WorkspacesController {
 
   @Get(':wsId/invitations')
   @ApiOperation({ summary: 'Get pending invitations for workspace' })
-  getInvitations(@Param('wsId') wsId: string) {
-    return this.invitationsService.findAllForWorkspace(wsId);
+  getInvitations(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.invitationsService.findAllForWorkspace(wsId, userId);
   }
 
   @Delete(':wsId/invitations/:id')

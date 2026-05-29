@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventsGateway } from './events.gateway';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import Redis from 'ioredis';
       }),
       inject: [ConfigService],
     }),
+    ChatModule,
   ],
   providers: [EventsGateway],
   exports: [EventsGateway],

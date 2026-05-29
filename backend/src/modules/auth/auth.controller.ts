@@ -116,6 +116,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 per minute — one-time code brute force protection
   @Post('exchange-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })

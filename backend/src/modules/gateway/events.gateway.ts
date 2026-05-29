@@ -13,6 +13,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { ChatService } from '../chat/chat.service';
 
 export interface WsUser {
   id: string;
@@ -55,7 +56,7 @@ export class EventsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private readonly logger = new Logger(EventsGateway.name);
 
@@ -69,6 +70,7 @@ export class EventsGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly chatService: ChatService,
   ) {}
 
   afterInit(server: Server) {
@@ -199,27 +201,41 @@ export class EventsGateway
 
   // ─── Send message ────────────────────────────────────
   @SubscribeMessage('send_message')
-  handleSendMessage(
+  async handleSendMessage(
     @MessageBody() data: SendMessageWsDto,
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException('Not authenticated');
 
-    const message = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      roomId: data.roomId,
-      userId,
-      text: data.text,
-      replyToId: data.replyToId || null,
-      timestamp: Date.now(),
+    // Persist to DB — ChatService checks room membership internally
+    let saved: any;
+    try {
+      saved = await this.chatService.sendMessage(data.roomId, userId, {
+        content: data.text,
+        replyToId: data.replyToId,
+      });
+    } catch (err: any) {
+      // ForbiddenException → emit error back to sender only
+      client.emit('error', {
+        code: err?.response?.code || 'SEND_MESSAGE_FAILED',
+        message: err?.message || 'Failed to send message',
+      });
+      return;
+    }
+
+    // Broadcast saved message to everyone in the room (including sender)
+    this.server.to(`room:${data.roomId}`).emit('new_message', {
+      id: saved.id,
+      roomId: saved.roomId,
+      senderId: saved.senderId,
+      content: saved.content,
+      replyToId: saved.replyToId || null,
+      createdAt: saved.createdAt,
       reactions: [],
-    };
+    });
 
-    // Broadcast to everyone in the room (including sender)
-    this.server.to(`room:${data.roomId}`).emit('new_message', message);
-
-    return { event: 'message_sent', messageId: message.id };
+    return { event: 'message_sent', messageId: saved.id };
   }
 
   // ─── Message reaction ─────────────────────────────────

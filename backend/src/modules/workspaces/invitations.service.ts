@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -101,7 +102,17 @@ export class InvitationsService {
 
   async findAllForWorkspace(
     workspaceId: string,
+    requesterId: string,
   ): Promise<WorkspaceInvitation[]> {
+    const requester = await this.memberRepo.findOne({
+      where: { workspaceId, userId: requesterId },
+    });
+    if (!requester) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'You are not a member of this workspace',
+      });
+    }
     return this.invitationRepo.find({
       where: { workspaceId, acceptedAt: IsNull(), declinedAt: IsNull() },
       order: { createdAt: 'DESC' },

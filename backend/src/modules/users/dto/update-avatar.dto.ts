@@ -1,9 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUrl, MaxLength } from 'class-validator';
+import { IsUrl, MaxLength, Matches } from 'class-validator';
 
 export class UpdateAvatarDto {
-  @ApiProperty({ example: `${process.env.R2_PUBLIC_URL || 'https://cdn.upz.dev'}/avatars/uuid.jpg` })
+  @ApiProperty({ example: 'https://cdn.upz.dev/avatars/uuid.jpg' })
   @IsUrl({ require_tld: false })
   @MaxLength(2048)
-  avatarUrl: string;
+  @Matches(
+    /^https?:\/\/(cdn\.upz\.dev|localhost(:\d+)?|r2\.upz\.dev)\//,
+    { message: 'avatarUrl must be from the authorized CDN domain' },
+  )
+  avatarUrl!: string;
 }
