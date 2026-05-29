@@ -30,11 +30,7 @@ export function AppLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    if (!user) {
-      router.replace("/");
-    }
-  }, [user, router]);
+
 
   if (!user) {
     return null;

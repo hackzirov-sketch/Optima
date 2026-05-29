@@ -22,6 +22,7 @@ export function useAuth() {
         if (
           typeof window !== 'undefined' &&
           !window.location.pathname.includes('/onboarding') &&
+          !window.location.pathname.startsWith('/auth') &&
           window.location.pathname !== '/'
         ) {
           router.push('/onboarding');

@@ -31,6 +31,7 @@ export interface UserProfile {
   phone?: string;
   username?: string;
   authProvider?: string;
+  role?: string;
 }
 
 export interface Task {

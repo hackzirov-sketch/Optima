@@ -1,9 +1,6 @@
-/**
- * UPZ API Client
- * Backend bilan barcha HTTP so'rovlarni boshqaradi
- */
+import cookie from "js-cookie"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
 
 // ─── Token management ─────────────────────────────────────────────────────
 
@@ -14,17 +11,22 @@ export function getAccessToken(): string | null {
 
 export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem('upz_access_token', accessToken);
-  localStorage.setItem('upz_refresh_token', refreshToken);
+  cookie.set('upz_refresh_token', refreshToken, {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: 7, // 7 days
+  });
 }
 
 export function clearTokens() {
   localStorage.removeItem('upz_access_token');
-  localStorage.removeItem('upz_refresh_token');
+  cookie.remove('upz_refresh_token', { path: '/' });
 }
 
 function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('upz_refresh_token');
+  return cookie.get('upz_refresh_token') || null;
 }
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────
@@ -146,7 +148,7 @@ export const authApi = {
 
   logout: () => request('POST', '/auth/logout'),
 
-  me: () => request<{ data: ApiUser }>('GET', '/auth/me'),
+  me: () => request<{ data: ApiUser }>('GET', '/users/me'),
 
   verifyEmail: (code: string) =>
     request('POST', '/auth/verify-email', { body: { code } }),

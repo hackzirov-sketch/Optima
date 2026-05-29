@@ -1,0 +1,165 @@
+'use client';
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Chrome,
+  Github,
+  Lock,
+  Mail,
+  Phone,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { storage } from "@/utils/storage";
+import { AuthField, EyeToggle, ProviderButton, TabButton, PrimaryButton } from "../shared";
+
+type LoginMethod = "email" | "phone";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { loginWithBackend } = useAuth();
+  
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("email");
+  const [showPassword, setShowPassword] = useState(false);
+  const [signinId, setSigninId] = useState("");
+  const [signinPw, setSigninPw] = useState("");
+
+  const signinReady = signinId.trim().length > 3 && signinPw.length >= 4;
+
+  const handleSignin = async () => {
+    if (!signinReady) return;
+    const success = await loginWithBackend(signinId, signinPw);
+    if (success) {
+      if (storage.isOnboarded()) {
+        router.push("/app/home");
+      } else {
+        router.push("/onboarding");
+      }
+    } else {
+      alert("Login failed");
+    }
+  };
+
+  const handleSocialDemo = (provider: string) => {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
+    window.location.href = `${backendUrl}/auth/${provider.toLowerCase()}`;
+  };
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="auth-login"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -12 }}
+        transition={{ duration: 0.22 }}
+        className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center py-4"
+      >
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 text-sm font-bold
+              text-slate-500 shadow-sm transition-all
+              hover:-translate-y-0.5 hover:text-foreground
+              dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+        </div>
+
+        {/* Heading */}
+        <div className="mb-7 text-center sm:text-left">
+          <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/20">
+            <Sparkles className="h-4 w-4" />
+            UPZ account
+          </span>
+          <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+            Welcome back to UPZ
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+            Choose email or phone, enter your password, and continue into the local MVP workspace.
+          </p>
+        </div>
+
+        {/* Sign in / Create account tabs */}
+        <div className="mb-5 flex rounded-[22px] border border-border bg-muted p-1 dark:border-slate-700/60 dark:bg-slate-900">
+          <TabButton active={true} onClick={() => {}}>Sign in</TabButton>
+          <TabButton active={false} onClick={() => router.push("/auth/register")}>Create account</TabButton>
+        </div>
+
+        {/* ── Sign-in form ── */}
+        <div className="space-y-4">
+          {/* Email / Phone toggle */}
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-muted p-1 dark:bg-slate-900">
+            {(["email", "phone"] as LoginMethod[]).map((method) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => setLoginMethod(method)}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition-all ${
+                  loginMethod === method
+                    ? "bg-card text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-300"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                {method === "email" ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+                {method === "email" ? "Email" : "Phone"}
+              </button>
+            ))}
+          </div>
+
+          <AuthField
+            icon={loginMethod === "email" ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
+            label={loginMethod === "email" ? "Email address" : "Phone number"}
+            value={signinId}
+            onChange={setSigninId}
+            placeholder={loginMethod === "email" ? "you@example.com" : "+998 90 123 45 67"}
+            type={loginMethod === "email" ? "email" : "tel"}
+            autoComplete={loginMethod === "email" ? "email" : "tel"}
+          />
+          <AuthField
+            icon={<Lock className="h-4 w-4" />}
+            label="Password"
+            value={signinPw}
+            onChange={setSigninPw}
+            placeholder="Enter your password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            action={<EyeToggle show={showPassword} onToggle={() => setShowPassword(v => !v)} />}
+          />
+
+          <div className="flex justify-end">
+            <button type="button" className="text-sm font-black text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+              Forgot password?
+            </button>
+          </div>
+
+          <PrimaryButton onClick={handleSignin} disabled={!signinReady}>
+            Sign in <ArrowRight className="h-4 w-4" />
+          </PrimaryButton>
+        </div>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3 text-xs font-bold text-slate-400 dark:text-slate-600">
+          <span className="h-px flex-1 bg-border dark:bg-slate-800" />
+          or continue with
+          <span className="h-px flex-1 bg-border dark:bg-slate-800" />
+        </div>
+
+        {/* Social buttons */}
+        <div className="grid grid-cols-3 gap-3">
+          <ProviderButton label="Google" icon={<Chrome className="h-5 w-5" />} onClick={() => handleSocialDemo("Google")} />
+          <ProviderButton label="GitHub" icon={<Github className="h-5 w-5" />} onClick={() => handleSocialDemo("GitHub")} />
+          <ProviderButton label="Apple"  icon={<Zap className="h-5 w-5" />}    onClick={() => handleSocialDemo("Apple")} />
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}

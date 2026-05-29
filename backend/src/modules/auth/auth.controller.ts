@@ -11,6 +11,7 @@ import {
   Headers,
   Param,
   Delete,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -75,10 +76,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Google OAuth callback' })
   async googleAuthRedirect(
     @Req() req,
+    @Res() res,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.googleLogin(req.user, ip, userAgent);
+    const data = await this.authService.googleLogin(req.user, ip, userAgent);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/callback?accessToken=${data.accessToken}&refreshToken=${data.refreshToken}`);
   }
 
   @Public()
@@ -93,10 +97,13 @@ export class AuthController {
   @ApiOperation({ summary: 'GitHub OAuth callback' })
   async githubAuthRedirect(
     @Req() req,
+    @Res() res,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.githubLogin(req.user, ip, userAgent);
+    const data = await this.authService.githubLogin(req.user, ip, userAgent);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/callback?accessToken=${data.accessToken}&refreshToken=${data.refreshToken}`);
   }
 
   @Public()
