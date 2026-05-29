@@ -71,7 +71,7 @@ function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOw
             className={cn(
               "mx-0.5 inline-flex translate-y-1 items-center rounded-full p-0.5 align-middle shadow-sm",
               large && "translate-y-0 p-1",
-              isOwn ? "bg-white/20" : "bg-[#F7FAFC] ring-1 ring-[#E5E7EB]",
+              isOwn ? "bg-card/20" : "bg-muted ring-1 ring-[#E5E7EB]",
             )}
           >
             <EmojiRenderer assetId={part.token} size={large ? 42 : 22} />
@@ -214,7 +214,7 @@ export function MessageBubble({
       >
         {!isOwn && <Avatar user={sender} size={30} />}
         <div className={cn("relative flex max-w-[78%] flex-col sm:max-w-[68%] lg:max-w-[58%]", isOwn ? "items-end" : "items-start")}>
-          {showSender && <span className="mb-1 ml-2 text-xs font-medium text-[#6B7280]">{sender?.name}</span>}
+          {showSender && <span className="mb-1 ml-2 text-xs font-medium text-muted-foreground">{sender?.name}</span>}
           <div className="group/message relative">
             <button
               type="button"
@@ -226,21 +226,21 @@ export function MessageBubble({
                 largeEmojiOnly && "px-4 py-3 text-4xl leading-tight",
                 isOwn
                   ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-indigo-950/25 hover:shadow-indigo-500/25"
-                  : "rounded-bl-md border border-[#E5E7EB] bg-white text-[#111827] hover:bg-white hover:shadow-indigo-100",
+                  : "rounded-bl-md border border-border bg-card text-foreground hover:bg-card hover:shadow-indigo-100",
               )}
             >
             {replyMessage && (
               <div
                 className={cn(
                   "relative mb-2 overflow-hidden rounded-xl border-l-2 px-3 py-2 text-xs",
-                  isOwn ? "border-white/70 bg-white/20 text-white" : "border-indigo-300 bg-indigo-50 text-[#111827]",
+                  isOwn ? "border-white/70 bg-card/20 text-white" : "border-indigo-300 bg-indigo-50 text-foreground",
                 )}
               >
                 <motion.span
                   aria-hidden="true"
                   animate={{ opacity: [0.35, 0.9, 0.35] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                  className={cn("absolute inset-y-2 left-0 w-0.5 rounded-full", isOwn ? "bg-white" : "bg-indigo-500")}
+                  className={cn("absolute inset-y-2 left-0 w-0.5 rounded-full", isOwn ? "bg-card" : "bg-indigo-500")}
                 />
                 <div className="font-semibold">{getUser(replyMessage.userId, users)?.name ?? t("app.chat.unknown")}</div>
                 <div className="mt-0.5 line-clamp-2 opacity-80">{getReplySnippet(replyMessage, t)}</div>
@@ -255,7 +255,7 @@ export function MessageBubble({
             <div className="whitespace-pre-wrap break-words">
               <PremiumMessageText text={text} isOwn={isOwn} large={largeEmojiOnly} />
             </div>
-            <div className={cn("mt-1.5 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-white/70" : "text-[#6B7280]", largeEmojiOnly && "text-xs")}>
+            <div className={cn("mt-1.5 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-white/70" : "text-muted-foreground", largeEmojiOnly && "text-xs")}>
               {message.edited && <span>{t("app.chat.edited")}</span>}
               <span>{formatMessageTime(message.timestamp)}</span>
               {isOwn && <span className={message.read === false ? "text-white/65" : "text-cyan-100"}>{message.read === false ? t("app.chat.sent") : t("app.chat.readStatus")}</span>}
@@ -265,7 +265,7 @@ export function MessageBubble({
               type="button"
               onClick={openPickerFromHoverButton}
               className={cn(
-                "absolute top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full border border-white/70 bg-white/86 text-gray-500 opacity-0 shadow-md shadow-indigo-950/10 backdrop-blur transition-all hover:scale-105 hover:text-indigo-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 group-hover/message:opacity-100 dark:border-gray-700 dark:bg-gray-800/88 dark:text-gray-300",
+                "absolute top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full border border-white/70 bg-card/86 text-gray-500 opacity-0 shadow-md shadow-indigo-950/10 backdrop-blur transition-all hover:scale-105 hover:text-indigo-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 group-hover/message:opacity-100 dark:border-gray-700 dark:bg-gray-800/88 dark:text-gray-300",
                 isOwn ? "left-1.5" : "right-1.5",
               )}
               aria-label="Open quick reactions"

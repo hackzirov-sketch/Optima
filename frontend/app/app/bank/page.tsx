@@ -40,24 +40,24 @@ export default function Page() {
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <SurfaceCard>
             <SectionTitle icon={Wallet} title={t("app.bank.transactions")} description={t("app.bank.transactionsDesc")} />
-            <div className="overflow-hidden rounded-2xl border border-[#E5E7EB]">
-              <div className="grid grid-cols-[1fr_140px_120px] gap-3 bg-[#F7FAFC] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#6B7280] max-sm:hidden">
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="grid grid-cols-[1fr_140px_120px] gap-3 bg-muted px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground max-sm:hidden">
                 <span>{t("app.bank.table.transaction")}</span>
                 <span>{t("app.bank.table.amount")}</span>
                 <span>{t("app.bank.table.status")}</span>
               </div>
-              <div className="divide-y divide-[#E5E7EB] bg-white">
+              <div className="divide-y divide-[#E5E7EB] bg-card">
                 {BANK_TRANSACTIONS.map((transaction) => {
                   const statusKey = transaction.status.toLowerCase().replace(/\s+/g, "");
                   return (
                     <div key={transaction.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[1fr_140px_120px] sm:items-center">
                       <div>
-                        <p className="font-semibold text-[#111827]">{t(`app.bank.transactionsData.${transaction.id}.title`, transaction.title)}</p>
-                        <p className="mt-1 text-xs text-[#6B7280]">
+                        <p className="font-semibold text-foreground">{t(`app.bank.transactionsData.${transaction.id}.title`, transaction.title)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
                           {t(`app.bank.transactionsData.${transaction.id}.type`, transaction.type)} - {t(`app.bank.transactionsData.${transaction.id}.date`, transaction.date)} - {transaction.id}
                         </p>
                       </div>
-                      <p className="font-bold text-[#111827]">{transaction.amount}</p>
+                      <p className="font-bold text-foreground">{transaction.amount}</p>
                       <Pill tone={transaction.status === "Completed" ? "green" : transaction.status === "Processing" ? "amber" : "slate"}>{t(`app.status.${statusKey}`, transaction.status)}</Pill>
                     </div>
                   );
@@ -72,11 +72,11 @@ export default function Page() {
               {PAYMENT_METHODS.map((item, index) => {
                 const statusKey = item.status.toLowerCase().replace(/\s+/g, "");
                 return (
-                  <div key={item.name} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                  <div key={item.name} className="rounded-2xl border border-border bg-muted p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-[#111827]">{item.name}</p>
-                        <p className="mt-1 text-sm leading-6 text-[#6B7280]">
+                        <p className="font-semibold text-foreground">{item.name}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {t(`app.bank.paymentMethods.${index}.region`, item.region)} - {t("app.bank.estimatedFee", { fee: t(`app.bank.paymentMethods.${index}.fee`, item.fee) })}
                         </p>
                       </div>

@@ -597,9 +597,9 @@ export function ReactionButton({
       whileTap={{ scale: 0.9 }}
       onClick={triggerClick}
       className={classNames(
-        "group relative inline-flex flex-shrink-0 items-center justify-center gap-1.5 overflow-visible border bg-white/90 shadow-sm backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
+        "group relative inline-flex flex-shrink-0 items-center justify-center gap-1.5 overflow-visible border bg-card/90 shadow-sm backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
         compact ? "h-8 rounded-full px-2" : "h-12 w-12 rounded-2xl",
-        active ? "border-indigo-200 text-indigo-700 ring-1 ring-indigo-100" : "border-[#E5E7EB] text-[#111827] hover:border-indigo-200",
+        active ? "border-indigo-200 text-indigo-700 ring-1 ring-indigo-100" : "border-border text-foreground hover:border-indigo-200",
       )}
       aria-label={`Select ${asset.label} reaction`}
       title={asset.label}
@@ -643,7 +643,7 @@ export function ReactionButton({
         </motion.span>
       )}
       {!compact && (
-        <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-white/70 bg-white/90 px-2 py-1 text-[10px] font-bold text-[#111827] shadow-lg backdrop-blur group-hover:block">
+        <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-white/70 bg-card/90 px-2 py-1 text-[10px] font-bold text-foreground shadow-lg backdrop-blur group-hover:block">
           {asset.label}
         </span>
       )}
@@ -669,12 +669,12 @@ export function PremiumStatusBadge({
       initial={false}
       animate={{ scale: [1, 1.05, 1] }}
       transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-      className={classNames("inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/85 p-0.5 shadow-sm backdrop-blur", className)}
+      className={classNames("inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-card/85 p-0.5 shadow-sm backdrop-blur", className)}
       aria-label={`Premium status: ${asset.label}`}
       title={asset.label}
     >
       <img src={asset.src} alt={`${asset.label} status`} width={size} height={size} loading="lazy" decoding="async" className="object-contain" draggable={false} />
-      {showLabel && <span className="pr-1 text-[11px] font-bold text-[#111827]">{asset.label}</span>}
+      {showLabel && <span className="pr-1 text-[11px] font-bold text-foreground">{asset.label}</span>}
     </motion.span>
   );
 }
@@ -692,7 +692,7 @@ export function AnimatedPresenceIndicator({ status, className = "" }: { status: 
       className={classNames(`inline-flex items-center rounded-full bg-gradient-to-br ${asset.tone} p-[2px]`, className)}
       aria-label={`${asset.label} presence`}
     >
-      <span className="rounded-full bg-white p-0.5">
+      <span className="rounded-full bg-card p-0.5">
         <img src={asset.src} alt={`${asset.label} presence icon`} className="h-4 w-4" loading="lazy" decoding="async" />
       </span>
     </motion.span>
@@ -749,7 +749,7 @@ export function AIAssistantStateBadge({
     <motion.span
       animate={state === "completed" ? { scale: 1 } : { opacity: [0.72, 1, 0.72] }}
       transition={{ duration: 1.7, repeat: state === "completed" ? 0 : Infinity, ease: "easeInOut" }}
-      className={classNames("inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-xs font-black text-[#111827] shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-100", className)}
+      className={classNames("inline-flex items-center gap-2 rounded-full border border-white/70 bg-card/80 px-3 py-1.5 text-xs font-black text-foreground shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-100", className)}
       aria-label={`AI assistant state: ${config.label}`}
     >
       <EmojiRenderer asset={asset} size={20} decorative />
@@ -761,13 +761,13 @@ export function AIAssistantStateBadge({
 export function WorkspaceEmojiPack({ activeId, onSelect }: { activeId?: string; onSelect?: (asset: PremiumAsset) => void }) {
   const packs = PREMIUM_EMOJI_PACKS.filter((asset) => ["workspace", "work-productivity", "coding", "learning", "achievement", "team"].includes(asset.section));
   return (
-    <div className="mt-3 flex items-center gap-2 overflow-x-auto rounded-2xl bg-[#F7FAFC] p-2" role="list" aria-label="Workspace emoji packs">
+    <div className="mt-3 flex items-center gap-2 overflow-x-auto rounded-2xl bg-muted p-2" role="list" aria-label="Workspace emoji packs">
       {packs.map((pack) => (
         <button
           key={pack.id}
           type="button"
           onClick={() => onSelect?.(pack)}
-          className={classNames("inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[#6B7280] ring-1 ring-[#E5E7EB] transition-colors hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400/30", activeId === pack.id && "text-indigo-700 ring-indigo-200")}
+          className={classNames("inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-bold text-muted-foreground ring-1 ring-[#E5E7EB] transition-colors hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400/30", activeId === pack.id && "text-indigo-700 ring-indigo-200")}
           aria-label={`Select ${pack.label} emoji pack`}
         >
           <EmojiRenderer asset={pack} size={16} decorative />
@@ -811,7 +811,7 @@ export function StickerPicker({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97, y: 5 }}
       transition={{ type: "spring", stiffness: 380, damping: 30 }}
-      className="w-[min(420px,calc(100vw-2rem))] rounded-[26px] border border-white/70 bg-white/95 p-3 shadow-2xl shadow-indigo-950/15 backdrop-blur-xl"
+      className="w-[min(420px,calc(100vw-2rem))] rounded-[26px] border border-white/70 bg-card/95 p-3 shadow-2xl shadow-indigo-950/15 backdrop-blur-xl"
       onClick={(event) => event.stopPropagation()}
       role="dialog"
       aria-label="Premium sticker picker"
@@ -819,15 +819,15 @@ export function StickerPicker({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500">Premium stickers</p>
-          <p className="text-xs text-[#6B7280]">Figma-sourced sticker replies and workspace packs</p>
+          <p className="text-xs text-muted-foreground">Figma-sourced sticker replies and workspace packs</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-full bg-[#F7FAFC] px-2 py-1 text-[10px] font-bold text-[#6B7280] hover:text-[#111827]" aria-label="Close sticker picker">
+        <button type="button" onClick={onClose} className="rounded-full bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground hover:text-foreground" aria-label="Close sticker picker">
           Esc
         </button>
       </div>
-      <div className="mb-3 flex h-10 items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-3 focus-within:border-indigo-300 focus-within:bg-white">
-        <Search className="h-4 w-4 text-[#6B7280]" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search stickers" className="min-w-0 flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#6B7280]" />
+      <div className="mb-3 flex h-10 items-center gap-2 rounded-2xl border border-border bg-muted px-3 focus-within:border-indigo-300 focus-within:bg-card">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search stickers" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <AnimatePresence initial={false}>
@@ -839,11 +839,11 @@ export function StickerPicker({
               whileHover={{ y: -2, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => onSelect(sticker)}
-              className="group rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-2 text-left transition-colors hover:border-indigo-200 hover:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+              className="group rounded-2xl border border-border bg-muted p-2 text-left transition-colors hover:border-indigo-200 hover:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
               aria-label={`Use ${sticker.label} sticker`}
             >
               <img src={sticker.src} alt={`${sticker.label} sticker`} className="mx-auto h-20 w-20 object-contain transition-transform group-hover:scale-105" loading="lazy" decoding="async" />
-              <span className="mt-1 flex items-center justify-center gap-1 truncate text-center text-xs font-bold text-[#111827]">
+              <span className="mt-1 flex items-center justify-center gap-1 truncate text-center text-xs font-bold text-foreground">
                 {sticker.label}
                 <Star className="h-3 w-3 text-amber-400" aria-hidden="true" />
               </span>

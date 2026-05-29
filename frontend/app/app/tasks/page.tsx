@@ -72,7 +72,7 @@ export default function TasksNotesPage() {
       <Pill key="status" tone="indigo">{task.status.replace("_", " ")}</Pill>,
       <span key="assignee">{task.assignee}</span>,
       <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="dueDate" className="text-muted-foreground">{task.dueDate}</span>,
     ],
   }));
 
@@ -97,21 +97,21 @@ export default function TasksNotesPage() {
         <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
           <SurfaceCard>
             <SectionTitle icon={Plus} title="Quick personal tasks" description="Existing localStorage task flow preserved for fast personal capture." />
-            <div className="flex flex-col gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3 sm:flex-row sm:items-center">
-              <input value={newTask} onChange={(event) => setNewTask(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addTask()} placeholder="Add a quick task" className="min-w-0 flex-1 bg-transparent px-2 text-sm text-[#111827] outline-none" />
-              <select value={newPriority} onChange={(event) => setNewPriority(event.target.value as Priority)} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#6B7280] outline-none"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted p-3 sm:flex-row sm:items-center">
+              <input value={newTask} onChange={(event) => setNewTask(event.target.value)} onKeyDown={(event) => event.key === "Enter" && addTask()} placeholder="Add a quick task" className="min-w-0 flex-1 bg-transparent px-2 text-sm text-foreground outline-none" />
+              <select value={newPriority} onChange={(event) => setNewPriority(event.target.value as Priority)} className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground outline-none"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
               <ActionButton onClick={addTask} className="py-2">Add</ActionButton>
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]"><h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">Pending {pending.length}</h3><div className="space-y-2">{pending.map((task) => <div key={task.id} className="flex items-center gap-2 rounded-xl bg-white p-2 ring-1 ring-[#E5E7EB]"><button onClick={() => toggleTask(task.id)}><CheckCircle2 className="h-4 w-4 text-[#6B7280]" /></button><span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#111827]">{task.text}</span><Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill><button onClick={() => deleteTask(task.id)}><Trash2 className="h-4 w-4 text-rose-500" /></button></div>)}</div></div>
-              <div className="rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]"><h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">Completed {done.length}</h3><div className="space-y-2">{done.map((task) => <div key={task.id} className="flex items-center gap-2 rounded-xl bg-white p-2 text-sm text-[#6B7280] line-through ring-1 ring-[#E5E7EB]"><button onClick={() => toggleTask(task.id)}><CheckCircle2 className="h-4 w-4 text-emerald-500" /></button>{task.text}</div>)}</div></div>
+              <div className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]"><h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Pending {pending.length}</h3><div className="space-y-2">{pending.map((task) => <div key={task.id} className="flex items-center gap-2 rounded-xl bg-card p-2 ring-1 ring-[#E5E7EB]"><button onClick={() => toggleTask(task.id)}><CheckCircle2 className="h-4 w-4 text-muted-foreground" /></button><span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{task.text}</span><Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill><button onClick={() => deleteTask(task.id)}><Trash2 className="h-4 w-4 text-rose-500" /></button></div>)}</div></div>
+              <div className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]"><h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Completed {done.length}</h3><div className="space-y-2">{done.map((task) => <div key={task.id} className="flex items-center gap-2 rounded-xl bg-card p-2 text-sm text-muted-foreground line-through ring-1 ring-[#E5E7EB]"><button onClick={() => toggleTask(task.id)}><CheckCircle2 className="h-4 w-4 text-emerald-500" /></button>{task.text}</div>)}</div></div>
             </div>
           </SurfaceCard>
 
           <SurfaceCard>
             <SectionTitle icon={AlarmClock} title="Recurring + reminders" description="MVP placeholders for schedule rules and notification reminders." />
             <div className="space-y-3">
-              {["Every Monday: plan launch sprint", "Daily 09:00: focus top 3 tasks", "Friday: send client progress report"].map((item) => <div key={item} className="flex items-center justify-between rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-[#111827]">{item}</span><Pill tone="blue">Demo</Pill></div>)}
+              {["Every Monday: plan launch sprint", "Daily 09:00: focus top 3 tasks", "Friday: send client progress report"].map((item) => <div key={item} className="flex items-center justify-between rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-foreground">{item}</span><Pill tone="blue">Demo</Pill></div>)}
             </div>
           </SurfaceCard>
         </div>
@@ -120,14 +120,14 @@ export default function TasksNotesPage() {
           <SurfaceCard>
             <SectionTitle icon={FileText} title="Knowledge Hub" description="Docs/wiki pages with linked task counts." />
             <div className="grid gap-3 md:grid-cols-3">
-              {DOC_PAGES.map((doc) => <motion.button key={doc.id} whileHover={{ y: -3 }} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left"><StickyNote className="h-5 w-5 text-indigo-600" /><h3 className="mt-3 font-black text-[#111827]">{doc.title}</h3><p className="mt-2 line-clamp-3 text-sm text-[#6B7280]">{doc.excerpt}</p><div className="mt-3 flex justify-between text-xs font-bold text-[#6B7280]"><span>{doc.updated}</span><span>{doc.linkedTasks} tasks</span></div></motion.button>)}
+              {DOC_PAGES.map((doc) => <motion.button key={doc.id} whileHover={{ y: -3 }} className="rounded-2xl border border-border bg-muted p-4 text-left"><StickyNote className="h-5 w-5 text-indigo-600" /><h3 className="mt-3 font-black text-foreground">{doc.title}</h3><p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{doc.excerpt}</p><div className="mt-3 flex justify-between text-xs font-bold text-muted-foreground"><span>{doc.updated}</span><span>{doc.linkedTasks} tasks</span></div></motion.button>)}
             </div>
           </SurfaceCard>
           <SurfaceCard>
             <SectionTitle icon={FormInput} title="Intake Forms + Focus Time" description="Forms, clips and timesheets prepared for backend integration." />
             <div className="space-y-3">
-              {FORM_FIELDS.map((field) => <div key={field.id} className="flex items-center justify-between rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-[#111827]">{field.label}</span><Pill tone={field.required ? "indigo" : "slate"}>{field.type}</Pill></div>)}
-              {TIME_ENTRIES.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-[#111827]"><Timer className="mr-2 inline h-4 w-4 text-indigo-600" />{entry.owner}</span><span className="text-xs font-bold text-[#6B7280]">{entry.duration}</span></div>)}
+              {FORM_FIELDS.map((field) => <div key={field.id} className="flex items-center justify-between rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-foreground">{field.label}</span><Pill tone={field.required ? "indigo" : "slate"}>{field.type}</Pill></div>)}
+              {TIME_ENTRIES.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]"><span className="text-sm font-bold text-foreground"><Timer className="mr-2 inline h-4 w-4 text-indigo-600" />{entry.owner}</span><span className="text-xs font-bold text-muted-foreground">{entry.duration}</span></div>)}
             </div>
           </SurfaceCard>
         </div>

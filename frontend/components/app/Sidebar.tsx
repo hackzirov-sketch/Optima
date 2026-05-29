@@ -76,18 +76,18 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
 
   return (
     <aside
-      className="flex h-full flex-col border-r border-[#E5E7EB] bg-white shadow-sm"
+      className="flex h-full flex-col border-r border-border bg-sidebar shadow-sm"
       style={{ width: collapsed ? 76 : 272, transition: "width 0.2s ease", flexShrink: 0 }}
     >
-      <div className="border-b border-[#E5E7EB] px-4 py-5">
+      <div className="border-b border-border px-4 py-5">
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 shadow-sm shadow-indigo-200">
             <Zap className="h-5 w-5 text-white" />
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <span className="block text-sm font-bold tracking-wide text-[#111827]">UPZ</span>
-              <span className="block truncate text-xs text-[#6B7280]">Universal Productivity Zone</span>
+              <span className="block text-sm font-bold tracking-wide text-foreground">UPZ</span>
+              <span className="block truncate text-xs text-muted-foreground">Universal Productivity Zone</span>
             </div>
           )}
         </div>
@@ -95,9 +95,9 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
           <div className="mt-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-3 ring-1 ring-indigo-100">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">{t("app.nav.zoneHealth")}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-indigo-600">88%</span>
+              <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-bold text-indigo-600">88%</span>
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-white">
+            <div className="mt-2 h-1.5 rounded-full bg-card">
               <div className="h-full w-[88%] rounded-full bg-gradient-to-r from-indigo-500 to-blue-500" />
             </div>
           </div>
@@ -150,21 +150,21 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
         ))}
       </nav>
 
-      <div className="border-t border-[#E5E7EB] px-3 py-4">
+      <div className="border-t border-border px-3 py-4">
         {!collapsed && (
-          <div className="mb-3 rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]">
+          <div className="mb-3 rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
             <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold text-[#111827]">{user.name}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{user.name}</p>
               <span className="rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 px-2 py-0.5 text-[10px] font-black text-white">{t("app.nav.pro")}</span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-[#6B7280]">{t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}</p>
           </div>
         )}
         <motion.button
           type="button"
           onClick={onLogout}
           className={cn(
-            "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-[#6B7280] transition-colors hover:bg-rose-50 hover:text-rose-600",
+            "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600",
             collapsed && "justify-center",
           )}
           whileTap={{ scale: 0.98 }}

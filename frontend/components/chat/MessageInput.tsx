@@ -99,7 +99,7 @@ export function MessageInput({
   };
 
   return (
-    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-3 py-2.5 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
+    <div className="flex-shrink-0 border-t border-gray-200 bg-card px-3 py-2.5 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
       <AnimatePresence>
         {typingUser && !editingMessage && (
           <motion.div
@@ -150,7 +150,7 @@ export function MessageInput({
                       key={mode}
                       type="button"
                       onClick={() => applyAiDraft(mode as "fix" | "professional" | "shorten" | "task")}
-                      className="rounded-full border border-indigo-100 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-600 hover:text-white dark:border-indigo-800 dark:bg-gray-900 dark:text-indigo-300 dark:hover:bg-indigo-600 dark:hover:text-white"
+                      className="rounded-full border border-indigo-100 bg-card px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-600 hover:text-white dark:border-indigo-800 dark:bg-gray-900 dark:text-indigo-300 dark:hover:bg-indigo-600 dark:hover:text-white"
                     >
                       {label}
                     </button>
@@ -196,7 +196,7 @@ export function MessageInput({
         )}
       </AnimatePresence>
 
-      <div className="relative flex items-end gap-2 rounded-[24px] border border-gray-200 bg-gray-50 p-1.5 shadow-sm transition-colors focus-within:border-indigo-300 focus-within:bg-white dark:border-gray-600 dark:bg-gray-800 dark:focus-within:border-indigo-500 dark:focus-within:bg-gray-700">
+      <div className="relative flex items-end gap-2 rounded-[24px] border border-gray-200 bg-gray-50 p-1.5 shadow-sm transition-colors focus-within:border-indigo-300 focus-within:bg-card dark:border-gray-600 dark:bg-gray-800 dark:focus-within:border-indigo-500 dark:focus-within:bg-gray-700">
         <button
           type="button"
           onClick={() => {
@@ -204,8 +204,8 @@ export function MessageInput({
             setEmojiOpen(false);
           }}
           className={cn(
-            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
-            stickerOpen ? "bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
+            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-card hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
+            stickerOpen ? "bg-card text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
           )}
           aria-label={t("app.chat.attachFile")}
         >
@@ -218,8 +218,8 @@ export function MessageInput({
             setStickerOpen(false);
           }}
           className={cn(
-            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
-            emojiOpen ? "bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
+            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-card hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
+            emojiOpen ? "bg-card text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
           )}
           aria-label={t("app.chat.emojiPicker")}
         >
@@ -241,7 +241,7 @@ export function MessageInput({
           className="max-h-[120px] min-h-10 flex-1 resize-none bg-transparent py-2.5 text-sm leading-5 text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
         />
 
-        <button type="button" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-100" aria-label={t("app.chat.voicePlaceholder")}>
+        <button type="button" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-gray-400 transition-colors hover:bg-card hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-100" aria-label={t("app.chat.voicePlaceholder")}>
           <Mic className="h-5 w-5" />
         </button>
         <motion.button
@@ -254,7 +254,7 @@ export function MessageInput({
             "grid h-11 w-11 flex-shrink-0 place-items-center rounded-full shadow-lg transition-all",
             value.trim()
               ? "bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-indigo-950/30"
-              : "cursor-not-allowed bg-white text-gray-400 shadow-none dark:bg-gray-700 dark:text-gray-500",
+              : "cursor-not-allowed bg-card text-gray-400 shadow-none dark:bg-gray-700 dark:text-gray-500",
           )}
           aria-label={t("app.chat.sendMessage")}
         >
@@ -303,7 +303,7 @@ export function MessageInput({
                     key={member.id}
                     type="button"
                     onClick={() => onChange(value.replace(/@\w*$/, `@${member.name.split(" ")[0]} `))}
-                    className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300"
+                    className="rounded-full border border-gray-200 bg-card px-3 py-1 text-xs text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300"
                   >
                     @{member.name.split(" ")[0]}
                   </button>

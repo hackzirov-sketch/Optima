@@ -72,7 +72,7 @@ export default function Page() {
   return (
     <AppLayout user={user} title={t("app.nav.settings")} onLogout={onLogout}>
       <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex w-fit gap-1 rounded-xl bg-white p-1 dark:bg-gray-800">
+        <div className="mb-6 flex w-fit gap-1 rounded-xl bg-card p-1 dark:bg-gray-800">
           {TABS.map((item) => (
             <button
               key={item.id}
@@ -92,7 +92,7 @@ export default function Page() {
 
         {tab === "account" && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <div className="space-y-5 rounded-xl border border-gray-200 bg-card p-6 dark:border-gray-700 dark:bg-gray-800">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t("app.settings.accountInfo")}</h3>
 
               {[
@@ -105,7 +105,7 @@ export default function Page() {
                   <input
                     type={field.type}
                     defaultValue={field.value}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 focus:bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-indigo-500 dark:focus:bg-gray-600"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 focus:bg-card dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-indigo-500 dark:focus:bg-gray-600"
                   />
                 </div>
               ))}
@@ -123,7 +123,7 @@ export default function Page() {
               </button>
             </div>
 
-            <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <div className="space-y-4 rounded-xl border border-gray-200 bg-card p-6 dark:border-gray-700 dark:bg-gray-800">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t("app.settings.dangerZone")}</h3>
               <div className="flex items-center justify-between rounded-xl border border-red-200/70 bg-red-50/70 p-4 dark:border-red-900/40 dark:bg-red-950/20">
                 <div>
@@ -140,7 +140,7 @@ export default function Page() {
 
         {tab === "notifications" && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <div className="space-y-5 rounded-xl border border-gray-200 bg-card p-6 dark:border-gray-700 dark:bg-gray-800">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t("app.settings.notificationPrefs")}</h3>
               {NOTIFICATION_KEYS.map((key) => {
                 const val = notifs[key];
@@ -158,7 +158,7 @@ export default function Page() {
                       ].join(" ")}
                     >
                       <div
-                        className="absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all"
+                        className="absolute top-1 h-4 w-4 rounded-full bg-card shadow transition-all"
                         style={{ left: val ? "calc(100% - 20px)" : 4 }}
                       />
                     </button>
@@ -180,7 +180,7 @@ export default function Page() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                  className="flex items-center gap-4 rounded-xl border border-gray-200 bg-card p-4 dark:border-gray-700 dark:bg-gray-800"
                 >
                   <div className={["flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl", intg.iconBg, intg.iconColor].join(" ")}>
                     {intg.icon}
@@ -227,11 +227,11 @@ export default function Page() {
               />
               <div className="grid gap-3 md:grid-cols-2">
                 {WORKSPACE_SETTINGS.map((setting) => (
-                  <div key={setting.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                  <div key={setting.id} className="rounded-2xl border border-border bg-muted p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-black text-[#111827]">{setting.title}</h3>
-                        <p className="mt-2 text-sm leading-6 text-[#6B7280]">{setting.value}</p>
+                        <h3 className="font-black text-foreground">{setting.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{setting.value}</p>
                       </div>
                       <Pill tone="indigo">Demo</Pill>
                     </div>
@@ -244,16 +244,16 @@ export default function Page() {
               <SurfaceCard>
                 <SectionTitle icon={Settings2} title="Saved default view" description="Persists the workspace view preference locally for this demo." />
                 <ViewSwitcher views={POWER_VIEWS} value={workspaceView} onChange={changeWorkspaceView} />
-                <div className="mt-5 rounded-[24px] bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]">
+                <div className="mt-5 rounded-[24px] bg-muted p-4 ring-1 ring-[#E5E7EB]">
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="text-sm font-black text-[#111827]">Density and layout</p>
+                    <p className="text-sm font-black text-foreground">Density and layout</p>
                     <Pill tone="blue">Compact</Pill>
                   </div>
                   <ProgressBar value={82} label="Power-user readiness" />
-                  <div className="mt-4 grid gap-2 text-sm font-semibold text-[#6B7280]">
-                    <span className="rounded-2xl bg-white px-3 py-2 ring-1 ring-[#E5E7EB]">Tables collapse into cards on mobile</span>
-                    <span className="rounded-2xl bg-white px-3 py-2 ring-1 ring-[#E5E7EB]">Task drawer becomes full-screen sheet</span>
-                    <span className="rounded-2xl bg-white px-3 py-2 ring-1 ring-[#E5E7EB]">Filters and views are localStorage-ready</span>
+                  <div className="mt-4 grid gap-2 text-sm font-semibold text-muted-foreground">
+                    <span className="rounded-2xl bg-card px-3 py-2 ring-1 ring-[#E5E7EB]">Tables collapse into cards on mobile</span>
+                    <span className="rounded-2xl bg-card px-3 py-2 ring-1 ring-[#E5E7EB]">Task drawer becomes full-screen sheet</span>
+                    <span className="rounded-2xl bg-card px-3 py-2 ring-1 ring-[#E5E7EB]">Filters and views are localStorage-ready</span>
                   </div>
                 </div>
               </SurfaceCard>
@@ -262,7 +262,7 @@ export default function Page() {
                 <SectionTitle icon={ShieldCheck} title="Permissions and Flow Automations" description="Role-ready settings and automation rules prepared for future backend integration." />
                 <div className="grid gap-3 md:grid-cols-2">
                   {["Admin can create spaces", "Members can manage assigned tasks", "Guests can comment only", "Moderators can review community posts"].map((rule) => (
-                    <div key={rule} className="rounded-2xl bg-[#F7FAFC] p-3 text-sm font-semibold text-[#111827] ring-1 ring-[#E5E7EB]">
+                    <div key={rule} className="rounded-2xl bg-muted p-3 text-sm font-semibold text-foreground ring-1 ring-[#E5E7EB]">
                       {rule}
                     </div>
                   ))}

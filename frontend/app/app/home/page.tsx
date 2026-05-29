@@ -67,9 +67,9 @@ export default function HomePage() {
           title={t("app.home.welcome", { name: user?.name })}
           description={t("app.home.description", { goal: goalLabel })}
         >
-          <div className="rounded-2xl bg-[#F7FAFC] px-4 py-3 text-right">
-            <div className="font-mono text-2xl font-bold text-[#111827]">{timeStr}</div>
-            <div className="text-xs text-[#6B7280]">{t("app.home.tasksDoneCount", { done: completedCount, total: tasks.length })}</div>
+          <div className="rounded-2xl bg-muted px-4 py-3 text-right">
+            <div className="font-mono text-2xl font-bold text-foreground">{timeStr}</div>
+            <div className="text-xs text-muted-foreground">{t("app.home.tasksDoneCount", { done: completedCount, total: tasks.length })}</div>
           </div>
         </PageHeader>
 
@@ -83,11 +83,11 @@ export default function HomePage() {
           <SectionTitle icon={Zap} title={t("app.home.quickActions")} description={t("app.home.quickActionsDesc")} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {QUICK_ACTIONS.map((action) => (
-              <Link key={action.href} href={action.href} className="flex w-full flex-col items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-sm">
+              <Link key={action.href} href={action.href} className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border bg-muted p-4 transition-all hover:-translate-y-1 hover:bg-card hover:shadow-sm">
                 <span className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: `${action.color}14`, color: action.color }}>
                   <action.icon className="h-5 w-5" />
                 </span>
-                <span className="text-sm font-semibold text-[#111827]">{t(`app.home.actions.${action.labelKey}`)}</span>
+                <span className="text-sm font-semibold text-foreground">{t(`app.home.actions.${action.labelKey}`)}</span>
               </Link>
             ))}
           </div>
@@ -98,9 +98,9 @@ export default function HomePage() {
             <SectionTitle icon={ListTodo} title={t("app.home.todaysTasks")} description={t("app.home.todaysTasksDesc")} action={<Link href="/app/tasks" className="rounded-2xl px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50">{t("app.home.viewAll")}</Link>} />
             <div className="space-y-3">
               {todaysTasks.map((task) => (
-                <button key={task.id} type="button" onClick={() => toggleTask(task.id)} className="flex w-full items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm">
-                  {task.done ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 text-[#6B7280]" />}
-                  <span className="min-w-0 flex-1 text-sm font-semibold text-[#111827]">{t(`app.mock.tasks.${task.id}`, task.text)}</span>
+                <button key={task.id} type="button" onClick={() => toggleTask(task.id)} className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                  {task.done ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 text-muted-foreground" />}
+                  <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">{t(`app.mock.tasks.${task.id}`, task.text)}</span>
                   <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-600">{t(`app.priority.${task.priority}`, task.priority)}</span>
                 </button>
               ))}
@@ -111,11 +111,11 @@ export default function HomePage() {
             <SectionTitle icon={Clock} title={t("app.home.recentActivity")} description={t("app.home.recentActivityDesc")} />
             <div className="space-y-3">
               {RECENT_ACTIVITY.map((item) => (
-                <div key={item.labelKey} className="flex items-start gap-3 rounded-2xl bg-[#F7FAFC] p-4">
+                <div key={item.labelKey} className="flex items-start gap-3 rounded-2xl bg-muted p-4">
                   <span className="mt-1 h-2 w-2 rounded-full bg-indigo-500" />
                   <div>
-                    <p className="text-sm font-semibold text-[#111827]">{t(`app.home.activity.${item.labelKey}`)}</p>
-                    <p className="mt-1 text-xs text-[#6B7280]">{t(`app.home.time.${item.timeKey}`)}</p>
+                    <p className="text-sm font-semibold text-foreground">{t(`app.home.activity.${item.labelKey}`)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t(`app.home.time.${item.timeKey}`)}</p>
                   </div>
                 </div>
               ))}

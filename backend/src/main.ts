@@ -11,6 +11,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { ServerOptions } from 'socket.io';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -26,11 +28,28 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
   const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
+  const frontendUrl = config.get<string>('app.frontendUrl') || 'http://localhost:3001';
+
+  // ── WebSocket Adapter (Socket.IO with CORS) ────────
+  class CorsIoAdapter extends IoAdapter {
+    createIOServer(port: number, options?: ServerOptions) {
+      const server = super.createIOServer(port, {
+        ...options,
+        cors: {
+          origin: [frontendUrl, 'http://localhost:3001', 'http://localhost:3000'],
+          credentials: true,
+        },
+        transports: ['websocket', 'polling'],
+      });
+      return server;
+    }
+  }
+  app.useWebSocketAdapter(new CorsIoAdapter(app));
 
   // ── Security ──────────────────────────────────────
   app.use(helmet());
   app.enableCors({
-    origin: config.get('app.frontendUrl'),
+    origin: [frontendUrl, 'http://localhost:3001', 'http://localhost:3000'],
     credentials: true,
   });
 

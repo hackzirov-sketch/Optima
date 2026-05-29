@@ -147,7 +147,7 @@ export function ReactionPicker({
       role="dialog"
       aria-label="Message reactions"
     >
-      <div className="flex items-center gap-1 rounded-full border border-white/80 bg-white/92 p-1 shadow-xl shadow-indigo-950/12 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/92">
+      <div className="flex items-center gap-1 rounded-full border border-white/80 bg-card/92 p-1 shadow-xl shadow-indigo-950/12 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/92">
         {PREMIUM_REACTIONS.slice(0, 6).map((reaction) => (
           <ReactionButton
             key={reaction.id}
@@ -175,7 +175,7 @@ export function ReactionPicker({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 6 }}
             transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className="absolute left-0 top-12 w-[268px] overflow-hidden rounded-[22px] border border-white/80 bg-white/94 p-2 shadow-2xl shadow-indigo-950/14 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/94"
+            className="absolute left-0 top-12 w-[268px] overflow-hidden rounded-[22px] border border-white/80 bg-card/94 p-2 shadow-2xl shadow-indigo-950/14 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/94"
           >
             <div className="mb-2 flex h-8 items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-2.5 dark:border-gray-700 dark:bg-gray-800">
               <Search className="h-3.5 w-3.5 text-gray-400" />

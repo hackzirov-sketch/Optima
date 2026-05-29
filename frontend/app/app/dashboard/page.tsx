@@ -139,7 +139,7 @@ export default function Page() {
             </span>
           </Link>
           <Link href="/app/chat">
-            <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] transition-all hover:bg-slate-50 active:scale-[0.98]">
+            <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-slate-50 active:scale-[0.98]">
               <MessageCircle className="h-4 w-4" /> {t("app.dashboard.openChat")}
             </span>
           </Link>
@@ -153,7 +153,7 @@ export default function Page() {
                 key={item}
                 type="button"
                 onClick={() => setPreset(item)}
-                className={`rounded-2xl px-3 py-2 text-xs font-black transition-colors ${preset === item ? "bg-indigo-600 text-white" : "bg-[#F7FAFC] text-[#6B7280] ring-1 ring-[#E5E7EB] hover:bg-white"}`}
+                className={`rounded-2xl px-3 py-2 text-xs font-black transition-colors ${preset === item ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground ring-1 ring-[#E5E7EB] hover:bg-card"}`}
               >
                 {item}
               </button>
@@ -183,10 +183,10 @@ export default function Page() {
                   <Pill tone="blue">{t("app.dashboard.activeProjectsPill")}</Pill>
                   <Pill tone="green">{t("app.dashboard.teammatesOnlinePill")}</Pill>
                 </div>
-                <h2 className="text-2xl font-black tracking-tight text-[#111827] md:text-4xl">
+                <h2 className="text-2xl font-black tracking-tight text-foreground md:text-4xl">
                   {t("app.dashboard.heroTitle")}
                 </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7280]">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                   {t("app.dashboard.heroDesc")}
                 </p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -196,13 +196,13 @@ export default function Page() {
                     </span>
                   </Link>
                   <Link href="/app/workspace">
-                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] transition-all hover:bg-slate-50 active:scale-[0.98]">
+                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-slate-50 active:scale-[0.98]">
                       <FolderOpen className="h-4 w-4" /> {t("app.dashboard.openWorkspace")}
                     </span>
                   </Link>
                 </div>
               </div>
-              <div className="rounded-[24px] border border-[#E5E7EB] bg-white p-4 shadow-sm">
+              <div className="rounded-[24px] border border-border bg-card p-4 shadow-sm">
                 <SectionTitle icon={Target} title={t("app.dashboard.launchReadiness")} description={t("app.dashboard.trackerDesc")} />
                 <div className="space-y-4">
                   {PROJECT_PROGRESS.slice(0, 3).map((project) => (
@@ -217,11 +217,11 @@ export default function Page() {
             <SectionTitle icon={Clock} title={t("app.dashboard.agenda")} description={t("app.dashboard.agendaDesc")} />
             <div className="space-y-3">
               {AGENDA.map((item) => (
-                <div key={`${item.time}-${item.titleKey}`} className="flex gap-3 rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]">
+                <div key={`${item.time}-${item.titleKey}`} className="flex gap-3 rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
                   <span className="w-12 flex-shrink-0 text-xs font-bold text-indigo-600">{item.time}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-[#111827]">{t(`app.dashboard.agendaItems.${item.titleKey}`)}</span>
-                    <span className="text-xs text-[#6B7280]">{t(`app.dashboard.areas.${item.areaKey}`)}</span>
+                    <span className="block text-sm font-semibold text-foreground">{t(`app.dashboard.agendaItems.${item.titleKey}`)}</span>
+                    <span className="text-xs text-muted-foreground">{t(`app.dashboard.areas.${item.areaKey}`)}</span>
                   </span>
                 </div>
               ))}
@@ -256,16 +256,16 @@ export default function Page() {
           <SectionTitle icon={Zap} title={t("app.dashboard.ecosystemHealth")} description={t("app.dashboard.ecosystemDesc")} />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {ECOSYSTEM_MODULES.map((module) => (
-              <div key={module.name} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm">
+              <div key={module.name} className="rounded-2xl border border-border bg-muted p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-[#111827]">{t(`app.ecosystem.modules.${module.name}.name`, module.name)}</p>
-                    <p className="mt-1 text-sm text-[#6B7280]">{t(`app.ecosystem.modules.${module.name}.status`, module.status)}</p>
+                    <p className="font-semibold text-foreground">{t(`app.ecosystem.modules.${module.name}.name`, module.name)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{t(`app.ecosystem.modules.${module.name}.status`, module.status)}</p>
                   </div>
                   <span className="text-xl font-bold text-indigo-600">{module.score}</span>
                 </div>
                 <ProgressBar value={Number.parseInt(module.score, 10)} />
-                <div className="mt-3 flex items-center justify-between text-xs font-semibold text-[#6B7280]">
+                <div className="mt-3 flex items-center justify-between text-xs font-semibold text-muted-foreground">
                   <span>{t("app.dashboard.moduleUsers", { count: module.users })}</span>
                   <span>{t("app.dashboard.backendReady")}</span>
                 </div>

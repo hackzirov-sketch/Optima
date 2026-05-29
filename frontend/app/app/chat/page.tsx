@@ -20,6 +20,7 @@ import { SMART_TASKS } from "@/data/ecosystemData";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 
 
@@ -72,7 +73,7 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
 }
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, hasBackendSession } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
@@ -88,6 +89,51 @@ export default function ChatPage() {
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ── WebSocket integration ────────────────────────────────────────────────
+  const roomIds = useMemo(() => rooms.map((r) => r.id), [rooms]);
+
+  const { isConnected, onlineUsers, sendMessage: wsSend, sendTyping, addReaction: wsReaction } = useWebSocket({
+    disabled: !hasBackendSession,
+    rooms: roomIds,
+    onNewMessage: (msg) => {
+      setRooms((current) =>
+        current.map((room) => {
+          if (room.id !== msg.roomId) return room;
+          // Deduplicate
+          if (room.messages.some((m) => m.id === msg.id)) return room;
+          const newMsg: ChatMessage = {
+            id: msg.id,
+            userId: msg.userId,
+            text: msg.text,
+            timestamp: msg.timestamp,
+            replyToId: msg.replyToId ?? undefined,
+            reactions: msg.reactions,
+          };
+          return {
+            ...room,
+            messages: [...room.messages, newMsg],
+            unread: msg.userId !== "me" ? (room.unread ?? 0) + 1 : room.unread,
+          };
+        }),
+      );
+    },
+    onReactionUpdated: (evt) => {
+      setRooms((current) =>
+        current.map((room) => {
+          if (room.id !== evt.roomId) return room;
+          return {
+            ...room,
+            messages: room.messages.map((msg) => {
+              if (msg.id !== evt.messageId) return msg;
+              return updateMessageReaction(msg, evt.emoji as ChatReactionEmoji);
+            }),
+          };
+        }),
+      );
+    },
+  });
+  // ────────────────────────────────────────────────────────────────────────
 
   const activeRoom = useMemo(() => rooms.find((room) => room.id === activeId) ?? rooms[0], [activeId, rooms]);
   const callRoom = useMemo(
@@ -169,6 +215,11 @@ export default function ChatPage() {
       replyToId: replyTo?.id,
     };
 
+    // Emit through WebSocket if connected (non-AI rooms)
+    if (isConnected && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
+      wsSend(activeRoom.id, text, replyTo?.id);
+    }
+
     updateActiveRoom((room) => ({
       ...room,
       unread: 0,
@@ -234,6 +285,9 @@ export default function ChatPage() {
       ...room,
       messages: room.messages.map((message) => (message.id === messageId ? updateMessageReaction(message, emoji) : message)),
     }));
+    if (isConnected && activeRoom && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
+      wsReaction(activeRoom.id, messageId, emoji);
+    }
   };
 
   const handleStartCall = (mode: ChatCallMode) => {
@@ -293,14 +347,14 @@ export default function ChatPage() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex min-h-0 overflow-hidden bg-white text-[#111827] dark:bg-gray-950 dark:text-gray-100"
+      className="fixed inset-0 z-[100] flex min-h-0 overflow-hidden bg-card text-foreground dark:bg-gray-950 dark:text-gray-100"
       style={{
         background:
           "radial-gradient(circle at 12% 0%, var(--upz-shell-glow-a), transparent 28%), radial-gradient(circle at 92% 8%, var(--upz-shell-glow-b), transparent 24%), var(--upz-bg)",
       }}
     >
       <div
-        className="flex h-full min-h-0 w-full overflow-hidden bg-white dark:bg-gray-900"
+        className="flex h-full min-h-0 w-full overflow-hidden bg-card dark:bg-gray-900"
       >
         <ChatSidebar
           rooms={rooms}
@@ -323,22 +377,22 @@ export default function ChatPage() {
               onStartCall={handleStartCall}
             />
 
-            <div className="relative z-20 border-b border-gray-200 bg-white/96 px-3 py-1.5 backdrop-blur dark:border-gray-700 dark:bg-gray-900/96">
+            <div className="relative z-20 border-b border-gray-200 bg-card/96 px-3 py-1.5 backdrop-blur dark:border-gray-700 dark:bg-gray-900/96">
               <div className="flex h-9 items-center gap-2 rounded-2xl bg-gray-50/80 px-2.5 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700">
-                <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-lg bg-white text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+                <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-lg bg-card text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
                   <CheckSquare className="h-3.5 w-3.5" />
                 </span>
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="hidden rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700 sm:inline-flex">
+                  <span className="hidden rounded-full bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700 sm:inline-flex">
                     Linked
                   </span>
-                  <p className="truncate text-xs font-semibold text-[#111827] dark:text-gray-100">{SMART_TASKS[0].title}</p>
+                  <p className="truncate text-xs font-semibold text-foreground dark:text-gray-100">{SMART_TASKS[0].title}</p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-1">
                   <button
                     type="button"
                     onClick={() => setNotice("Task created from selected message locally")}
-                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
+                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-card hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
                     aria-label="Create task from chat"
                   >
                     <CheckSquare className="h-3.5 w-3.5" />
@@ -346,7 +400,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => setNotice("AI summarized this chat locally")}
-                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
+                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-card hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
                     aria-label="Summarize chat with AI"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
@@ -375,19 +429,19 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="relative z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
+                  className="relative z-30 border-b border-gray-200 bg-card px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
                 >
-                  <div className="mx-auto flex h-9 max-w-4xl items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-3 focus-within:border-indigo-300 focus-within:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus-within:bg-gray-800">
-                    <Search className="h-4 w-4 text-[#6B7280]" />
+                  <div className="mx-auto flex h-9 max-w-4xl items-center gap-2 rounded-2xl border border-border bg-muted px-3 focus-within:border-indigo-300 focus-within:bg-card dark:border-gray-700 dark:bg-gray-800 dark:focus-within:bg-gray-800">
+                    <Search className="h-4 w-4 text-muted-foreground" />
                     <input
                       value={chatSearchQuery}
                       onChange={(event) => setChatSearchQuery(event.target.value)}
                       placeholder={t("app.chat.searchRoom", { room: getRoomName(activeRoom, t) })}
-                      className="min-w-0 flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#6B7280]"
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                       autoFocus
                     />
                     {chatSearchQuery && (
-                      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#6B7280] ring-1 ring-[#E5E7EB]">
+                      <span className="rounded-full bg-card px-2 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-[#E5E7EB]">
                         {t("app.chat.results", { count: displayedMessages.length })}
                       </span>
                     )}
@@ -397,7 +451,7 @@ export default function ChatPage() {
                         setChatSearchOpen(false);
                         setChatSearchQuery("");
                       }}
-                      className="rounded-xl p-1 text-[#6B7280] hover:bg-white hover:text-[#111827]"
+                      className="rounded-xl p-1 text-muted-foreground hover:bg-card hover:text-foreground"
                       aria-label={t("app.chat.closeSearch")}
                     >
                       <X className="h-4 w-4" />
@@ -411,14 +465,14 @@ export default function ChatPage() {
               <button
                 type="button"
                 onClick={() => setNotice(t("app.chat.pinnedNotice"))}
-                className="relative z-20 flex h-9 items-center gap-2 border-b border-gray-200 bg-white/96 px-3 text-left backdrop-blur transition-colors hover:bg-indigo-50/70 dark:border-gray-700 dark:bg-gray-900/96 dark:hover:bg-indigo-950/25"
+                className="relative z-20 flex h-9 items-center gap-2 border-b border-gray-200 bg-card/96 px-3 text-left backdrop-blur transition-colors hover:bg-indigo-50/70 dark:border-gray-700 dark:bg-gray-900/96 dark:hover:bg-indigo-950/25"
               >
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-950/40 dark:ring-indigo-900/60">
                   <Pin className="h-3 w-3" />
                 </span>
                 <span className="flex min-w-0 flex-1 items-center gap-2">
                   <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-600">{t("app.chat.pinnedMessage")}</span>
-                  <span className="truncate text-xs text-[#111827] dark:text-gray-100">{getReplySnippet(pinnedMessage, t)}</span>
+                  <span className="truncate text-xs text-foreground dark:text-gray-100">{getReplySnippet(pinnedMessage, t)}</span>
                 </span>
               </button>
             )}
@@ -431,7 +485,7 @@ export default function ChatPage() {
               }}
             >
               <div className="mx-auto flex max-w-4xl flex-col gap-3">
-                <div className="self-center rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-[11px] font-medium text-[#6B7280] backdrop-blur">
+                <div className="self-center rounded-full border border-border bg-card px-3 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur">
                   {t("app.chat.today")}
                 </div>
 
@@ -455,16 +509,16 @@ export default function ChatPage() {
                 </AnimatePresence>
 
                 {activeRoom.messages.length === 0 && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-[#E5E7EB] bg-white px-6 py-8 text-center shadow-sm">
-                    <div className="text-sm font-semibold text-[#111827]">{t("app.chat.historyCleared")}</div>
-                    <p className="mt-2 text-sm text-[#6B7280]">{t("app.chat.historyClearedDesc")}</p>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-border bg-card px-6 py-8 text-center shadow-sm">
+                    <div className="text-sm font-semibold text-foreground">{t("app.chat.historyCleared")}</div>
+                    <p className="mt-2 text-sm text-muted-foreground">{t("app.chat.historyClearedDesc")}</p>
                   </motion.div>
                 )}
 
                 {activeRoom.messages.length > 0 && displayedMessages.length === 0 && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-dashed border-[#E5E7EB] bg-white px-6 py-8 text-center shadow-sm">
-                    <div className="text-sm font-semibold text-[#111827]">{t("app.chat.noMessageFound")}</div>
-                    <p className="mt-2 text-sm text-[#6B7280]">{t("app.chat.noMessageFoundDesc")}</p>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-dashed border-border bg-card px-6 py-8 text-center shadow-sm">
+                    <div className="text-sm font-semibold text-foreground">{t("app.chat.noMessageFound")}</div>
+                    <p className="mt-2 text-sm text-muted-foreground">{t("app.chat.noMessageFoundDesc")}</p>
                   </motion.div>
                 )}
                 <div ref={messagesEndRef} />
@@ -477,7 +531,12 @@ export default function ChatPage() {
               value={draft}
               replyTo={replyTo}
               editingMessage={editingMessage}
-              onChange={setDraft}
+              onChange={(val) => {
+                setDraft(val);
+                if (isConnected && activeRoom && activeRoom.type !== "ai") {
+                  sendTyping(activeRoom.id, val.length > 0);
+                }
+              }}
               onSend={handleSend}
               onCancelReply={() => setReplyTo(null)}
               onCancelEdit={() => {
@@ -487,10 +546,10 @@ export default function ChatPage() {
             />
           </section>
         ) : (
-          <section className="flex min-w-0 flex-1 flex-col items-center justify-center bg-[#F7FAFC] px-6 text-center">
-            <div className="rounded-3xl border border-[#E5E7EB] bg-white px-8 py-10 shadow-sm">
-              <div className="text-base font-semibold text-[#111827]">{t("app.chat.noChatsLeft")}</div>
-              <p className="mt-2 max-w-sm text-sm text-[#6B7280]">{t("app.chat.noChatsLeftDesc")}</p>
+          <section className="flex min-w-0 flex-1 flex-col items-center justify-center bg-muted px-6 text-center">
+            <div className="rounded-3xl border border-border bg-card px-8 py-10 shadow-sm">
+              <div className="text-base font-semibold text-foreground">{t("app.chat.noChatsLeft")}</div>
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t("app.chat.noChatsLeftDesc")}</p>
             </div>
           </section>
         )}

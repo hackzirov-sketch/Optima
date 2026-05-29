@@ -49,7 +49,7 @@ export function FreelancerEcosystemSection() {
                 transition={{ duration: 0.5 }}
               >
                 <div
-                  className="rounded-2xl bg-white shadow-md border border-indigo-100 flex items-center justify-center p-2"
+                  className="rounded-2xl bg-card shadow-md border border-indigo-100 flex items-center justify-center p-2"
                   style={{ height: "260px" }}
                 >
                   <LottieAnimation
@@ -78,7 +78,7 @@ export function FreelancerEcosystemSection() {
                         viewport={{ once: true }}
                         transition={{ duration: 0.4, delay: i * 0.08 }}
                       >
-                        <div className="w-16 h-16 rounded-2xl bg-white shadow-md border border-border flex items-center justify-center text-indigo-600">
+                        <div className="w-16 h-16 rounded-2xl bg-card shadow-md border border-border flex items-center justify-center text-indigo-600">
                           <Icon className="w-8 h-8" />
                         </div>
                         <span className="font-semibold text-sm text-foreground leading-tight">{label}</span>

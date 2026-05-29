@@ -70,21 +70,21 @@ export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSe
   const regularRooms = visibleRooms.filter((room) => !room.pinned);
 
   return (
-    <aside className={cn("flex min-h-0 flex-col border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900", className)}>
+    <aside className={cn("flex min-h-0 flex-col border-r border-gray-200 bg-card dark:border-gray-700 dark:bg-gray-900", className)}>
       <div className="border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
         <div className="flex items-center gap-2">
           {onBackToApp && (
             <button
               type="button"
               onClick={onBackToApp}
-              className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/40"
+              className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border border-gray-200 bg-card text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/40"
               aria-label="Asosiy menyuga qaytish"
               title="Orqaga"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
-          <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-gray-500 transition-colors focus-within:border-indigo-300 focus-within:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:focus-within:bg-gray-700">
+          <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-gray-500 transition-colors focus-within:border-indigo-300 focus-within:bg-card dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:focus-within:bg-gray-700">
             <Search className="h-4 w-4 flex-shrink-0" />
             <input
               value={query}
@@ -108,13 +108,13 @@ export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSe
                   "inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
                   active
                     ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200"
-                    : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800",
+                    : "border-gray-200 bg-card text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800",
                 )}
                 aria-pressed={active}
               >
                 <Icon className="h-3.5 w-3.5" />
                 <span>{t(`app.chat.categories.${id}`, label)}</span>
-                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", active ? "bg-white/80 dark:bg-gray-900/70" : "bg-gray-100 dark:bg-gray-800")}>{count}</span>
+                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", active ? "bg-card/80 dark:bg-gray-900/70" : "bg-gray-100 dark:bg-gray-800")}>{count}</span>
               </button>
             );
           })}

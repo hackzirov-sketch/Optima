@@ -155,7 +155,7 @@ export function PremiumEmojiPicker({
       exit={{ opacity: 0, scale: 0.97, y: 6 }}
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
       className={cn(
-        "overflow-hidden border border-white/80 bg-white/82 shadow-2xl shadow-indigo-950/15 backdrop-blur-2xl dark:border-gray-700/80 dark:bg-gray-900/86",
+        "overflow-hidden border border-white/80 bg-card/82 shadow-2xl shadow-indigo-950/15 backdrop-blur-2xl dark:border-gray-700/80 dark:bg-gray-900/86",
         compact ? "w-[min(280px,calc(100vw-1.25rem))] rounded-[22px] p-2" : "w-[min(430px,calc(100vw-1rem))] rounded-[28px] p-3",
         className,
       )}
@@ -177,7 +177,7 @@ export function PremiumEmojiPicker({
         </span>
       </div>
 
-      <div className={cn("flex items-center gap-2 rounded-2xl border border-gray-200/90 bg-white/70 px-3 shadow-inner shadow-white/60 backdrop-blur focus-within:border-indigo-300 dark:border-gray-700 dark:bg-gray-800/70 dark:shadow-none", compact ? "mb-2 h-9" : "mb-3 h-10")}>
+      <div className={cn("flex items-center gap-2 rounded-2xl border border-gray-200/90 bg-card/70 px-3 shadow-inner shadow-white/60 backdrop-blur focus-within:border-indigo-300 dark:border-gray-700 dark:bg-gray-800/70 dark:shadow-none", compact ? "mb-2 h-9" : "mb-3 h-10")}>
         <Search className="h-4 w-4 flex-shrink-0 text-gray-400" />
         <input
           value={query}
@@ -189,7 +189,7 @@ export function PremiumEmojiPicker({
       </div>
 
       {mode === "reaction" && !compact && (
-        <div className="mb-3 flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl bg-white/60 p-1.5 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700">
+        <div className="mb-3 flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl bg-card/60 p-1.5 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700">
           {PREMIUM_REACTIONS.map((reaction) => (
             <ReactionButton
               key={reaction.id}
@@ -203,7 +203,7 @@ export function PremiumEmojiPicker({
       )}
 
       <div className={cn("grid gap-2 max-sm:grid-cols-1", compact ? "min-h-[164px] grid-cols-[40px_1fr]" : "min-h-[292px] grid-cols-[64px_1fr] gap-3")}>
-        <div className={cn("flex flex-col gap-1 overflow-y-auto rounded-2xl bg-white/62 p-1 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700 max-sm:max-h-none max-sm:flex-row max-sm:overflow-x-auto", compact ? "max-h-[164px]" : "max-h-[292px] p-1.5")}>
+        <div className={cn("flex flex-col gap-1 overflow-y-auto rounded-2xl bg-card/62 p-1 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700 max-sm:max-h-none max-sm:flex-row max-sm:overflow-x-auto", compact ? "max-h-[164px]" : "max-h-[292px] p-1.5")}>
           {CATEGORY_META.map((category) => (
             <button
               key={category.id}
@@ -213,8 +213,8 @@ export function PremiumEmojiPicker({
                 "group inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-xl text-xs font-black transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
                 compact ? "min-h-8 px-1.5" : "min-h-10 px-2",
                 activeCategory === category.id
-                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:text-indigo-300 dark:ring-indigo-800"
-                  : "text-gray-500 hover:bg-white/80 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100",
+                  ? "bg-card text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:text-indigo-300 dark:ring-indigo-800"
+                  : "text-gray-500 hover:bg-card/80 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100",
               )}
               aria-label={`Open ${category.label} emoji category`}
               title={category.label}
@@ -239,7 +239,7 @@ export function PremiumEmojiPicker({
               <motion.div key="frimousse" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <EmojiPicker.Root onEmojiSelect={(emoji) => selectNative(emoji.emoji)} columns={8}>
                   <EmojiPicker.Search value={query} onChange={(event) => setQuery(event.target.value)} className="sr-only" />
-                  <EmojiPicker.Viewport className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
+                  <EmojiPicker.Viewport className={cn("overflow-y-auto rounded-2xl bg-card/60 p-1 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
                     <EmojiPicker.Loading className="grid h-full place-items-center text-xs font-semibold text-gray-400">Loading emoji...</EmojiPicker.Loading>
                     <EmojiPicker.Empty>
                       {({ search }) => <span className="grid h-full place-items-center text-xs text-gray-400">No emoji found for {search}</span>}
@@ -247,7 +247,7 @@ export function PremiumEmojiPicker({
                     <EmojiPicker.List
                       components={{
                         CategoryHeader: ({ category, ...props }) => (
-                          <div {...props} className="sticky top-0 z-10 bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-gray-400 backdrop-blur dark:bg-gray-900/90 dark:text-gray-500">
+                          <div {...props} className="sticky top-0 z-10 bg-card/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-gray-400 backdrop-blur dark:bg-gray-900/90 dark:text-gray-500">
                             {category.label}
                           </div>
                         ),
@@ -258,7 +258,7 @@ export function PremiumEmojiPicker({
                             className={cn(
                               "grid place-items-center rounded-xl transition-all hover:scale-110 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:hover:bg-indigo-950/40",
                               compact ? "h-8 w-8 text-lg" : "h-9 w-9 text-xl",
-                              emoji.isActive && "bg-white shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:ring-indigo-800",
+                              emoji.isActive && "bg-card shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:ring-indigo-800",
                             )}
                             aria-label={emoji.label}
                           >
@@ -271,7 +271,7 @@ export function PremiumEmojiPicker({
                 </EmojiPicker.Root>
               </motion.div>
             ) : (
-              <motion.div key={activeCategory} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1.5 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
+              <motion.div key={activeCategory} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={cn("overflow-y-auto rounded-2xl bg-card/60 p-1.5 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
                 {premiumItems.length > 0 && (
                   <div className={cn("mb-2 grid gap-1", compact ? "grid-cols-5" : "grid-cols-6")}>
                     {premiumItems.map((asset) => (
@@ -279,7 +279,7 @@ export function PremiumEmojiPicker({
                         key={asset.id}
                         type="button"
                         onClick={() => (mode === "reaction" ? onSelectReaction?.(asset.reactionId ?? "gem") : onSelectAsset?.(asset.id))}
-                        className={cn("group grid place-items-center rounded-xl bg-white text-sm shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:ring-indigo-200 dark:bg-gray-800 dark:ring-gray-700", compact ? "h-8" : "h-10")}
+                        className={cn("group grid place-items-center rounded-xl bg-card text-sm shadow-sm ring-1 ring-gray-200 transition-all hover:-translate-y-0.5 hover:ring-indigo-200 dark:bg-gray-800 dark:ring-gray-700", compact ? "h-8" : "h-10")}
                         aria-label={`Select ${asset.label}`}
                         title={asset.label}
                       >
@@ -307,7 +307,7 @@ export function PremiumEmojiPicker({
                 </div>
 
                 {nativeItems.length === 0 && premiumItems.length === 0 && (
-                  <div className="grid h-full place-items-center rounded-2xl border border-dashed border-gray-200 bg-white/70 px-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:bg-gray-900/40">
+                  <div className="grid h-full place-items-center rounded-2xl border border-dashed border-gray-200 bg-card/70 px-4 text-center text-xs text-gray-400 dark:border-gray-700 dark:bg-gray-900/40">
                     No emoji found. Try a softer search.
                   </div>
                 )}

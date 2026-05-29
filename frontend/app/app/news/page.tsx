@@ -64,13 +64,13 @@ export default function Page() {
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <SimpleTabs tabs={NEWS_TABS} labels={tabLabels} value={activeTab} onChange={(tab) => setActiveTab(tab as (typeof NEWS_TABS)[number])} />
-          <div className="flex h-10 w-full items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-3 shadow-sm md:w-72 lg:w-80">
-            <Search className="h-4 w-4 text-[#6B7280]" />
+          <div className="flex h-10 w-full items-center gap-2 rounded-2xl border border-border bg-card px-3 shadow-sm md:w-72 lg:w-80">
+            <Search className="h-4 w-4 text-muted-foreground" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t("app.news.searchArticles")}
-              className="w-full bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#6B7280]"
+              className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function Page() {
                   key={article.id}
                   type="button"
                   onClick={() => setSelectedId(article.id)}
-                  className="w-full rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+                  className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -92,11 +92,11 @@ export default function Page() {
                         <Pill tone="blue">{article.category}</Pill>
                         {article.trending && <Pill tone="red">{t("app.news.trending")}</Pill>}
                       </div>
-                      <h3 className="mt-3 font-semibold leading-snug text-[#111827]">{article.title}</h3>
+                      <h3 className="mt-3 font-semibold leading-snug text-foreground">{article.title}</h3>
                     </div>
-                    <span className="text-xs font-semibold text-[#6B7280]">{article.readTime}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">{article.readTime}</span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#6B7280]">{article.summary}</p>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{article.summary}</p>
                 </button>
               ))}
             </div>
@@ -113,17 +113,17 @@ export default function Page() {
                 </ActionButton>
               }
             />
-            <article className="rounded-2xl bg-[#F7FAFC] p-6">
+            <article className="rounded-2xl bg-muted p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Pill tone="indigo">{selected.category}</Pill>
-                <span className="text-sm text-[#6B7280]">{t("app.news.readLabel", { time: selected.readTime })}</span>
+                <span className="text-sm text-muted-foreground">{t("app.news.readLabel", { time: selected.readTime })}</span>
               </div>
-              <h1 className="mt-4 text-2xl font-bold tracking-tight text-[#111827]">{selected.title}</h1>
-              <p className="mt-4 text-sm leading-7 text-[#6B7280]">{selected.summary}</p>
-              <p className="mt-4 text-sm leading-7 text-[#6B7280]">{t("app.news.productionBody")}</p>
+              <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">{selected.title}</h1>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">{selected.summary}</p>
+              <p className="mt-4 text-sm leading-7 text-muted-foreground">{t("app.news.productionBody")}</p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {["recommended", "role", "tasks"].map((item) => (
-                  <div key={item} className="rounded-2xl border border-[#E5E7EB] bg-white p-3 text-sm font-semibold text-[#111827] shadow-sm">
+                  <div key={item} className="rounded-2xl border border-border bg-card p-3 text-sm font-semibold text-foreground shadow-sm">
                     {t(`app.news.related.${item}`)}
                   </div>
                 ))}

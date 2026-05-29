@@ -43,7 +43,7 @@ export default function Page() {
       <Pill key="status" tone="indigo">{task.status.replace("_", " ")}</Pill>,
       <span key="assignee">{task.assignee}</span>,
       <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="dueDate" className="text-muted-foreground">{task.dueDate}</span>,
     ],
   }));
 
@@ -67,15 +67,15 @@ export default function Page() {
             <SectionTitle icon={ClipboardList} title="Smart Task board" description="ClickUp-style capability translated to UPZ cards, fields and detail drawer." />
             <div className="grid gap-4 xl:grid-cols-5">
               {["backlog", "todo", "in_progress", "review", "done"].map((status) => (
-                <div key={status} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3">
-                  <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black capitalize text-[#111827]">{status.replace("_", " ")}</h3><Pill tone="slate">{filteredTasks.filter((task) => task.status === status).length}</Pill></div>
+                <div key={status} className="rounded-2xl border border-border bg-muted p-3">
+                  <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black capitalize text-foreground">{status.replace("_", " ")}</h3><Pill tone="slate">{filteredTasks.filter((task) => task.status === status).length}</Pill></div>
                   <div className="space-y-3">
                     {filteredTasks.filter((task) => task.status === status).map((task) => (
-                      <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="w-full rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                        <p className="font-black leading-snug text-[#111827]">{task.title}</p>
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#6B7280]">{task.description}</p>
+                      <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="w-full rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                        <p className="font-black leading-snug text-foreground">{task.title}</p>
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{task.description}</p>
                         <div className="mt-3 flex flex-wrap gap-1.5">{task.tags.slice(0, 2).map((tag) => <Pill key={tag} tone="blue">{tag}</Pill>)}</div>
-                        <div className="mt-3 flex items-center justify-between text-xs font-bold text-[#6B7280]"><span>{task.assignee}</span><span>{task.dueDate}</span></div>
+                        <div className="mt-3 flex items-center justify-between text-xs font-bold text-muted-foreground"><span>{task.assignee}</span><span>{task.dueDate}</span></div>
                       </button>
                     ))}
                   </div>
@@ -92,8 +92,8 @@ export default function Page() {
             <SectionTitle icon={CalendarDays} title={`${view} view`} description="Dates, estimates, tracked time and task progress in compact planning lanes." />
             <div className="space-y-3">
               {filteredTasks.map((task) => (
-                <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="grid w-full gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left md:grid-cols-[1fr_1.4fr_0.6fr] md:items-center">
-                  <div><p className="font-black text-[#111827]">{task.title}</p><p className="text-xs text-[#6B7280]">{task.assignee} - {task.project}</p></div>
+                <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="grid w-full gap-3 rounded-2xl border border-border bg-muted p-4 text-left md:grid-cols-[1fr_1.4fr_0.6fr] md:items-center">
+                  <div><p className="font-black text-foreground">{task.title}</p><p className="text-xs text-muted-foreground">{task.assignee} - {task.project}</p></div>
                   <ProgressBar value={task.progress} />
                   <Pill tone="indigo">{task.dueDate}</Pill>
                 </button>
@@ -104,7 +104,7 @@ export default function Page() {
 
         {view === "dashboard" && (
           <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <SurfaceCard><SectionTitle icon={Target} title="Milestones" description="Goal tracking and OKR-style progress." />{GOALS.map((goal) => <div key={goal.id} className="mb-4 rounded-2xl bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]"><div className="flex items-center justify-between"><p className="font-black text-[#111827]">{goal.title}</p><Pill tone="blue">{goal.owner}</Pill></div><ProgressBar value={goal.progress} label={goal.dueDate} /></div>)}</SurfaceCard>
+            <SurfaceCard><SectionTitle icon={Target} title="Milestones" description="Goal tracking and OKR-style progress." />{GOALS.map((goal) => <div key={goal.id} className="mb-4 rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]"><div className="flex items-center justify-between"><p className="font-black text-foreground">{goal.title}</p><Pill tone="blue">{goal.owner}</Pill></div><ProgressBar value={goal.progress} label={goal.dueDate} /></div>)}</SurfaceCard>
             <SurfaceCard><SectionTitle icon={Zap} title="Flow Automations" description="Trigger/action rules shown as backend-ready frontend demo." /><div className="space-y-3">{AUTOMATION_RULES.map((rule) => <AutomationRuleCard key={rule.id} rule={rule} onToggle={() => showNotice(`${rule.name} toggled locally`)} />)}</div></SurfaceCard>
           </div>
         )}
@@ -114,7 +114,7 @@ export default function Page() {
             <SectionTitle icon={UserPlus} title="Workload" description="Owners, assignments and tracked focus time." />
             <div className="space-y-3">
               {TEAM_MEMBERS.slice(0, 5).map((member, index) => (
-                <div key={member.id} className="rounded-2xl bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]"><div className="flex items-center justify-between"><div><p className="font-black text-[#111827]">{member.name}</p><p className="text-sm text-[#6B7280]">{member.focus}</p></div><Pill tone={index === 0 ? "indigo" : "slate"}>{index + 2} tasks</Pill></div><ProgressBar value={72 + index * 4} /></div>
+                <div key={member.id} className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]"><div className="flex items-center justify-between"><div><p className="font-black text-foreground">{member.name}</p><p className="text-sm text-muted-foreground">{member.focus}</p></div><Pill tone={index === 0 ? "indigo" : "slate"}>{index + 2} tasks</Pill></div><ProgressBar value={72 + index * 4} /></div>
               ))}
             </div>
           </SurfaceCard>
@@ -126,8 +126,8 @@ export default function Page() {
 
         <Modal open={modalOpen} title="Create demo project" description="Frontend-only project creation modal for the UPZ MVP." onClose={() => setModalOpen(false)}>
           <div className="space-y-3">
-            <input className="w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project name" />
-            <textarea className="min-h-28 w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project brief" />
+            <input className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project name" />
+            <textarea className="min-h-28 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project brief" />
             <div className="flex justify-end gap-2 pt-2"><ActionButton variant="secondary" onClick={() => setModalOpen(false)}>Cancel</ActionButton><ActionButton onClick={() => { setModalOpen(false); showNotice("Demo project created locally"); }}>Create project</ActionButton></div>
           </div>
         </Modal>

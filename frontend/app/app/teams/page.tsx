@@ -357,7 +357,7 @@ export default function Page() {
         <section className="overflow-hidden rounded-[30px] border border-slate-800/90 bg-[#070A12] text-slate-100 shadow-[0_28px_80px_rgba(2,6,23,0.42)]">
           <div className="grid min-h-[720px] xl:grid-cols-[190px_minmax(0,1fr)] 2xl:grid-cols-[200px_minmax(0,1fr)_300px]">
             <aside className="border-b border-white/10 bg-[#080B12] p-3 xl:border-b-0 xl:border-r 2xl:p-4">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-card/[0.03] p-3">
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/20">
                   <Layers3 className="h-5 w-5" />
                 </span>
@@ -375,7 +375,7 @@ export default function Page() {
                     onClick={() => setActiveOptimaPanel(id)}
                     className={cn(
                       "group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-all duration-200",
-                      activeOptimaPanel === id ? "bg-blue-500/12 text-white ring-1 ring-blue-400/20" : "text-slate-400 hover:bg-white/[0.045] hover:text-slate-100",
+                      activeOptimaPanel === id ? "bg-blue-500/12 text-white ring-1 ring-blue-400/20" : "text-slate-400 hover:bg-card/[0.045] hover:text-slate-100",
                     )}
                   >
                     <span className="flex min-w-0 items-center gap-2.5">
@@ -387,7 +387,7 @@ export default function Page() {
                 ))}
               </div>
 
-              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="mt-6 rounded-2xl border border-white/10 bg-card/[0.025] p-3">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Departments</p>
                   <Radio className="h-3.5 w-3.5 text-blue-300" />
@@ -400,7 +400,7 @@ export default function Page() {
                       onClick={() => setActiveDepartment(department.name)}
                       className={cn(
                         "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors",
-                        activeDepartment === department.name ? "bg-white/[0.07] text-white" : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-100",
+                        activeDepartment === department.name ? "bg-card/[0.07] text-white" : "text-slate-400 hover:bg-card/[0.04] hover:text-slate-100",
                       )}
                     >
                       <span className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => setNotice("Workspace switcher placeholder opened")}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-bold text-slate-100 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/[0.07]"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-card/[0.04] px-3 py-2 text-sm font-bold text-slate-100 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-card/[0.07]"
                 >
                   UPZ Launch Squad
                   <ChevronDown className="h-4 w-4 text-slate-500" />
@@ -431,7 +431,7 @@ export default function Page() {
                       value={commandQuery}
                       onChange={(event) => setCommandQuery(event.target.value)}
                       placeholder="Search tasks, people, sprint..."
-                      className="h-10 w-full rounded-2xl border border-white/10 bg-white/[0.035] pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-blue-400/40"
+                      className="h-10 w-full rounded-2xl border border-white/10 bg-card/[0.035] pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-blue-400/40"
                     />
                   </label>
                   <button
@@ -442,7 +442,7 @@ export default function Page() {
                     <Sparkles className="h-4 w-4" />
                     AI command
                   </button>
-                  <button type="button" className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:bg-white/[0.07]" aria-label="Notifications">
+                  <button type="button" className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-card/[0.04] text-slate-300 transition-colors hover:bg-card/[0.07]" aria-label="Notifications">
                     <Bell className="h-4 w-4" />
                   </button>
                 </div>
@@ -455,7 +455,7 @@ export default function Page() {
                   { label: "Velocity", value: `${weeklyScore}/day`, icon: LineChart, meta: "weekly avg" },
                   { label: "Focus score", value: `${productivityScore}%`, icon: Gauge, meta: "team health" },
                 ].map(({ label, value, icon: Icon, meta }) => (
-                  <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.035] p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400/30 hover:bg-white/[0.055] 2xl:p-4">
+                  <div key={label} className="rounded-2xl border border-white/10 bg-card/[0.035] p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400/30 hover:bg-card/[0.055] 2xl:p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
                       <Icon className="h-4 w-4 text-blue-300" />
@@ -467,7 +467,7 @@ export default function Page() {
               </div>
 
               <div className="mt-4 grid gap-4 2xl:grid-cols-[0.92fr_1.08fr]">
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3">
+                <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-300">Assign task</p>
@@ -525,7 +525,7 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3">
+                <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-300">Review queue</p>
@@ -600,13 +600,13 @@ export default function Page() {
                           <div key={status} className="rounded-2xl border border-white/10 bg-black/10 p-2.5">
                             <div className="mb-3 flex items-center justify-between px-1">
                               <p className="text-xs font-black text-slate-300">{status}</p>
-                              <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-black text-slate-500">{tasks.length}</span>
+                              <span className="rounded-full bg-card/[0.06] px-2 py-0.5 text-[10px] font-black text-slate-500">{tasks.length}</span>
                             </div>
                             <div className="space-y-2">
                               {tasks.map((task) => {
                                 const running = runningTaskId === task.id;
                                 return (
-                                  <div key={`${status}-${task.id}`} className="group min-h-[116px] rounded-xl border border-white/10 bg-white/[0.035] p-3 transition-all hover:-translate-y-0.5 hover:border-blue-400/30 hover:bg-white/[0.06]">
+                                  <div key={`${status}-${task.id}`} className="group min-h-[116px] rounded-xl border border-white/10 bg-card/[0.035] p-3 transition-all hover:-translate-y-0.5 hover:border-blue-400/30 hover:bg-card/[0.06]">
                                     <div className="flex items-start justify-between gap-2">
                                       <p className="line-clamp-2 text-[13px] font-bold leading-5 text-slate-100">{task.title}</p>
                                       <button
@@ -619,11 +619,11 @@ export default function Page() {
                                       </button>
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-1.5">
-                                      <span className="max-w-full truncate rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold text-slate-400">{task.owner}</span>
+                                      <span className="max-w-full truncate rounded-full bg-card/[0.06] px-2 py-0.5 text-[10px] font-bold text-slate-400">{task.owner}</span>
                                       <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-200">{task.label}</span>
                                       <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", task.priority === "High" ? "bg-rose-500/15 text-rose-200" : task.priority === "Medium" ? "bg-amber-500/15 text-amber-200" : "bg-emerald-500/15 text-emerald-200")}>{task.priority}</span>
                                     </div>
-                                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-card/[0.06]">
                                       <div className="h-full rounded-full bg-blue-400" style={{ width: `${task.completion}%` }} />
                                     </div>
                                     <div className="mt-3 flex items-center justify-between gap-2">
@@ -632,12 +632,12 @@ export default function Page() {
                                         <button
                                           type="button"
                                           onClick={() => moveTaskToReview(task.id)}
-                                          className="rounded-lg bg-white/[0.06] px-2 py-1 text-[10px] font-black text-slate-300 transition-colors hover:bg-blue-500/15 hover:text-blue-200"
+                                          className="rounded-lg bg-card/[0.06] px-2 py-1 text-[10px] font-black text-slate-300 transition-colors hover:bg-blue-500/15 hover:text-blue-200"
                                         >
                                           Send review
                                         </button>
                                       ) : (
-                                        <span className="rounded-lg bg-white/[0.04] px-2 py-1 text-[10px] font-black text-slate-500">{task.proof ? "Proof" : "No proof"}</span>
+                                        <span className="rounded-lg bg-card/[0.04] px-2 py-1 text-[10px] font-black text-slate-500">{task.proof ? "Proof" : "No proof"}</span>
                                       )}
                                     </div>
                                   </div>
@@ -652,7 +652,7 @@ export default function Page() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3 2xl:grid-cols-1">
-                  <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3">
+                  <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Velocity graph</p>
                       <LineChart className="h-4 w-4 text-blue-300" />
@@ -666,7 +666,7 @@ export default function Page() {
                       ))}
                     </div>
                   </div>
-                  <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3">
+                  <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3">
                     <div className="mb-3 flex items-center justify-between">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Focus heatmap</p>
                       <Activity className="h-4 w-4 text-emerald-300" />
@@ -677,7 +677,7 @@ export default function Page() {
                       ))}
                     </div>
                   </div>
-                  <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3">
+                  <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Live timeline</p>
                     <div className="mt-3 space-y-2.5">
                       {LIVE_ACTIVITY.slice(0, 3).map((item) => (
@@ -695,7 +695,7 @@ export default function Page() {
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-[0.78fr_1.22fr]">
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3 2xl:p-4">
+                <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3 2xl:p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Team focus score</p>
                     <Zap className="h-4 w-4 text-blue-300" />
@@ -706,10 +706,10 @@ export default function Page() {
                         key={employee.id}
                         type="button"
                         onClick={() => setSelectedEmployeeId(employee.id)}
-                        className="grid w-full grid-cols-[88px_1fr_42px] items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.04]"
+                        className="grid w-full grid-cols-[88px_1fr_42px] items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-card/[0.04]"
                       >
                         <span className="truncate text-xs font-bold text-slate-300">{employee.name}</span>
-                        <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                        <span className="h-1.5 overflow-hidden rounded-full bg-card/[0.06]">
                           <span className="block h-full rounded-full bg-blue-400" style={{ width: `${employee.focus}%` }} />
                         </span>
                         <span className="text-right text-xs font-black text-slate-400">{employee.focus}</span>
@@ -717,7 +717,7 @@ export default function Page() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.035] p-3 2xl:p-4">
+                <div className="rounded-[22px] border border-white/10 bg-card/[0.035] p-3 2xl:p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-300">Employee workspace</p>
@@ -758,7 +758,7 @@ export default function Page() {
                 <p className="mt-1 text-sm text-blue-100/75">Healthy, with 2 overload warnings.</p>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-card/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">AI insights</p>
                   <Bot className="h-4 w-4 text-blue-300" />
@@ -777,7 +777,7 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-card/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Deadlines</p>
                   <CalendarDays className="h-4 w-4 text-blue-300" />
@@ -795,7 +795,7 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-card/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Review history</p>
                   <ClipboardCheck className="h-4 w-4 text-emerald-300" />
@@ -814,7 +814,7 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-card/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Telegram bot</p>
                   <Send className="h-4 w-4 text-blue-300" />
@@ -835,7 +835,7 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.035] p-4">
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-card/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Finance pulse</p>
                   <DollarSign className="h-4 w-4 text-emerald-300" />
@@ -865,8 +865,8 @@ export default function Page() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">OPTIMA Team Command</p>
-                    <h2 className="mt-2 text-2xl font-black tracking-tight text-[#111827]">Live productivity operating system</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">Employees, tasks, timers, AI risk signals, Telegram bot actions and role architecture in one calm UPZ control layer.</p>
+                    <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground">Live productivity operating system</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Employees, tasks, timers, AI risk signals, Telegram bot actions and role architecture in one calm UPZ control layer.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Pill tone="green">{activeEmployees} active employees</Pill>
@@ -881,14 +881,14 @@ export default function Page() {
                     { label: "Productivity score", value: `${productivityScore}%`, icon: Gauge, tone: "green" as const, meta: "team average" },
                     { label: "Weekly performance", value: `${weeklyScore}`, icon: LineChart, tone: "amber" as const, meta: "done/day average" },
                   ].map(({ label, value, icon: Icon, tone, meta }) => (
-                    <div key={label} className="rounded-[22px] border border-[#E5E7EB] bg-white/90 p-4 shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div key={label} className="rounded-[22px] border border-border bg-card/90 p-4 shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-md">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6B7280]">{label}</p>
-                        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#F7FAFC] text-indigo-600">
+                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+                        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-muted text-indigo-600">
                           <Icon className="h-4 w-4" />
                         </span>
                       </div>
-                      <p className="mt-3 text-2xl font-black text-[#111827]">{value}</p>
+                      <p className="mt-3 text-2xl font-black text-foreground">{value}</p>
                       <Pill tone={tone} className="mt-3">{meta}</Pill>
                     </div>
                   ))}
@@ -896,19 +896,19 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="border-t border-[#E5E7EB] bg-[#F7FAFC] p-5 xl:border-l xl:border-t-0">
+            <div className="border-t border-border bg-muted p-5 xl:border-l xl:border-t-0">
               <SectionTitle icon={Radio} title="Live activity" description="Real-time activity stream mock for team operations." />
               <div className="space-y-3">
                 {LIVE_ACTIVITY.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-sm">
+                  <div key={item.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
                     <div className="flex items-start gap-3">
                       <span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,0.12)]" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="font-black text-[#111827]">{item.title}</p>
+                          <p className="font-black text-foreground">{item.title}</p>
                           <Pill tone={item.tone}>{item.time}</Pill>
                         </div>
-                        <p className="mt-1 text-sm text-[#6B7280]">{item.detail}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
                       </div>
                     </div>
                   </div>
@@ -922,9 +922,9 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={BarChart3} title="Live team analytics" description="Radar, heatmap, stacked bars and department comparison in one clean dashboard." />
             <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-              <div className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+              <div className="rounded-[24px] border border-border bg-muted p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#6B7280]">Radar</p>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Radar</p>
                   <Pill tone="indigo">Departments</Pill>
                 </div>
                 <svg viewBox="0 0 120 120" className="mt-3 h-56 w-full">
@@ -949,9 +949,9 @@ export default function Page() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div className="rounded-[24px] border border-border bg-muted p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#6B7280]">Weekly stacked bars</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Weekly stacked bars</p>
                     <Pill tone="green">Completion rate</Pill>
                   </div>
                   <div className="mt-4 space-y-3">
@@ -959,8 +959,8 @@ export default function Page() {
                       const total = day.done + day.review + day.risk;
                       return (
                         <div key={day.day} className="grid grid-cols-[42px_1fr] items-center gap-3">
-                          <span className="text-xs font-black text-[#6B7280]">{day.day}</span>
-                          <div className="flex h-8 overflow-hidden rounded-2xl bg-white ring-1 ring-[#E5E7EB]">
+                          <span className="text-xs font-black text-muted-foreground">{day.day}</span>
+                          <div className="flex h-8 overflow-hidden rounded-2xl bg-card ring-1 ring-[#E5E7EB]">
                             <div className="bg-emerald-500" style={{ width: `${(day.done / total) * 100}%` }} />
                             <div className="bg-blue-500" style={{ width: `${(day.review / total) * 100}%` }} />
                             <div className="bg-amber-400" style={{ width: `${(day.risk / total) * 100}%` }} />
@@ -971,9 +971,9 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div className="rounded-[24px] border border-border bg-muted p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#6B7280]">Active time heatmap</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Active time heatmap</p>
                     <Pill tone="blue">5 weeks</Pill>
                   </div>
                   <div className="grid grid-cols-7 gap-1.5">
@@ -1002,7 +1002,7 @@ export default function Page() {
                     onClick={() => setActiveDepartment(department)}
                     className={cn(
                       "rounded-full px-3 py-1.5 text-xs font-black ring-1 transition-colors",
-                      activeDepartment === department ? "bg-indigo-600 text-white ring-indigo-600" : "bg-[#F7FAFC] text-[#6B7280] ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
+                      activeDepartment === department ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
                     )}
                   >
                     {department}
@@ -1019,7 +1019,7 @@ export default function Page() {
                     onClick={() => setSelectedEmployeeId(employee.id)}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                      selectedEmployeeId === employee.id ? "border-indigo-200 bg-indigo-50" : "border-[#E5E7EB] bg-[#F7FAFC] hover:bg-white",
+                      selectedEmployeeId === employee.id ? "border-indigo-200 bg-indigo-50" : "border-border bg-muted hover:bg-card",
                     )}
                   >
                     <div className="flex items-center gap-3">
@@ -1027,8 +1027,8 @@ export default function Page() {
                         {initials(employee.name)}
                       </span>
                       <span>
-                        <span className="block font-black text-[#111827]">{employee.name}</span>
-                        <span className="text-xs text-[#6B7280]">{employee.role}</span>
+                        <span className="block font-black text-foreground">{employee.name}</span>
+                        <span className="text-xs text-muted-foreground">{employee.role}</span>
                       </span>
                     </div>
                     <Pill tone={toneForScore(employee.productivity)}>{employee.productivity}%</Pill>
@@ -1036,12 +1036,12 @@ export default function Page() {
                 ))}
               </div>
 
-              <div className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+              <div className="rounded-[24px] border border-border bg-muted p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500">{selectedEmployee.department}</p>
-                    <h3 className="mt-1 text-xl font-black text-[#111827]">{selectedEmployee.name}</h3>
-                    <p className="text-sm text-[#6B7280]">{selectedEmployee.role}</p>
+                    <h3 className="mt-1 text-xl font-black text-foreground">{selectedEmployee.name}</h3>
+                    <p className="text-sm text-muted-foreground">{selectedEmployee.role}</p>
                   </div>
                   <Pill tone={selectedEmployee.burnout === "Medium" ? "amber" : "green"}>{selectedEmployee.burnout} burnout risk</Pill>
                 </div>
@@ -1052,16 +1052,16 @@ export default function Page() {
                     { label: "Streak", value: selectedEmployee.streak, icon: Flame },
                     { label: "Focus", value: selectedEmployee.focus, icon: Zap },
                   ].map(({ label, value, icon: Icon }) => (
-                    <div key={label} className="rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
+                    <div key={label} className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
                       <Icon className="h-4 w-4 text-indigo-600" />
-                      <p className="mt-2 text-xl font-black text-[#111827]">{value}</p>
-                      <p className="text-xs text-[#6B7280]">{label}</p>
+                      <p className="mt-2 text-xl font-black text-foreground">{value}</p>
+                      <p className="text-xs text-muted-foreground">{label}</p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-[#E5E7EB]">
+                <div className="mt-4 rounded-2xl bg-card p-4 ring-1 ring-[#E5E7EB]">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-black text-[#111827]">Work trend</p>
+                    <p className="text-sm font-black text-foreground">Work trend</p>
                     <Pill tone="blue">AI insight</Pill>
                   </div>
                   <div className="mt-4 flex h-20 items-end gap-2">
@@ -1093,12 +1093,12 @@ export default function Page() {
               const running = runningTaskId === task.id;
               const proofReady = proofTaskIds.includes(task.id);
               return (
-                <div key={task.id} className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-md">
+                <div key={task.id} className="rounded-[24px] border border-border bg-muted p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-md">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <Pill tone={statusTone(task.status)}>{task.status}</Pill>
-                      <h3 className="mt-3 font-black text-[#111827]">{task.title}</h3>
-                      <p className="mt-1 text-sm text-[#6B7280]">{task.owner} - {task.priority} priority</p>
+                      <h3 className="mt-3 font-black text-foreground">{task.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{task.owner} - {task.priority} priority</p>
                     </div>
                     <button
                       type="button"
@@ -1109,21 +1109,21 @@ export default function Page() {
                       {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     </button>
                   </div>
-                  <div className="mt-4 rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
-                    <div className="mb-2 flex items-center justify-between text-xs font-black text-[#6B7280]">
+                  <div className="mt-4 rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                    <div className="mb-2 flex items-center justify-between text-xs font-black text-muted-foreground">
                       <span>{running ? "Timer running" : "Timer"}</span>
                       <span>{task.timer}</span>
                     </div>
                     <ProgressBar value={task.completion} />
                   </div>
-                  <div className="mt-3 rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">AI prediction</p>
-                    <p className="mt-1 text-sm font-semibold text-[#111827]">{task.prediction}</p>
+                  <div className="mt-3 rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">AI prediction</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{task.prediction}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleProofUpload(task.id)}
-                    className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#111827] ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                    className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                   >
                     <UploadCloud className="h-4 w-4" />
                     {proofReady ? "Proof attached" : "Upload proof"}
@@ -1139,21 +1139,21 @@ export default function Page() {
             <SectionTitle icon={Bot} title="Telegram team bot" description="Signature bot layer for reminders, alerts, approvals, reports and inline actions." />
             <div className="space-y-3">
               {TELEGRAM_BOT_EVENTS.map((event) => (
-                <div key={event.id} className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={event.id} className="rounded-[22px] border border-border bg-muted p-4">
                   <div className="flex items-start gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                       <Send className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-black text-[#111827]">{event.title}</p>
+                        <p className="font-black text-foreground">{event.title}</p>
                         <Pill tone={event.tone}>Bot alert</Pill>
                       </div>
-                      <p className="mt-1 text-sm text-[#6B7280]">{event.body}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{event.body}</p>
                       <button
                         type="button"
                         onClick={() => handleBotAction(event.action)}
-                        className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#111827] ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                        className="mt-3 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                       >
                         {event.action}
                       </button>
@@ -1168,14 +1168,14 @@ export default function Page() {
             <SectionTitle icon={Sparkles} title="AI team assistant" description="Overload detection, redistribution, workflow suggestions and performance decline warnings." />
             <div className="grid gap-3 md:grid-cols-2">
               {AI_TEAM_INSIGHTS.map((insight, index) => (
-                <div key={insight} className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={insight} className="rounded-[22px] border border-border bg-muted p-4">
                   <div className="flex items-start gap-3">
                     <span className={cn("grid h-10 w-10 place-items-center rounded-2xl text-white", index === 0 ? "bg-amber-500" : "bg-indigo-600")}>
                       {index === 0 ? <AlertTriangle className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
                     </span>
                     <div>
-                      <p className="font-black text-[#111827]">AI recommendation #{index + 1}</p>
-                      <p className="mt-2 text-sm leading-6 text-[#6B7280]">{insight}</p>
+                      <p className="font-black text-foreground">AI recommendation #{index + 1}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{insight}</p>
                     </div>
                   </div>
                 </div>
@@ -1187,19 +1187,19 @@ export default function Page() {
         <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <SurfaceCard>
             <SectionTitle icon={ShieldCheck} title="Role architecture" description="Hisobotchi-style hierarchy adapted for UPZ team operations." />
-            <div className="overflow-hidden rounded-[22px] border border-[#E5E7EB]">
+            <div className="overflow-hidden rounded-[22px] border border-border">
               {ROLE_ARCHITECTURE.map((role) => (
-                <div key={role.role} className="grid gap-3 border-b border-[#E5E7EB] bg-white p-3 last:border-b-0 md:grid-cols-[1fr_1.3fr_0.8fr_0.8fr_0.8fr] md:items-center">
+                <div key={role.role} className="grid gap-3 border-b border-border bg-card p-3 last:border-b-0 md:grid-cols-[1fr_1.3fr_0.8fr_0.8fr_0.8fr] md:items-center">
                   <div>
-                    <p className="font-black text-[#111827]">{role.role}</p>
-                    <p className="text-xs text-[#6B7280]">{role.access}</p>
+                    <p className="font-black text-foreground">{role.role}</p>
+                    <p className="text-xs text-muted-foreground">{role.access}</p>
                   </div>
                   {[
                     ["Approve", role.canApprove],
                     ["Redistribute", role.canRedistribute],
                     ["Analytics", role.canViewAnalytics],
                   ].map(([label, allowed]) => (
-                    <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-[#F7FAFC] px-3 py-2 text-xs font-black text-[#111827] md:justify-start md:gap-2">
+                    <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-muted px-3 py-2 text-xs font-black text-foreground md:justify-start md:gap-2">
                       <span>{label}</span>
                       <span className={cn("h-2.5 w-2.5 rounded-full", allowed ? "bg-emerald-500" : "bg-slate-300")} />
                     </div>
@@ -1212,12 +1212,12 @@ export default function Page() {
 
           <SurfaceCard>
             <SectionTitle icon={MessageSquareText} title="Team chat and collaboration" description="Realtime chat, reactions, voice notes, task mentions and AI summaries as premium placeholders." />
-            <div className="rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+            <div className="rounded-[24px] border border-border bg-muted p-4">
               <div className="flex items-center gap-3">
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 text-sm font-black text-white">UP</span>
                 <div>
-                  <p className="font-black text-[#111827]">UPZ Launch Squad</p>
-                  <p className="text-sm text-[#6B7280]">6 members - AI summary ready</p>
+                  <p className="font-black text-foreground">UPZ Launch Squad</p>
+                  <p className="text-sm text-muted-foreground">6 members - AI summary ready</p>
                 </div>
               </div>
               <div className="mt-4 space-y-3">
@@ -1226,15 +1226,15 @@ export default function Page() {
                   ["Alex", "@Otabek reaction menu timer paused, review requested.", "Task mention"],
                   ["AI", "Summary: 2 blockers cleared, 1 overload risk remains.", "AI summary"],
                 ].map(([name, body, badge]) => (
-                  <div key={body} className="rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
+                  <div key={body} className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-black text-[#111827]">{name}</p>
+                      <p className="font-black text-foreground">{name}</p>
                       <Pill tone={badge === "AI summary" ? "indigo" : "blue"}>{badge}</Pill>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-[#6B7280]">{body}</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
                     <div className="mt-2 flex gap-1.5">
                       {["/emojis/fire.svg", "/emojis/clap.svg", "/emojis/done.svg"].map((src) => (
-                        <span key={src} className="grid h-7 w-7 place-items-center rounded-full bg-[#F7FAFC] ring-1 ring-[#E5E7EB]">
+                        <span key={src} className="grid h-7 w-7 place-items-center rounded-full bg-muted ring-1 ring-[#E5E7EB]">
                           <img src={src} alt="Premium reaction" className="h-4 w-4" loading="lazy" decoding="async" />
                         </span>
                       ))}
@@ -1252,14 +1252,14 @@ export default function Page() {
             <SectionTitle icon={Users} title={t("app.teams.dashboard")} description={t("app.teams.dashboardDesc")} />
             <div className="grid gap-3 sm:grid-cols-2">
               {TEAM_METRICS.map((metric) => (
-                <div key={metric.labelKey} className="rounded-2xl bg-[#F7FAFC] p-4 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm">
+                <div key={metric.labelKey} className="rounded-2xl bg-muted p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">{metric.label}</p>
-                    <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{metric.label}</p>
+                    <span className="grid h-9 w-9 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                       <metric.icon className="h-4 w-4" />
                     </span>
                   </div>
-                  <p className="mt-2 text-2xl font-bold text-[#111827]">{metric.value}</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">{metric.value}</p>
                   <Pill tone={metric.tone} className="mt-2">{metric.trend}</Pill>
                 </div>
               ))}
@@ -1274,20 +1274,20 @@ export default function Page() {
             <SectionTitle icon={Shield} title={t("app.teams.membersRoles")} description={t("app.teams.membersRolesDesc")} />
             <div className="space-y-3">
               {TEAM_MEMBERS.map((member) => (
-                <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+                <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
                   <div className="flex items-center gap-3">
                     <PremiumAvatarRing active={member.status === "Online"} className="h-11 w-11 rounded-2xl">
                       <div className="relative grid h-full w-full place-items-center rounded-[14px] bg-gradient-to-br from-indigo-500 to-blue-500 text-sm font-bold text-white">
                         {member.name.split(" ").map((part) => part[0]).join("")}
-                        <PremiumStatusBadge status={TEAM_STATUS[member.status] ?? "offline"} size={16} className="absolute -bottom-1 -right-1 border-[#E5E7EB]" />
+                        <PremiumStatusBadge status={TEAM_STATUS[member.status] ?? "offline"} size={16} className="absolute -bottom-1 -right-1 border-border" />
                       </div>
                     </PremiumAvatarRing>
                     <div>
-                      <p className="flex items-center gap-2 font-semibold text-[#111827]">
+                      <p className="flex items-center gap-2 font-semibold text-foreground">
                         {member.name}
                         {member.role === "Admin" && <PremiumGradientBadge label="Creator" icon="/emojis/trophy.svg" />}
                       </p>
-                      <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6B7280]">
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                         <img src={TEAM_FOCUS_ASSETS[member.focus as keyof typeof TEAM_FOCUS_ASSETS] ?? "/emojis/gem.svg"} alt={`${member.focus} skill icon`} className="h-4 w-4" loading="lazy" decoding="async" />
                         {t(`app.teams.focus.${member.focus.toLowerCase()}`, member.focus)}
                       </p>
@@ -1308,12 +1308,12 @@ export default function Page() {
             <SectionTitle icon={Users} title="Team spaces" description="Spaces connect people, projects, chats, workload and permissions." />
             <div className="grid gap-3 md:grid-cols-3">
               {TEAM_SPACES.map((space) => (
-                <div key={space.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={space.id} className="rounded-2xl border border-border bg-muted p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-black text-[#111827]">{space.name}</h3>
+                    <h3 className="font-black text-foreground">{space.name}</h3>
                     <Pill tone="indigo">{space.projects} projects</Pill>
                   </div>
-                  <p className="mt-2 text-sm text-[#6B7280]">{space.permissions}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{space.permissions}</p>
                   <div className="mt-4"><ProgressBar value={space.workload} label="Workload" /></div>
                 </div>
               ))}
@@ -1324,8 +1324,8 @@ export default function Page() {
             <SectionTitle icon={Shield} title="Roles and permissions" description="Admin/member roles are ready for future backend permissions." />
             <div className="space-y-3">
               {["Create projects", "Manage automations", "Invite members", "Approve deliverables"].map((permission, index) => (
-                <div key={permission} className="flex items-center justify-between rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]">
-                  <span className="text-sm font-bold text-[#111827]">{permission}</span>
+                <div key={permission} className="flex items-center justify-between rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+                  <span className="text-sm font-bold text-foreground">{permission}</span>
                   <div className="flex gap-2">
                     <Pill tone="indigo">Admin</Pill>
                     <Pill tone={index < 2 ? "slate" : "blue"}>{index < 2 ? "Restricted" : "Member"}</Pill>
@@ -1338,8 +1338,8 @@ export default function Page() {
 
         <Modal open={modalOpen} title={t("app.teams.modalTitle")} description={t("app.teams.modalDesc")} onClose={() => setModalOpen(false)}>
           <div className="space-y-3">
-            <input className="w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder={t("app.teams.teamName")} />
-            <input className="w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder={t("app.teams.inviteEmail")} />
+            <input className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder={t("app.teams.teamName")} />
+            <input className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder={t("app.teams.inviteEmail")} />
             <div className="flex justify-end gap-2 pt-2">
               <ActionButton variant="secondary" onClick={() => setModalOpen(false)}>{t("app.common.cancel")}</ActionButton>
               <ActionButton onClick={() => setModalOpen(false)}>{t("app.teams.createDemoTeam")}</ActionButton>

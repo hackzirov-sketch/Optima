@@ -37,7 +37,7 @@ export function LanguageSwitcher() {
           <DropdownMenuItem
             key={lang.code}
             onClick={() => handleChange(lang.code)}
-            className={`cursor-pointer ${i18n.language === lang.code ? "text-indigo-600 font-semibold bg-indigo-50" : ""}`}
+            className={`cursor-pointer ${i18n.language === lang.code ? "text-indigo-600 font-semibold bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-400" : ""}`}
             data-testid={`lang-option-${lang.code}`}
           >
             {lang.label}

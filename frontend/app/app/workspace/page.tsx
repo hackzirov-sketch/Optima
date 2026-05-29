@@ -516,7 +516,7 @@ export default function Page() {
       <Pill key="project" tone="blue">{task.project}</Pill>,
       <span key="assignee">{task.assignee}</span>,
       <Pill key="priority" tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>,
-      <span key="dueDate" className="text-[#6B7280]">{task.dueDate}</span>,
+      <span key="dueDate" className="text-muted-foreground">{task.dueDate}</span>,
     ],
   }));
 
@@ -704,8 +704,8 @@ export default function Page() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Workspace control center</p>
-                    <h2 className="mt-2 text-2xl font-black tracking-tight text-[#111827]">Monitor the zone without making it crowded</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">{activePreset.controlFocus}</p>
+                    <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground">Monitor the zone without making it crowded</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{activePreset.controlFocus}</p>
                   </div>
                   <Pill tone="green">{WORKSPACE_ZONE.health}% zone health</Pill>
                 </div>
@@ -717,12 +717,12 @@ export default function Page() {
                     { label: "Review / risk", value: String(reviewCount + highPriorityCount), icon: ShieldCheck, tone: reviewCount ? "amber" as const : "blue" as const },
                     { label: "Tools online", value: `${connectedCount}/${INTEGRATIONS.length}`, icon: Database, tone: missingRecommended.length ? "amber" as const : "green" as const },
                   ].map(({ label, value, icon: Icon, tone }) => (
-                    <div key={label} className="rounded-2xl border border-[#E5E7EB] bg-white/86 p-4 shadow-sm backdrop-blur">
+                    <div key={label} className="rounded-2xl border border-border bg-card/86 p-4 shadow-sm backdrop-blur">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6B7280]">{label}</p>
-                        <span className="grid h-9 w-9 place-items-center rounded-2xl bg-[#F7FAFC] text-indigo-600"><Icon className="h-4 w-4" /></span>
+                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+                        <span className="grid h-9 w-9 place-items-center rounded-2xl bg-muted text-indigo-600"><Icon className="h-4 w-4" /></span>
                       </div>
-                      <p className="mt-3 text-2xl font-black text-[#111827]">{value}</p>
+                      <p className="mt-3 text-2xl font-black text-foreground">{value}</p>
                       <Pill tone={tone} className="mt-3">Live demo</Pill>
                     </div>
                   ))}
@@ -732,48 +732,48 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={applyProfessionTemplate}
-                    className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm"
                   >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-indigo-600 shadow-sm"><Workflow className="h-4 w-4" /></span>
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-card text-indigo-600 shadow-sm"><Workflow className="h-4 w-4" /></span>
                     <span>
-                      <span className="block text-sm font-black text-[#111827]">Apply template</span>
-                      <span className="text-xs text-[#6B7280]">{activePreset.boards.length} boards for {activePreset.label}</span>
+                      <span className="block text-sm font-black text-foreground">Apply template</span>
+                      <span className="text-xs text-muted-foreground">{activePreset.boards.length} boards for {activePreset.label}</span>
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={connectRecommendedIntegrations}
-                    className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
                   >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#F7FAFC] text-indigo-600"><Database className="h-4 w-4" /></span>
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-indigo-600"><Database className="h-4 w-4" /></span>
                     <span>
-                      <span className="block text-sm font-black text-[#111827]">Connect recommended</span>
-                      <span className="text-xs text-[#6B7280]">{missingRecommended.length} missing tool signals</span>
+                      <span className="block text-sm font-black text-foreground">Connect recommended</span>
+                      <span className="text-xs text-muted-foreground">{missingRecommended.length} missing tool signals</span>
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveSnapshot}
-                    className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
                   >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#F7FAFC] text-indigo-600"><Save className="h-4 w-4" /></span>
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-indigo-600"><Save className="h-4 w-4" /></span>
                     <span>
-                      <span className="block text-sm font-black text-[#111827]">Save control state</span>
-                      <span className="text-xs text-[#6B7280]">{snapshots.length} saved snapshots</span>
+                      <span className="block text-sm font-black text-foreground">Save control state</span>
+                      <span className="text-xs text-muted-foreground">{snapshots.length} saved snapshots</span>
                     </span>
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-[#E5E7EB] bg-[#F7FAFC] p-5 lg:border-l lg:border-t-0">
+            <div className="border-t border-border bg-muted p-5 lg:border-l lg:border-t-0">
               <SectionTitle icon={Settings} title="Create and save" description="Make a board, doc, automation or dashboard and keep it in localStorage." />
               <div className="space-y-3">
                 <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
                   <select
                     value={newItemType}
                     onChange={(event) => setNewItemType(event.target.value as WorkspaceItemType)}
-                    className="h-11 rounded-2xl border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827] outline-none focus:border-indigo-300"
+                    className="h-11 rounded-2xl border border-border bg-card px-3 text-sm font-semibold text-foreground outline-none focus:border-indigo-300"
                     aria-label="Workspace item type"
                   >
                     {(["Board", "Doc", "Automation", "Dashboard"] as WorkspaceItemType[]).map((item) => <option key={item}>{item}</option>)}
@@ -782,7 +782,7 @@ export default function Page() {
                     value={newItemTitle}
                     onChange={(event) => setNewItemTitle(event.target.value)}
                     placeholder={`${activePreset.label} ${newItemType} name`}
-                    className="h-11 rounded-2xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none placeholder:text-[#6B7280] focus:border-indigo-300"
+                    className="h-11 rounded-2xl border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-indigo-300"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -795,15 +795,15 @@ export default function Page() {
                       key={control.id}
                       type="button"
                       onClick={() => setControls((current) => ({ ...current, [control.id]: !current[control.id] }))}
-                      className={cn("rounded-2xl border p-3 text-left transition-all", controls[control.id] ? "border-indigo-100 bg-white shadow-sm" : "border-[#E5E7EB] bg-white/60")}
+                      className={cn("rounded-2xl border p-3 text-left transition-all", controls[control.id] ? "border-indigo-100 bg-card shadow-sm" : "border-border bg-card/60")}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-[#111827]">{control.label}</span>
+                        <span className="text-xs font-black text-foreground">{control.label}</span>
                         <span className={cn("h-5 w-9 rounded-full p-0.5 transition-colors", controls[control.id] ? "bg-indigo-600" : "bg-slate-200")}>
-                          <span className={cn("block h-4 w-4 rounded-full bg-white transition-transform", controls[control.id] && "translate-x-4")} />
+                          <span className={cn("block h-4 w-4 rounded-full bg-card transition-transform", controls[control.id] && "translate-x-4")} />
                         </span>
                       </div>
-                      <p className="mt-2 text-[11px] leading-4 text-[#6B7280]">{control.detail}</p>
+                      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">{control.detail}</p>
                     </button>
                   ))}
                 </div>
@@ -830,24 +830,24 @@ export default function Page() {
                   }}
                   className={cn(
                     "rounded-[22px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                    active ? "border-indigo-200 bg-indigo-50/70 shadow-sm" : "border-[#E5E7EB] bg-[#F7FAFC] hover:bg-white",
+                    active ? "border-indigo-200 bg-indigo-50/70 shadow-sm" : "border-border bg-muted hover:bg-card",
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className={cn("grid h-11 w-11 place-items-center rounded-2xl", active ? "bg-white text-indigo-600" : "bg-white text-[#6B7280]")}><Icon className="h-5 w-5" /></span>
+                    <span className={cn("grid h-11 w-11 place-items-center rounded-2xl", active ? "bg-card text-indigo-600" : "bg-card text-muted-foreground")}><Icon className="h-5 w-5" /></span>
                     {active && <Pill tone="indigo">Active</Pill>}
                   </div>
-                  <h3 className="mt-4 font-black text-[#111827]">{preset.label}</h3>
-                  <p className="mt-2 text-sm leading-5 text-[#6B7280]">{preset.summary}</p>
+                  <h3 className="mt-4 font-black text-foreground">{preset.label}</h3>
+                  <p className="mt-2 text-sm leading-5 text-muted-foreground">{preset.summary}</p>
                 </button>
               );
             })}
           </div>
-          <div className="mt-4 rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-3">
+          <div className="mt-4 rounded-[22px] border border-border bg-muted p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-xs font-black text-[#111827]">Active focus lane</p>
-                <p className="text-[11px] text-[#6B7280]">Filter the workspace without changing search text.</p>
+                <p className="text-xs font-black text-foreground">Active focus lane</p>
+                <p className="text-[11px] text-muted-foreground">Filter the workspace without changing search text.</p>
               </div>
               <Pill tone="blue">{focusFilter}</Pill>
             </div>
@@ -859,7 +859,7 @@ export default function Page() {
                   onClick={() => setFocusFilter(filter)}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors",
-                    focusFilter === filter ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-[#6B7280] ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
+                    focusFilter === filter ? "bg-indigo-600 text-white ring-indigo-600" : "bg-card text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
                   )}
                 >
                   {filter}
@@ -875,15 +875,15 @@ export default function Page() {
             <div className="grid gap-4 md:grid-cols-[160px_1fr] md:items-center">
               <div className="mx-auto grid h-36 w-36 place-items-center rounded-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 ring-1 ring-indigo-100">
                 <div className="text-center">
-                  <p className="text-4xl font-black text-[#111827]">{readinessScore}</p>
+                  <p className="text-4xl font-black text-foreground">{readinessScore}</p>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">ready</p>
                 </div>
               </div>
               <div className="space-y-3">
                 {workspaceSignals.map((signal) => (
-                  <div key={signal.label} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3">
+                  <div key={signal.label} className="rounded-2xl border border-border bg-muted p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-[#111827]">{signal.label}</span>
+                      <span className="text-xs font-black text-foreground">{signal.label}</span>
                       <Pill tone={signal.tone}>{signal.value}%</Pill>
                     </div>
                     <ProgressBar value={signal.value} />
@@ -896,27 +896,27 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Workflow} title={`${activePreset.label} blueprint`} description="Suggested operating structure generated from the selected profession preset." />
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">Boards</p>
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Boards</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {activePreset.boards.map((board) => <Pill key={board} tone="blue">{board}</Pill>)}
                 </div>
               </div>
-              <div className="rounded-2xl bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">Controls</p>
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Controls</p>
                 <div className="mt-3 space-y-2">
                   {CONTROL_SWITCHES.map((control) => (
-                    <div key={control.id} className="flex items-center justify-between gap-2 text-xs font-bold text-[#111827]">
+                    <div key={control.id} className="flex items-center justify-between gap-2 text-xs font-bold text-foreground">
                       <span>{control.label}</span>
                       <span className={cn("h-2 w-2 rounded-full", controls[control.id] ? "bg-emerald-500" : "bg-slate-300")} />
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="rounded-2xl bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#6B7280]">Tool coverage</p>
-                <p className="mt-3 text-2xl font-black text-[#111827]">{integrationCoverage}%</p>
-                <p className="mt-1 text-xs text-[#6B7280]">{missingRecommended.length ? `${missingRecommended.length} recommended tools missing` : "Recommended tools connected"}</p>
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Tool coverage</p>
+                <p className="mt-3 text-2xl font-black text-foreground">{integrationCoverage}%</p>
+                <p className="mt-1 text-xs text-muted-foreground">{missingRecommended.length ? `${missingRecommended.length} recommended tools missing` : "Recommended tools connected"}</p>
               </div>
             </div>
           </SurfaceCard>
@@ -933,16 +933,16 @@ export default function Page() {
                 key={kit.id}
                 type="button"
                 onClick={() => applyTemplateKit(kit)}
-                className="group rounded-[24px] border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:shadow-md"
+                className="group rounded-[24px] border border-border bg-muted p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-card hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm ring-1 ring-indigo-100">
                     <Rocket className="h-5 w-5 transition-transform group-hover:-rotate-12 group-hover:scale-110" />
                   </span>
                   <Pill tone={kit.profession === "all" ? "blue" : "green"}>{kit.profession === "all" ? "Universal" : activePreset.label}</Pill>
                 </div>
-                <h3 className="mt-4 font-black text-[#111827]">{kit.title}</h3>
-                <p className="mt-2 min-h-12 text-sm leading-6 text-[#6B7280]">{kit.description}</p>
+                <h3 className="mt-4 font-black text-foreground">{kit.title}</h3>
+                <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{kit.description}</p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {kit.items.map((item) => <Pill key={item} tone={item === "Automation" ? "amber" : item === "Dashboard" ? "indigo" : "blue"}>{item}</Pill>)}
                 </div>
@@ -971,21 +971,21 @@ export default function Page() {
                   onClick={() => setWorkspaceRules((current) => current.map((item) => item.id === rule.id ? { ...item, enabled: !item.enabled } : item))}
                   className={cn(
                     "flex w-full items-start gap-3 rounded-[22px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                    rule.enabled ? "border-indigo-100 bg-indigo-50/60" : "border-[#E5E7EB] bg-[#F7FAFC] hover:bg-white",
+                    rule.enabled ? "border-indigo-100 bg-indigo-50/60" : "border-border bg-muted hover:bg-card",
                   )}
                 >
-                  <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", rule.enabled ? "bg-white text-indigo-600 shadow-sm" : "bg-white text-[#6B7280] ring-1 ring-[#E5E7EB]")}>
+                  <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", rule.enabled ? "bg-card text-indigo-600 shadow-sm" : "bg-card text-muted-foreground ring-1 ring-[#E5E7EB]")}>
                     <PlayCircle className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-black text-[#111827]">{rule.title}</span>
+                      <span className="font-black text-foreground">{rule.title}</span>
                       <Pill tone={rule.enabled ? "green" : "slate"}>{rule.enabled ? "On" : "Off"}</Pill>
                     </span>
-                    <span className="mt-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#6B7280]">When</span>
-                    <span className="mt-1 block text-sm text-[#111827]">{rule.trigger}</span>
-                    <span className="mt-2 block text-xs font-bold uppercase tracking-[0.12em] text-[#6B7280]">Then</span>
-                    <span className="mt-1 block text-sm text-[#6B7280]">{rule.action}</span>
+                    <span className="mt-2 block text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">When</span>
+                    <span className="mt-1 block text-sm text-foreground">{rule.trigger}</span>
+                    <span className="mt-2 block text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Then</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">{rule.action}</span>
                   </span>
                 </button>
               ))}
@@ -997,7 +997,7 @@ export default function Page() {
               <SectionTitle icon={Columns3} title="Custom field builder" description="Control what every board tracks before backend fields exist." />
               <Pill tone={enabledFields > 2 ? "green" : "amber"}>{enabledFields} enabled</Pill>
             </div>
-            <div className="mt-4 rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-3">
+            <div className="mt-4 rounded-[22px] border border-border bg-muted p-3">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={fieldDraft}
@@ -1006,7 +1006,7 @@ export default function Page() {
                     if (event.key === "Enter") addCustomField();
                   }}
                   placeholder="Add field: Client, Budget, Skill level..."
-                  className="h-11 flex-1 rounded-2xl border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] outline-none placeholder:text-[#6B7280] focus:border-indigo-300"
+                  className="h-11 flex-1 rounded-2xl border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-indigo-300"
                 />
                 <button
                   type="button"
@@ -1026,12 +1026,12 @@ export default function Page() {
                   onClick={() => setWorkspaceFields((current) => current.map((item) => item.id === field.id ? { ...item, enabled: !item.enabled } : item))}
                   className={cn(
                     "flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
-                    field.enabled ? "border-emerald-100 bg-emerald-50/70" : "border-[#E5E7EB] bg-[#F7FAFC] hover:bg-white",
+                    field.enabled ? "border-emerald-100 bg-emerald-50/70" : "border-border bg-muted hover:bg-card",
                   )}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-black text-[#111827]">{field.label}</span>
-                    <span className="mt-1 flex items-center gap-1.5 text-xs text-[#6B7280]">
+                    <span className="block truncate text-sm font-black text-foreground">{field.label}</span>
+                    <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Filter className="h-3.5 w-3.5" />
                       {field.type}
                     </span>
@@ -1050,25 +1050,25 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => setNotice("Invite flow placeholder opened locally")}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-3 py-2 text-xs font-black text-[#111827] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700"
               >
                 <UserPlus className="h-4 w-4" />
                 Invite member
               </button>
             </div>
-            <div className="mt-4 overflow-hidden rounded-[22px] border border-[#E5E7EB]">
+            <div className="mt-4 overflow-hidden rounded-[22px] border border-border">
               {ROLE_MATRIX.map((row) => (
-                <div key={row.role} className="grid gap-3 border-b border-[#E5E7EB] bg-white p-3 last:border-b-0 md:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_1.4fr] md:items-center">
+                <div key={row.role} className="grid gap-3 border-b border-border bg-card p-3 last:border-b-0 md:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr_1.4fr] md:items-center">
                   <div>
-                    <p className="font-black text-[#111827]">{row.role}</p>
-                    <p className="text-xs text-[#6B7280]">{row.note}</p>
+                    <p className="font-black text-foreground">{row.role}</p>
+                    <p className="text-xs text-muted-foreground">{row.note}</p>
                   </div>
                   {[
                     ["Create", row.canCreate],
                     ["Save", row.canSave],
                     ["Connect", row.canConnect],
                   ].map(([label, allowed]) => (
-                    <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-[#F7FAFC] px-3 py-2 text-xs font-black text-[#111827] md:justify-start md:gap-2">
+                    <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-muted px-3 py-2 text-xs font-black text-foreground md:justify-start md:gap-2">
                       <span>{label}</span>
                       <span className={cn("h-2.5 w-2.5 rounded-full", allowed ? "bg-emerald-500" : "bg-slate-300")} />
                     </div>
@@ -1088,17 +1088,17 @@ export default function Page() {
                 { title: "Integration coverage", body: missingRecommended.length ? `${missingRecommended.length} recommended tools still ready to connect.` : "All recommended tools are connected in demo mode.", icon: Database, tone: missingRecommended.length ? "amber" as const : "green" as const },
                 { title: "Saved workspace", body: `${snapshots.length} saved snapshots and ${createdItems.length} local objects are stored.`, icon: Save, tone: snapshots.length ? "indigo" as const : "slate" as const },
               ].map(({ title, body, icon: Icon, tone }) => (
-                <div key={title} className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={title} className="rounded-[22px] border border-border bg-muted p-4">
                   <div className="flex items-start gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                       <Icon className="h-4 w-4" />
                     </span>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-black text-[#111827]">{title}</p>
+                        <p className="font-black text-foreground">{title}</p>
                         <Pill tone={tone}>Signal</Pill>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-[#6B7280]">{body}</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
                     </div>
                   </div>
                 </div>
@@ -1122,12 +1122,12 @@ export default function Page() {
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-[180px_1fr]">
               <div className="rounded-[24px] bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-4 text-center ring-1 ring-indigo-100">
-                <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                   <Gauge className="h-5 w-5" />
                 </span>
-                <p className="mt-4 text-4xl font-black text-[#111827]">{milestoneScore}%</p>
+                <p className="mt-4 text-4xl font-black text-foreground">{milestoneScore}%</p>
                 <p className="mt-1 text-xs font-black uppercase tracking-[0.14em] text-indigo-500">goal pulse</p>
-                <p className="mt-3 text-xs leading-5 text-[#6B7280]">Average progress across workspace operating goals.</p>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">Average progress across workspace operating goals.</p>
               </div>
               <div className="space-y-3">
                 {milestones.map((milestone) => (
@@ -1135,12 +1135,12 @@ export default function Page() {
                     key={milestone.id}
                     type="button"
                     onClick={() => advanceMilestone(milestone.id)}
-                    className="w-full rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    className="w-full rounded-[22px] border border-border bg-muted p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="font-black text-[#111827]">{milestone.title}</p>
-                        <p className="mt-1 text-sm text-[#6B7280]">{milestone.target}</p>
+                        <p className="font-black text-foreground">{milestone.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{milestone.target}</p>
                       </div>
                       <Pill tone={milestone.status === "risk" ? "amber" : milestone.status === "on_track" ? "green" : "slate"}>{milestone.status.replace("_", " ")}</Pill>
                     </div>
@@ -1159,23 +1159,23 @@ export default function Page() {
             <SectionTitle icon={Timer} title="Workload and capacity" description="Quick capacity view based on filtered tasks and current profession focus." />
             <div className="mt-4 space-y-3">
               {workloadLanes.map((lane) => (
-                <div key={lane.owner} className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={lane.owner} className="rounded-[22px] border border-border bg-muted p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-black text-[#111827]">{lane.owner}</p>
-                      <p className="text-xs text-[#6B7280]">{lane.tasks} tasks - focus: {lane.focus}</p>
+                      <p className="font-black text-foreground">{lane.owner}</p>
+                      <p className="text-xs text-muted-foreground">{lane.tasks} tasks - focus: {lane.focus}</p>
                     </div>
                     <Pill tone={lane.capacity > 72 ? "amber" : "green"}>{lane.capacity}% capacity</Pill>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
-                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6B7280]">Progress</p>
+                    <div className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Progress</p>
                       <ProgressBar value={lane.progress} />
                     </div>
-                    <div className="rounded-2xl bg-white p-3 ring-1 ring-[#E5E7EB]">
-                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6B7280]">Risk load</p>
+                    <div className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Risk load</p>
                       <div className="mt-3 flex items-center justify-between">
-                        <span className="text-2xl font-black text-[#111827]">{lane.risk}</span>
+                        <span className="text-2xl font-black text-foreground">{lane.risk}</span>
                         <Pill tone={lane.risk ? "amber" : "green"}>{lane.risk ? "Watch" : "Clear"}</Pill>
                       </div>
                     </div>
@@ -1183,7 +1183,7 @@ export default function Page() {
                 </div>
               ))}
               {workloadLanes.length === 0 && (
-                <p className="rounded-2xl bg-[#F7FAFC] p-4 text-sm text-[#6B7280] ring-1 ring-[#E5E7EB]">No workload lanes in the current filter.</p>
+                <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB]">No workload lanes in the current filter.</p>
               )}
             </div>
           </SurfaceCard>
@@ -1194,22 +1194,22 @@ export default function Page() {
             <SectionTitle icon={ClipboardList} title="Intake pipeline builder" description="Turn outside requests into clean workspace routes." />
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {INTAKE_ROUTES.map(({ id, title, source, route, owner, fields, icon: Icon }) => (
-                <div key={id} className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                <div key={id} className="rounded-[22px] border border-border bg-muted p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                       <Icon className="h-4 w-4" />
                     </span>
                     <Pill tone="blue">{source}</Pill>
                   </div>
-                  <h3 className="mt-4 font-black text-[#111827]">{title}</h3>
-                  <p className="mt-1 text-sm text-[#6B7280]">{route} - {owner}</p>
+                  <h3 className="mt-4 font-black text-foreground">{title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{route} - {owner}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {fields.map((field) => <Pill key={field} tone="slate">{field}</Pill>)}
                   </div>
                   <button
                     type="button"
                     onClick={() => createIntakeRoute(title)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#111827] ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                   >
                     <Workflow className="h-4 w-4" />
                     Create route
@@ -1225,7 +1225,7 @@ export default function Page() {
               <button
                 type="button"
                 onClick={saveViewPreset}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-3 py-2 text-xs font-black text-[#111827] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700"
               >
                 <Save className="h-4 w-4" />
                 Save preset
@@ -1237,16 +1237,16 @@ export default function Page() {
                   key={preset.id}
                   type="button"
                   onClick={() => restoreViewPreset(preset)}
-                  className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                  className="rounded-[22px] border border-border bg-muted p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-black text-[#111827]">{preset.title}</p>
-                      <p className="mt-1 text-xs text-[#6B7280]">{preset.createdAt}</p>
+                      <p className="font-black text-foreground">{preset.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{preset.createdAt}</p>
                     </div>
                     <Pill tone={preset.profession === "all" ? "blue" : "indigo"}>{preset.view}</Pill>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-[#6B7280]">{preset.description}</p>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{preset.description}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <Pill tone="green">{preset.board}</Pill>
                     {preset.filters.map((filter) => <Pill key={filter} tone="slate">{filter}</Pill>)}
@@ -1267,15 +1267,15 @@ export default function Page() {
                     key={id}
                     type="button"
                     onClick={() => setNotice(`${title} export placeholder prepared`)}
-                    className="rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    className="rounded-[22px] border border-border bg-muted p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm"
                   >
                     <div className="flex items-start gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                      <span className="grid h-10 w-10 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                         <Icon className="h-4 w-4" />
                       </span>
                       <span>
-                        <span className="block font-black text-[#111827]">{title}</span>
-                        <span className="mt-1 block text-sm leading-5 text-[#6B7280]">{detail}</span>
+                        <span className="block font-black text-foreground">{title}</span>
+                        <span className="mt-1 block text-sm leading-5 text-muted-foreground">{detail}</span>
                       </span>
                     </div>
                     <Pill tone={tone} className="mt-3">Prepared</Pill>
@@ -1284,23 +1284,23 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="rounded-[26px] border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+            <div className="rounded-[26px] border border-border bg-muted p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Governance checklist</p>
-                  <h3 className="mt-2 text-xl font-black text-[#111827]">Workspace is backend-ready by shape</h3>
-                  <p className="mt-1 text-sm leading-6 text-[#6B7280]">These checks keep the demo scalable while real APIs are not connected yet.</p>
+                  <h3 className="mt-2 text-xl font-black text-foreground">Workspace is backend-ready by shape</h3>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">These checks keep the demo scalable while real APIs are not connected yet.</p>
                 </div>
                 <Pill tone="green">{GOVERNANCE_CHECKS.length} checks</Pill>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {GOVERNANCE_CHECKS.map((check) => (
-                  <div key={check.title} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#E5E7EB]">
+                  <div key={check.title} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-[#E5E7EB]">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="font-black text-[#111827]">{check.title}</p>
+                      <p className="font-black text-foreground">{check.title}</p>
                       <Pill tone={check.tone}>{check.status}</Pill>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-[#6B7280]">{check.detail}</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{check.detail}</p>
                   </div>
                 ))}
               </div>
@@ -1319,7 +1319,7 @@ export default function Page() {
                     key={board}
                     type="button"
                     onClick={() => setActiveBoard(board)}
-                    className={cn("rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors", activeBoard === board ? "bg-indigo-600 text-white ring-indigo-600" : "bg-[#F7FAFC] text-[#6B7280] ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700")}
+                    className={cn("rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors", activeBoard === board ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700")}
                   >
                     {board}
                   </button>
@@ -1341,8 +1341,8 @@ export default function Page() {
 
             {filteredTasks.length === 0 && (
               <SurfaceCard className="border-dashed text-center">
-                <p className="font-black text-[#111827]">No matching workspace items</p>
-                <p className="mt-2 text-sm text-[#6B7280]">Try another profession preset or clear search.</p>
+                <p className="font-black text-foreground">No matching workspace items</p>
+                <p className="mt-2 text-sm text-muted-foreground">Try another profession preset or clear search.</p>
               </SurfaceCard>
             )}
 
@@ -1351,15 +1351,15 @@ export default function Page() {
                 <SectionTitle icon={LayoutDashboard} title={`${activePreset.label} board view`} description="Profession-filtered Smart Tasks grouped by workflow status." />
                 <div className="grid gap-3 xl:grid-cols-4">
                   {(["todo", "in_progress", "review", "done"] as const).map((status) => (
-                    <div key={status} className="rounded-2xl bg-[#F7FAFC] p-3 ring-1 ring-[#E5E7EB]">
+                    <div key={status} className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
                       <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-sm font-black capitalize text-[#111827]">{status.replace("_", " ")}</h3>
+                        <h3 className="text-sm font-black capitalize text-foreground">{status.replace("_", " ")}</h3>
                         <Pill tone="slate">{filteredTasks.filter((task) => task.status === status).length}</Pill>
                       </div>
                       <div className="space-y-2">
                         {filteredTasks.filter((task) => task.status === status).map((task) => (
-                          <div key={task.id} className="rounded-2xl border border-[#E5E7EB] bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                            <p className="text-sm font-black text-[#111827]">{task.title}</p>
+                          <div key={task.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                            <p className="text-sm font-black text-foreground">{task.title}</p>
                             <div className="mt-3 flex flex-wrap gap-1.5">
                               {task.tags.slice(0, 2).map((tag) => <Pill key={tag} tone="blue">{tag}</Pill>)}
                             </div>
@@ -1380,10 +1380,10 @@ export default function Page() {
                 <SectionTitle icon={Calendar} title="Calendar control" description="Deadline preview for filtered Smart Tasks, meetings and reminders." />
                 <div className="grid gap-3 md:grid-cols-4">
                   {filteredTasks.map((task) => (
-                    <div key={task.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
+                    <div key={task.id} className="rounded-2xl border border-border bg-muted p-4">
                       <p className="text-xs font-black uppercase tracking-[0.14em] text-indigo-500">{task.dueDate}</p>
-                      <p className="mt-2 text-sm font-black text-[#111827]">{task.title}</p>
-                      <p className="mt-1 text-xs text-[#6B7280]">{task.assignee}</p>
+                      <p className="mt-2 text-sm font-black text-foreground">{task.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{task.assignee}</p>
                     </div>
                   ))}
                 </div>
@@ -1395,10 +1395,10 @@ export default function Page() {
                 <SectionTitle icon={Sparkles} title="Timeline control" description="Launch lane with progress, estimate and tracked focus time." />
                 <div className="space-y-3">
                   {filteredTasks.map((task) => (
-                    <div key={task.id} className="grid gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4 md:grid-cols-[1fr_2fr_0.5fr] md:items-center">
+                    <div key={task.id} className="grid gap-3 rounded-2xl border border-border bg-muted p-4 md:grid-cols-[1fr_2fr_0.5fr] md:items-center">
                       <div>
-                        <p className="font-black text-[#111827]">{task.title}</p>
-                        <p className="text-xs text-[#6B7280]">{task.estimate} estimate - {task.timeTracked} tracked</p>
+                        <p className="font-black text-foreground">{task.title}</p>
+                        <p className="text-xs text-muted-foreground">{task.estimate} estimate - {task.timeTracked} tracked</p>
                       </div>
                       <ProgressBar value={task.progress} />
                       <Pill tone="indigo">{task.dueDate}</Pill>
@@ -1423,12 +1423,12 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Save} title="Saved workspace states" description="Restore profession, view and board presets you saved locally." />
             <div className="space-y-2">
-              {snapshots.length === 0 && <p className="rounded-2xl bg-[#F7FAFC] p-4 text-sm text-[#6B7280] ring-1 ring-[#E5E7EB]">No saved workspace states yet. Use Save view to create one.</p>}
+              {snapshots.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB]">No saved workspace states yet. Use Save view to create one.</p>}
               {snapshots.map((snapshot) => (
-                <button key={snapshot.id} type="button" onClick={() => restoreSnapshot(snapshot)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3 text-left transition-colors hover:bg-white hover:shadow-sm">
+                <button key={snapshot.id} type="button" onClick={() => restoreSnapshot(snapshot)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-muted p-3 text-left transition-colors hover:bg-card hover:shadow-sm">
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-black text-[#111827]">{snapshot.name}</span>
-                    <span className="mt-1 block text-xs text-[#6B7280]">{snapshot.createdAt} - {snapshot.filters.join(", ")}</span>
+                    <span className="block truncate text-sm font-black text-foreground">{snapshot.name}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{snapshot.createdAt} - {snapshot.filters.join(", ")}</span>
                   </span>
                   <Pill tone="blue">Restore</Pill>
                 </button>
@@ -1439,15 +1439,15 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Plus} title="Created locally" description="Demo objects created from this workspace. Backend-ready shape, localStorage only." />
             <div className="grid gap-2 md:grid-cols-2">
-              {createdItems.length === 0 && <p className="rounded-2xl bg-[#F7FAFC] p-4 text-sm text-[#6B7280] ring-1 ring-[#E5E7EB] md:col-span-2">Create a board, doc, automation or dashboard to see it here.</p>}
+              {createdItems.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB] md:col-span-2">Create a board, doc, automation or dashboard to see it here.</p>}
               {createdItems.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3">
+                <div key={item.id} className="rounded-2xl border border-border bg-muted p-3">
                   <div className="flex items-center justify-between gap-2">
                     <Pill tone={item.type === "Automation" ? "amber" : item.type === "Dashboard" ? "indigo" : "blue"}>{item.type}</Pill>
-                    <span className="text-[11px] font-semibold text-[#6B7280]">{item.createdAt}</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">{item.createdAt}</span>
                   </div>
-                  <p className="mt-3 font-black text-[#111827]">{item.title}</p>
-                  <p className="mt-1 text-xs text-[#6B7280]">{PROFESSION_PRESETS[item.profession].label} - {item.board}</p>
+                  <p className="mt-3 font-black text-foreground">{item.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{PROFESSION_PRESETS[item.profession].label} - {item.board}</p>
                 </div>
               ))}
             </div>
@@ -1459,10 +1459,10 @@ export default function Page() {
             <SectionTitle icon={FileText} title="Knowledge Hub" description="Docs and wiki pages linked to tasks, spaces and boards." />
             <div className="grid gap-3 md:grid-cols-3">
               {DOC_PAGES.map((doc) => (
-                <div key={doc.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
-                  <p className="font-black text-[#111827]">{doc.title}</p>
-                  <p className="mt-2 line-clamp-3 text-sm text-[#6B7280]">{doc.excerpt}</p>
-                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-[#6B7280]"><span>{doc.space}</span><span>{doc.linkedTasks} tasks</span></div>
+                <div key={doc.id} className="rounded-2xl border border-border bg-muted p-4">
+                  <p className="font-black text-foreground">{doc.title}</p>
+                  <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{doc.excerpt}</p>
+                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-muted-foreground"><span>{doc.space}</span><span>{doc.linkedTasks} tasks</span></div>
                 </div>
               ))}
             </div>
@@ -1470,9 +1470,9 @@ export default function Page() {
 
           <SurfaceCard>
             <SectionTitle icon={Sparkles} title="UPZ Canvas + Intake" description="Whiteboard nodes, intake fields and screen notes placeholders." />
-            <div className="relative h-56 overflow-hidden rounded-[24px] bg-[#F7FAFC] ring-1 ring-[#E5E7EB]">
+            <div className="relative h-56 overflow-hidden rounded-[24px] bg-muted ring-1 ring-[#E5E7EB]">
               {WHITEBOARD_NODES.map((node) => (
-                <div key={node.id} className="absolute rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#111827] shadow-sm ring-1 ring-[#E5E7EB]" style={{ left: `${node.x}%`, top: `${node.y}%` }}>{node.title}</div>
+                <div key={node.id} className="absolute rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-[#E5E7EB]" style={{ left: `${node.x}%`, top: `${node.y}%` }}>{node.title}</div>
               ))}
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1489,20 +1489,20 @@ export default function Page() {
               const connected = integrationState[id];
               const recommended = activePreset.integrations.includes(id);
               return (
-                <div key={id} className={cn("rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-sm", recommended ? "border-indigo-100 bg-indigo-50/45" : "border-[#E5E7EB] bg-[#F7FAFC]")}>
+                <div key={id} className={cn("rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm", recommended ? "border-indigo-100 bg-indigo-50/45" : "border-border bg-muted")}>
                   <div className="flex items-start justify-between gap-3">
-                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm"><Icon className="h-5 w-5" /></span>
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm"><Icon className="h-5 w-5" /></span>
                     <div className="flex gap-1">
                       {recommended && <Pill tone="indigo">Recommended</Pill>}
                       <Pill tone={connected ? "green" : "slate"}>{connected ? "Connected" : "Ready UI"}</Pill>
                     </div>
                   </div>
-                  <h3 className="mt-4 font-black text-[#111827]">{name}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#6B7280]">{desc}</p>
+                  <h3 className="mt-4 font-black text-foreground">{name}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{desc}</p>
                   <button
                     type="button"
                     onClick={() => setIntegrationState((current) => ({ ...current, [id]: !current[id] }))}
-                    className={cn("mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-black transition-colors", connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-white text-[#6B7280] ring-1 ring-[#E5E7EB] hover:text-indigo-700")}
+                    className={cn("mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-black transition-colors", connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-card text-muted-foreground ring-1 ring-[#E5E7EB] hover:text-indigo-700")}
                   >
                     {connected ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                     {connected ? "Connected" : "Connect demo"}

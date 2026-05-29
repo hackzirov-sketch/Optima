@@ -83,7 +83,7 @@ export function FeaturesSection() {
                         className="w-full h-full p-4"
                       />
                     ) : (
-                      <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-md border border-white/80 group-hover:scale-110 transition-transform">
+                      <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-card shadow-md border border-white/80 group-hover:scale-110 transition-transform">
                         {(visual as { kind: "icon"; icon: React.ReactNode; bg: string }).icon}
                       </div>
                     )}

@@ -60,7 +60,7 @@ function CallControl({ icon: Icon, label, active, danger, onClick }: CallControl
         danger
           ? "border-rose-400/30 bg-rose-500 shadow-rose-950/30 hover:bg-rose-400"
           : active
-            ? "border-white/25 bg-white/20 shadow-black/20 hover:bg-white/25"
+            ? "border-white/25 bg-card/20 shadow-black/20 hover:bg-card/25"
             : "border-white/10 bg-slate-950/55 shadow-black/20 hover:bg-slate-800",
       )}
       aria-label={label}
@@ -116,7 +116,7 @@ function ParticipantVideoTile({
       <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(2,6,23,0.62))]" />
       <div className="relative flex h-full flex-col justify-between">
         <div className="flex items-center justify-between gap-2">
-          <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/80 ring-1 ring-white/10 backdrop-blur">
+          <span className="rounded-full bg-card/10 px-2.5 py-1 text-[11px] font-bold text-white/80 ring-1 ring-white/10 backdrop-blur">
             {t(`app.chat.call.participantStatus.${statusKey}`)}
           </span>
           {cameraOff && <VideoOff className="h-4 w-4 text-white/55" />}
@@ -205,7 +205,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
         <button
           type="button"
           onClick={() => setCompact(false)}
-          className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
+          className="grid h-9 w-9 place-items-center rounded-full bg-card/10 text-white transition-colors hover:bg-card/15"
           aria-label={t("app.chat.call.expand")}
         >
           <Maximize2 className="h-4 w-4" />
@@ -236,7 +236,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
       <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white/8 to-transparent" />
 
       <div className="relative flex h-full min-h-0 flex-col gap-3 p-3 sm:gap-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-white/[0.06] px-3 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:px-4">
+        <div className="flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-card/[0.06] px-3 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             {room.type === "1on1" ? <Avatar user={peer} size={46} showOnline /> : <RoomGlyph room={room} className="h-12 w-12" />}
             <div className="min-w-0">
@@ -256,7 +256,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
             <button
               type="button"
               onClick={() => setCompact(true)}
-              className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/15"
+              className="grid h-10 w-10 place-items-center rounded-full bg-card/10 text-white transition-colors hover:bg-card/15"
               aria-label={t("app.chat.call.minimize")}
             >
               <Minimize2 className="h-4 w-4" />
@@ -284,11 +284,11 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
               </div>
             ) : (
               <div className="relative flex h-full min-h-[340px] flex-col items-center justify-center text-center">
-                <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70 ring-1 ring-white/10">
+                <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-card/10 px-3 py-1.5 text-xs font-bold text-white/70 ring-1 ring-white/10">
                   <ShieldCheck className="h-4 w-4 text-emerald-200" />
                   {t("app.chat.call.secureLayer")}
                 </div>
-                <div className="absolute right-4 top-4 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white/70 ring-1 ring-white/10">
+                <div className="absolute right-4 top-4 rounded-full bg-card/10 px-3 py-1.5 text-xs font-bold text-white/70 ring-1 ring-white/10">
                   {visibleUsers.length} {t("app.chat.call.participants")}
                 </div>
 
@@ -309,7 +309,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
                   {isGroupCall ? t("app.chat.call.groupVoiceDesc") : t("app.chat.call.directVoiceDesc")}
                 </p>
 
-                <div className="mt-6 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-bold text-white/65 backdrop-blur-xl">
+                <div className="mt-6 flex items-center gap-2 rounded-full border border-white/10 bg-card/[0.06] px-4 py-2 text-xs font-bold text-white/65 backdrop-blur-xl">
                   <Sparkles className="h-4 w-4 text-indigo-200" />
                   {t("app.chat.call.telegramInspired")}
                 </div>
@@ -317,13 +317,13 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
             )}
           </div>
 
-          <aside className="hidden min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.06] shadow-2xl shadow-black/20 backdrop-blur-xl lg:flex">
+          <aside className="hidden min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-card/[0.06] shadow-2xl shadow-black/20 backdrop-blur-xl lg:flex">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <div>
                 <p className="text-sm font-black">{t("app.chat.call.people")}</p>
                 <p className="text-xs text-white/48">{t("app.chat.call.peopleDesc")}</p>
               </div>
-              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/10">
+              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-card/10">
                 <Users className="h-4 w-4" />
               </span>
             </div>
@@ -331,7 +331,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
               {visibleUsers.map((member, index) => {
                 const statusKey = participantStatusKeys[index % participantStatusKeys.length];
                 return (
-                  <div key={member.id} className="flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors hover:bg-white/10">
+                  <div key={member.id} className="flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors hover:bg-card/10">
                     <Avatar user={member} size={38} showOnline />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold">{member.id === "me" ? t("app.chat.you") : member.name}</p>
@@ -345,7 +345,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
             <div className="border-t border-white/10 p-3">
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-2.5 text-sm font-bold transition-colors hover:bg-white/15"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card/10 px-3 py-2.5 text-sm font-bold transition-colors hover:bg-card/15"
               >
                 <UserPlus className="h-4 w-4" />
                 {t("app.chat.call.invite")}

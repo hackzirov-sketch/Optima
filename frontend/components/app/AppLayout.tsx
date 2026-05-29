@@ -1,4 +1,6 @@
-import { useState } from "react";
+"use client";
+
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,19 +17,33 @@ interface AppLayoutProps {
   onLogout: () => void;
 }
 
-export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
+export function AppLayout({
+  user,
+  title,
+  children,
+  onLogout,
+}: AppLayoutProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
+
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    if (!user) {
+      router.replace("/");
+    }
+  }, [user, router]);
+
   if (!user) {
-    router.replace("/");
     return null;
   }
 
-  const hideAssistantButton = pathname === "/app/chat" || pathname === "/app/assistant" || pathname === "/app/meetings";
+  const hideAssistantButton =
+    pathname === "/app/chat" ||
+    pathname === "/app/assistant" ||
+    pathname === "/app/meetings";
 
   const handleToggleSidebar = () => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
@@ -39,7 +55,7 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F7FAFC] text-[#111827]">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <div className="hidden md:block">
         <Sidebar user={user} onLogout={onLogout} collapsed={collapsed} />
       </div>
@@ -50,25 +66,38 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-[#111827]/35 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-foreground/20 backdrop-blur-sm md:hidden"
             onClick={() => setMobileSidebarOpen(false)}
           >
             <motion.div
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
-              transition={{ type: "spring", damping: 26, stiffness: 260 }}
+              transition={{
+                type: "spring",
+                damping: 26,
+                stiffness: 260,
+              }}
               className="h-full w-[280px]"
               onClick={(event) => event.stopPropagation()}
             >
-              <Sidebar user={user} onLogout={onLogout} onNavigate={() => setMobileSidebarOpen(false)} />
+              <Sidebar
+                user={user}
+                onLogout={onLogout}
+                onNavigate={() => setMobileSidebarOpen(false)}
+              />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar user={user} title={title} onToggleSidebar={handleToggleSidebar} />
+        <Topbar
+          user={user}
+          title={title}
+          onToggleSidebar={handleToggleSidebar}
+        />
+
         <main
           className="flex-1 overflow-y-auto p-4 md:p-6"
           style={{
@@ -78,6 +107,7 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
         >
           {children}
         </main>
+
         {!hideAssistantButton && (
           <Link
             href="/app/assistant"
@@ -85,7 +115,9 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
             aria-label="Open AI assistant"
           >
             <Bot className="h-5 w-5" />
-            <span className="hidden sm:inline">{t("app.dashboard.askAI")}</span>
+            <span className="hidden sm:inline">
+              {t("app.dashboard.askAI")}
+            </span>
           </Link>
         )}
       </div>

@@ -34,7 +34,7 @@ export function MessageOptionsMenu({ isOwn, onAction, className, style }: Messag
       exit={{ opacity: 0, scale: 0.98, y: 3 }}
       transition={{ duration: 0.13, ease: "easeOut" }}
       className={cn(
-        "z-50 w-[196px] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[18px] border border-white/80 bg-white/96 p-1.5 text-xs text-gray-900 shadow-2xl shadow-indigo-950/14 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/96 dark:text-gray-100",
+        "z-50 w-[196px] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[18px] border border-white/80 bg-card/96 p-1.5 text-xs text-gray-900 shadow-2xl shadow-indigo-950/14 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-900/96 dark:text-gray-100",
         className,
       )}
       style={style}

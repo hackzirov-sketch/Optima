@@ -56,7 +56,7 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
   };
 
   return (
-    <header className="relative z-40 flex h-[72px] flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-3 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
+    <header className="relative z-40 flex h-[72px] flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-3 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
       <button
         type="button"
         onClick={onBackToList}
@@ -137,7 +137,7 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 4 }}
             transition={{ duration: 0.14, ease: "easeOut" }}
-            className="absolute right-3 top-[62px] z-[120] w-56 rounded-2xl border border-gray-200 bg-white p-1.5 text-sm text-gray-900 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            className="absolute right-3 top-[62px] z-[120] w-56 rounded-2xl border border-gray-200 bg-card p-1.5 text-sm text-gray-900 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             onClick={(event) => event.stopPropagation()}
           >
             <button type="button" onClick={() => runAction("profile")} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">

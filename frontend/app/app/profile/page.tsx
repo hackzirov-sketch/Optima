@@ -68,13 +68,13 @@ export default function Page() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold text-[#111827]">{user?.name}</h2>
+                    <h2 className="text-xl font-bold text-foreground">{user?.name}</h2>
                     <BadgeCheck className="h-5 w-5 text-blue-500" aria-label="Verified premium profile" />
                     <PremiumGradientBadge />
                   </div>
                   <p className="mt-0.5 text-sm text-indigo-600">{profession}</p>
                 </div>
-                <button className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-white hover:text-indigo-600">
+                <button className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-card hover:text-indigo-600">
                   <Edit3 className="h-3.5 w-3.5" /> {t("app.profile.edit")}
                 </button>
               </div>
@@ -85,7 +85,7 @@ export default function Page() {
                 <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(16,185,129,0.12)", color: "#047857" }}>
                   <BookOpen className="mr-1 inline h-3 w-3" />{experience}
                 </span>
-                <span className="rounded-full px-2.5 py-1 text-xs font-medium text-[#6B7280]" style={{ background: "#FFFFFF" }}>
+                <span className="rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground" style={{ background: "#FFFFFF" }}>
                   {joinedLabel}
                 </span>
               </div>
@@ -99,7 +99,7 @@ export default function Page() {
               { label: t("app.profile.stats.streak"), value: "7" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-xl font-bold text-[#111827]">{stat.value}</div>
+                <div className="text-xl font-bold text-foreground">{stat.value}</div>
                 <div className="mt-0.5 text-xs text-gray-500">{stat.label}</div>
               </div>
             ))}
@@ -130,7 +130,7 @@ export default function Page() {
         </motion.div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl p-5 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="rounded-xl p-5 bg-card border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100"><Star className="h-4 w-4 text-yellow-400" /> {t("app.profile.skills")}</h3>
             <div className="flex flex-wrap gap-2">
               {skills.map((skill) => (
@@ -139,7 +139,7 @@ export default function Page() {
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl p-5 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl p-5 bg-card border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100"><Briefcase className="h-4 w-4 text-blue-500" /> {t("app.profile.about")}</h3>
             <div className="space-y-3">
               {[
@@ -157,7 +157,7 @@ export default function Page() {
           </motion.div>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-xl p-5 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-xl p-5 bg-card border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
           <h3 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100"><Award className="h-4 w-4 text-yellow-400" /> {t("app.profile.certificates")}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {MOCK_CERTS.map((cert) => (
@@ -178,7 +178,7 @@ export default function Page() {
         </motion.div>
 
         {user?.profession === "developer" && (
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-xl p-5 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-xl p-5 bg-card border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100"><GitBranch className="h-4 w-4 text-gray-500 dark:text-gray-400" /> {t("app.profile.githubRepos")}</h3>
             <div className="space-y-3">
               {MOCK_REPOS.map((repo) => (
