@@ -29,6 +29,8 @@ i18n
       order: ["localStorage", "navigator"],
       caches: ["localStorage"],
     },
+    // escapeValue: false is safe because translations are static JSON, not user-generated.
+    // React already escapes JSX output. Only enable escaping if dynamic user content is interpolated.
     interpolation: { escapeValue: false },
   });
 

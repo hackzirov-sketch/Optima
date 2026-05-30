@@ -22,7 +22,7 @@ import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
 import { PROFESSION_LABELS } from "@/data/mockData";
-import { cn } from "./DesignSystem";
+import { cn } from "@/lib/utils";
 
 const NAV_GROUPS = [
   {
@@ -113,7 +113,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             )}
             <div className="space-y-1">
               {group.items.map(({ path, labelKey, icon: Icon, badgeKey }) => {
-                const active = location.startsWith(path);
+                const active = location === path || (path !== "/app/home" && location.startsWith(path + "/"));
                 const label = t(`app.nav.${labelKey}`);
                 return (
                   <Link key={path} href={path}>

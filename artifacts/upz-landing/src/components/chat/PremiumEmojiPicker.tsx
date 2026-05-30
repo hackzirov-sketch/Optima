@@ -6,6 +6,7 @@ import type { EmojiMartData } from "@emoji-mart/data";
 import { init as initEmojiMart } from "emoji-mart";
 import { Search, Sparkles, Star } from "lucide-react";
 import type { ChatReactionEmoji } from "@/types";
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/utils/storage";
 import {
   EmojiRenderer,
   PUBLIC_FREE_EMOJI_SOURCES,
@@ -72,7 +73,7 @@ function getNativeEmoji(id: string): NativeEmojiItem | null {
 
 function readRecent() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    const parsed = JSON.parse(safeLocalStorageGet(RECENT_KEY) ?? "[]");
     return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(0, 18) : [];
   } catch {
     return [];
@@ -80,7 +81,7 @@ function readRecent() {
 }
 
 function saveRecent(items: string[]) {
-  localStorage.setItem(RECENT_KEY, JSON.stringify(items.slice(0, 18)));
+  safeLocalStorageSet(RECENT_KEY, JSON.stringify(items.slice(0, 18)));
 }
 
 export function PremiumEmojiPicker({
@@ -92,10 +93,11 @@ export function PremiumEmojiPicker({
   onSelectNative,
   className,
 }: PremiumEmojiPickerProps) {
-  const [activeCategory, setActiveCategory] = useState<CategoryId>(mode === "reaction" ? "premium" : "all");
+  const [activeCategory, setActiveCategory] = useState<CategoryId>(mode === "reaction" ? "premium" : "smileys");
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>(() => readRecent());
   const sourceLabel = PUBLIC_FREE_EMOJI_SOURCES.map((source) => source.name).join(" + ");
+  const telegramSheet = compact && mode === "message";
 
   useEffect(() => {
     void initEmojiMart({ data: emojiMartData }, { caller: "upz-premium-emoji-picker" }).catch(() => undefined);
@@ -156,14 +158,18 @@ export function PremiumEmojiPicker({
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
       className={cn(
         "overflow-hidden border border-white/80 bg-white/82 shadow-2xl shadow-indigo-950/15 backdrop-blur-2xl dark:border-gray-700/80 dark:bg-gray-900/86",
-        compact ? "w-[min(280px,calc(100vw-1.25rem))] rounded-[22px] p-2" : "w-[min(430px,calc(100vw-1rem))] rounded-[28px] p-3",
+        telegramSheet
+          ? "upz-telegram-emoji-sheet w-full rounded-none border-0 bg-[#181818] p-0 shadow-none backdrop-blur-none"
+          : compact
+            ? "w-[min(280px,calc(100vw-1.25rem))] rounded-[22px] p-2"
+            : "w-[min(430px,calc(100vw-1rem))] rounded-[28px] p-3",
         className,
       )}
       onClick={(event) => event.stopPropagation()}
       role="dialog"
       aria-label={mode === "reaction" ? "Premium reaction picker" : "Premium emoji picker"}
     >
-      <div className={cn("flex items-center justify-between gap-3", compact ? "mb-2" : "mb-3")}>
+      {!telegramSheet && <div className={cn("flex items-center justify-between gap-3", compact ? "mb-2" : "mb-3")}>
         <div className="min-w-0">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">{compact ? "Reactions" : "UPZ Emoji Cloud"}</p>
           {!compact && (
@@ -175,9 +181,9 @@ export function PremiumEmojiPicker({
         <span className="inline-flex items-center gap-1 rounded-full bg-[rgb(255,255,220)]/80 px-2.5 py-1 text-[10px] font-black text-indigo-700 ring-1 ring-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-800">
           <Sparkles className="h-3 w-3" /> Premium
         </span>
-      </div>
+      </div>}
 
-      <div className={cn("flex items-center gap-2 rounded-2xl border border-gray-200/90 bg-white/70 px-3 shadow-inner shadow-white/60 backdrop-blur focus-within:border-indigo-300 dark:border-gray-700 dark:bg-gray-800/70 dark:shadow-none", compact ? "mb-2 h-9" : "mb-3 h-10")}>
+      {!telegramSheet && <div className={cn("flex items-center gap-2 rounded-2xl border border-gray-200/90 bg-white/70 px-3 shadow-inner shadow-white/60 backdrop-blur focus-within:border-indigo-300 dark:border-gray-700 dark:bg-gray-800/70 dark:shadow-none", compact ? "mb-2 h-9" : "mb-3 h-10")}>
         <Search className="h-4 w-4 flex-shrink-0 text-gray-400" />
         <input
           value={query}
@@ -186,7 +192,7 @@ export function PremiumEmojiPicker({
           className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
           aria-label="Search emoji"
         />
-      </div>
+      </div>}
 
       {mode === "reaction" && !compact && (
         <div className="mb-3 flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl bg-white/60 p-1.5 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700">
@@ -202,8 +208,8 @@ export function PremiumEmojiPicker({
         </div>
       )}
 
-      <div className={cn("grid gap-2 max-sm:grid-cols-1", compact ? "min-h-[164px] grid-cols-[40px_1fr]" : "min-h-[292px] grid-cols-[64px_1fr] gap-3")}>
-        <div className={cn("flex flex-col gap-1 overflow-y-auto rounded-2xl bg-white/62 p-1 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700 max-sm:max-h-none max-sm:flex-row max-sm:overflow-x-auto", compact ? "max-h-[164px]" : "max-h-[292px] p-1.5")}>
+      <div className={cn("grid gap-2 max-sm:grid-cols-1", telegramSheet ? "flex min-h-[300px] flex-col" : compact ? "min-h-[164px] grid-cols-[40px_1fr]" : "min-h-[292px] grid-cols-[64px_1fr] gap-3")}>
+        <div className={cn("flex flex-col gap-1 overflow-y-auto rounded-2xl bg-white/62 p-1 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700 max-sm:max-h-none max-sm:flex-row max-sm:overflow-x-auto", telegramSheet ? "order-2 h-[56px] flex-row items-center justify-center gap-5 rounded-none border-t border-[#2A2A2A] bg-[#1D1D1F] px-4 py-0 ring-0" : compact ? "max-h-[164px]" : "max-h-[292px] p-1.5")}>
           {CATEGORY_META.map((category) => (
             <button
               key={category.id}
@@ -211,27 +217,29 @@ export function PremiumEmojiPicker({
               onClick={() => setActiveCategory(category.id)}
               className={cn(
                 "group inline-flex flex-shrink-0 items-center justify-center gap-1 rounded-xl text-xs font-black transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
-                compact ? "min-h-8 px-1.5" : "min-h-10 px-2",
+                telegramSheet ? "h-11 w-11 rounded-full px-0 text-[#9B9B9F] focus:ring-[#8B5CF6]/50" : compact ? "min-h-8 px-1.5" : "min-h-10 px-2",
                 activeCategory === category.id
-                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:text-indigo-300 dark:ring-indigo-800"
+                  ? telegramSheet
+                    ? "bg-[#2B2B2F] text-[#D9D9DE] shadow-none ring-0"
+                    : "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:text-indigo-300 dark:ring-indigo-800"
                   : "text-gray-500 hover:bg-white/80 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100",
               )}
               aria-label={`Open ${category.label} emoji category`}
               title={category.label}
             >
-              <span className="text-base transition-transform group-hover:scale-110" aria-hidden="true">{category.native}</span>
-              {"premium" in category && category.premium && <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />}
+              <span className={cn("transition-transform group-hover:scale-110", telegramSheet ? "text-2xl grayscale" : "text-base")} aria-hidden="true">{category.native}</span>
+              {"premium" in category && category.premium && !telegramSheet && <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />}
             </button>
           ))}
         </div>
 
-        <div className={cn("min-w-0 rounded-[22px] bg-gray-50/72 p-2 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700", compact && "p-1.5")}>
-          <div className={cn("flex items-center justify-between gap-2 px-1", compact ? "mb-1" : "mb-2")}>
+        <div className={cn("min-w-0 rounded-[22px] bg-gray-50/72 p-2 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700", telegramSheet ? "order-1 rounded-none bg-[#181818] p-0 ring-0" : compact && "p-1.5")}>
+          <div className={cn("flex items-center justify-between gap-2 px-1", telegramSheet ? "h-12 justify-center px-4" : compact ? "mb-1" : "mb-2")}>
             <div>
-              <p className="text-xs font-black text-gray-900 dark:text-gray-100">{selectedCategory.label}</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">{mode === "reaction" ? "Tap to react instantly" : "Tap to insert into message"}</p>
+              <p className={cn("text-xs font-black text-gray-900 dark:text-gray-100", telegramSheet && "text-center text-base text-[#8F8F94]")}>{selectedCategory.label === "Smileys" ? "Smileys & People" : selectedCategory.label}</p>
+              {!telegramSheet && <p className="text-[11px] text-gray-500 dark:text-gray-400">{mode === "reaction" ? "Tap to react instantly" : "Tap to insert into message"}</p>}
             </div>
-            {"premium" in selectedCategory && selectedCategory.premium && <Star className="h-4 w-4 text-amber-400" aria-hidden="true" />}
+            {"premium" in selectedCategory && selectedCategory.premium && !telegramSheet && <Star className="h-4 w-4 text-amber-400" aria-hidden="true" />}
           </div>
 
           <AnimatePresence mode="wait">
@@ -239,7 +247,7 @@ export function PremiumEmojiPicker({
               <motion.div key="frimousse" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <EmojiPicker.Root onEmojiSelect={(emoji) => selectNative(emoji.emoji)} columns={8}>
                   <EmojiPicker.Search value={query} onChange={(event) => setQuery(event.target.value)} className="sr-only" />
-                  <EmojiPicker.Viewport className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
+                  <EmojiPicker.Viewport className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1 dark:bg-gray-900/30", telegramSheet ? "h-[188px] rounded-none bg-[#181818] px-4 py-1" : compact ? "h-[124px]" : "h-[232px]")}>
                     <EmojiPicker.Loading className="grid h-full place-items-center text-xs font-semibold text-gray-400">Loading emoji...</EmojiPicker.Loading>
                     <EmojiPicker.Empty>
                       {({ search }) => <span className="grid h-full place-items-center text-xs text-gray-400">No emoji found for {search}</span>}
@@ -247,17 +255,17 @@ export function PremiumEmojiPicker({
                     <EmojiPicker.List
                       components={{
                         CategoryHeader: ({ category, ...props }) => (
-                          <div {...props} className="sticky top-0 z-10 bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-gray-400 backdrop-blur dark:bg-gray-900/90 dark:text-gray-500">
+                          <div {...props} className={cn("sticky top-0 z-10 bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-gray-400 backdrop-blur dark:bg-gray-900/90 dark:text-gray-500", telegramSheet && "hidden")}>
                             {category.label}
                           </div>
                         ),
-                        Row: ({ children, ...props }) => <div {...props} className={cn("grid gap-1 px-1 py-0.5", compact ? "grid-cols-7" : "grid-cols-8")}>{children}</div>,
+                        Row: ({ children, ...props }) => <div {...props} className={cn("grid gap-1 px-1 py-0.5", telegramSheet ? "grid-cols-8 gap-x-4 gap-y-5 px-0 py-2 sm:grid-cols-10 lg:grid-cols-12" : compact ? "grid-cols-7" : "grid-cols-8")}>{children}</div>,
                         Emoji: ({ emoji, ...props }) => (
                           <button
                             {...props}
                             className={cn(
                               "grid place-items-center rounded-xl transition-all hover:scale-110 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:hover:bg-indigo-950/40",
-                              compact ? "h-8 w-8 text-lg" : "h-9 w-9 text-xl",
+                              telegramSheet ? "h-10 w-10 text-[32px] hover:bg-[#262629]" : compact ? "h-8 w-8 text-lg" : "h-9 w-9 text-xl",
                               emoji.isActive && "bg-white shadow-sm ring-1 ring-indigo-100 dark:bg-gray-700 dark:ring-indigo-800",
                             )}
                             aria-label={emoji.label}
@@ -271,7 +279,7 @@ export function PremiumEmojiPicker({
                 </EmojiPicker.Root>
               </motion.div>
             ) : (
-              <motion.div key={activeCategory} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1.5 dark:bg-gray-900/30", compact ? "h-[124px]" : "h-[232px]")}>
+              <motion.div key={activeCategory} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={cn("overflow-y-auto rounded-2xl bg-white/60 p-1.5 dark:bg-gray-900/30", telegramSheet ? "h-[188px] rounded-none bg-[#181818] px-4 py-1" : compact ? "h-[124px]" : "h-[232px]")}>
                 {premiumItems.length > 0 && (
                   <div className={cn("mb-2 grid gap-1", compact ? "grid-cols-5" : "grid-cols-6")}>
                     {premiumItems.map((asset) => (
@@ -289,7 +297,7 @@ export function PremiumEmojiPicker({
                   </div>
                 )}
 
-                <div className={cn("grid gap-1 max-sm:grid-cols-6", compact ? "grid-cols-6" : "grid-cols-7")}>
+                <div className={cn("grid gap-1 max-sm:grid-cols-6", telegramSheet ? "grid-cols-8 gap-x-4 gap-y-5 sm:grid-cols-10 lg:grid-cols-12" : compact ? "grid-cols-6" : "grid-cols-7")}>
                   {nativeItems.map((emoji) => (
                     <motion.button
                       key={`${emoji.id}-${emoji.native}`}
@@ -297,11 +305,11 @@ export function PremiumEmojiPicker({
                       whileHover={{ scale: 1.12, y: -1 }}
                       whileTap={{ scale: 0.92 }}
                       onClick={() => selectNative(emoji.native)}
-                      className={cn("grid place-items-center rounded-xl transition-colors hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:hover:bg-indigo-950/40", compact ? "h-8 text-lg" : "h-10 text-xl")}
+                      className={cn("grid place-items-center rounded-xl transition-colors hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:hover:bg-indigo-950/40", telegramSheet ? "h-10 text-[32px] hover:bg-[#262629] focus:ring-[#8B5CF6]/50" : compact ? "h-8 text-lg" : "h-10 text-xl")}
                       aria-label={`Select ${emoji.label}`}
                       title={emoji.label}
                     >
-                      <EmojiRenderer asset={getReactionAsset(encodeNativeEmojiReaction(emoji.native))} size={compact ? 20 : 24} decorative />
+                      <EmojiRenderer asset={getReactionAsset(encodeNativeEmojiReaction(emoji.native))} size={telegramSheet ? 34 : compact ? 20 : 24} decorative />
                     </motion.button>
                   ))}
                 </div>

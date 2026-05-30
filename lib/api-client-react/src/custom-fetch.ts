@@ -1,5 +1,8 @@
+export const DEFAULT_TIMEOUT_MS = 30_000;
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  timeoutMs?: number;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -327,7 +330,7 @@ export async function customFetch<T = unknown>(
   options: CustomFetchOptions = {},
 ): Promise<T> {
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const { responseType = "auto", timeoutMs = DEFAULT_TIMEOUT_MS, headers: headersInit, ...init } = options;
 
   const method = resolveMethod(input, init.method);
 
@@ -360,12 +363,35 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const timeoutAbort = new AbortController();
+  const timeoutId = setTimeout(() => timeoutAbort.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
 
-  if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+  const combinedSignal = init.signal
+    ? anySignal([init.signal, timeoutAbort.signal])
+    : timeoutAbort.signal;
+
+  try {
+    const response = await fetch(input, { ...init, method, headers, signal: combinedSignal });
+
+    if (!response.ok) {
+      const errorData = await parseErrorBody(response, method);
+      throw new ApiError(response, errorData, requestInfo);
+    }
+
+    return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      return controller.signal;
+    }
+    signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
 }

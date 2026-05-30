@@ -24,9 +24,14 @@ const K = {
   TEAM_REVIEW_LOG: 'upz_team_review_log',
 };
 
+function canUseStorage() {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
 function get<T>(key: string): T | null {
+  if (!canUseStorage()) return null;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = window.localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -34,13 +39,45 @@ function get<T>(key: string): T | null {
 }
 
 function set(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value));
+  if (!canUseStorage()) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can be full or disabled. UI stays usable with in-memory state.
+  }
+}
+
+function remove(key: string) {
+  if (!canUseStorage()) return;
+  window.localStorage.removeItem(key);
+}
+
+function has(key: string) {
+  return canUseStorage() && window.localStorage.getItem(key) !== null;
+}
+
+export function safeLocalStorageGet(key: string) {
+  if (!canUseStorage()) return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function safeLocalStorageSet(key: string, value: string) {
+  if (!canUseStorage()) return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be blocked, private, or full. Non-critical UI state can reset.
+  }
 }
 
 export const storage = {
-  isOnboarded: () => !!localStorage.getItem(K.ONBOARDED),
-  setOnboarded: () => localStorage.setItem(K.ONBOARDED, '1'),
-  clearOnboarded: () => localStorage.removeItem(K.ONBOARDED),
+  isOnboarded: () => has(K.ONBOARDED),
+  setOnboarded: () => set(K.ONBOARDED, '1'),
+  clearOnboarded: () => remove(K.ONBOARDED),
 
   getUser: () => get<UserProfile>(K.USER),
   saveUser: (u: UserProfile) => set(K.USER, u),
@@ -79,26 +116,26 @@ export const storage = {
   saveWorkspaceProfession: (profession: Profession) => set(K.WORKSPACE_PROFESSION, profession),
 
   getWorkspaceSnapshots: <T>(): T[] => get<T[]>(K.WORKSPACE_SNAPSHOTS) ?? [],
-  saveWorkspaceSnapshots: (snapshots: unknown[]) => set(K.WORKSPACE_SNAPSHOTS, snapshots),
+  saveWorkspaceSnapshots: <T>(snapshots: T[]) => set(K.WORKSPACE_SNAPSHOTS, snapshots),
 
   getWorkspaceCreatedItems: <T>(): T[] => get<T[]>(K.WORKSPACE_CREATED_ITEMS) ?? [],
-  saveWorkspaceCreatedItems: (items: unknown[]) => set(K.WORKSPACE_CREATED_ITEMS, items),
+  saveWorkspaceCreatedItems: <T>(items: T[]) => set(K.WORKSPACE_CREATED_ITEMS, items),
 
   getWorkspaceFields: <T>(): T[] => get<T[]>(K.WORKSPACE_FIELDS) ?? [],
-  saveWorkspaceFields: (fields: unknown[]) => set(K.WORKSPACE_FIELDS, fields),
+  saveWorkspaceFields: <T>(fields: T[]) => set(K.WORKSPACE_FIELDS, fields),
 
   getWorkspaceRules: <T>(): T[] => get<T[]>(K.WORKSPACE_RULES) ?? [],
-  saveWorkspaceRules: (rules: unknown[]) => set(K.WORKSPACE_RULES, rules),
+  saveWorkspaceRules: <T>(rules: T[]) => set(K.WORKSPACE_RULES, rules),
 
   getWorkspaceMilestones: <T>(): T[] => get<T[]>(K.WORKSPACE_MILESTONES) ?? [],
-  saveWorkspaceMilestones: (milestones: unknown[]) => set(K.WORKSPACE_MILESTONES, milestones),
+  saveWorkspaceMilestones: <T>(milestones: T[]) => set(K.WORKSPACE_MILESTONES, milestones),
 
   getWorkspaceViewPresets: <T>(): T[] => get<T[]>(K.WORKSPACE_VIEW_PRESETS) ?? [],
-  saveWorkspaceViewPresets: (presets: unknown[]) => set(K.WORKSPACE_VIEW_PRESETS, presets),
+  saveWorkspaceViewPresets: <T>(presets: T[]) => set(K.WORKSPACE_VIEW_PRESETS, presets),
 
   getTeamOptimaTasks: <T>(): T[] => get<T[]>(K.TEAM_OPTIMA_TASKS) ?? [],
-  saveTeamOptimaTasks: (tasks: unknown[]) => set(K.TEAM_OPTIMA_TASKS, tasks),
+  saveTeamOptimaTasks: <T>(tasks: T[]) => set(K.TEAM_OPTIMA_TASKS, tasks),
 
   getTeamReviewLog: <T>(): T[] => get<T[]>(K.TEAM_REVIEW_LOG) ?? [],
-  saveTeamReviewLog: (logs: unknown[]) => set(K.TEAM_REVIEW_LOG, logs),
+  saveTeamReviewLog: <T>(logs: T[]) => set(K.TEAM_REVIEW_LOG, logs),
 };

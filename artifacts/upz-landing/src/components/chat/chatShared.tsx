@@ -3,6 +3,9 @@ import { Bot, Bookmark, FolderOpen, Hash, Users, User as UserIcon } from "lucide
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatType, ChatUser } from "@/types";
 import { MOCK_USERS } from "@/data/mockData";
 import { PREMIUM_REACTIONS, PremiumAvatarRing, PremiumStatusBadge, getPremiumStatusForUser } from "@/components/premium/PremiumAssets";
+import { cn } from "@/lib/utils";
+
+export { cn };
 
 export const REACTION_EMOJIS: ChatReactionEmoji[] = PREMIUM_REACTIONS.map((reaction) => reaction.id);
 
@@ -23,10 +26,6 @@ export const CHAT_TYPE_ICONS: Record<ChatType, ComponentType<{ className?: strin
   saved: Bookmark,
   ai: Bot,
 };
-
-export function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 export function getUser(userId: string, users: ChatUser[] = MOCK_USERS) {
   return users.find((candidate) => candidate.id === userId);

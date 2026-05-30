@@ -57,12 +57,30 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@lottiefiles") || id.includes("lottie-react") || id.includes("lottie-web")) return "animation";
+          if (id.includes("recharts") || id.includes("d3-")) return "charts";
+          if (id.includes("@emoji-mart/data")) return "emoji-data";
+          if (id.includes("@emoji-mart") || id.includes("emoji-mart") || id.includes("frimousse") || id.includes("openmoji")) return "emoji";
+          if (id.includes("framer-motion")) return "motion";
+          if (id.includes("@radix-ui")) return "radix";
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react-vendor";
+          return "vendor";
+        },
+      },
+    },
   },
   server: {
     port,
     strictPort: true,
     host: "0.0.0.0",
-    allowedHosts: true,
+    allowedHosts: process.env.ALLOWED_HOSTS?.split(",").map((host) => host.trim()).filter(Boolean) ?? [
+      "localhost",
+      "127.0.0.1",
+    ],
     fs: {
       strict: true,
     },
@@ -70,6 +88,9 @@ export default defineConfig({
   preview: {
     port,
     host: "0.0.0.0",
-    allowedHosts: true,
+    allowedHosts: process.env.ALLOWED_HOSTS?.split(",").map((host) => host.trim()).filter(Boolean) ?? [
+      "localhost",
+      "127.0.0.1",
+    ],
   },
 });

@@ -7,7 +7,7 @@ import { GLOBAL_SEARCH_ITEMS, NOTIFICATIONS } from "@/data/ecosystemData";
 import { LanguageSwitcher } from "@/components/landing/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PremiumStatusBadge } from "@/components/premium/PremiumAssets";
-import { cn } from "./DesignSystem";
+import { cn } from "@/lib/utils";
 
 interface TopbarProps {
   user: UserProfile;

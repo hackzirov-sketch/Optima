@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import type { UserProfile } from "@/types";
@@ -17,12 +18,13 @@ interface AppLayoutProps {
 export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
   const { t } = useTranslation();
   const [location] = useLocation();
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const hideAssistantButton = location === "/app/chat" || location === "/app/assistant" || location === "/app/meetings";
 
   const handleToggleSidebar = () => {
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
+    if (isMobile) {
       setMobileSidebarOpen(true);
       return;
     }

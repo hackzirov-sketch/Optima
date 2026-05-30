@@ -141,6 +141,11 @@
   --upz-chat-bg-b: #FFFFFF;
   --upz-chat-glow-a: rgba(99, 102, 241, 0.10);
   --upz-chat-glow-b: rgba(59, 130, 246, 0.08);
+  --upz-messenger-shell: #E7EEF3;
+  --upz-messenger-wallpaper: #DCECF3;
+  --upz-messenger-peer: #FFFFFF;
+  --upz-messenger-own: #DDF7D7;
+  --upz-messenger-accent: #36A8E3;
 
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
@@ -245,6 +250,234 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+.upz-messenger-wallpaper {
+  background:
+    radial-gradient(circle at 18px 18px, rgba(77, 116, 132, 0.08) 0 1.2px, transparent 1.4px),
+    radial-gradient(circle at 68px 44px, rgba(77, 116, 132, 0.055) 0 1px, transparent 1.2px),
+    linear-gradient(135deg, #dcecf3 0%, #e7f1f5 48%, #d8e9ef 100%);
+  background-size: 96px 96px, 112px 112px, 100% 100%;
+}
+
+.upz-message-bubble {
+  border-radius: 18px;
+  contain: paint;
+}
+
+.upz-message-bubble-peer {
+  background: var(--upz-messenger-peer);
+  border-bottom-left-radius: 6px;
+  box-shadow: 0 1px 1px rgba(43, 82, 96, 0.12);
+}
+
+.upz-message-bubble-own {
+  background: linear-gradient(180deg, #e3fadf 0%, var(--upz-messenger-own) 100%);
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 1px 1px rgba(43, 82, 96, 0.14);
+}
+
+.upz-message-bubble-peer::after,
+.upz-message-bubble-own::after {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 14px;
+  content: "";
+}
+
+.upz-message-bubble-peer::after {
+  left: -5px;
+  background: radial-gradient(circle at 0 0, transparent 10px, var(--upz-messenger-peer) 10.5px);
+}
+
+.upz-message-bubble-own::after {
+  right: -5px;
+  background: radial-gradient(circle at 10px 0, transparent 10px, var(--upz-messenger-own) 10.5px);
+}
+
+.upz-composer-dock {
+  box-shadow: 0 1px 2px rgba(43, 82, 96, 0.1), 0 8px 24px rgba(43, 82, 96, 0.08);
+}
+
+.upz-emoji-only-message {
+  background: transparent !important;
+  box-shadow: none !important;
+  contain: layout paint;
+  text-shadow: 0 6px 18px rgba(43, 82, 96, 0.16);
+}
+
+.upz-emoji-only-message::after {
+  display: none;
+}
+
+.upz-emoji-only-message .upz-premium-emoji {
+  filter: drop-shadow(0 8px 18px rgba(43, 82, 96, 0.18));
+}
+
+.upz-inline-premium-emoji-large {
+  margin-inline: 0.04em;
+  filter: drop-shadow(0 8px 18px rgba(43, 82, 96, 0.16));
+}
+
+.upz-inline-premium-emoji-large .upz-premium-emoji-glow {
+  inset: -12%;
+  opacity: 0.55;
+}
+
+.dark .upz-messenger-wallpaper {
+  background:
+    radial-gradient(circle at 18px 18px, rgba(148, 163, 184, 0.08) 0 1.2px, transparent 1.4px),
+    linear-gradient(135deg, #111827 0%, #0f172a 100%);
+}
+
+.dark .upz-message-bubble-peer {
+  background: #1f2937;
+  color: #f8fafc !important;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.24);
+}
+
+.dark .upz-message-bubble-own {
+  background: linear-gradient(180deg, #173d35 0%, #15372f 100%);
+  color: #e5f7ee !important;
+}
+
+.dark .upz-message-bubble-peer *,
+.dark .upz-message-bubble-own * {
+  color: inherit;
+}
+
+.dark .upz-message-bubble-peer::after {
+  background: radial-gradient(circle at 0 0, transparent 10px, #1f2937 10.5px);
+}
+
+.dark .upz-message-bubble-own::after {
+  background: radial-gradient(circle at 10px 0, transparent 10px, #15372f 10.5px);
+}
+
+.dark .upz-emoji-only-message {
+  color: #f8fafc;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.upz-premium-emoji {
+  isolation: isolate;
+  transform-origin: 50% 72%;
+}
+
+.upz-premium-emoji-glow {
+  position: absolute;
+  inset: 10%;
+  z-index: 0;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 25%, rgb(255 255 255 / 0.9), transparent 28%),
+    radial-gradient(circle at 64% 72%, rgb(99 102 241 / 0.26), transparent 48%);
+  filter: blur(7px);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.upz-premium-emoji-orbit {
+  position: absolute;
+  inset: -18%;
+  z-index: 0;
+  border-radius: 999px;
+  background:
+    conic-gradient(from 0deg, transparent 0 18%, rgb(99 102 241 / 0.55) 20%, transparent 26% 57%, rgb(245 158 11 / 0.6) 60%, transparent 66%);
+  mask: radial-gradient(circle, transparent 54%, #000 56%, #000 62%, transparent 64%);
+  opacity: 0.72;
+  pointer-events: none;
+  animation: upz-emoji-orbit 2.8s linear infinite;
+}
+
+.upz-emoji-pop {
+  animation: upz-emoji-pop 1.8s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+.upz-emoji-fire {
+  animation: upz-emoji-fire 1.25s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+.upz-emoji-heart {
+  animation: upz-emoji-heart 2.1s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+.upz-emoji-spark {
+  animation: upz-emoji-spark 2.4s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+.upz-emoji-gem {
+  animation: upz-emoji-gem 2.8s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+
+@keyframes upz-emoji-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes upz-emoji-pop {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  42% {
+    transform: translateY(-5%) scale(1.08);
+  }
+}
+
+@keyframes upz-emoji-fire {
+  0%, 100% {
+    transform: translateY(0) rotate(-1deg) scale(1);
+    filter: saturate(1);
+  }
+  36% {
+    transform: translateY(-7%) rotate(2deg) scale(1.09);
+    filter: saturate(1.18);
+  }
+  68% {
+    transform: translateY(1%) rotate(-2deg) scale(0.98);
+  }
+}
+
+@keyframes upz-emoji-heart {
+  0%, 100% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.15);
+  }
+  32% {
+    transform: scale(0.98);
+  }
+  48% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes upz-emoji-spark {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  45% {
+    transform: translateY(-4%) rotate(4deg) scale(1.08);
+  }
+}
+
+@keyframes upz-emoji-gem {
+  0%, 100% {
+    transform: rotateY(0deg) scale(1);
+  }
+  48% {
+    transform: rotateY(16deg) scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upz-premium-emoji,
+  .upz-premium-emoji-orbit {
+    animation: none !important;
+  }
 }
 
 @layer base {

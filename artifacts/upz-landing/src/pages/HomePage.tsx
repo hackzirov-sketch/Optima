@@ -41,7 +41,7 @@ export default function HomePage({ user, onLogout }: Props) {
     } else {
       setTasks(saved);
     }
-    const timer = window.setInterval(() => setTime(new Date()), 1000);
+    const timer = window.setInterval(() => setTime(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
 

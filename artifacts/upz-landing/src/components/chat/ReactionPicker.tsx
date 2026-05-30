@@ -12,7 +12,7 @@ import {
   getReactionAsset,
 } from "@/components/premium/PremiumAssets";
 import { cn } from "./chatShared";
-import { PremiumEmojiPicker } from "./PremiumEmojiPicker";
+import { FastEmojiPicker } from "./FastEmojiPicker";
 
 const emojiMartData = emojiMartDataRaw as EmojiMartData;
 
@@ -124,15 +124,7 @@ export function ReactionPicker({
 
   if (mode === "message") {
     return (
-      <PremiumEmojiPicker
-        mode="message"
-        compact
-        activeEmojis={activeEmojis}
-        onSelectReaction={onSelect}
-        onSelectAsset={onSelectAsset}
-        onSelectNative={onSelectNative}
-        className={className}
-      />
+      <FastEmojiPicker onSelectAsset={onSelectAsset} onSelectNative={onSelectNative} className={className} />
     );
   }
 
@@ -220,12 +212,12 @@ export function ReactionPicker({
                     whileTap={{ scale: 0.92 }}
                     onClick={() => selectNative(native)}
                     className={cn(
-                      "grid h-8 place-items-center rounded-xl transition-colors hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:hover:bg-indigo-950/40",
-                      active && "bg-indigo-50 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:ring-indigo-800",
+                      "grid h-9 place-items-center rounded-xl text-[22px] leading-none transition-colors hover:bg-[#F2F8FC] focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30 dark:hover:bg-indigo-950/40",
+                      active && "bg-[#E6F3FB] ring-1 ring-[#A9D7F2] dark:bg-indigo-950/40 dark:ring-indigo-800",
                     )}
                     aria-label={`React with ${native}`}
                   >
-                    <EmojiRenderer asset={getReactionAsset(reactionId)} size={20} decorative />
+                    <EmojiRenderer asset={getReactionAsset(reactionId)} size={24} decorative />
                   </motion.button>
                 );
               })}

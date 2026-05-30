@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -7,8 +7,10 @@ import { useTranslation } from "react-i18next";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
 import { EmojiRenderer, ReactionButton, encodeNativeEmojiReaction, findEmojiAsset, getReactionAsset, normalizeReactionId } from "@/components/premium/PremiumAssets";
 import { Avatar, cn, formatMessageTime, getMessageText, getReplySnippet, getUser } from "./chatShared";
+import { FastEmojiRenderer } from "./FastEmojiRenderer";
 import { MessageOptionsMenu, type MessageOptionAction } from "./MessageOptionsMenu";
-import { ReactionPicker } from "./ReactionPicker";
+
+const ReactionPicker = lazy(() => import("./ReactionPicker").then((module) => ({ default: module.ReactionPicker })));
 
 interface MessageBubbleProps {
   room: ChatRoom;
@@ -42,7 +44,7 @@ function isLargeEmojiOnly(text: string) {
 }
 
 function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOwn: boolean; large?: boolean }) {
-  const parts: Array<string | { token: string; key: string }> = [];
+  const parts: Array<string | { token: string; key: string; source: "premium" | "generated" }> = [];
   const pattern = /:([a-z0-9-]+):/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -50,10 +52,11 @@ function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOw
   while ((match = pattern.exec(text)) !== null) {
     const [raw, token] = match;
     const asset = findEmojiAsset(token);
-    if (!asset) continue;
+    const generated = !asset && /^(static|animated)-/.test(token);
+    if (!asset && !generated) continue;
 
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push({ token, key: `${token}-${match.index}` });
+    parts.push({ token, key: `${token}-${match.index}`, source: asset ? "premium" : "generated" });
     lastIndex = match.index + raw.length;
   }
 
@@ -69,12 +72,16 @@ function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOw
           <span
             key={part.key}
             className={cn(
-              "mx-0.5 inline-flex translate-y-1 items-center rounded-full p-0.5 align-middle shadow-sm",
-              large && "translate-y-0 p-1",
-              isOwn ? "bg-white/20" : "bg-[#F7FAFC] ring-1 ring-[#E5E7EB]",
+              "upz-inline-premium-emoji mx-0.5 inline-flex translate-y-1 items-center align-middle",
+              large && "upz-inline-premium-emoji-large translate-y-0",
+              !large && (isOwn ? "rounded-full bg-white/20 p-0.5" : "rounded-full bg-[#F7FAFC] p-0.5 ring-1 ring-[#E5E7EB]"),
             )}
           >
-            <EmojiRenderer assetId={part.token} size={large ? 42 : 22} />
+            {part.source === "premium" ? (
+              <EmojiRenderer assetId={part.token} size={large ? 58 : 22} />
+            ) : (
+              <FastEmojiRenderer emojiId={part.token} size={large ? "message" : "inline"} isPremiumUser={isOwn} playOnMount decorative />
+            )}
           </span>
         ),
       )}
@@ -213,7 +220,7 @@ export function MessageBubble({
         className={cn("flex items-end gap-2.5", isOwn && "flex-row-reverse")}
       >
         {!isOwn && <Avatar user={sender} size={30} />}
-        <div className={cn("relative flex max-w-[78%] flex-col sm:max-w-[68%] lg:max-w-[58%]", isOwn ? "items-end" : "items-start")}>
+        <div className={cn("relative flex max-w-[82%] flex-col sm:max-w-[72%] lg:max-w-[64%]", isOwn ? "items-end" : "items-start")}>
           {showSender && <span className="mb-1 ml-2 text-xs font-medium text-[#6B7280]">{sender?.name}</span>}
           <div className="group/message relative">
             <button
@@ -222,18 +229,18 @@ export function MessageBubble({
               onClick={openMenuFromClick}
               onContextMenu={openMenuFromContext}
               className={cn(
-                "group/bubble relative rounded-[22px] px-4 py-2.5 text-left text-sm leading-relaxed shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
-                largeEmojiOnly && "px-4 py-3 text-4xl leading-tight",
-                isOwn
-                  ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-indigo-950/25 hover:shadow-indigo-500/25"
-                  : "rounded-bl-md border border-[#E5E7EB] bg-white text-[#111827] hover:bg-white hover:shadow-indigo-100",
+                "upz-message-bubble group/bubble relative px-3.5 py-2 text-left text-[15px] leading-relaxed shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30",
+                largeEmojiOnly && "upz-emoji-only-message px-2 py-1 text-[3.3rem] leading-none",
+                isOwn ? "upz-message-bubble-own text-[#17212B]" : "upz-message-bubble-peer text-[#17212B]",
               )}
             >
             {replyMessage && (
               <div
                 className={cn(
                   "relative mb-2 overflow-hidden rounded-xl border-l-2 px-3 py-2 text-xs",
-                  isOwn ? "border-white/70 bg-white/20 text-white" : "border-indigo-300 bg-indigo-50 text-[#111827]",
+                  isOwn
+                    ? "border-[#5BAE64]/70 bg-white/36 text-[#17212B] dark:bg-white/10 dark:text-[#E5F7EE]"
+                    : "border-[#4BA3D8] bg-[#E6F3FB] text-[#17212B] dark:bg-[#12263A] dark:text-[#EAF6FF]",
                 )}
               >
                 <motion.span
@@ -255,17 +262,17 @@ export function MessageBubble({
             <div className="whitespace-pre-wrap break-words">
               <PremiumMessageText text={text} isOwn={isOwn} large={largeEmojiOnly} />
             </div>
-            <div className={cn("mt-1.5 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-white/70" : "text-[#6B7280]", largeEmojiOnly && "text-xs")}>
+            <div className={cn("mt-1 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-[#54865A]" : "text-[#6C7B86]", largeEmojiOnly && "text-xs")}>
               {message.edited && <span>{t("app.chat.edited")}</span>}
               <span>{formatMessageTime(message.timestamp)}</span>
-              {isOwn && <span className={message.read === false ? "text-white/65" : "text-cyan-100"}>{message.read === false ? t("app.chat.sent") : t("app.chat.readStatus")}</span>}
+              {isOwn && <span className={message.read === false ? "text-[#7FA786]" : "text-[#36A8E3]"}>{message.read === false ? t("app.chat.sent") : t("app.chat.readStatus")}</span>}
             </div>
             </button>
             <button
               type="button"
               onClick={openPickerFromHoverButton}
               className={cn(
-                "absolute top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full border border-white/70 bg-white/86 text-gray-500 opacity-0 shadow-md shadow-indigo-950/10 backdrop-blur transition-all hover:scale-105 hover:text-indigo-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 group-hover/message:opacity-100 dark:border-gray-700 dark:bg-gray-800/88 dark:text-gray-300",
+                "absolute top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-white/90 text-[#6C7B86] opacity-0 shadow-md shadow-black/10 backdrop-blur transition-all hover:scale-105 hover:text-[#168ACD] focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30 group-hover/message:opacity-100 dark:border-gray-700 dark:bg-gray-800/88 dark:text-gray-300",
                 isOwn ? "left-1.5" : "right-1.5",
               )}
               aria-label="Open quick reactions"
@@ -317,7 +324,9 @@ export function MessageBubble({
         typeof document !== "undefined" &&
         createPortal(
           <div style={pickerStyle}>
-            <ReactionPicker activeEmojis={activeReactionEmojis} onSelect={handleReaction} onSelectNative={handleNativeReaction} />
+            <Suspense fallback={<div className="w-[240px] rounded-[22px] border border-white/80 bg-white/92 p-4 text-xs font-bold text-gray-500 shadow-xl">Loading reactions</div>}>
+              <ReactionPicker activeEmojis={activeReactionEmojis} onSelect={handleReaction} onSelectNative={handleNativeReaction} />
+            </Suspense>
           </div>,
           document.body,
         )}

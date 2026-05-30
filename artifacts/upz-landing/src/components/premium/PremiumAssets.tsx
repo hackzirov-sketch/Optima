@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import Lottie from "lottie-react";
 import { Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -94,6 +95,14 @@ type PremiumSticker = {
 const classNames = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
 const REACTION_PARTICLES = ["#6366F1", "#3B82F6", "#F59E0B", "#10B981", "#F43F5E", "#FACC15"];
+
+const PREMIUM_MOTION_BY_EFFECT = {
+  pop: "upz-emoji-pop",
+  fire: "upz-emoji-fire",
+  hearts: "upz-emoji-heart",
+  sparkles: "upz-emoji-spark",
+  gem: "upz-emoji-gem",
+} as const;
 
 const EMOJI_NATIVE = {
   eyes: "\u{1F440}",
@@ -516,15 +525,20 @@ export function EmojiRenderer({
 }) {
   const resolved = asset ?? getEmojiAsset(assetId ?? "like");
   const label = `${resolved.label} premium emoji`;
+  const reduceMotion = useReducedMotion();
+  const motionClass = !reduceMotion && resolved.premium ? PREMIUM_MOTION_BY_EFFECT[resolved.effect ?? "sparkles"] : "";
+  const shouldGlow = Boolean(resolved.premium && !reduceMotion);
 
   if (!resolved.src && !resolved.animatedFluentId) {
     return (
       <span
         aria-hidden={decorative ? "true" : undefined}
         aria-label={decorative ? undefined : label}
-        className={classNames("inline-grid select-none place-items-center leading-none", className)}
+        className={classNames("upz-premium-emoji inline-grid select-none place-items-center leading-none", motionClass, className)}
         style={{ width: size, height: size, fontSize: Math.max(14, size * 0.82) }}
       >
+        {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
+        {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
         {resolved.native ?? "\u2726"}
       </span>
     );
@@ -533,14 +547,15 @@ export function EmojiRenderer({
   if (resolved.animatedFluentId && !resolved.src) {
     return (
       <motion.span
-        animate={decorative ? undefined : { scale: [1, 1.05, 1] }}
+        animate={decorative || reduceMotion ? undefined : { scale: [1, 1.05, 1] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
         aria-hidden={decorative ? "true" : undefined}
         aria-label={decorative ? undefined : label}
-        className={classNames("relative inline-grid select-none place-items-center overflow-hidden rounded-full leading-none", className)}
+        className={classNames("upz-premium-emoji relative inline-grid select-none place-items-center overflow-hidden rounded-full leading-none", motionClass, className)}
         style={{ width: size, height: size, fontSize: Math.max(14, size * 0.78) }}
       >
-        <span className="absolute inset-0 rounded-full bg-indigo-400/10 blur-md" aria-hidden="true" />
+        {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
+        {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
         <span className="relative grid place-items-center">{resolved.native ?? "\u2726"}</span>
       </motion.span>
     );
@@ -550,9 +565,11 @@ export function EmojiRenderer({
     <span
       aria-hidden={decorative ? "true" : undefined}
       aria-label={decorative ? undefined : label}
-      className={classNames("relative inline-grid select-none place-items-center", className)}
+      className={classNames("upz-premium-emoji relative inline-grid select-none place-items-center", motionClass, className)}
       style={{ width: size, height: size }}
     >
+      {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
+      {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
       <img
         src={resolved.src}
         alt={decorative ? "" : label}
@@ -560,7 +577,7 @@ export function EmojiRenderer({
         height={size}
         loading="lazy"
         decoding="async"
-        className="h-full w-full object-contain"
+        className="relative z-10 h-full w-full object-contain"
         draggable={false}
       />
     </span>
@@ -597,9 +614,9 @@ export function ReactionButton({
       whileTap={{ scale: 0.9 }}
       onClick={triggerClick}
       className={classNames(
-        "group relative inline-flex flex-shrink-0 items-center justify-center gap-1.5 overflow-visible border bg-white/90 shadow-sm backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400/30",
-        compact ? "h-8 rounded-full px-2" : "h-12 w-12 rounded-2xl",
-        active ? "border-indigo-200 text-indigo-700 ring-1 ring-indigo-100" : "border-[#E5E7EB] text-[#111827] hover:border-indigo-200",
+        "group relative inline-flex flex-shrink-0 items-center justify-center gap-1.5 overflow-visible border bg-white/92 shadow-sm backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30",
+        compact ? "h-7 rounded-full px-2" : "h-12 w-12 rounded-2xl",
+        active ? "border-[#A9D7F2] bg-[#E6F3FB] text-[#168ACD] ring-1 ring-[#A9D7F2]/70" : "border-[#D9E1E8] text-[#17212B] hover:border-[#A9D7F2] hover:bg-[#F2F8FC]",
       )}
       aria-label={`Select ${asset.label} reaction`}
       title={asset.label}
@@ -636,7 +653,7 @@ export function ReactionButton({
           </motion.span>
         )}
       </AnimatePresence>
-      <EmojiRenderer asset={asset} size={compact ? 18 : 31} className="drop-shadow-sm transition-transform group-hover:scale-105" />
+      <EmojiRenderer asset={asset} size={compact ? 19 : 34} className="drop-shadow-sm transition-transform group-hover:scale-105" />
       {typeof count === "number" && (
         <motion.span key={count} initial={{ scale: 0.7, opacity: 0.5 }} animate={{ scale: 1, opacity: 0.7 }} className="text-[10px] font-bold">
           {count}

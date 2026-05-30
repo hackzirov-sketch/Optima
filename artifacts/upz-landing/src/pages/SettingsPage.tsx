@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { User, Bell, Plug, Github, Send, Instagram, Youtube, HardDrive, Mail, Calendar, BookOpen, CheckCircle2, XCircle, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, User, Bell, Plug, Github, Send, Instagram, Youtube, HardDrive, Mail, Calendar, BookOpen, CheckCircle2, XCircle, Settings2, ShieldCheck, SlidersHorizontal, MoreVertical, Pencil, AtSign, Cake, Camera, Image, Phone, Shield, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, Pill, ProgressBar, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
@@ -30,10 +31,13 @@ const TABS = [
 ] as const;
 
 const NOTIFICATION_KEYS = ["email", "push", "taskReminders", "chatMessages", "weeklyReport", "productUpdates"] as const;
+const settingRowClass = "flex w-full items-center gap-4 px-4 py-3.5 text-left text-[#17212B] transition-colors hover:bg-[#F2F4F7] dark:text-gray-100 dark:hover:bg-white/10";
 
 export default function SettingsPage({ user, onLogout }: Props) {
   const { t } = useTranslation();
+  const [, navigate] = useLocation();
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("account");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [connected, setConnected] = useState<Record<string, boolean>>({});
   const [workspaceView, setWorkspaceView] = useState<TaskView>(() => storage.getActiveView() ?? "list");
   const [notifs, setNotifs] = useState({
@@ -61,9 +65,59 @@ export default function SettingsPage({ user, onLogout }: Props) {
     storage.saveActiveView(view);
   };
 
+  const username = user.username ?? `@${user.name.toLowerCase().replace(/\s+/g, "_")}`;
+  const email = user.email ?? "user@example.com";
+  const phone = user.phone ?? "+998 90 914 43 30";
+
   return (
     <AppLayout user={user} title={t("app.nav.settings")} onLogout={onLogout}>
       <div className="mx-auto max-w-5xl">
+        <div className="mb-4 overflow-hidden rounded-[24px] bg-[#202124] text-white shadow-lg shadow-black/10">
+          <div className="relative flex h-14 items-center gap-2 px-3">
+            <button
+              type="button"
+              onClick={() => navigate("/app/home")}
+              className="grid h-10 w-10 place-items-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Back to home"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <h2 className="min-w-0 flex-1 truncate text-base font-bold">Settings</h2>
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-full text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Edit profile"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((current) => !current)}
+              className="grid h-10 w-10 place-items-center rounded-full text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Open settings menu"
+              aria-expanded={menuOpen}
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-3 top-12 z-30 w-52 overflow-hidden rounded-2xl bg-[#2A2B2D] py-1.5 text-sm font-semibold text-white shadow-2xl shadow-black/25 ring-1 ring-white/10">
+                <button type="button" className="flex w-full px-4 py-2.5 text-left text-white hover:bg-white/10">Edit name</button>
+                <button type="button" className="flex w-full px-4 py-2.5 text-left text-white hover:bg-white/10">Set username</button>
+                <button type="button" className="flex w-full px-4 py-2.5 text-left text-white hover:bg-white/10">Log out</button>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col items-center px-4 pb-6 pt-1">
+            <div className="grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-rose-400 text-4xl font-bold">
+              {user.name.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="mt-3 text-center">
+              <p className="text-base font-bold">{user.name}</p>
+              <p className="text-xs text-white/55">online</p>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-6 flex w-fit gap-1 rounded-xl bg-white p-1 dark:bg-gray-800">
           {TABS.map((item) => (
             <button
@@ -84,34 +138,78 @@ export default function SettingsPage({ user, onLogout }: Props) {
 
         {tab === "account" && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t("app.settings.accountInfo")}</h3>
-
-              {[
-                { label: t("app.settings.displayName"), value: user.name, type: "text" },
-                { label: t("app.settings.email"), value: "user@example.com", type: "email" },
-                { label: t("app.settings.username"), value: `@${user.name.toLowerCase().replace(/\s+/g, "_")}`, type: "text" },
-              ].map((field) => (
-                <div key={field.label}>
-                  <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">{field.label}</label>
-                  <input
-                    type={field.type}
-                    defaultValue={field.value}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 focus:bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:focus:border-indigo-500 dark:focus:bg-gray-600"
-                  />
-                </div>
-              ))}
-
-              <div>
-                <label className="mb-1.5 block text-xs text-gray-500 dark:text-gray-400">{t("app.settings.profession")}</label>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                  {t(`app.professions.${user.profession}`, user.profession)}
-                  <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{t("app.settings.changeOnboarding")}</span>
-                </div>
-              </div>
-
-              <button className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500">
-                {t("app.settings.saveChanges")}
+            <div className="overflow-hidden rounded-[24px] bg-white shadow-sm ring-1 ring-[#E5E7EB] dark:bg-gray-900 dark:ring-gray-700">
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Camera className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">Profile avatar</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Change your public avatar</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <UserRound className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">{user.name}</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Name</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <AtSign className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">{username}</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Username</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Mail className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">{email}</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Email</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Phone className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">{phone}</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Phone</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Cake className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">Add birthday</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Birthday</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Image className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">My stories</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Story privacy and archive</span>
+                </span>
+              </button>
+              <button type="button" className={settingRowClass}>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#EEF4F8] text-[#168ACD] dark:bg-gray-800">
+                  <Shield className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#17212B] dark:text-gray-100">Privacy and Security</span>
+                  <span className="block truncate text-xs text-[#7C8B96]">Sessions, password, blocked users</span>
+                </span>
               </button>
             </div>
 
@@ -222,8 +320,8 @@ export default function SettingsPage({ user, onLogout }: Props) {
                   <div key={setting.id} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-black text-[#111827]">{setting.title}</h3>
-                        <p className="mt-2 text-sm leading-6 text-[#6B7280]">{setting.value}</p>
+                        <h3 className="font-black text-[#111827] dark:text-gray-100">{setting.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-[#6B7280] dark:text-gray-400">{setting.value}</p>
                       </div>
                       <Pill tone="indigo">Demo</Pill>
                     </div>
@@ -238,7 +336,7 @@ export default function SettingsPage({ user, onLogout }: Props) {
                 <ViewSwitcher views={POWER_VIEWS} value={workspaceView} onChange={changeWorkspaceView} />
                 <div className="mt-5 rounded-[24px] bg-[#F7FAFC] p-4 ring-1 ring-[#E5E7EB]">
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="text-sm font-black text-[#111827]">Density and layout</p>
+                    <p className="text-sm font-black text-[#111827] dark:text-gray-100">Density and layout</p>
                     <Pill tone="blue">Compact</Pill>
                   </div>
                   <ProgressBar value={82} label="Power-user readiness" />
@@ -254,7 +352,7 @@ export default function SettingsPage({ user, onLogout }: Props) {
                 <SectionTitle icon={ShieldCheck} title="Permissions and Flow Automations" description="Role-ready settings and automation rules prepared for future backend integration." />
                 <div className="grid gap-3 md:grid-cols-2">
                   {["Admin can create spaces", "Members can manage assigned tasks", "Guests can comment only", "Moderators can review community posts"].map((rule) => (
-                    <div key={rule} className="rounded-2xl bg-[#F7FAFC] p-3 text-sm font-semibold text-[#111827] ring-1 ring-[#E5E7EB]">
+                    <div key={rule} className="rounded-2xl bg-[#F7FAFC] p-3 text-sm font-semibold text-[#111827] ring-1 ring-[#E5E7EB] dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700">
                       {rule}
                     </div>
                   ))}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckSquare, Pin, Search, Sparkles, X } from "lucide-react";
+import { Pin, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { Toast } from "@/components/app/DesignSystem";
@@ -12,7 +12,6 @@ import { MessageInput } from "@/components/chat/MessageInput";
 import { cn, getMessageText, getReplySnippet, getRoomName } from "@/components/chat/chatShared";
 import { normalizeReactionId } from "@/components/premium/PremiumAssets";
 import { MOCK_CHAT_ROOMS, MOCK_USERS } from "@/data/mockData";
-import { SMART_TASKS } from "@/data/ecosystemData";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
 
@@ -287,16 +286,8 @@ export default function ChatPage(_: Props) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex min-h-0 overflow-hidden bg-white text-[#111827] dark:bg-gray-950 dark:text-gray-100"
-      style={{
-        background:
-          "radial-gradient(circle at 12% 0%, var(--upz-shell-glow-a), transparent 28%), radial-gradient(circle at 92% 8%, var(--upz-shell-glow-b), transparent 24%), var(--upz-bg)",
-      }}
-    >
-      <div
-        className="flex h-full min-h-0 w-full overflow-hidden bg-white dark:bg-gray-900"
-      >
+    <div className="fixed inset-0 z-[100] flex min-h-0 overflow-hidden bg-[var(--upz-messenger-shell)] text-[#17212B] dark:bg-gray-950 dark:text-gray-100">
+      <div className="flex h-full min-h-0 w-full overflow-hidden">
         <ChatSidebar
           rooms={rooms}
           users={MOCK_USERS}
@@ -305,7 +296,7 @@ export default function ChatPage(_: Props) {
           onQueryChange={setSearchQuery}
           onSelectRoom={handleSelectRoom}
           onBackToApp={handleBackToApp}
-          className={cn("w-full md:flex md:w-[360px] md:flex-shrink-0", mobilePane === "chat" ? "hidden" : "flex")}
+          className={cn("w-full md:flex md:w-[372px] md:flex-shrink-0", mobilePane === "chat" ? "hidden" : "flex")}
         />
 
         {activeRoom ? (
@@ -317,38 +308,6 @@ export default function ChatPage(_: Props) {
               onAction={handleHeaderAction}
               onStartCall={handleStartCall}
             />
-
-            <div className="relative z-20 border-b border-gray-200 bg-white/96 px-3 py-1.5 backdrop-blur dark:border-gray-700 dark:bg-gray-900/96">
-              <div className="flex h-9 items-center gap-2 rounded-2xl bg-gray-50/80 px-2.5 ring-1 ring-gray-200/80 dark:bg-gray-800/70 dark:ring-gray-700">
-                <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-lg bg-white text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-                  <CheckSquare className="h-3.5 w-3.5" />
-                </span>
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="hidden rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700 sm:inline-flex">
-                    Linked
-                  </span>
-                  <p className="truncate text-xs font-semibold text-[#111827] dark:text-gray-100">{SMART_TASKS[0].title}</p>
-                </div>
-                <div className="flex flex-shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setNotice("Task created from selected message locally")}
-                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
-                    aria-label="Create task from chat"
-                  >
-                    <CheckSquare className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNotice("AI summarized this chat locally")}
-                    className="grid h-7 w-7 place-items-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-gray-900"
-                    aria-label="Summarize chat with AI"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
 
             <AnimatePresence>
               {activeCall && callRoom && (
@@ -370,7 +329,7 @@ export default function ChatPage(_: Props) {
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="relative z-30 border-b border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
+                  className="relative z-30 border-b border-[#D9E1E8] bg-[#FFFFFF]/96 px-3 py-2 backdrop-blur dark:border-gray-700 dark:bg-gray-900"
                 >
                   <div className="mx-auto flex h-9 max-w-4xl items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-3 focus-within:border-indigo-300 focus-within:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus-within:bg-gray-800">
                     <Search className="h-4 w-4 text-[#6B7280]" />
@@ -378,7 +337,7 @@ export default function ChatPage(_: Props) {
                       value={chatSearchQuery}
                       onChange={(event) => setChatSearchQuery(event.target.value)}
                       placeholder={t("app.chat.searchRoom", { room: getRoomName(activeRoom, t) })}
-                      className="min-w-0 flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#6B7280]"
+                      className="min-w-0 flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#6B7280] dark:text-gray-100 dark:placeholder:text-gray-500"
                       autoFocus
                     />
                     {chatSearchQuery && (
@@ -392,7 +351,7 @@ export default function ChatPage(_: Props) {
                         setChatSearchOpen(false);
                         setChatSearchQuery("");
                       }}
-                      className="rounded-xl p-1 text-[#6B7280] hover:bg-white hover:text-[#111827]"
+                      className="rounded-xl p-1 text-[#6B7280] hover:bg-white hover:text-[#111827] dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                       aria-label={t("app.chat.closeSearch")}
                     >
                       <X className="h-4 w-4" />
@@ -406,7 +365,7 @@ export default function ChatPage(_: Props) {
               <button
                 type="button"
                 onClick={() => setNotice(t("app.chat.pinnedNotice"))}
-                className="relative z-20 flex h-9 items-center gap-2 border-b border-gray-200 bg-white/96 px-3 text-left backdrop-blur transition-colors hover:bg-indigo-50/70 dark:border-gray-700 dark:bg-gray-900/96 dark:hover:bg-indigo-950/25"
+              className="relative z-20 flex h-9 items-center gap-2 border-b border-[#D9E1E8] bg-[#FFFFFF]/96 px-3 text-left backdrop-blur transition-colors hover:bg-[#F2F8FC] dark:border-gray-700 dark:bg-gray-900/96 dark:hover:bg-indigo-950/25"
               >
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-950/40 dark:ring-indigo-900/60">
                   <Pin className="h-3 w-3" />
@@ -419,14 +378,10 @@ export default function ChatPage(_: Props) {
             )}
 
             <div
-              className="relative z-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-5"
-              style={{
-                background:
-                  "radial-gradient(circle at 12% 0%, var(--upz-chat-glow-a), transparent 28%), radial-gradient(circle at 100% 20%, var(--upz-chat-glow-b), transparent 24%), linear-gradient(135deg, var(--upz-chat-bg-a), var(--upz-chat-bg-b))",
-              }}
+              className="upz-messenger-wallpaper relative z-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 sm:px-5"
             >
-              <div className="mx-auto flex max-w-4xl flex-col gap-3">
-                <div className="self-center rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-[11px] font-medium text-[#6B7280] backdrop-blur">
+              <div className="mx-auto flex max-w-[780px] flex-col gap-2.5">
+                <div className="self-center rounded-full bg-[#728A96]/70 px-3 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur">
                   {t("app.chat.today")}
                 </div>
 
@@ -451,14 +406,14 @@ export default function ChatPage(_: Props) {
 
                 {activeRoom.messages.length === 0 && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-[#E5E7EB] bg-white px-6 py-8 text-center shadow-sm">
-                    <div className="text-sm font-semibold text-[#111827]">{t("app.chat.historyCleared")}</div>
+                    <div className="text-sm font-semibold text-[#111827] dark:text-gray-100">{t("app.chat.historyCleared")}</div>
                     <p className="mt-2 text-sm text-[#6B7280]">{t("app.chat.historyClearedDesc")}</p>
                   </motion.div>
                 )}
 
                 {activeRoom.messages.length > 0 && displayedMessages.length === 0 && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto mt-16 max-w-sm rounded-3xl border border-dashed border-[#E5E7EB] bg-white px-6 py-8 text-center shadow-sm">
-                    <div className="text-sm font-semibold text-[#111827]">{t("app.chat.noMessageFound")}</div>
+                    <div className="text-sm font-semibold text-[#111827] dark:text-gray-100">{t("app.chat.noMessageFound")}</div>
                     <p className="mt-2 text-sm text-[#6B7280]">{t("app.chat.noMessageFoundDesc")}</p>
                   </motion.div>
                 )}
@@ -484,7 +439,7 @@ export default function ChatPage(_: Props) {
         ) : (
           <section className="flex min-w-0 flex-1 flex-col items-center justify-center bg-[#F7FAFC] px-6 text-center">
             <div className="rounded-3xl border border-[#E5E7EB] bg-white px-8 py-10 shadow-sm">
-              <div className="text-base font-semibold text-[#111827]">{t("app.chat.noChatsLeft")}</div>
+              <div className="text-base font-semibold text-[#111827] dark:text-gray-100">{t("app.chat.noChatsLeft")}</div>
               <p className="mt-2 max-w-sm text-sm text-[#6B7280]">{t("app.chat.noChatsLeftDesc")}</p>
             </div>
           </section>

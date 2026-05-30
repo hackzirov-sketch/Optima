@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
+const SAFE_CSS_TOKEN = /^[a-zA-Z0-9_-]+$/
+const SAFE_CSS_COLOR = /^(#[0-9a-fA-F]{3,8}|rgb(a)?\([\d\s,%.]+\)|hsl(a)?\([\d\s,%.]+\)|var\(--[a-zA-Z0-9_-]+\)|[a-zA-Z]+)$/
 
 export type ChartConfig = {
   [k in string]: {
@@ -42,7 +44,7 @@ const ChartContainer = React.forwardRef<
   }
 >(({ id, className, children, config, ...props }, ref) => {
   const uniqueId = React.useId()
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
+  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`.replace(/[^a-zA-Z0-9_-]/g, "")
 
   return (
     <ChartContext.Provider value={{ config }}>
@@ -67,7 +69,7 @@ ChartContainer.displayName = "Chart"
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
-    ([, config]) => config.theme || config.color
+    ([key, config]) => SAFE_CSS_TOKEN.test(key) && (config.theme || config.color)
   )
 
   if (!colorConfig.length) {
@@ -86,7 +88,7 @@ ${colorConfig
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
+    return color && SAFE_CSS_COLOR.test(color) ? `  --color-${key}: ${color};` : null
   })
   .join("\n")}
 }

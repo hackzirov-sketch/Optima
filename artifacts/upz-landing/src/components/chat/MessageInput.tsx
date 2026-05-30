@@ -1,11 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, Edit, Mic, Paperclip, Reply, Send, Smile, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
 import { StickerPicker, getReactionAsset } from "@/components/premium/PremiumAssets";
-import { ReactionPicker } from "./ReactionPicker";
 import { cn, getReplySnippet, getRoomName, getUser } from "./chatShared";
+import { FastEmojiRenderer } from "./FastEmojiRenderer";
+
+const ReactionPicker = lazy(() => import("./ReactionPicker").then((module) => ({ default: module.ReactionPicker })));
+const EMOJI_TOKEN_PATTERN = /:((?:static|animated)-[a-z0-9-]+):/g;
+
+function getEmojiOnlyTokens(value: string) {
+  const tokens = Array.from(value.matchAll(EMOJI_TOKEN_PATTERN)).map((match) => match[1]);
+  if (!tokens.length) return [];
+  const withoutTokens = value.replace(EMOJI_TOKEN_PATTERN, "").trim();
+  return withoutTokens ? [] : tokens.slice(0, 12);
+}
 
 interface MessageInputProps {
   room: ChatRoom;
@@ -39,6 +49,7 @@ export function MessageInput({
   const aiCommandOpen = value.trimStart().toLowerCase().startsWith("/ai");
   const typingUser = room.memberIds.map((id) => getUser(id, users)).find((candidate) => candidate && candidate.id !== "me" && candidate.status === "online");
   const roomName = getRoomName(room, t);
+  const emojiOnlyTokens = getEmojiOnlyTokens(value);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -99,7 +110,7 @@ export function MessageInput({
   };
 
   return (
-    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-3 py-2.5 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
+    <div className="flex-shrink-0 border-t border-[#D9E1E8] bg-[#FFFFFF]/92 px-2 py-2 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
       <AnimatePresence>
         {typingUser && !editingMessage && (
           <motion.div
@@ -196,7 +207,7 @@ export function MessageInput({
         )}
       </AnimatePresence>
 
-      <div className="relative flex items-end gap-2 rounded-[24px] border border-gray-200 bg-gray-50 p-1.5 shadow-sm transition-colors focus-within:border-indigo-300 focus-within:bg-white dark:border-gray-600 dark:bg-gray-800 dark:focus-within:border-indigo-500 dark:focus-within:bg-gray-700">
+      <div className="upz-composer-dock relative mx-auto flex max-w-[780px] items-end gap-1.5 rounded-[24px] bg-[#F1F5F8] p-1.5 shadow-sm transition-colors focus-within:bg-white focus-within:ring-2 focus-within:ring-[#4BA3D8]/25 dark:border-gray-600 dark:bg-gray-800 dark:focus-within:border-indigo-500 dark:focus-within:bg-gray-700">
         <button
           type="button"
           onClick={() => {
@@ -204,8 +215,8 @@ export function MessageInput({
             setEmojiOpen(false);
           }}
           className={cn(
-            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
-            stickerOpen ? "bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
+            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-[#168ACD] dark:hover:bg-gray-700 dark:hover:text-gray-100",
+            stickerOpen ? "bg-white text-[#168ACD] dark:bg-gray-700 dark:text-gray-100" : "text-[#6C7B86] dark:text-gray-500",
           )}
           aria-label={t("app.chat.attachFile")}
         >
@@ -218,30 +229,42 @@ export function MessageInput({
             setStickerOpen(false);
           }}
           className={cn(
-            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100",
-            emojiOpen ? "bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-100" : "text-gray-400 dark:text-gray-500",
+            "grid h-10 w-10 flex-shrink-0 place-items-center rounded-full transition-colors hover:bg-white hover:text-[#168ACD] dark:hover:bg-gray-700 dark:hover:text-gray-100",
+            emojiOpen ? "bg-white text-[#168ACD] dark:bg-gray-700 dark:text-gray-100" : "text-[#6C7B86] dark:text-gray-500",
           )}
           aria-label={t("app.chat.emojiPicker")}
         >
           <Smile className="h-5 w-5" />
         </button>
 
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              onSend();
-            }
-          }}
-          rows={1}
-          placeholder={canMention ? t("app.chat.mentionPlaceholder", { room: roomName }) : t("app.chat.messagePlaceholder", { room: roomName })}
-          className="max-h-[120px] min-h-10 flex-1 resize-none bg-transparent py-2.5 text-sm leading-5 text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
-        />
+        <div className="relative min-h-10 flex-1">
+          {emojiOnlyTokens.length > 0 && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center gap-1 overflow-hidden py-1">
+              {emojiOnlyTokens.map((token, index) => (
+                <FastEmojiRenderer key={`${token}-${index}`} emojiId={token} size={emojiOnlyTokens.length === 1 ? 34 : 26} mode="static" decorative />
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSend();
+              }
+            }}
+            rows={1}
+            placeholder={canMention ? t("app.chat.mentionPlaceholder", { room: roomName }) : t("app.chat.messagePlaceholder", { room: roomName })}
+            className={cn(
+              "max-h-[120px] min-h-10 w-full resize-none bg-transparent py-2.5 text-[15px] leading-5 text-[#17212B] outline-none placeholder:text-[#7C8B96] dark:text-gray-100 dark:placeholder:text-gray-500",
+              emojiOnlyTokens.length > 0 && "text-transparent caret-[#17212B] dark:text-transparent dark:caret-gray-100",
+            )}
+          />
+        </div>
 
-        <button type="button" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-100" aria-label={t("app.chat.voicePlaceholder")}>
+        <button type="button" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-[#6C7B86] transition-colors hover:bg-white hover:text-[#168ACD] dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-100" aria-label={t("app.chat.voicePlaceholder")}>
           <Mic className="h-5 w-5" />
         </button>
         <motion.button
@@ -253,7 +276,7 @@ export function MessageInput({
           className={cn(
             "grid h-11 w-11 flex-shrink-0 place-items-center rounded-full shadow-lg transition-all",
             value.trim()
-              ? "bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-indigo-950/30"
+              ? "bg-[#36A8E3] text-white shadow-[#36A8E3]/30"
               : "cursor-not-allowed bg-white text-gray-400 shadow-none dark:bg-gray-700 dark:text-gray-500",
           )}
           aria-label={t("app.chat.sendMessage")}
@@ -262,11 +285,6 @@ export function MessageInput({
         </motion.button>
 
         <AnimatePresence>
-          {emojiOpen && (
-            <div className="absolute bottom-[58px] left-0 z-40 max-w-[calc(100vw-1.5rem)]">
-              <ReactionPicker mode="message" onSelect={appendEmoji} onSelectAsset={appendEmojiAsset} onSelectNative={appendNativeEmoji} />
-            </div>
-          )}
           {stickerOpen && (
             <div className="absolute bottom-[58px] left-0 z-40 max-w-[calc(100vw-1.5rem)]">
               <StickerPicker
@@ -277,6 +295,28 @@ export function MessageInput({
           )}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {emojiOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 14, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: 10, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="mx-auto mt-2 max-w-[780px] overflow-hidden rounded-t-[22px] bg-[#181818] shadow-2xl shadow-black/25"
+          >
+            <Suspense fallback={<div className="h-[280px] bg-[#181818] p-4 text-xs font-bold text-[#A9A9A9]">Loading emoji</div>}>
+              <ReactionPicker
+                mode="message"
+                className="upz-telegram-emoji-panel"
+                onSelect={appendEmoji}
+                onSelectAsset={appendEmojiAsset}
+                onSelectNative={appendNativeEmoji}
+              />
+            </Suspense>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!aiCommandOpen && (
         <div className="mt-1.5 px-2 text-[11px] text-gray-400 dark:text-gray-500">

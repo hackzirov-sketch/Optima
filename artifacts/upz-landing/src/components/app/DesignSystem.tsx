@@ -1,6 +1,9 @@
 ﻿import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export { cn };
 
 export const DESIGN_TOKENS = {
   background: "#F7FAFC",
@@ -12,10 +15,6 @@ export const DESIGN_TOKENS = {
   blue: "#3B82F6",
   shadow: "0 18px 45px rgba(17, 24, 39, 0.08)",
 };
-
-export function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 interface PageShellProps {
   children: ReactNode;

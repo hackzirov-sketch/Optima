@@ -56,25 +56,25 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
   };
 
   return (
-    <header className="relative z-40 flex h-[72px] flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-3 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
+    <header className="relative z-40 flex h-14 flex-shrink-0 items-center gap-3 border-b border-[#D9E1E8] bg-[#FFFFFF]/96 px-3 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-4">
       <button
         type="button"
         onClick={onBackToList}
-        className="grid h-10 w-10 place-items-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100 md:hidden"
+        className="grid h-10 w-10 place-items-center rounded-full text-[#6C7B86] transition-colors hover:bg-[#EEF4F8] hover:text-[#168ACD] dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100 md:hidden"
         aria-label={t("app.chat.openList")}
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      {room.type === "1on1" ? <Avatar user={peer} size={44} showOnline /> : <RoomGlyph room={room} className="h-11 w-11" />}
+      {room.type === "1on1" ? <Avatar user={peer} size={40} showOnline /> : <RoomGlyph room={room} className="h-10 w-10" />}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100 sm:text-base">{roomName}</h2>
+          <h2 className="truncate text-[15px] font-semibold text-[#17212B] dark:text-gray-100">{roomName}</h2>
           {room.projectBadge && <PremiumGradientBadge label={room.projectBadge} icon="/emojis/rocket.svg" className="hidden sm:inline-flex" />}
           {room.muted && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500 dark:bg-gray-700 dark:text-gray-400">{t("app.chat.muted")}</span>}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-[#6C7B86] dark:text-gray-400">
           <PremiumStatusBadge status={headerStatus} size={18} className="border-gray-200 dark:border-gray-600" />
           <span className="truncate">{linkedTask ? `${status.label} - ${linkedTask}` : status.label}</span>
         </div>
@@ -88,13 +88,13 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
         </div>
       )}
 
-      <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center gap-1 text-[#6C7B86] dark:text-gray-400">
         {canCall && (
           <>
             <button
               type="button"
               onClick={() => onStartCall("voice")}
-              className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+              className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-[#EEF4F8] hover:text-[#168ACD] dark:hover:bg-gray-800 dark:hover:text-gray-100"
               aria-label={t("app.chat.startVoice")}
             >
               <Phone className="h-4 w-4" />
@@ -102,7 +102,7 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
             <button
               type="button"
               onClick={() => onStartCall("video")}
-              className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+              className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-[#EEF4F8] hover:text-[#168ACD] dark:hover:bg-gray-800 dark:hover:text-gray-100"
               aria-label={t("app.chat.startVideo")}
             >
               <Video className="h-4 w-4" />
@@ -112,7 +112,7 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
         <button
           type="button"
           onClick={() => onAction("search")}
-          className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-[#EEF4F8] hover:text-[#168ACD] dark:hover:bg-gray-800 dark:hover:text-gray-100"
           aria-label={t("app.chat.searchInChat")}
         >
           <Search className="h-4 w-4" />
@@ -123,7 +123,7 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
             event.stopPropagation();
             setOpen((current) => !current);
           }}
-          className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-[#EEF4F8] hover:text-[#168ACD] dark:hover:bg-gray-800 dark:hover:text-gray-100"
           aria-label={t("app.chat.openMenu")}
         >
           <MoreVertical className="h-4 w-4" />
