@@ -92,23 +92,23 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
           )}
         </div>
         {!collapsed && (
-          <div className="mt-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-3 ring-1 ring-indigo-100">
+          <div className="mt-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-3 ring-1 ring-indigo-100 dark:from-indigo-500/15 dark:to-blue-500/15 dark:ring-indigo-500/25">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">{t("app.nav.zoneHealth")}</span>
-              <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-bold text-indigo-600">88%</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">{t("app.nav.zoneHealth")}</span>
+              <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">88%</span>
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-card">
+            <div className="mt-2 h-1.5 rounded-full bg-white/60 dark:bg-white/10">
               <div className="h-full w-[88%] rounded-full bg-gradient-to-r from-indigo-500 to-blue-500" />
             </div>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 gap-4 overflow-y-auto px-3 py-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.titleKey} className="mb-4 last:mb-0">
             {!collapsed && (
-              <div className="mb-1 px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">
+              <div className="mb-1 px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                 {t(`app.nav.${group.titleKey}`)}
               </div>
             )}
@@ -123,9 +123,11 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                       className={cn(
                         "relative flex cursor-pointer select-none items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors",
                         collapsed && "justify-center",
+                        active
+                          ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
-                      style={{ background: active ? "#EEF2FF" : "transparent", color: active ? "#4F46E5" : "#6B7280" }}
-                      whileHover={{ background: active ? "#EEF2FF" : "#F7FAFC", color: active ? "#4F46E5" : "#111827" }}
+                      whileTap={{ scale: 0.98 }}
                       transition={{ duration: 0.15 }}
                       title={collapsed ? label : undefined}
                     >
@@ -139,7 +141,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                       <Icon className="h-4 w-4 flex-shrink-0" />
                       {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
                       {!collapsed && badgeKey && (
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600">{t(`app.nav.${badgeKey}`)}</span>
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">{t(`app.nav.${badgeKey}`)}</span>
                       )}
                     </motion.div>
                   </Link>
@@ -152,7 +154,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
 
       <div className="border-t border-border px-3 py-4">
         {!collapsed && (
-          <div className="mb-3 rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+          <div className="mb-3 rounded-2xl bg-muted p-3 ring-1 ring-border">
             <div className="flex items-center justify-between gap-2">
               <p className="truncate text-sm font-semibold text-foreground">{user.name}</p>
               <span className="rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 px-2 py-0.5 text-[10px] font-black text-white">{t("app.nav.pro")}</span>
@@ -164,7 +166,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
           type="button"
           onClick={onLogout}
           className={cn(
-            "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600",
+            "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/15 dark:hover:text-rose-400",
             collapsed && "justify-center",
           )}
           whileTap={{ scale: 0.98 }}

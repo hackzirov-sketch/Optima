@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 
@@ -82,7 +82,7 @@ export function SectionTitle({ icon: Icon, title, description, action }: Section
     <div className="mb-4 flex items-start justify-between gap-4">
       <div className="flex items-start gap-3">
         {Icon && (
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
             <Icon className="h-5 w-5" />
           </span>
         )}
@@ -117,7 +117,7 @@ export function MetricTile({ label, value, icon: Icon, accent = "#6366F1", trend
         </span>
       </div>
       <div className="mt-4 text-2xl font-bold text-foreground">{value}</div>
-      {trend && <div className="mt-2 text-xs font-medium text-emerald-600">{trend}</div>}
+      {trend && <div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">{trend}</div>}
     </motion.div>
   );
 }
@@ -129,16 +129,20 @@ interface PillProps {
 }
 
 const pillTone = {
-  indigo: "bg-indigo-50 text-indigo-700 ring-indigo-100",
-  blue: "bg-blue-50 text-blue-700 ring-blue-100",
-  green: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  amber: "bg-amber-50 text-amber-700 ring-amber-100",
-  red: "bg-rose-50 text-rose-700 ring-rose-100",
-  slate: "bg-slate-100 text-slate-600 ring-slate-200",
+  indigo: "bg-indigo-50 text-indigo-700 ring-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/25",
+  blue:   "bg-blue-50 text-blue-700 ring-blue-100 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/25",
+  green:  "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/25",
+  amber:  "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/25",
+  red:    "bg-rose-50 text-rose-700 ring-rose-100 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/25",
+  slate:  "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600",
 };
 
 export function Pill({ children, tone = "indigo", className }: PillProps) {
-  return <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1", pillTone[tone], className)}>{children}</span>;
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1", pillTone[tone], className)}>
+      {children}
+    </span>
+  );
 }
 
 interface ActionButtonProps {
@@ -150,10 +154,10 @@ interface ActionButtonProps {
 }
 
 const buttonVariant = {
-  primary: "bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-500",
-  secondary: "border border-border bg-card text-foreground hover:bg-slate-50",
-  ghost: "text-muted-foreground hover:bg-slate-100 hover:text-foreground",
-  danger: "bg-rose-50 text-rose-700 hover:bg-rose-100",
+  primary:   "bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-500 dark:shadow-indigo-900/40",
+  secondary: "border border-border bg-card text-foreground hover:bg-slate-50 dark:hover:bg-slate-800",
+  ghost:     "text-muted-foreground hover:bg-slate-100 hover:text-foreground dark:hover:bg-slate-800",
+  danger:    "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25",
 };
 
 export function ActionButton({ children, onClick, variant = "primary", className, type = "button" }: ActionButtonProps) {
@@ -185,7 +189,9 @@ export function SimpleTabs<T extends string>({ tabs, value, onChange, labels }: 
           onClick={() => onChange(tab)}
           className={cn(
             "rounded-xl px-3 py-2 text-sm font-semibold capitalize transition-colors",
-            value === tab ? "bg-indigo-600 text-white shadow-sm" : "text-muted-foreground hover:bg-slate-50 hover:text-foreground",
+            value === tab
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-slate-100 hover:text-foreground dark:hover:bg-slate-800",
           )}
         >
           {labels?.[tab] ?? tab.replace(/-/g, " ")}
@@ -205,7 +211,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-muted p-8 text-center">
-      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm dark:text-indigo-400">
         <Icon className="h-6 w-6" />
       </span>
       <h3 className="mt-4 text-base font-semibold text-foreground">{title}</h3>
@@ -218,13 +224,13 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
 export function LoadingSkeleton() {
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100" />
-      <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
-      <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+      <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+      <div className="h-3 w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+      <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
       <div className="grid grid-cols-3 gap-3 pt-2">
-        <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-        <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-        <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="h-16 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+        <div className="h-16 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+        <div className="h-16 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
       </div>
     </div>
   );
@@ -247,7 +253,7 @@ export function ProgressBar({ value, accent = DESIGN_TOKENS.indigo, label }: Pro
           <span>{safeValue}%</span>
         </div>
       )}
-      <div className="h-2.5 overflow-hidden rounded-full bg-muted ring-1 ring-[#E5E7EB]">
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted ring-1 ring-border">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${safeValue}%`, background: accent }} />
       </div>
     </div>
@@ -270,7 +276,7 @@ export function CommandCard({ icon: Icon, title, description, meta, accent = DES
       onClick={onClick}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.99 }}
-      className="group flex w-full items-start gap-4 rounded-[24px] border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-indigo-100 hover:shadow-md"
+      className="group flex w-full items-start gap-4 rounded-[24px] border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:hover:border-indigo-500/40"
     >
       <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl" style={{ background: `${accent}14`, color: accent }}>
         <Icon className="h-5 w-5" />
@@ -278,7 +284,11 @@ export function CommandCard({ icon: Icon, title, description, meta, accent = DES
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold text-foreground">{title}</span>
         <span className="mt-1 block text-sm leading-5 text-muted-foreground">{description}</span>
-        {meta && <span className="mt-3 inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-[#E5E7EB]">{meta}</span>}
+        {meta && (
+          <span className="mt-3 inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
+            {meta}
+          </span>
+        )}
       </span>
     </motion.button>
   );
@@ -315,7 +325,7 @@ export function Modal({ open, title, description, children, onClose }: ModalProp
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#111827]/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -326,8 +336,13 @@ export function Modal({ open, title, description, children, onClose }: ModalProp
             <h3 className="text-lg font-bold text-foreground">{title}</h3>
             {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl px-2 py-1 text-muted-foreground hover:bg-slate-100" aria-label="Close modal">
-            x
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl px-2 py-1 text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close modal"
+          >
+            ✕
           </button>
         </div>
         <div className="mt-5">{children}</div>

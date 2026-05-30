@@ -71,7 +71,7 @@ function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOw
             className={cn(
               "mx-0.5 inline-flex translate-y-1 items-center rounded-full p-0.5 align-middle shadow-sm",
               large && "translate-y-0 p-1",
-              isOwn ? "bg-card/20" : "bg-muted ring-1 ring-[#E5E7EB]",
+              isOwn ? "bg-card/20" : "bg-muted ring-1 ring-border",
             )}
           >
             <EmojiRenderer assetId={part.token} size={large ? 42 : 22} />
@@ -233,7 +233,7 @@ export function MessageBubble({
               <div
                 className={cn(
                   "relative mb-2 overflow-hidden rounded-xl border-l-2 px-3 py-2 text-xs",
-                  isOwn ? "border-white/70 bg-card/20 text-white" : "border-indigo-300 bg-indigo-50 text-foreground",
+                  isOwn ? "border-white/70 bg-card/20 text-white" : "border-indigo-300 bg-indigo-50 text-foreground dark:border-indigo-500/40 dark:bg-indigo-500/15",
                 )}
               >
                 <motion.span
@@ -247,7 +247,7 @@ export function MessageBubble({
               </div>
             )}
             {isPinned && (
-              <div className={cn("mb-1.5 flex items-center gap-1 text-[11px] font-semibold", isOwn ? "text-white/75" : "text-indigo-600")}>
+              <div className={cn("mb-1.5 flex items-center gap-1 text-[11px] font-semibold", isOwn ? "text-white/75" : "text-indigo-600 dark:text-indigo-400")}>
                 <Pin className="h-3 w-3" />
                 {t("app.chat.pinnedLabel")}
               </div>

@@ -73,7 +73,7 @@ export function FilterBar({
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-[24px] border border-border bg-card p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-muted px-3 ring-1 ring-[#E5E7EB] focus-within:ring-indigo-200">
+      <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-muted px-3 ring-1 ring-border focus-within:ring-indigo-400 dark:focus-within:ring-indigo-500">
         <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         <input
           value={query}
@@ -84,7 +84,7 @@ export function FilterBar({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {chips.map((chip) => (
-          <button key={chip} type="button" className="rounded-full bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground ring-1 ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700">
+          <button key={chip} type="button" className="rounded-full bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground ring-1 ring-border hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300">
             {chip}
           </button>
         ))}
@@ -96,7 +96,7 @@ export function FilterBar({
 
 export function SmartField({ field }: { field: SmartFieldType }) {
   return (
-    <div className="rounded-2xl bg-muted px-3 py-2 ring-1 ring-[#E5E7EB]">
+    <div className="rounded-2xl bg-muted px-3 py-2 ring-1 ring-border">
       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">{field.label}</p>
       <div className="mt-1">
         <Pill tone={field.tone ?? "slate"}>{field.value}</Pill>
@@ -121,7 +121,7 @@ export function DataTable({
           <span key={column}>{column}</span>
         ))}
       </div>
-      <div className="divide-y divide-[#E5E7EB]">
+      <div className="divide-y divide-border">
         {rows.map((row) => (
           <button
             key={row.id}
@@ -172,7 +172,7 @@ export function WidgetCard({
           <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">{widget.title}</p>
           <p className="mt-3 text-2xl font-black text-foreground">{widget.value}</p>
         </div>
-        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
           {draggable ? <GripVertical className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </span>
       </div>
@@ -211,7 +211,7 @@ export function WorkspaceHierarchy({
             </div>
             <div className="space-y-2">
               {space.collections.map((collection) => (
-                <div key={collection.id} className="rounded-2xl bg-muted p-2 ring-1 ring-[#E5E7EB]">
+                <div key={collection.id} className="rounded-2xl bg-muted p-2 ring-1 ring-border">
                   <p className="px-2 text-xs font-bold text-foreground">{collection.name}</p>
                   <div className="mt-2 space-y-1">
                     {collection.boards.map((board) => (
@@ -221,7 +221,7 @@ export function WorkspaceHierarchy({
                         onClick={() => onSelectBoard(board)}
                         className={cn(
                           "flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-left text-xs font-semibold transition-colors",
-                          activeBoard === board ? "bg-card text-indigo-700 shadow-sm ring-1 ring-indigo-100" : "text-muted-foreground hover:bg-card hover:text-foreground",
+                          activeBoard === board ? "bg-card text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:text-indigo-300 dark:ring-indigo-500/30" : "text-muted-foreground hover:bg-card hover:text-foreground",
                         )}
                       >
                         {board}
@@ -244,7 +244,7 @@ export function ActivityTimeline({ items }: { items: string[] }) {
     <div className="space-y-3">
       {items.map((item, index) => (
         <div key={`${item}-${index}`} className="flex gap-3">
-          <span className="mt-1 grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-black text-indigo-600 ring-1 ring-indigo-100">{index + 1}</span>
+          <span className="mt-1 grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-black text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/25">{index + 1}</span>
           <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
             {item}
             <p className="mt-1 text-xs font-medium text-muted-foreground">Recorded in local activity stream</p>
@@ -268,7 +268,7 @@ export function AutomationRuleCard({ rule, onToggle }: { rule: AutomationRule; o
         <button
           type="button"
           onClick={onToggle}
-          className={cn("relative h-7 w-12 rounded-full transition-colors", rule.enabled ? "bg-indigo-600" : "bg-slate-200")}
+          className={cn("relative h-7 w-12 rounded-full transition-colors", rule.enabled ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
           aria-label={`Toggle ${rule.name}`}
         >
           <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-card transition-all", rule.enabled ? "left-6" : "left-1")} />
@@ -298,7 +298,7 @@ export function CommandMenu({
           onClick={() => onRun?.(command.id)}
           className="rounded-[24px] border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
         >
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
             <Bot className="h-5 w-5" />
           </span>
           <h3 className="mt-4 text-sm font-black text-foreground">{command.title}</h3>
@@ -330,7 +330,7 @@ export function TaskDrawer({
   return (
     <AnimatePresence>
       {task && (
-        <div className="fixed inset-0 z-[80] flex justify-end bg-[#111827]/20 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[80] flex justify-end bg-black/30 backdrop-blur-sm">
           <motion.aside
             initial={{ x: 420, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -367,7 +367,7 @@ export function TaskDrawer({
                 </div>
                 <div className="space-y-2">
                   {task.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-[#E5E7EB]">
+                    <div key={subtask.id} className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-border">
                       {subtask.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Clock3 className="h-4 w-4 text-muted-foreground" />}
                       {subtask.text}
                     </div>

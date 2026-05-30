@@ -134,7 +134,7 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
         >
           <Search className="h-4 w-4 flex-shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left text-xs">{t("app.topbar.searchLong")}</span>
-          <kbd className="hidden flex-shrink-0 rounded-lg bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground ring-1 ring-[#E5E7EB] xl:inline-flex">Ctrl K</kbd>
+          <kbd className="hidden flex-shrink-0 rounded-lg bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground ring-1 ring-border xl:inline-flex">Ctrl K</kbd>
         </button>
 
         <button
@@ -209,14 +209,14 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-3 flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-50 to-blue-50 px-3 py-2 text-xs text-indigo-700 ring-1 ring-indigo-100">
+            <div className="mt-3 flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-50 to-blue-50 px-3 py-2 text-xs text-indigo-700 ring-1 ring-indigo-100 dark:from-indigo-500/15 dark:to-blue-500/15 dark:text-indigo-300 dark:ring-indigo-500/25">
               <Sparkles className="h-4 w-4" />
               {t("app.topbar.commandReady")}
             </div>
             <div className="mt-3 max-h-[360px] space-y-1 overflow-y-auto">
               {filteredResults.map((item) => (
                 <button key={`${item.type}-${item.title}`} type="button" className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted">
-                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-600">{item.typeLabel}</span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{item.typeLabel}</span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
@@ -244,7 +244,7 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
                 <h3 className="text-sm font-bold text-foreground">{t("app.topbar.notifications")}</h3>
                 <p className="text-xs text-muted-foreground">{t("app.topbar.notificationsDesc")}</p>
               </div>
-              <button type="button" onClick={() => setReadIds(NOTIFICATIONS.map((item) => item.id))} className="rounded-xl px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50">
+              <button type="button" onClick={() => setReadIds(NOTIFICATIONS.map((item) => item.id))} className="rounded-xl px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/15">
                 {t("app.topbar.markAllRead")}
               </button>
             </div>
@@ -256,9 +256,9 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
                     key={notification.id}
                     type="button"
                     onClick={() => setReadIds((current) => [...new Set([...current, notification.id])])}
-                    className={cn("flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted", unread && "bg-indigo-50/70")}
+                    className={cn("flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted", unread && "bg-indigo-50/70 dark:bg-indigo-500/10")}
                   >
-                    <span className={cn("mt-1 h-2 w-2 rounded-full", unread ? "bg-indigo-600" : "bg-slate-200")} />
+                    <span className={cn("mt-1 h-2 w-2 rounded-full", unread ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-600")} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{notification.category}</span>
