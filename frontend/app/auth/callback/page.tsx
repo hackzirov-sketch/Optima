@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setTokens, authApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,8 +10,14 @@ function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
+  const hasRun = useRef(false);
 
   useEffect(() => {
+    // Guard against React StrictMode double-invocation — the one-time code
+    // is consumed on first use; a second call would get 401 and redirect to login.
+    if (hasRun.current) return;
+    hasRun.current = true;
+
     // Backend now sends a short-lived one-time `code` in the URL instead of
     // actual tokens — prevents tokens from appearing in browser history / logs.
     const code = searchParams.get('code');
@@ -50,15 +56,16 @@ function AuthCallbackContent() {
 
     if (code) {
       // Exchange one-time code for real tokens via POST (secure)
-      fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/auth/exchange-code`, {
+      fetch('/api/auth/exchange-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       })
         .then(r => r.json())
         .then(data => {
-          if (data?.accessToken && data?.refreshToken) {
-            handleTokens(data.accessToken, data.refreshToken);
+          const tokens = data?.data ?? data;
+          if (tokens?.accessToken && tokens?.refreshToken) {
+            handleTokens(tokens.accessToken, tokens.refreshToken);
           } else {
             router.push('/auth/login');
           }

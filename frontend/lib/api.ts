@@ -1,6 +1,6 @@
 import cookie from "js-cookie"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
 
 // ─── Token management ─────────────────────────────────────────────────────
 
@@ -71,6 +71,7 @@ async function request<T = unknown>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
+    cache: 'no-store',
   });
 
   // Auto-refresh on 401
@@ -83,6 +84,7 @@ async function request<T = unknown>(
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         credentials: 'include',
+        cache: 'no-store',
       });
       if (!retry.ok) {
         const err = await retry.json().catch(() => ({}));
@@ -98,7 +100,12 @@ async function request<T = unknown>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw { status: res.status, ...(err as object) };
+    console.error(`[API] ${method} ${path} failed:`, res.status, err);
+    throw { 
+      status: res.status, 
+      message: err?.message || err?.error || err?.msg,
+      ...err 
+    };
   }
 
   // 204 No Content
@@ -130,7 +137,14 @@ async function tryRefresh(): Promise<boolean> {
 // ─── Auth ─────────────────────────────────────────────────────────────────
 
 export interface LoginDto { email: string; password: string }
-export interface RegisterDto { email: string; password: string; firstName: string; lastName: string }
+export interface RegisterDto { 
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  username: string
+  phoneNumber?: number
+}
 export interface AuthResponse { accessToken: string; refreshToken: string; user: ApiUser }
 
 export const authApi = {
@@ -151,7 +165,10 @@ export const authApi = {
   me: () => request<{ data: ApiUser }>('GET', '/users/me'),
 
   verifyEmail: (code: string) =>
-    request('POST', '/auth/verify-email', { body: { code } }),
+    request('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
+
+  setPassword: (password: string) =>
+    request('POST', '/auth/set-password', { body: { password } }),
 };
 
 // ─── Users ────────────────────────────────────────────────────────────────

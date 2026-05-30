@@ -28,20 +28,36 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [signinId, setSigninId] = useState("");
   const [signinPw, setSigninPw] = useState("");
+  const [error, setError] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const signinReady = signinId.trim().length > 3 && signinPw.length >= 4;
 
   const handleSignin = async () => {
     if (!signinReady) return;
-    const success = await loginWithBackend(signinId, signinPw);
-    if (success) {
-      if (storage.isOnboarded()) {
-        router.push("/app/home");
-      } else {
-        router.push("/onboarding");
+    
+    setError("");
+    setIsLoading(true);
+    
+    try {
+      const result = await loginWithBackend(signinId, signinPw);
+      if (result.success) {
+        if (storage.isOnboarded()) {
+          router.push('/app/home');
+        } else {
+          router.push('/onboarding');
+        }
+        return;
       }
-    } else {
-      alert("Login failed");
+
+      if (result.redirect) {
+        router.push(`/auth${result.redirect}`);
+        return;
+      }
+
+      setError(result.message || 'Login failed');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -136,7 +152,7 @@ export default function LoginPage() {
           />
 
           <div className="flex justify-end">
-            <button type="button" className="text-sm font-black text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            <button type="button" onClick={() => router.push('/auth/forgot-password')} className="text-sm font-black text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
               Forgot password?
             </button>
           </div>
@@ -154,10 +170,9 @@ export default function LoginPage() {
         </div>
 
         {/* Social buttons */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <ProviderButton label="Google" icon={<Chrome className="h-5 w-5" />} onClick={() => handleSocialDemo("Google")} />
           <ProviderButton label="GitHub" icon={<Github className="h-5 w-5" />} onClick={() => handleSocialDemo("GitHub")} />
-          <ProviderButton label="Apple"  icon={<Zap className="h-5 w-5" />}    onClick={() => handleSocialDemo("Apple")} />
         </div>
       </motion.div>
     </AnimatePresence>

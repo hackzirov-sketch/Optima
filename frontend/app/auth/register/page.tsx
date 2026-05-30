@@ -34,31 +34,45 @@ export default function RegisterPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const passwordMismatch = confirmPw.length > 0 && password !== confirmPw;
+  const usernameInvalid = username.length > 0 && !username.match(/^[a-zA-Z0-9_]+$/);
   const signupReady =
     fullName.trim().length > 1 &&
     email.includes("@") &&
-    phone.trim().length >= 7 &&
-    username.trim().length > 2 &&
-    password.length >= 6 &&
+    username.trim().length >= 3 &&
+    username.match(/^[a-zA-Z0-9_]+$/) &&
+    password.length >= 8 &&
+    password.length <= 32 &&
     password === confirmPw &&
     acceptedTerms;
 
   const handleCreateAccount = async () => {
     if (!signupReady) return;
     try {
-      await authApi.register({
+      const registerPayload = {
         email,
         password,
+        username: username.trim(),
         firstName: fullName.split(' ')[0] || '',
-        lastName: fullName.split(' ').slice(1).join(' ')
-      });
+        lastName: fullName.split(' ').slice(1).join(' '),
+      };
+      
+      // Add optional phone number if provided
+      if (phone.trim().length > 0) {
+        const phoneDigits = phone.replace(/\D/g, '');
+        if (phoneDigits.length >= 10 && phoneDigits.length <= 15) {
+          (registerPayload as any).phoneNumber = parseInt(phoneDigits, 10);
+        }
+      }
+      
+      await authApi.register(registerPayload);
       // Store credentials temporarily so verify page can auto-login
       sessionStorage.setItem('pending_verify_email', email);
       sessionStorage.setItem('pending_verify_password', password);
       // Redirect to email verification
       router.push("/auth/verify");
-    } catch {
-      alert("Registration failed");
+    } catch (error: any) {
+      const message = error?.message || "Registration failed";
+      alert(message);
     }
   };
 
@@ -120,7 +134,7 @@ export default function RegisterPage() {
             <AuthField icon={<Phone className="h-4 w-4" />} label="Phone" value={phone}    onChange={setPhone}    placeholder="+998 90 123 45 67"    type="tel"   autoComplete="tel" />
           </div>
 
-          <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={setUsername} placeholder="@jasur_karimov" autoComplete="username" />
+          <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={v => setUsername(v.replace(/^@+/, ''))} placeholder="jasur_karimov" autoComplete="username" />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <AuthField
@@ -144,6 +158,12 @@ export default function RegisterPage() {
               action={<EyeToggle show={showConfirm} onToggle={() => setShowConfirm(v => !v)} />}
             />
           </div>
+
+          {usernameInvalid && (
+            <p className="text-sm font-bold text-rose-500 dark:text-rose-400">
+              Username can only contain letters, numbers, and underscores.
+            </p>
+          )}
 
           {passwordMismatch && (
             <p className="text-sm font-bold text-rose-500 dark:text-rose-400">
@@ -186,10 +206,9 @@ export default function RegisterPage() {
         </div>
 
         {/* Social buttons */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <ProviderButton label="Google" icon={<Chrome className="h-5 w-5" />} onClick={() => handleSocialDemo("Google")} />
           <ProviderButton label="GitHub" icon={<Github className="h-5 w-5" />} onClick={() => handleSocialDemo("GitHub")} />
-          <ProviderButton label="Apple"  icon={<Zap className="h-5 w-5" />}    onClick={() => handleSocialDemo("Apple")} />
         </div>
       </motion.div>
     </AnimatePresence>

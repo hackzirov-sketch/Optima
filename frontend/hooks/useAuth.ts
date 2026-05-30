@@ -17,16 +17,21 @@ export function useAuth() {
     const init = async () => {
       const savedUser = storage.getUser();
       const isOnboarded = storage.isOnboarded();
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      const isAppRoute = pathname.startsWith('/app');
+      const isAuthRoute = pathname.startsWith('/auth');
+      const isOnboardingRoute = pathname === '/onboarding';
 
-      if (!savedUser || !isOnboarded) {
-        if (
-          typeof window !== 'undefined' &&
-          !window.location.pathname.includes('/onboarding') &&
-          !window.location.pathname.startsWith('/auth') &&
-          window.location.pathname !== '/'
-        ) {
-          router.push('/onboarding');
+      if (!savedUser) {
+        if (isAppRoute) {
+          router.push('/auth/login');
         }
+        setLoading(false);
+        return;
+      }
+
+      if (!isOnboarded && isAppRoute) {
+        router.push('/onboarding');
         setLoading(false);
         return;
       }
@@ -75,11 +80,21 @@ export function useAuth() {
     setUser(profile);
   };
 
+  type LoginResult = {
+    success: boolean;
+    redirect?: string;
+    message?: string;
+  };
+
   /** Full backend login: authenticates and stores tokens */
-  const loginWithBackend = async (email: string, password: string): Promise<boolean> => {
+  const loginWithBackend = async (email: string, password: string): Promise<LoginResult> => {
     try {
+      console.log('[useAuth] Logging in with email:', email);
       const res = await authApi.login({ email, password });
+      console.log('[useAuth] Login response:', res);
+      
       if (res?.data?.accessToken) {
+        console.log('[useAuth] Login successful, setting tokens');
         setTokens(res.data.accessToken, res.data.refreshToken);
         const { user: apiUser } = res.data;
         const profile: UserProfile = {
@@ -94,11 +109,34 @@ export function useAuth() {
         };
         login(profile);
         setBackendUser({ id: apiUser.id, email: apiUser.email });
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch {
-      return false;
+      return { success: false, message: 'Login failed: No tokens received' };
+    } catch (err) {
+      const error = err as Record<string, any>;
+      console.error('[useAuth] Login error:', error);
+      
+      // Extract error message from various possible sources
+      let errorMessage = 'Login failed';
+      if (error?.message && error.message !== 'Login failed') {
+        errorMessage = error.message;
+      } else if (error?.error?.message) {
+        errorMessage = error.error.message;
+      } else if (error?.msg) {
+        errorMessage = error.msg;
+      } else if (error?.status === 401) {
+        errorMessage = 'Invalid email or password';
+      } else if (error?.status === 400) {
+        errorMessage = 'Invalid request format';
+      } else if (error?.status) {
+        errorMessage = `Server error (${error.status})`;
+      }
+      
+      return {
+        success: false,
+        message: errorMessage,
+        redirect: error?.redirect,
+      };
     }
   };
 

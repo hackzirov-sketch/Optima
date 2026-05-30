@@ -11,6 +11,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { ServerOptions } from 'socket.io';
 
@@ -68,8 +69,11 @@ async function bootstrap() {
     }),
   );
 
-  // ── Serialization ─────────────────────────────────
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  // ── Serialization & response wrapping ────────────
+  app.useGlobalInterceptors(
+    new ClassSerializerInterceptor(app.get(Reflector)),
+    new ResponseInterceptor(),
+  );
 
   // ── Exception Filters ─────────────────────────────
   app.useGlobalFilters(new AllExceptionsFilter(config));

@@ -23,46 +23,86 @@ export default function VerifyPage() {
     try {
       const res = await authApi.verifyEmail(code) as any;
 
-      setSuccess(true);
+      if (res?.accessToken && res?.refreshToken) {
+        setTokens(res.accessToken, res.refreshToken);
 
-      // Try to auto-login with stored credentials
-      const pendingEmail = sessionStorage.getItem('pending_verify_email');
-      const pendingPassword = sessionStorage.getItem('pending_verify_password');
-
-      if (pendingEmail && pendingPassword) {
-        sessionStorage.removeItem('pending_verify_email');
-        sessionStorage.removeItem('pending_verify_password');
-
-        try {
-          const loginRes = await authApi.login({ email: pendingEmail, password: pendingPassword });
-          if (loginRes?.data?.accessToken) {
-            setTokens(loginRes.data.accessToken, loginRes.data.refreshToken);
-            const { user: apiUser } = loginRes.data;
-            login({
-              name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
-              profession: 'developer',
-              goal: 'build_portfolio',
-              experience: 'intermediate',
-              joinedAt: Date.now(),
-              email: apiUser.email,
-              username: apiUser.username,
-              authProvider: 'email',
-            });
-            // Go to onboarding to fill in profession/goal/experience
-            router.push('/onboarding');
-            return;
+        if (res?.user) {
+          login({
+            name: `${res.user.firstName} ${res.user.lastName}`.trim(),
+            profession: 'developer',
+            goal: 'build_portfolio',
+            experience: 'intermediate',
+            joinedAt: Date.now(),
+            email: res.user.email,
+            username: res.user.username,
+            authProvider: 'email',
+          });
+        } else {
+          try {
+            const meRes = await authApi.me();
+            if (meRes?.data) {
+              login({
+                name: `${meRes.data.firstName} ${meRes.data.lastName}`.trim(),
+                profession: 'developer',
+                goal: 'build_portfolio',
+                experience: 'intermediate',
+                joinedAt: Date.now(),
+                email: meRes.data.email,
+                username: meRes.data.username,
+                authProvider: 'email',
+              });
+            }
+          } catch {
+            // ignore and continue to redirect handling
           }
-        } catch {
-          // Login failed after verify — redirect to login
         }
-      }
 
-      // Fallback if auto-login fails
-      setTimeout(() => {
+        setSuccess(true);
+        const route = res.redirect || '/onboarding';
+        const target = route === '/set-password' ? '/auth/set-password' : route === '/verify' ? '/auth/verify' : '/onboarding';
+        setTimeout(() => {
+          router.push(target);
+        }, 1200);
+      } else {
+        // Verification succeeded in response but no tokens, try pending credentials
+        const pendingEmail = sessionStorage.getItem('pending_verify_email');
+        const pendingPassword = sessionStorage.getItem('pending_verify_password');
+
+        if (pendingEmail && pendingPassword) {
+          sessionStorage.removeItem('pending_verify_email');
+          sessionStorage.removeItem('pending_verify_password');
+
+          try {
+            const loginRes = await authApi.login({ email: pendingEmail, password: pendingPassword });
+            if (loginRes?.data?.accessToken) {
+              setTokens(loginRes.data.accessToken, loginRes.data.refreshToken);
+              const { user: apiUser } = loginRes.data;
+              login({
+                name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
+                profession: 'developer',
+                goal: 'build_portfolio',
+                experience: 'intermediate',
+                joinedAt: Date.now(),
+                email: apiUser.email,
+                username: apiUser.username,
+                authProvider: 'email',
+              });
+              setSuccess(true);
+              setTimeout(() => {
+                router.push('/onboarding');
+              }, 1200);
+              return;
+            }
+          } catch {
+            // Login failed after verify
+          }
+        }
+
+        alert('Verification succeeded, but automatic sign-in failed. Please sign in manually.');
         router.push('/auth/login');
-      }, 1500);
+      }
     } catch {
-      alert("Invalid code or verification failed.");
+      alert('Invalid code or verification failed.');
     } finally {
       setLoading(false);
     }
