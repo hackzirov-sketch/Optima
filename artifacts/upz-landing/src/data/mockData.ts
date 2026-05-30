@@ -1,7 +1,7 @@
 import type { ChatUser, ChatRoom, Task, Note } from '@/types';
 
 export const MOCK_USERS: ChatUser[] = [
-  { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' },
+  { id: 'ai', name: 'Optima AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' },
   { id: 'u1', name: 'Alex Kim', initials: 'AK', color: '#6366F1', status: 'online', role: 'Lead Developer' },
   { id: 'u2', name: 'Sara Chen', initials: 'SC', color: '#3B82F6', status: 'online', role: 'Designer' },
   { id: 'u3', name: 'James Wright', initials: 'JW', color: '#10B981', status: 'away', role: 'Project Manager' },
@@ -14,12 +14,12 @@ export const MOCK_CHAT_ROOMS: ChatRoom[] = [
   {
     id: 'r-ai',
     type: 'ai',
-    name: 'UPZ AI Assistant',
+    name: 'Optima AI Assistant',
     memberIds: ['me', 'ai'],
     unread: 0,
     pinned: true,
     messages: [
-      { id: 'm-ai-1', userId: 'ai', text: 'Men UPZ ichidagi shaxsiy AI yordamchingizman. Goya, task, xabar matni, summary yoki project reja bo\'yicha yozing.', timestamp: Date.now() - 900000, read: true },
+      { id: 'm-ai-1', userId: 'ai', text: 'Men Optima ichidagi shaxsiy AI yordamchingizman. Goya, task, xabar matni, summary yoki project reja bo\'yicha yozing.', timestamp: Date.now() - 900000, read: true },
       { id: 'm-ai-2', userId: 'ai', text: 'Istalgan chatda /ai yozib matnni tuzatish, professional qilish yoki qisqartirish mumkin.', timestamp: Date.now() - 840000, read: true },
     ],
   },
@@ -31,7 +31,7 @@ export const MOCK_CHAT_ROOMS: ChatRoom[] = [
     unread: 0,
     pinned: true,
     messages: [
-      { id: 'm-saved-1', userId: 'me', text: 'UPZ launch checklist: workspace, chat, teams, AI assistant and premium polish.', timestamp: Date.now() - 1200000, read: true, reactions: [{ emoji: 'done', userIds: ['me'] }] },
+      { id: 'm-saved-1', userId: 'me', text: 'Optima launch checklist: workspace, chat, teams, AI assistant and premium polish.', timestamp: Date.now() - 1200000, read: true, reactions: [{ emoji: 'done', userIds: ['me'] }] },
       { id: 'm-saved-2', userId: 'me', text: 'Saved messages can work like a private productivity inbox for links, notes and quick reminders.', timestamp: Date.now() - 600000, read: true },
     ],
   },
@@ -64,7 +64,7 @@ export const MOCK_CHAT_ROOMS: ChatRoom[] = [
   {
     id: 'r3',
     type: 'team',
-    name: 'UPZ Core Team',
+    name: 'Optima Core Team',
     memberIds: ['me', 'u1', 'u2', 'u3', 'u5'],
     unread: 5,
     pinned: true,
@@ -82,7 +82,7 @@ export const MOCK_CHAT_ROOMS: ChatRoom[] = [
     name: 'Landing Page Redesign',
     memberIds: ['me', 'u2', 'u5'],
     unread: 0,
-    projectBadge: 'UPZ-142',
+    projectBadge: 'Optima-142',
     linkedTask: 'Landing hero QA',
     pinnedMessageId: 'm12',
     messages: [

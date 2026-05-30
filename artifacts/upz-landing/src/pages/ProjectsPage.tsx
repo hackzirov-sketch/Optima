@@ -45,7 +45,7 @@ export default function ProjectsPage({ user, onLogout }: Props) {
   return (
     <AppLayout user={user} title={t("app.nav.projects")} onLogout={onLogout}>
       <PageShell>
-        <PageHeader eyebrow="Smart Projects" title="Project command center" description="Kanban, table, timeline, calendar, workload, goals, automations and task detail drawers in one UPZ power-user workspace.">
+        <PageHeader eyebrow="Smart Projects" title="Project command center" description="Kanban, table, timeline, calendar, workload, goals, automations and task detail drawers in one Optima power-user workspace.">
           <ActionButton onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" /> Create project</ActionButton>
           <ActionButton variant="secondary"><CalendarDays className="h-4 w-4" /> Deadlines</ActionButton>
         </PageHeader>
@@ -59,7 +59,7 @@ export default function ProjectsPage({ user, onLogout }: Props) {
 
         {view === "board" && (
           <SurfaceCard>
-            <SectionTitle icon={ClipboardList} title="Smart Task board" description="ClickUp-style capability translated to UPZ cards, fields and detail drawer." />
+            <SectionTitle icon={ClipboardList} title="Smart Task board" description="ClickUp-style capability translated to Optima cards, fields and detail drawer." />
             <div className="grid gap-4 xl:grid-cols-5">
               {["backlog", "todo", "in_progress", "review", "done"].map((status) => (
                 <div key={status} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3">
@@ -119,7 +119,7 @@ export default function ProjectsPage({ user, onLogout }: Props) {
           </SurfaceCard>
         </div>
 
-        <Modal open={modalOpen} title="Create demo project" description="Frontend-only project creation modal for the UPZ MVP." onClose={() => setModalOpen(false)}>
+        <Modal open={modalOpen} title="Create demo project" description="Frontend-only project creation modal for the Optima MVP." onClose={() => setModalOpen(false)}>
           <div className="space-y-3">
             <input className="w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project name" />
             <textarea className="min-h-28 w-full rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:border-indigo-300" placeholder="Project brief" />

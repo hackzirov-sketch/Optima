@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { EmojiPicker } from "frimousse";
 import emojiMartDataRaw from "@emoji-mart/data";
@@ -20,29 +20,29 @@ import {
 import { cn } from "./chatShared";
 
 const emojiMartData = emojiMartDataRaw as EmojiMartData;
-const RECENT_KEY = "upz_recent_native_emojis";
+const RECENT_KEY = "Optima_recent_native_emojis";
 
 const CATEGORY_META = [
-  { id: "all", label: "All", native: "⌘", martId: "people" },
-  { id: "recent", label: "Recent", native: "◷", martId: "people" },
-  { id: "favorites", label: "Favorites", native: "★", martId: "people" },
-  { id: "premium", label: "Premium", native: "✦", martId: "people", premium: true },
-  { id: "smileys", label: "Smileys", native: "🙂", martId: "people" },
-  { id: "people", label: "People", native: "👋", martId: "people" },
-  { id: "animals", label: "Animals", native: "🐾", martId: "nature" },
-  { id: "food", label: "Food", native: "🍎", martId: "foods" },
-  { id: "activities", label: "Activities", native: "⚽", martId: "activity" },
-  { id: "travel", label: "Travel", native: "✈️", martId: "places" },
-  { id: "objects", label: "Objects", native: "💡", martId: "objects" },
-  { id: "symbols", label: "Symbols", native: "🔷", martId: "symbols" },
-  { id: "flags", label: "Flags", native: "🏁", martId: "flags" },
-  { id: "work-productivity", label: "Work", native: "💼", martId: "objects", premium: true },
-  { id: "learning", label: "Learning", native: "📚", martId: "objects", premium: true },
-  { id: "coding", label: "Coding", native: "💻", martId: "objects", premium: true },
-  { id: "team", label: "Team", native: "🤝", martId: "people", premium: true },
-  { id: "achievement", label: "Achievement", native: "🏆", martId: "activity", premium: true },
-  { id: "status", label: "Status", native: "🟢", martId: "symbols", premium: true },
-  { id: "workspace", label: "Workspace", native: "🧩", martId: "objects", premium: true },
+  { id: "all", label: "All", native: "?", martId: "people" },
+  { id: "recent", label: "Recent", native: "?", martId: "people" },
+  { id: "favorites", label: "Favorites", native: "?", martId: "people" },
+  { id: "premium", label: "Premium", native: "?", martId: "people", premium: true },
+  { id: "smileys", label: "Smileys", native: "??", martId: "people" },
+  { id: "people", label: "People", native: "??", martId: "people" },
+  { id: "animals", label: "Animals", native: "??", martId: "nature" },
+  { id: "food", label: "Food", native: "??", martId: "foods" },
+  { id: "activities", label: "Activities", native: "?", martId: "activity" },
+  { id: "travel", label: "Travel", native: "??", martId: "places" },
+  { id: "objects", label: "Objects", native: "??", martId: "objects" },
+  { id: "symbols", label: "Symbols", native: "??", martId: "symbols" },
+  { id: "flags", label: "Flags", native: "??", martId: "flags" },
+  { id: "work-productivity", label: "Work", native: "??", martId: "objects", premium: true },
+  { id: "learning", label: "Learning", native: "??", martId: "objects", premium: true },
+  { id: "coding", label: "Coding", native: "??", martId: "objects", premium: true },
+  { id: "team", label: "Team", native: "??", martId: "people", premium: true },
+  { id: "achievement", label: "Achievement", native: "??", martId: "activity", premium: true },
+  { id: "status", label: "Status", native: "??", martId: "symbols", premium: true },
+  { id: "workspace", label: "Workspace", native: "??", martId: "objects", premium: true },
 ] as const;
 
 type CategoryId = (typeof CATEGORY_META)[number]["id"];
@@ -100,12 +100,12 @@ export function PremiumEmojiPicker({
   const telegramSheet = compact && mode === "message";
 
   useEffect(() => {
-    void initEmojiMart({ data: emojiMartData }, { caller: "upz-premium-emoji-picker" }).catch(() => undefined);
+    void initEmojiMart({ data: emojiMartData }, { caller: "Optima-premium-emoji-picker" }).catch(() => undefined);
   }, []);
 
   const activeIds = activeEmojis.map(String);
   const selectedCategory = CATEGORY_META.find((category) => category.id === activeCategory) ?? CATEGORY_META[0];
-  const favoriteNative = ["👍", "❤️", "🔥", "😂", "🚀", "💎", "✅", "👏"];
+  const favoriteNative = ["??", "??", "??", "??", "??", "??", "?", "??"];
 
   const nativeItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -159,7 +159,7 @@ export function PremiumEmojiPicker({
       className={cn(
         "overflow-hidden border border-white/80 bg-white/82 shadow-2xl shadow-indigo-950/15 backdrop-blur-2xl dark:border-gray-700/80 dark:bg-gray-900/86",
         telegramSheet
-          ? "upz-telegram-emoji-sheet w-full rounded-none border-0 bg-[#181818] p-0 shadow-none backdrop-blur-none"
+          ? "Optima-telegram-emoji-sheet w-full rounded-none border-0 bg-[#181818] p-0 shadow-none backdrop-blur-none"
           : compact
             ? "w-[min(280px,calc(100vw-1.25rem))] rounded-[22px] p-2"
             : "w-[min(430px,calc(100vw-1rem))] rounded-[28px] p-3",
@@ -171,7 +171,7 @@ export function PremiumEmojiPicker({
     >
       {!telegramSheet && <div className={cn("flex items-center justify-between gap-3", compact ? "mb-2" : "mb-3")}>
         <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">{compact ? "Reactions" : "UPZ Emoji Cloud"}</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">{compact ? "Reactions" : "Optima Emoji Cloud"}</p>
           {!compact && (
             <p className="truncate text-xs text-gray-500 dark:text-gray-400" title={sourceLabel}>
               Public/free sources: Emoji Mart, Frimousse, OpenMoji, Fluent

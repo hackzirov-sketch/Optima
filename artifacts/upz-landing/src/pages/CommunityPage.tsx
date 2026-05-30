@@ -150,7 +150,7 @@ export default function CommunityPage({ user, onLogout }: Props) {
                       <Pill tone={thread.status === "Hot" ? "red" : thread.status === "Pinned" ? "indigo" : "slate"}>{thread.status}</Pill>
                     </div>
                     <h3 className="mt-4 text-sm font-black text-[#111827]">{t(`app.community.threads.${thread.id}.title`, thread.title)}</h3>
-                    <p className="mt-2 text-xs leading-5 text-[#6B7280]">{thread.replies} replies analyzed by UPZ AI agent {index + 1}</p>
+                    <p className="mt-2 text-xs leading-5 text-[#6B7280]">{thread.replies} replies analyzed by Optima AI agent {index + 1}</p>
                   </button>
                 );
               })}

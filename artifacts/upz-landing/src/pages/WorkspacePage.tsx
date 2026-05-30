@@ -685,7 +685,7 @@ export default function WorkspacePage({ user, onLogout }: Props) {
         <PageHeader
           eyebrow="Power Workspace"
           title={`${activePreset.template} for ${user.name}`}
-          description="Control, create and save your workspace by profession. UPZ keeps boards, views, integrations and saved workspace states local for this MVP."
+          description="Control, create and save your workspace by profession. Optima keeps boards, views, integrations and saved workspace states local for this MVP."
         >
           <ActionButton onClick={handleCreateItem}><Plus className="h-4 w-4" /> Create</ActionButton>
           <ActionButton variant="secondary" onClick={handleSaveSnapshot}><Save className="h-4 w-4" /> Save view</ActionButton>
@@ -808,7 +808,7 @@ export default function WorkspacePage({ user, onLogout }: Props) {
         </SurfaceCard>
 
         <SurfaceCard>
-          <SectionTitle icon={Users} title="Profession workspace filters" description="Pick a profession and UPZ will filter boards, tasks, controls and recommended integrations." />
+          <SectionTitle icon={Users} title="Profession workspace filters" description="Pick a profession and Optima will filter boards, tasks, controls and recommended integrations." />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {Object.values(PROFESSION_PRESETS).map((preset) => {
               const Icon = preset.icon;
@@ -1464,7 +1464,7 @@ export default function WorkspacePage({ user, onLogout }: Props) {
           </SurfaceCard>
 
           <SurfaceCard>
-            <SectionTitle icon={Sparkles} title="UPZ Canvas + Intake" description="Whiteboard nodes, intake fields and screen notes placeholders." />
+            <SectionTitle icon={Sparkles} title="Optima Canvas + Intake" description="Whiteboard nodes, intake fields and screen notes placeholders." />
             <div className="relative h-56 overflow-hidden rounded-[24px] bg-[#F7FAFC] ring-1 ring-[#E5E7EB]">
               {WHITEBOARD_NODES.map((node) => (
                 <div key={node.id} className="absolute rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#111827] shadow-sm ring-1 ring-[#E5E7EB]" style={{ left: `${node.x}%`, top: `${node.y}%` }}>{node.title}</div>

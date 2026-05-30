@@ -313,7 +313,7 @@ export default function SettingsPage({ user, onLogout }: Props) {
               <SectionTitle
                 icon={SlidersHorizontal}
                 title={t("app.settings.workspaceTitle", "Workspace operating system")}
-                description={t("app.settings.workspaceDesc", "Configure statuses, custom fields, templates, permissions, saved views, and compact design density for UPZ power users.")}
+                description={t("app.settings.workspaceDesc", "Configure statuses, custom fields, templates, permissions, saved views, and compact design density for Optima power users.")}
               />
               <div className="grid gap-3 md:grid-cols-2">
                 {WORKSPACE_SETTINGS.map((setting) => (

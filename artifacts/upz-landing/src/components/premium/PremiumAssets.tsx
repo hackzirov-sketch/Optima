@@ -97,11 +97,11 @@ const classNames = (...classes: Array<string | false | null | undefined>) => cla
 const REACTION_PARTICLES = ["#6366F1", "#3B82F6", "#F59E0B", "#10B981", "#F43F5E", "#FACC15"];
 
 const PREMIUM_MOTION_BY_EFFECT = {
-  pop: "upz-emoji-pop",
-  fire: "upz-emoji-fire",
-  hearts: "upz-emoji-heart",
-  sparkles: "upz-emoji-spark",
-  gem: "upz-emoji-gem",
+  pop: "Optima-emoji-pop",
+  fire: "Optima-emoji-fire",
+  hearts: "Optima-emoji-heart",
+  sparkles: "Optima-emoji-spark",
+  gem: "Optima-emoji-gem",
 } as const;
 
 const EMOJI_NATIVE = {
@@ -237,7 +237,7 @@ const SPARKLE_LOTTIE = {
   op: 42,
   w: 80,
   h: 80,
-  nm: "UPZ reaction sparkle",
+  nm: "Optima reaction sparkle",
   ddd: 0,
   assets: [],
   layers: [
@@ -534,11 +534,11 @@ export function EmojiRenderer({
       <span
         aria-hidden={decorative ? "true" : undefined}
         aria-label={decorative ? undefined : label}
-        className={classNames("upz-premium-emoji inline-grid select-none place-items-center leading-none", motionClass, className)}
+        className={classNames("Optima-premium-emoji inline-grid select-none place-items-center leading-none", motionClass, className)}
         style={{ width: size, height: size, fontSize: Math.max(14, size * 0.82) }}
       >
-        {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
-        {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
+        {shouldGlow && <span className="Optima-premium-emoji-glow" aria-hidden="true" />}
+        {shouldGlow && <span className="Optima-premium-emoji-orbit" aria-hidden="true" />}
         {resolved.native ?? "\u2726"}
       </span>
     );
@@ -551,11 +551,11 @@ export function EmojiRenderer({
         transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
         aria-hidden={decorative ? "true" : undefined}
         aria-label={decorative ? undefined : label}
-        className={classNames("upz-premium-emoji relative inline-grid select-none place-items-center overflow-hidden rounded-full leading-none", motionClass, className)}
+        className={classNames("Optima-premium-emoji relative inline-grid select-none place-items-center overflow-hidden rounded-full leading-none", motionClass, className)}
         style={{ width: size, height: size, fontSize: Math.max(14, size * 0.78) }}
       >
-        {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
-        {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
+        {shouldGlow && <span className="Optima-premium-emoji-glow" aria-hidden="true" />}
+        {shouldGlow && <span className="Optima-premium-emoji-orbit" aria-hidden="true" />}
         <span className="relative grid place-items-center">{resolved.native ?? "\u2726"}</span>
       </motion.span>
     );
@@ -565,11 +565,11 @@ export function EmojiRenderer({
     <span
       aria-hidden={decorative ? "true" : undefined}
       aria-label={decorative ? undefined : label}
-      className={classNames("upz-premium-emoji relative inline-grid select-none place-items-center", motionClass, className)}
+      className={classNames("Optima-premium-emoji relative inline-grid select-none place-items-center", motionClass, className)}
       style={{ width: size, height: size }}
     >
-      {shouldGlow && <span className="upz-premium-emoji-glow" aria-hidden="true" />}
-      {shouldGlow && <span className="upz-premium-emoji-orbit" aria-hidden="true" />}
+      {shouldGlow && <span className="Optima-premium-emoji-glow" aria-hidden="true" />}
+      {shouldGlow && <span className="Optima-premium-emoji-orbit" aria-hidden="true" />}
       <img
         src={resolved.src}
         alt={decorative ? "" : label}

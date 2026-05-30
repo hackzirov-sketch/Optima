@@ -63,7 +63,7 @@ export default function AssistantPage({ user, onLogout }: Props) {
         <SurfaceCard>
           <SectionTitle
             icon={Sparkles}
-            title={t("app.assistant.agentsTitle", "UPZ AI Agents")}
+            title={t("app.assistant.agentsTitle", "Optima AI Agents")}
             description={t("app.assistant.agentsDesc", "Task planner, doc summarizer, project idea generator, meeting summary, and automation builder agents for the whole workspace.")}
           />
           <div className="mb-4 flex flex-wrap gap-2">
@@ -77,7 +77,7 @@ export default function AssistantPage({ user, onLogout }: Props) {
             onRun={(id) => {
               const agent = AI_AGENTS.find((item) => item.id === id);
               setPreviewTaskId(SMART_TASKS[Math.max(0, AI_AGENTS.findIndex((item) => item.id === id)) % SMART_TASKS.length].id);
-              sendMessage(agent ? `Run ${agent.title} for this workspace` : "Run UPZ AI agent");
+              sendMessage(agent ? `Run ${agent.title} for this workspace` : "Run Optima AI agent");
             }}
           />
         </SurfaceCard>

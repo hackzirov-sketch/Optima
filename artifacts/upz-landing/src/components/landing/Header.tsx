@@ -39,8 +39,8 @@ export function Header() {
             U
           </div>
           <div className="min-w-0">
-            <span className="block text-xl font-black tracking-tight text-[#111827]">UPZ</span>
-            <span className="hidden truncate text-[11px] font-medium text-[#6B7280] lg:block">Universal Productivity Zone</span>
+            <span className="block text-xl font-black tracking-tight text-[#111827]">Optima</span>
+            <span className="hidden truncate text-[11px] font-medium text-[#6B7280] lg:block">Optima</span>
           </div>
         </Link>
 

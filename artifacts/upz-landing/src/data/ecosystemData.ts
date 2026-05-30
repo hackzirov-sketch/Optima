@@ -23,7 +23,7 @@ export const COMMUNITY_GROUPS = [
 ];
 
 export const COMMUNITY_CHANNELS = [
-  { id: "c1", name: "UPZ Product Updates", subscribers: "18.4K", category: "Official", last: "Workspace presets shipped" },
+  { id: "c1", name: "Optima Product Updates", subscribers: "18.4K", category: "Official", last: "Workspace presets shipped" },
   { id: "c2", name: "Remote Jobs Digest", subscribers: "9.2K", category: "Careers", last: "12 new verified roles" },
   { id: "c3", name: "Learning Drops", subscribers: "7.8K", category: "Education", last: "AI prompt design mini-course" },
   { id: "c4", name: "Freelance Deals Radar", subscribers: "6.5K", category: "Market", last: "5 project requests under review" },
@@ -53,11 +53,11 @@ export const NEWS_ARTICLES = [
 
 export const BANK_TRANSACTIONS = [
   { id: "ub-1007", title: "Client payment - Landing redesign", type: "Freelance earning", amount: "+$1,240.00", status: "Completed", date: "Today" },
-  { id: "ub-1006", title: "UPZ Pro workspace", type: "Subscription", amount: "-$19.00", status: "Completed", date: "Yesterday" },
+  { id: "ub-1006", title: "Optima Pro workspace", type: "Subscription", amount: "-$19.00", status: "Completed", date: "Yesterday" },
   { id: "ub-1005", title: "Local payout to card", type: "Withdrawal", amount: "-$520.00", status: "Processing", date: "May 3" },
   { id: "ub-1004", title: "Crypto placeholder transfer", type: "Crypto", amount: "+0.018 BTC", status: "Demo", date: "May 2" },
   { id: "ub-1003", title: "Team bonus pool", type: "Team earning", amount: "+$680.00", status: "Completed", date: "May 1" },
-  { id: "ub-1002", title: "Invoice #UPZ-142", type: "Invoice", amount: "+$2,400.00", status: "Processing", date: "Apr 29" },
+  { id: "ub-1002", title: "Invoice #Optima-142", type: "Invoice", amount: "+$2,400.00", status: "Processing", date: "Apr 29" },
   { id: "ub-1001", title: "Course marketplace payout", type: "Learning", amount: "+$310.00", status: "Completed", date: "Apr 26" },
 ];
 
@@ -73,7 +73,7 @@ export const TEAM_MEMBERS = [
 export const MEETING_ROOMS = [
   {
     id: "m-call-1",
-    title: "UPZ Core Team Sync",
+    title: "Optima Core Team Sync",
     type: "Team",
     status: "Live",
     time: "Now",
@@ -81,7 +81,7 @@ export const MEETING_ROOMS = [
     host: "Alex Kim",
     participants: ["Alex Kim", "Sara Chen", "Mira Johnson", "Otabek Karimov"],
     agenda: ["Chat polish review", "Dark mode QA", "Render deploy notes"],
-    code: "upz-core-418",
+    code: "Optima-core-418",
   },
   {
     id: "m-call-2",
@@ -137,21 +137,21 @@ export const ACTIVITY_LOG = [
 
 export const GLOBAL_SEARCH_ITEMS = [
   { type: "User", title: "Alex Kim", detail: "Lead Developer" },
-  { type: "Chat", title: "UPZ Core Team", detail: "5 members, 3 online" },
-  { type: "Meeting", title: "UPZ Core Team Sync", detail: "Live meeting room" },
-  { type: "Task", title: "Build community moderation UI", detail: "Project: UPZ Platform" },
-  { type: "Project", title: "Landing Page Redesign", detail: "UPZ-142" },
+  { type: "Chat", title: "Optima Core Team", detail: "5 members, 3 online" },
+  { type: "Meeting", title: "Optima Core Team Sync", detail: "Live meeting room" },
+  { type: "Task", title: "Build community moderation UI", detail: "Project: Optima Platform" },
+  { type: "Project", title: "Landing Page Redesign", detail: "Optima-142" },
   { type: "Article", title: "AI copilots are becoming project teammates", detail: "News" },
-  { type: "Wallet", title: "Invoice #UPZ-142", detail: "Universal Bank" },
-  { type: "Premium", title: "UPZ Pro", detail: "Premium account benefits and upgrade plans" },
+  { type: "Wallet", title: "Invoice #Optima-142", detail: "Universal Bank" },
+  { type: "Premium", title: "Optima Pro", detail: "Premium account benefits and upgrade plans" },
   { type: "Animation", title: "Original hero animation", detail: "First-version asset library" },
   { type: "Learning", title: "AI-powered productivity", detail: "64% complete" },
-  { type: "Team", title: "UPZ Launch Squad", detail: "6 members" },
+  { type: "Team", title: "Optima Launch Squad", detail: "6 members" },
 ];
 
 export const NOTIFICATIONS = [
   { id: "no1", category: "Project", title: "Deadline updated", body: "Community beta moved to Friday.", unread: true, time: "4m" },
-  { id: "no2", category: "Chat", title: "New mention", body: "Sara mentioned you in UPZ Core Team.", unread: true, time: "18m" },
+  { id: "no2", category: "Chat", title: "New mention", body: "Sara mentioned you in Optima Core Team.", unread: true, time: "18m" },
   { id: "no3", category: "Bank", title: "Payment received", body: "Client payment is available in Universal Bank.", unread: false, time: "2h" },
   { id: "no4", category: "News", title: "Saved article updated", body: "A related AI assistant article is trending.", unread: false, time: "1d" },
   { id: "no5", category: "Community", title: "Thread is hot", body: "AI assistant prompts reached 44 replies.", unread: true, time: "2d" },
@@ -159,7 +159,7 @@ export const NOTIFICATIONS = [
 ];
 
 export const PUBLIC_LOTTIE_ANIMATIONS = [
-  { id: "hero", title: "UPZ hero", url: "/animations/hero.json", area: "Landing", description: "Original first-version hero motion." },
+  { id: "hero", title: "Optima hero", url: "/animations/hero.json", area: "Landing", description: "Original first-version hero motion." },
   { id: "chat", title: "Chat flow", url: "/animations/chat.json", area: "Chat", description: "Original chat animation." },
   { id: "tasks", title: "Task manager", url: "/animations/tasks.json", area: "Tasks", description: "Original productivity task animation." },
   { id: "ai", title: "AI assistant", url: "/animations/ai.json", area: "AI", description: "Original AI learning animation." },
@@ -224,7 +224,7 @@ export const PREMIUM_PLANS = [
     price: "$0",
     period: "forever",
     badge: "Current MVP",
-    description: "For trying UPZ and managing a light personal workspace.",
+    description: "For trying Optima and managing a light personal workspace.",
     cta: "Current plan",
     featured: false,
     features: ["Basic workspace", "3 active projects", "20 AI actions/day", "30 min demo meetings", "Community read access"],
@@ -264,7 +264,7 @@ export const PREMIUM_COMPARISON = [
 
 export const AI_IDEAS = [
   { prompt: "Generate a micro-SaaS idea for designers", output: "Client feedback portal with AI summary and visual QA checklist." },
-  { prompt: "Suggest tasks for UPZ launch", output: "Finalize onboarding, invite beta users, publish feature tour, monitor feedback." },
+  { prompt: "Suggest tasks for Optima launch", output: "Finalize onboarding, invite beta users, publish feature tour, monitor feedback." },
   { prompt: "Create a learning plan", output: "Three-week path: fundamentals, practice projects, portfolio proof." },
   { prompt: "Improve my freelance workflow", output: "Add proposal templates, invoice milestones, client check-ins, and delivery archive." },
 ];
@@ -273,8 +273,8 @@ export const AI_IDEAS = [
 export const POWER_VIEWS: TaskView[] = ["list", "board", "table", "calendar", "timeline", "dashboard"];
 
 export const WORKSPACE_ZONE: WorkspaceZone = {
-  id: "zone-upz",
-  name: "UPZ Operating Zone",
+  id: "zone-Optima",
+  name: "Optima Operating Zone",
   health: 91,
   spaces: [
     {
@@ -305,7 +305,7 @@ export const SMART_TASKS: SmartTask[] = [
     priority: "high",
     assignee: "Sara Chen",
     dueDate: "May 9",
-    project: "UPZ Platform",
+    project: "Optima Platform",
     tags: ["Design System", "Tasks", "Power UI"],
     progress: 68,
     estimate: "6h",
@@ -330,7 +330,7 @@ export const SMART_TASKS: SmartTask[] = [
   {
     id: "st-102",
     title: "Build workspace hierarchy navigation",
-    description: "Add Zone, Spaces, Collections, and Boards to make UPZ feel like a true operating system.",
+    description: "Add Zone, Spaces, Collections, and Boards to make Optima feel like a true operating system.",
     status: "review",
     priority: "high",
     assignee: "Alex Kim",
@@ -417,7 +417,7 @@ export const AUTOMATION_RULES: AutomationRule[] = [
 ];
 
 export const GOALS: MilestoneGoal[] = [
-  { id: "goal-1", title: "Launch UPZ power workspace", owner: "Ahmad", progress: 76, dueDate: "May 20" },
+  { id: "goal-1", title: "Launch Optima power workspace", owner: "Ahmad", progress: 76, dueDate: "May 20" },
   { id: "goal-2", title: "Reach first 100 beta users", owner: "Growth Team", progress: 44, dueDate: "Jun 1" },
   { id: "goal-3", title: "Ship backend-ready data model", owner: "Alex Kim", progress: 58, dueDate: "May 28" },
 ];
@@ -434,7 +434,7 @@ export const DASHBOARD_WIDGETS: DashboardWidget[] = [
 ];
 
 export const DOC_PAGES: DocPage[] = [
-  { id: "doc-1", title: "UPZ Product Operating Manual", space: "Product", updated: "Today", linkedTasks: 8, excerpt: "Vision, feature principles, routes, and delivery rituals for the UPZ ecosystem." },
+  { id: "doc-1", title: "Optima Product Operating Manual", space: "Product", updated: "Today", linkedTasks: 8, excerpt: "Vision, feature principles, routes, and delivery rituals for the Optima ecosystem." },
   { id: "doc-2", title: "Client Delivery Checklist", space: "Freelance Ops", updated: "Yesterday", linkedTasks: 5, excerpt: "Proposal, kickoff, delivery, invoice, feedback, and archive steps." },
   { id: "doc-3", title: "Community Moderation Guide", space: "Growth Lab", updated: "May 5", linkedTasks: 4, excerpt: "Public group rules, creator badges, reports, and escalation flow." },
 ];

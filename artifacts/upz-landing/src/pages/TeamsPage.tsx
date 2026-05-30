@@ -416,7 +416,7 @@ export default function TeamsPage({ user, onLogout }: Props) {
                   onClick={() => setNotice("Workspace switcher placeholder opened")}
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-bold text-slate-100 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/[0.07]"
                 >
-                  UPZ Launch Squad
+                  Optima Launch Squad
                   <ChevronDown className="h-4 w-4 text-slate-500" />
                 </button>
                 <div className="flex flex-1 flex-col gap-2 lg:flex-row lg:justify-end">
@@ -861,7 +861,7 @@ export default function TeamsPage({ user, onLogout }: Props) {
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">OPTIMA Team Command</p>
                     <h2 className="mt-2 text-2xl font-black tracking-tight text-[#111827]">Live productivity operating system</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">Employees, tasks, timers, AI risk signals, Telegram bot actions and role architecture in one calm UPZ control layer.</p>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">Employees, tasks, timers, AI risk signals, Telegram bot actions and role architecture in one calm Optima control layer.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Pill tone="green">{activeEmployees} active employees</Pill>
@@ -1181,7 +1181,7 @@ export default function TeamsPage({ user, onLogout }: Props) {
 
         <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
           <SurfaceCard>
-            <SectionTitle icon={ShieldCheck} title="Role architecture" description="Hisobotchi-style hierarchy adapted for UPZ team operations." />
+            <SectionTitle icon={ShieldCheck} title="Role architecture" description="Hisobotchi-style hierarchy adapted for Optima team operations." />
             <div className="overflow-hidden rounded-[22px] border border-[#E5E7EB]">
               {ROLE_ARCHITECTURE.map((role) => (
                 <div key={role.role} className="grid gap-3 border-b border-[#E5E7EB] bg-white p-3 last:border-b-0 md:grid-cols-[1fr_1.3fr_0.8fr_0.8fr_0.8fr] md:items-center">
@@ -1211,7 +1211,7 @@ export default function TeamsPage({ user, onLogout }: Props) {
               <div className="flex items-center gap-3">
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 text-sm font-black text-white">UP</span>
                 <div>
-                  <p className="font-black text-[#111827]">UPZ Launch Squad</p>
+                  <p className="font-black text-[#111827]">Optima Launch Squad</p>
                   <p className="text-sm text-[#6B7280]">6 members - AI summary ready</p>
                 </div>
               </div>

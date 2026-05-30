@@ -13,7 +13,7 @@
     "badge": "Hepsi Bir Arada Verimlilik Platformu",
     "headline1": "Çalış. Öğren. Kazan.",
     "headline2": "Hepsi tek bir yerde.",
-    "subheadline": "Universal Productivity Zone, kullanıcıların beceri öğrenmesine, iş bulmasına, ekip yönetmesine, serbest çalışan olarak büyümesine ve yapay zeka destekli araçlarla tek bir kişiselleştirilmiş çalışma alanında çalışmasına yardımcı olur.",
+    "subheadline": "Optima, kullanıcıların beceri öğrenmesine, iş bulmasına, ekip yönetmesine, serbest çalışan olarak büyümesine ve yapay zeka destekli araçlarla tek bir kişiselleştirilmiş çalışma alanında çalışmasına yardımcı olur.",
     "getStarted": "Başla",
     "exploreFeatures": "Özellikleri Keşfet"
   },
@@ -34,7 +34,7 @@
   },
   "solution": {
     "title": "İhtiyacın olan her şey, nihayet birleşti",
-    "subtitle": "UPZ, mesleki büyüme ve günlük iş için tüm temel araçları, sürtünmeyi ortadan kaldırmak için tasarlanmış tek, tutarlı bir ortamda bir araya getiriyor.",
+    "subtitle": "Optima, mesleki büyüme ve günlük iş için tüm temel araçları, sürtünmeyi ortadan kaldırmak için tasarlanmış tek, tutarlı bir ortamda bir araya getiriyor.",
     "modules": [
       "Kişiselleştirilmiş Çalışma Alanı",
       "Sohbet",
@@ -108,7 +108,7 @@
   },
   "forWhom": {
     "title": "Her profesyonel için inşa edildi",
-    "subtitle": "Ne yaparsan yap, UPZ sana uyum sağlar.",
+    "subtitle": "Ne yaparsan yap, Optima sana uyum sağlar.",
     "personas": [
       {
         "role": "Geliştiriciler",
@@ -190,7 +190,7 @@
   },
   "freelancer": {
     "title": "Sıfırdan serbest çalışan ol",
-    "subtitle": "UPZ sadece bir serbest çalışma pazaryeri değil — yeni başlayandan kazanan profesyonele kadar eksiksiz bir yol.",
+    "subtitle": "Optima sadece bir serbest çalışma pazaryeri değil — yeni başlayandan kazanan profesyonele kadar eksiksiz bir yol.",
     "steps": [
       "Öğren",
       "Pratik Yap",
@@ -208,7 +208,7 @@
     "joinCount": "{{count}}+ profesyonele katıl"
   },
   "footer": {
-    "tagline": "Universal Productivity Zone, dağınık araçlarının yerini alan hepsi bir arada çalışma alanı. Tek yerde çalış, öğren ve kazan.",
+    "tagline": "Optima, dağınık araçlarının yerini alan hepsi bir arada çalışma alanı. Tek yerde çalış, öğren ve kazan.",
     "product": "Ürün",
     "features": "Özellikler",
     "howItWorks": "Nasıl Çalışır",
@@ -223,7 +223,7 @@
     "privacy": "Gizlilik Politikası",
     "terms": "Kullanım Koşulları",
     "contact": "İletişim",
-    "copyright": "© {{year}} Universal Productivity Zone. Tüm hakları saklıdır."
+    "copyright": "© {{year}} Optima. Tüm hakları saklıdır."
   },
   "app": {
     "nav": {
@@ -264,7 +264,7 @@
       "synced": "Yerelde senkronize",
       "tagline": "Tek ?al??ma alan?nda ?al??, ??ren, kazan ve i? birli?i yap.",
       "searchLong": "Kullan?c?, sohbet, g?rev, proje ara",
-      "searchShort": "UPZ ara",
+      "searchShort": "Optima ara",
       "openSearch": "Global aramay? a?",
       "closeSearch": "Aramay? kapat",
       "commandReady": "Command center aramas? backend ba?lant?s?na haz?r.",
@@ -280,7 +280,7 @@
     "dashboard": {
       "eyebrow": "Bug?n?n command center??",
       "welcome": "Tekrar ho? geldin, {{name}}",
-      "description": "UPZ command center projeleri, sohbeti, AI??, ekipleri, c?zdan?, bildirimleri ve workspace sa?l???n? tek temiz g?r?n?mde toplar.",
+      "description": "Optima command center projeleri, sohbeti, AI??, ekipleri, c?zdan?, bildirimleri ve workspace sa?l???n? tek temiz g?r?n?mde toplar.",
       "askAI": "AI?a sor",
       "openChat": "Sohbeti a?",
       "heroTitle": "G?n? sakin ve ba?l? bir workspace?ten y?net.",
@@ -305,7 +305,7 @@
       "nextActions": "Sonraki en iyi aksiyonlar",
       "nextActionsDesc": "Clickable command cards backend karma??kl??? olmadan MVP?yi ger?ek hissettirir.",
       "ecosystemHealth": "Ekosistem mod?l sa?l???",
-      "ecosystemDesc": "Tam UPZ product system i?in daha zengin mock data.",
+      "ecosystemDesc": "Tam Optima product system i?in daha zengin mock data.",
       "backendReady": "Backend haz?r",
       "weeklyActivity": "Haftal?k aktivite",
       "weeklyActivityDesc": "?r?n ekosisteminde g?revler ve mesajlar.",
@@ -336,7 +336,7 @@
         "workspace": "Workspace"
       },
       "progress": {
-        "productSystem": "UPZ Product System",
+        "productSystem": "Optima Product System",
         "internalExpansion": "Internal app geni?leme",
         "backendIntegration": "Backend entegrasyonu",
         "mobileUx": "Mobile adaptive UX"
@@ -413,7 +413,7 @@
       "pressEnterSave": "Kaydetmek i?in Enter?a bas",
       "mentionPlaceholder": "{{room}} mesaj?. Teammate mention i?in @ kullan...",
       "messagePlaceholder": "{{room}} mesaj?...",
-      "aiOnline": "UPZ AI online",
+      "aiOnline": "Optima AI online",
       "savedPrivate": "Ozel kaydedilen mesajlar",
       "aiComposeTitle": "AI yazma yardimcisi",
       "aiComposeDesc": "/ai sonrasina metin yaz, sonra duzelt veya profesyonel yap.",
@@ -449,15 +449,15 @@
         "groupVoice": "Grup sesli arama",
         "groupVideo": "Grup video arama",
         "live": "Canli",
-        "encryptedDemo": "UPZ secure demo",
+        "encryptedDemo": "Optima secure demo",
         "minimize": "Aramayi kucult",
         "expand": "Aramayi buyut",
         "end": "Aramayi bitir",
         "secureLayer": "Secure demo katmani",
         "participants": "katilimci",
-        "directVoiceDesc": "Telegram benzeri temiz call surface: UPZ kontrolleri, local state ve backend gerekmez.",
+        "directVoiceDesc": "Telegram benzeri temiz call surface: Optima kontrolleri, local state ve backend gerekmez.",
         "groupVoiceDesc": "Grup voice calllari sakin sahne, participant stack ve ekip sohbetleri icin hizli kontrollerle gelir.",
-        "telegramInspired": "Taninmis call UX, UPZ stiline uyarlandi",
+        "telegramInspired": "Taninmis call UX, Optima stiline uyarlandi",
         "people": "Kisiler",
         "peopleDesc": "Lokal katilimci durumlari",
         "invite": "Kisi davet et",
@@ -484,12 +484,12 @@
     "meetings": {
       "eyebrow": "Toplantilar",
       "title": "Ekipler ve musteri gorusmeleri icin lux video toplantilar",
-      "description": "Anlik arama, planli oturum, ekip sync, ekran paylasimi ve gelecek takvim entegrasyonu icin premium UPZ meeting room.",
+      "description": "Anlik arama, planli oturum, ekip sync, ekran paylasimi ve gelecek takvim entegrasyonu icin premium Optima meeting room.",
       "newMeeting": "Yeni toplanti",
       "schedule": "Planla",
       "liveRoom": "Canli meeting room",
       "readyRoom": "Hazir oda",
-      "roomDesc": "UPZ icin uyarlanmis tanidik video-call layout: sakin kontroller, katilimci kartlari, agenda, linkler ve demo guvenlik durumlari.",
+      "roomDesc": "Optima icin uyarlanmis tanidik video-call layout: sakin kontroller, katilimci kartlari, agenda, linkler ve demo guvenlik durumlari.",
       "copyLink": "Linki kopyala",
       "inCall": "Gorusmede",
       "preview": "Preview",
@@ -595,13 +595,13 @@
     },
     "premium": {
       "eyebrow": "Premium hesaplar",
-      "title": "Ciddi UPZ kullanicilari icin premium avantajlar",
+      "title": "Ciddi Optima kullanicilari icin premium avantajlar",
       "description": "Daha fazla AI, daha iyi meetings, workspace controls, verified community status ve Universal Bank perks.",
       "upgrade": "Hesabi upgrade et",
       "comparePlans": "Planlari karsilastir",
       "currentPlan": "Premium preview",
-      "heroTitle": "{{name}}, daha guclu UPZ sistemini ac.",
-      "heroDesc": "Premium UPZ icinde her gun calisan, ogrenip kazanan ve ekiplerle is yapan kullanicilar icin.",
+      "heroTitle": "{{name}}, daha guclu Optima sistemini ac.",
+      "heroDesc": "Premium Optima icinde her gun calisan, ogrenip kazanan ve ekiplerle is yapan kullanicilar icin.",
       "selectedPlan": "Secili plan",
       "whyTitle": "Premium neden onemli",
       "whyDesc": "Free MVP bozulmadan upgrade icin net nedenler olusturur.",
@@ -667,7 +667,7 @@
           "name": "Free",
           "period": "forever",
           "badge": "Current MVP",
-          "description": "UPZ denemek icin.",
+          "description": "Optima denemek icin.",
           "cta": "Current plan",
           "features": [
             "Basic workspace",
@@ -709,7 +709,7 @@
     },
     "home": {
       "welcome": "Tekrar ho? geldin, {{name}}",
-      "description": "Hedef: {{goal}}. UPZ ?al??ma alan?, projeler, topluluk, haberler, c?zdan, ekipler ve AI asistan? tek sistemde birle?tirir.",
+      "description": "Hedef: {{goal}}. Optima ?al??ma alan?, projeler, topluluk, haberler, c?zdan, ekipler ve AI asistan? tek sistemde birle?tirir.",
       "tasksDoneCount": "{{done}}/{{total}} g?rev tamamland?",
       "metrics": {
         "focusScore": "Odak skoru",
@@ -720,7 +720,7 @@
         "unreadTrend": "Sohbet ve haberlerde"
       },
       "quickActions": "H?zl? i?lemler",
-      "quickActionsDesc": "Fast entry points into the expanded UPZ ecosystem.",
+      "quickActionsDesc": "Fast entry points into the expanded Optima ecosystem.",
       "actions": {
         "newTask": "Yeni g?rev",
         "openChat": "Sohbeti a?",
@@ -736,7 +736,7 @@
         "completedTask": "Completed task: Review project requirements",
         "newMessage": "New message from Alex Kim",
         "updatedNote": "Updated note: MVP Feature List",
-        "joinedChat": "Joined UPZ Core Team chat",
+        "joinedChat": "Joined Optima Core Team chat",
         "onboarding": "Onboarding completed"
       },
       "time": {
@@ -788,7 +788,7 @@
     "community": {
       "eyebrow": "Topluluk sistemi",
       "title": "Mesle?e g?re gruplar, kanallar ve tart??malar",
-      "description": "Public communities give every UPZ user a place to learn, collaborate, moderate, and discover opportunities without leaving their workspace.",
+      "description": "Public communities give every Optima user a place to learn, collaborate, moderate, and discover opportunities without leaving their workspace.",
       "startDiscussion": "Tart??ma ba?lat",
       "moderationQueue": "Moderasyon kuyru?u",
       "publicGroups": "Herkese a??k gruplar",
@@ -849,7 +849,7 @@
       "save": "Kaydet",
       "saved": "Kaydedildi",
       "readLabel": "{{time}} okuma",
-      "productionBody": "In a production UPZ backend, this view would support authors, sources, recommendations, and profession-based personalization. For the MVP, it demonstrates hierarchy, reading rhythm, and saved state without adding content infrastructure.",
+      "productionBody": "In a production Optima backend, this view would support authors, sources, recommendations, and profession-based personalization. For the MVP, it demonstrates hierarchy, reading rhythm, and saved state without adding content infrastructure.",
       "related": {
         "recommended": "Recommended",
         "role": "For your role",
@@ -890,7 +890,7 @@
       "generatePlan": "Plan olu?tur",
       "chatTitle": "AI ile sohbet",
       "chatDesc": "MVP chat surface with local demo responses.",
-      "inputPlaceholder": "UPZ AI'a sor...",
+      "inputPlaceholder": "Optima AI'a sor...",
       "messages": {
         "welcome": "Hi, I can help turn your workspace into actions. Ask for task suggestions, learning help, or project ideas.",
         "focusPlan": "Suggest a focus plan for this week.",
@@ -948,7 +948,7 @@
         "thisWeek": "Bu hafta"
       },
       "linkedChat": "Ba?l? sohbet",
-      "linkedChatDesc": "UPZ Core Team chat is connected to this dashboard for future backend activity sync.",
+      "linkedChatDesc": "Optima Core Team chat is connected to this dashboard for future backend activity sync.",
       "membersRoles": "?yeler ve roller",
       "membersRolesDesc": "Admin/member role display with add-member placeholder.",
       "roles": {
@@ -1067,7 +1067,7 @@
         },
         "productUpdates": {
           "label": "Product Updates",
-          "desc": "News about new UPZ features"
+          "desc": "News about new Optima features"
         }
       },
       "integrationsIntro": "Connect external services to enhance your workspace. No real credentials required in this demo.",
@@ -1142,7 +1142,7 @@
           "name": "Sara Chen"
         },
         "r3": {
-          "name": "UPZ Core Team"
+          "name": "Optima Core Team"
         },
         "r4": {
           "name": "Landing Page Redesign",

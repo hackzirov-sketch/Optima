@@ -60,7 +60,7 @@ export function SolutionSection() {
                   fallback={
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white font-bold text-3xl shadow-md">U</div>
-                      <span className="font-bold text-foreground">UPZ Core</span>
+                      <span className="font-bold text-foreground">Optima Core</span>
                     </div>
                   }
                   className="w-full h-full"

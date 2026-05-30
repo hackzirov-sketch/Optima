@@ -13,7 +13,7 @@
     "badge": "All-in-One Productivity Platform",
     "headline1": "Work. Learn. Earn.",
     "headline2": "All in one place.",
-    "subheadline": "Universal Productivity Zone helps users learn skills, find jobs, manage teams, grow as freelancers, and work with AI-powered productivity tools in one personalized workspace.",
+    "subheadline": "Optima helps users learn skills, find jobs, manage teams, grow as freelancers, and work with AI-powered productivity tools in one personalized workspace.",
     "getStarted": "Get Started",
     "exploreFeatures": "Explore Features"
   },
@@ -34,7 +34,7 @@
   },
   "solution": {
     "title": "Everything you need, finally unified",
-    "subtitle": "UPZ brings together all the essential tools for professional growth and daily work into a single, cohesive environment designed to eliminate friction.",
+    "subtitle": "Optima brings together all the essential tools for professional growth and daily work into a single, cohesive environment designed to eliminate friction.",
     "modules": [
       "Personalized Workspace",
       "Chat",
@@ -108,7 +108,7 @@
   },
   "forWhom": {
     "title": "Built for every professional",
-    "subtitle": "Whatever you do, UPZ adapts to you.",
+    "subtitle": "Whatever you do, Optima adapts to you.",
     "personas": [
       {
         "role": "Developers",
@@ -190,7 +190,7 @@
   },
   "freelancer": {
     "title": "Become a freelancer from zero",
-    "subtitle": "UPZ isn't just a freelance marketplace — it's the complete path from beginner to earning professional.",
+    "subtitle": "Optima isn't just a freelance marketplace — it's the complete path from beginner to earning professional.",
     "steps": [
       "Learn",
       "Practice",
@@ -208,7 +208,7 @@
     "joinCount": "Join {{count}}+ professionals"
   },
   "footer": {
-    "tagline": "Universal Productivity Zone is the all-in-one workspace that replaces your scattered tools. Work, learn, and earn in one place.",
+    "tagline": "Optima is the all-in-one workspace that replaces your scattered tools. Work, learn, and earn in one place.",
     "product": "Product",
     "features": "Features",
     "howItWorks": "How it Works",
@@ -223,7 +223,7 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
     "contact": "Contact",
-    "copyright": "© {{year}} Universal Productivity Zone. All rights reserved."
+    "copyright": "© {{year}} Optima. All rights reserved."
   },
   "app": {
     "nav": {
@@ -264,7 +264,7 @@
       "synced": "Synced locally",
       "tagline": "Build, learn, earn, and collaborate in one workspace.",
       "searchLong": "Search users, chats, tasks, projects",
-      "searchShort": "Search UPZ",
+      "searchShort": "Search Optima",
       "openSearch": "Open global search",
       "closeSearch": "Close search",
       "commandReady": "Command center search is ready for backend wiring.",
@@ -280,7 +280,7 @@
     "dashboard": {
       "eyebrow": "Today command center",
       "welcome": "Welcome back, {{name}}",
-      "description": "Your UPZ command center brings together projects, chat, AI, teams, wallet, notifications, and workspace health in one clean operating view.",
+      "description": "Your Optima command center brings together projects, chat, AI, teams, wallet, notifications, and workspace health in one clean operating view.",
       "askAI": "Ask AI",
       "openChat": "Open chat",
       "heroTitle": "Run the day from one calm, connected workspace.",
@@ -305,7 +305,7 @@
       "nextActions": "Next best actions",
       "nextActionsDesc": "Clickable command cards make the MVP feel actionable without backend complexity.",
       "ecosystemHealth": "Ecosystem module health",
-      "ecosystemDesc": "Richer mock data for the full UPZ product system.",
+      "ecosystemDesc": "Richer mock data for the full Optima product system.",
       "backendReady": "Backend-ready",
       "weeklyActivity": "Weekly activity",
       "weeklyActivityDesc": "Tasks and messages across the product ecosystem.",
@@ -336,7 +336,7 @@
         "workspace": "Workspace"
       },
       "progress": {
-        "productSystem": "UPZ Product System",
+        "productSystem": "Optima Product System",
         "internalExpansion": "Internal App Expansion",
         "backendIntegration": "Backend Integration",
         "mobileUx": "Mobile Adaptive UX"
@@ -413,7 +413,7 @@
       "pressEnterSave": "Press Enter to save changes",
       "mentionPlaceholder": "Message {{room}}. Use @ to mention teammates...",
       "messagePlaceholder": "Message {{room}}...",
-      "aiOnline": "UPZ AI online",
+      "aiOnline": "Optima AI online",
       "savedPrivate": "Private saved messages",
       "aiComposeTitle": "AI writing assistant",
       "aiComposeDesc": "Write text after /ai, then fix it or make it professional.",
@@ -449,15 +449,15 @@
         "groupVoice": "Group voice call",
         "groupVideo": "Group video call",
         "live": "Live",
-        "encryptedDemo": "UPZ secure demo",
+        "encryptedDemo": "Optima secure demo",
         "minimize": "Minimize call",
         "expand": "Expand call",
         "end": "End call",
         "secureLayer": "Secure demo layer",
         "participants": "participants",
-        "directVoiceDesc": "A clean Telegram-like call surface with UPZ controls, local state, and no backend requirement.",
+        "directVoiceDesc": "A clean Telegram-like call surface with Optima controls, local state, and no backend requirement.",
         "groupVoiceDesc": "Group voice calls use a calm stage, participant stack, and quick controls for team conversations.",
-        "telegramInspired": "Familiar call UX, adapted to UPZ style",
+        "telegramInspired": "Familiar call UX, adapted to Optima style",
         "people": "People",
         "peopleDesc": "Local participant states",
         "invite": "Invite people",
@@ -484,12 +484,12 @@
     "meetings": {
       "eyebrow": "Meetings",
       "title": "Lux video meetings for teams and client calls",
-      "description": "A premium UPZ meeting room for instant calls, scheduled sessions, team syncs, screen sharing, and future calendar integration.",
+      "description": "A premium Optima meeting room for instant calls, scheduled sessions, team syncs, screen sharing, and future calendar integration.",
       "newMeeting": "New meeting",
       "schedule": "Schedule",
       "liveRoom": "Live meeting room",
       "readyRoom": "Ready room",
-      "roomDesc": "A familiar video-call layout adapted for UPZ: calm controls, participant tiles, agenda, links, and mock security states.",
+      "roomDesc": "A familiar video-call layout adapted for Optima: calm controls, participant tiles, agenda, links, and mock security states.",
       "copyLink": "Copy link",
       "inCall": "In call",
       "preview": "Preview",
@@ -595,13 +595,13 @@
     },
     "premium": {
       "eyebrow": "Premium accounts",
-      "title": "Premium advantages for serious UPZ users",
+      "title": "Premium advantages for serious Optima users",
       "description": "Turn the MVP into a paid-product-ready experience with more AI, better meetings, deeper workspace controls, verified community status, and Universal Bank perks.",
       "upgrade": "Upgrade account",
       "comparePlans": "Compare plans",
       "currentPlan": "Premium preview",
-      "heroTitle": "{{name}}, unlock the stronger UPZ operating system.",
-      "heroDesc": "Premium is designed for users who work, learn, earn, and collaborate daily inside UPZ.",
+      "heroTitle": "{{name}}, unlock the stronger Optima operating system.",
+      "heroDesc": "Premium is designed for users who work, learn, earn, and collaborate daily inside Optima.",
       "selectedPlan": "Selected plan",
       "whyTitle": "Why Premium matters",
       "whyDesc": "These advantages create clear reasons to upgrade without making the free MVP feel broken.",
@@ -667,7 +667,7 @@
           "name": "Free",
           "period": "forever",
           "badge": "Current MVP",
-          "description": "For trying UPZ and managing a light personal workspace.",
+          "description": "For trying Optima and managing a light personal workspace.",
           "cta": "Current plan",
           "features": [
             "Basic workspace",
@@ -709,7 +709,7 @@
     },
     "home": {
       "welcome": "Welcome back, {{name}}",
-      "description": "Goal: {{goal}}. UPZ now connects your workspace, projects, community, news, wallet, teams, and AI assistant into one light productivity system.",
+      "description": "Goal: {{goal}}. Optima now connects your workspace, projects, community, news, wallet, teams, and AI assistant into one light productivity system.",
       "tasksDoneCount": "{{done}}/{{total}} tasks done",
       "metrics": {
         "focusScore": "Focus score",
@@ -720,7 +720,7 @@
         "unreadTrend": "Across chat and news"
       },
       "quickActions": "Quick actions",
-      "quickActionsDesc": "Fast entry points into the expanded UPZ ecosystem.",
+      "quickActionsDesc": "Fast entry points into the expanded Optima ecosystem.",
       "actions": {
         "newTask": "New Task",
         "openChat": "Open Chat",
@@ -736,7 +736,7 @@
         "completedTask": "Completed task: Review project requirements",
         "newMessage": "New message from Alex Kim",
         "updatedNote": "Updated note: MVP Feature List",
-        "joinedChat": "Joined UPZ Core Team chat",
+        "joinedChat": "Joined Optima Core Team chat",
         "onboarding": "Onboarding completed"
       },
       "time": {
@@ -788,7 +788,7 @@
     "community": {
       "eyebrow": "Community system",
       "title": "Profession-based groups, channels, and discussions",
-      "description": "Public communities give every UPZ user a place to learn, collaborate, moderate, and discover opportunities without leaving their workspace.",
+      "description": "Public communities give every Optima user a place to learn, collaborate, moderate, and discover opportunities without leaving their workspace.",
       "startDiscussion": "Start discussion",
       "moderationQueue": "Moderation queue",
       "publicGroups": "Public groups by profession",
@@ -849,7 +849,7 @@
       "save": "Save",
       "saved": "Saved",
       "readLabel": "{{time}} read",
-      "productionBody": "In a production UPZ backend, this view would support authors, sources, recommendations, and profession-based personalization. For the MVP, it demonstrates hierarchy, reading rhythm, and saved state without adding content infrastructure.",
+      "productionBody": "In a production Optima backend, this view would support authors, sources, recommendations, and profession-based personalization. For the MVP, it demonstrates hierarchy, reading rhythm, and saved state without adding content infrastructure.",
       "related": {
         "recommended": "Recommended",
         "role": "For your role",
@@ -890,7 +890,7 @@
       "generatePlan": "Generate plan",
       "chatTitle": "Chat with AI",
       "chatDesc": "MVP chat surface with local demo responses.",
-      "inputPlaceholder": "Ask UPZ AI anything...",
+      "inputPlaceholder": "Ask Optima AI anything...",
       "messages": {
         "welcome": "Hi, I can help turn your workspace into actions. Ask for task suggestions, learning help, or project ideas.",
         "focusPlan": "Suggest a focus plan for this week.",
@@ -948,7 +948,7 @@
         "thisWeek": "This week"
       },
       "linkedChat": "Linked chat",
-      "linkedChatDesc": "UPZ Core Team chat is connected to this dashboard for future backend activity sync.",
+      "linkedChatDesc": "Optima Core Team chat is connected to this dashboard for future backend activity sync.",
       "membersRoles": "Members and roles",
       "membersRolesDesc": "Admin/member role display with add-member placeholder.",
       "roles": {
@@ -1067,7 +1067,7 @@
         },
         "productUpdates": {
           "label": "Product Updates",
-          "desc": "News about new UPZ features"
+          "desc": "News about new Optima features"
         }
       },
       "integrationsIntro": "Connect external services to enhance your workspace. No real credentials required in this demo.",
@@ -1142,7 +1142,7 @@
           "name": "Sara Chen"
         },
         "r3": {
-          "name": "UPZ Core Team"
+          "name": "Optima Core Team"
         },
         "r4": {
           "name": "Landing Page Redesign",

@@ -242,8 +242,8 @@ export default function OnboardingPage() {
               U
             </span>
             <span className="min-w-0">
-              <span className="block text-lg font-black tracking-tight">UPZ</span>
-              <span className="hidden truncate text-xs font-semibold text-[#6B7280] dark:text-slate-400 sm:block">Universal Productivity Zone</span>
+              <span className="block text-lg font-black tracking-tight">Optima</span>
+              <span className="hidden truncate text-xs font-semibold text-[#6B7280] dark:text-slate-400 sm:block">Optima</span>
             </span>
           </button>
           <div className="flex items-center gap-2">
@@ -266,7 +266,7 @@ export default function OnboardingPage() {
                 One calm account for your whole productivity zone.
               </h1>
               <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
-                Sign in with email or phone, create a richer profile, then enter your UPZ workspace with chat, meetings, projects, bank, news, community, and AI.
+                Sign in with email or phone, create a richer profile, then enter your Optima workspace with chat, meetings, projects, bank, news, community, and AI.
               </p>
             </div>
 
@@ -321,10 +321,10 @@ export default function OnboardingPage() {
                   <div className="mb-7 text-center sm:text-left">
                     <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:ring-indigo-400/20">
                       <Sparkles className="h-4 w-4" />
-                      UPZ account
+                      Optima account
                     </span>
                     <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                      {authMode === "signup" ? "Create your productivity account" : "Welcome back to UPZ"}
+                      {authMode === "signup" ? "Create your productivity account" : "Welcome back to Optima"}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-[#6B7280] dark:text-slate-400">
                       {authMode === "signup"
@@ -506,7 +506,7 @@ export default function OnboardingPage() {
                   {step === "profession" && (
                     <div>
                       <h2 className="text-3xl font-black tracking-tight">What best describes you?</h2>
-                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">We will tailor your UPZ workspace to your field.</p>
+                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">We will tailor your Optima workspace to your field.</p>
                       <div className="mt-6 grid gap-3 sm:grid-cols-2">
                         {PROFESSIONS.map((item) => (
                           <button

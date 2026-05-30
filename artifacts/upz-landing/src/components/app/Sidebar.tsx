@@ -85,8 +85,8 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <span className="block text-sm font-bold tracking-wide text-[#111827]">UPZ</span>
-              <span className="block truncate text-xs text-[#6B7280]">Universal Productivity Zone</span>
+              <span className="block text-sm font-bold tracking-wide text-[#111827]">Optima</span>
+              <span className="block truncate text-xs text-[#6B7280]">Optima</span>
             </div>
           )}
         </div>

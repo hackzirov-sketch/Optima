@@ -10,6 +10,12 @@ type LottieComponent = ComponentType<{
   autoplay?: boolean;
   className?: string;
   style?: CSSProperties;
+  rendererSettings?: {
+    preserveAspectRatio?: string;
+    progressiveLoad?: boolean;
+    hideOnTransparent?: boolean;
+    clearCanvas?: boolean;
+  };
   onComplete?: () => void;
 }>;
 
@@ -130,7 +136,7 @@ function useEmojiPlayback({
 
   useEffect(() => {
     if (!playing || !emoji?.animationSrc) return;
-    const timeout = window.setTimeout(stop, 1800);
+    const timeout = window.setTimeout(stop, 1200);
     return () => window.clearTimeout(timeout);
   }, [emoji?.animationSrc, playing]);
 
@@ -216,8 +222,8 @@ export const FastEmojiRenderer = memo(function FastEmojiRenderer({
   return (
     <span
       ref={ref}
-      className={className || "relative inline-grid place-items-center align-middle"}
-      style={{ width: pixelSize, height: pixelSize }}
+      className={className || "relative inline-grid place-items-center overflow-hidden align-middle"}
+      style={{ width: pixelSize, height: pixelSize, contain: "paint", isolation: "isolate" }}
       onClick={() => {
         if (playOnClick) playback.play();
       }}
@@ -233,18 +239,25 @@ export const FastEmojiRenderer = memo(function FastEmojiRenderer({
         loading="lazy"
         decoding="async"
         draggable={false}
-        className="h-full w-full object-contain"
+        className={playback.playing && showLottie ? "h-full w-full object-contain opacity-0" : "h-full w-full object-contain"}
       />
       {showLottie && Lottie && (
-        <Lottie
-          key={playback.playKey}
-          animationData={playback.animationData}
-          loop={loop}
-          autoplay
-          onComplete={playback.stop}
-          className="absolute inset-0 h-full w-full"
-          style={{ width: pixelSize, height: pixelSize }}
-        />
+        <span key={playback.playKey} className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden">
+          <Lottie
+            animationData={playback.animationData}
+            loop={loop}
+            autoplay
+            rendererSettings={{
+              preserveAspectRatio: "xMidYMid meet",
+              progressiveLoad: false,
+              hideOnTransparent: true,
+              clearCanvas: true,
+            }}
+            onComplete={playback.stop}
+            className="h-full w-full"
+            style={{ width: pixelSize, height: pixelSize }}
+          />
+        </span>
       )}
     </span>
   );

@@ -77,7 +77,7 @@ export default function TasksNotesPage({ user, onLogout }: Props) {
   return (
     <AppLayout user={user} title={t("app.nav.tasks")} onLogout={onLogout}>
       <PageShell>
-        <PageHeader eyebrow="Tasks + Knowledge Hub" title="Smart task and docs operating room" description="UPZ task management now includes smart tables, quick tasks, docs/wiki, intake forms, recurring placeholders, reminders and focus time." >
+        <PageHeader eyebrow="Tasks + Knowledge Hub" title="Smart task and docs operating room" description="Optima task management now includes smart tables, quick tasks, docs/wiki, intake forms, recurring placeholders, reminders and focus time." >
           <ActionButton><Plus className="h-4 w-4" /> New smart task</ActionButton>
           <ActionButton variant="secondary"><Repeat2 className="h-4 w-4" /> Recurring rules</ActionButton>
         </PageHeader>

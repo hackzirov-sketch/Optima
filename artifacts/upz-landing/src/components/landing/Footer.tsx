@@ -15,7 +15,7 @@ export function Footer() {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
                 U
               </div>
-              <span className="font-bold text-xl tracking-tight text-foreground">UPZ</span>
+              <span className="font-bold text-xl tracking-tight text-foreground">Optima</span>
             </Link>
             <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">{t("footer.tagline")}</p>
           </div>

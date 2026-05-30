@@ -19,7 +19,7 @@ interface ChatHeaderProps {
 
 function roomStatus(room: ChatRoom, users: ChatUser[], t: (key: string, options?: Record<string, unknown>) => string) {
   const peer = getRoomPeer(room, users);
-  if (room.type === "ai") return { label: t("app.chat.aiOnline", { defaultValue: "UPZ AI online" }) };
+  if (room.type === "ai") return { label: t("app.chat.aiOnline", { defaultValue: "Optima AI online" }) };
   if (room.type === "saved") return { label: t("app.chat.savedPrivate", { defaultValue: "Private saved messages" }) };
 
   if (room.type === "1on1") {
