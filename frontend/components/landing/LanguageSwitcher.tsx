@@ -1,7 +1,7 @@
 'use client';
 import { useTranslation } from "react-i18next";
 import { Globe } from "lucide-react";
-import { LANGUAGES, applyDir, type LangCode } from "@/i18n";
+import { LANGUAGES, applyDir, I18N_STORAGE_KEY, type LangCode } from "@/i18n";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,7 @@ export function LanguageSwitcher() {
   const handleChange = (code: LangCode) => {
     i18n.changeLanguage(code);
     applyDir(code);
+    localStorage.setItem(I18N_STORAGE_KEY, code);
   };
 
   return (
