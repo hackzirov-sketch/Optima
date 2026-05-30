@@ -281,7 +281,6 @@ export const PREMIUM_FIGMA_SOURCES: FigmaSource[] = [
 export const PUBLIC_FREE_EMOJI_SOURCES: PublicEmojiSource[] = [
   { id: "emoji-mart-data", name: "Emoji Mart Data", license: "MIT", usage: "Unicode search index, category metadata, keyboard-friendly emoji lookup" },
   { id: "frimousse", name: "Frimousse", license: "MIT", usage: "Accessible picker primitives for the Telegram-like emoji cloud" },
-  { id: "animated-fluent-emojis", name: "Animated Fluent Emojis", license: "ISC", usage: "Subtle animated emoji rendering for premium hover states" },
   { id: "openmoji", name: "OpenMoji", license: "CC BY-SA 4.0", usage: "Curated public SVG reaction/status/productivity assets", folder: "/openmoji/" },
 ];
 
