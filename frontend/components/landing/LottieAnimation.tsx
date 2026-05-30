@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from "react";
-import Lottie, { type LottieRefCurrentProps } from "lottie-react";
+import dynamic from "next/dynamic";
+import type { LottieRefCurrentProps } from "lottie-react";
+
+// Lottie is ~400 kB — load it only when an animation is actually needed
+const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
 
 interface LottieAnimationProps {
   url: string;

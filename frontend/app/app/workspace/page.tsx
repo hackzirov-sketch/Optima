@@ -1,6 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -47,7 +46,6 @@ import {
   Workflow,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, ViewSwitcher, WidgetCard, WorkspaceHierarchy } from "@/components/app/PowerWorkspaceSystem";
 import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMART_TASKS, WHITEBOARD_NODES, WORKSPACE_ZONE } from "@/data/ecosystemData";
@@ -685,7 +683,7 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.workspace")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader
           eyebrow="Power Workspace"
@@ -1514,6 +1512,6 @@ export default function Page() {
         </SurfaceCard>
       </PageShell>
       <Toast message={notice} />
-    </AppLayout>
+    </>
   );
 }

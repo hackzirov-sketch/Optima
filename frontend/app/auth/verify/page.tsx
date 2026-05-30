@@ -21,7 +21,7 @@ export default function VerifyPage() {
     if (!verifyReady) return;
     setLoading(true);
     try {
-      const res = await authApi.verifyEmail(code) as any;
+      const res = await authApi.verifyEmail(code);
 
       if (res?.accessToken && res?.refreshToken) {
         setTokens(res.accessToken, res.refreshToken);
@@ -161,7 +161,7 @@ export default function VerifyPage() {
               Check your inbox
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              We've sent a 6-digit verification code to your email address. Please enter it below to verify your account.
+              We&apos;ve sent a 6-digit verification code to your email address. Please enter it below to verify your account.
             </p>
 
             {/* Email hint if we have it stored */}

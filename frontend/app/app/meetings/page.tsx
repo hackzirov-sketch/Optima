@@ -1,6 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useMemo, useState } from "react";
 import {
@@ -26,7 +25,6 @@ import {
   VideoOff,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { CLIP_ITEMS, MEETING_PARTICIPANTS, MEETING_ROOMS, SMART_TASKS } from "@/data/ecosystemData";
 import type { UserProfile } from "@/types";
@@ -160,7 +158,7 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.meetings")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader
           eyebrow={t("app.meetings.eyebrow")}
@@ -376,6 +374,6 @@ export default function Page() {
         </Modal>
       </PageShell>
       <Toast message={toast} />
-    </AppLayout>
+    </>
   );
 }

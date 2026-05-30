@@ -146,6 +146,7 @@ export interface RegisterDto {
   phoneNumber?: number
 }
 export interface AuthResponse { accessToken: string; refreshToken: string; user: ApiUser }
+export interface VerifyEmailResponse extends AuthResponse { redirect?: string }
 
 export const authApi = {
   login: (dto: LoginDto) =>
@@ -165,7 +166,7 @@ export const authApi = {
   me: () => request<{ data: ApiUser }>('GET', '/users/me'),
 
   verifyEmail: (code: string) =>
-    request('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
+    request<VerifyEmailResponse>('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
 
   setPassword: (password: string) =>
     request('POST', '/auth/set-password', { body: { password } }),

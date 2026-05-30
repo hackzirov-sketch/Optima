@@ -17,7 +17,7 @@ import {
   User,
   Zap,
 } from "lucide-react";
-import { authApi } from "@/lib/api";
+import { authApi, type RegisterDto } from "@/lib/api";
 import { AuthField, EyeToggle, ProviderButton, TabButton, PrimaryButton } from "../shared";
 
 export default function RegisterPage() {
@@ -48,7 +48,7 @@ export default function RegisterPage() {
   const handleCreateAccount = async () => {
     if (!signupReady) return;
     try {
-      const registerPayload = {
+      const registerPayload: RegisterDto = {
         email,
         password,
         username: username.trim(),
@@ -60,7 +60,7 @@ export default function RegisterPage() {
       if (phone.trim().length > 0) {
         const phoneDigits = phone.replace(/\D/g, '');
         if (phoneDigits.length >= 10 && phoneDigits.length <= 15) {
-          (registerPayload as any).phoneNumber = parseInt(phoneDigits, 10);
+          registerPayload.phoneNumber = parseInt(phoneDigits, 10);
         }
       }
       
@@ -70,8 +70,8 @@ export default function RegisterPage() {
       sessionStorage.setItem('pending_verify_password', password);
       // Redirect to email verification
       router.push("/auth/verify");
-    } catch (error: any) {
-      const message = error?.message || "Registration failed";
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Registration failed";
       alert(message);
     }
   };

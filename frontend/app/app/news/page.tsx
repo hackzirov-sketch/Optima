@@ -1,11 +1,9 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 ﻿import { useMemo, useState } from "react";
 import { Bookmark, Flame, Newspaper, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SimpleTabs, SurfaceCard } from "@/components/app/DesignSystem";
 import { NEWS_ARTICLES } from "@/data/ecosystemData";
 import type { UserProfile } from "@/types";
@@ -52,7 +50,6 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.news")} onLogout={onLogout}>
       <PageShell>
         <PageHeader
           eyebrow={t("app.news.eyebrow")}
@@ -132,6 +129,5 @@ export default function Page() {
           </SurfaceCard>
         </div>
       </PageShell>
-    </AppLayout>
   );
 }

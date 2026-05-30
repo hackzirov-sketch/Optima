@@ -1,11 +1,9 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import { CheckSquare, GitBranch, Lightbulb, MessageSquare, Plus, ShieldCheck, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { CommunityRoleIcon, PREMIUM_REACTIONS, PremiumGradientBadge, ReactionButton } from "@/components/premium/PremiumAssets";
 import { COMMUNITY_CHANNELS, COMMUNITY_GROUPS, COMMUNITY_THREADS, FEATURED_CREATORS, PROFESSIONAL_COMMUNITIES, SMART_TASKS, WORKSPACE_ZONE } from "@/data/ecosystemData";
@@ -38,7 +36,6 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.community")} onLogout={onLogout}>
       <PageShell>
         <PageHeader
           eyebrow={t("app.community.eyebrow")}
@@ -264,6 +261,5 @@ export default function Page() {
           </div>
         </SurfaceCard>
       </PageShell>
-    </AppLayout>
   );
 }

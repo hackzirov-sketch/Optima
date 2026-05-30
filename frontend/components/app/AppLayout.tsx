@@ -1,40 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
-import type { UserProfile } from "@/types";
 
-interface AppLayoutProps {
-  user: UserProfile | null;
-  title: string;
-  children: React.ReactNode;
-  onLogout: () => void;
-}
-
-export function AppLayout({
-  user,
-  title,
-  children,
-  onLogout,
-}: AppLayoutProps) {
+export function AppLayout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const router = useRouter();
+  const { user, logout } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-
-
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const hideAssistantButton =
     pathname === "/app/chat" ||
@@ -46,14 +30,13 @@ export function AppLayout({
       setMobileSidebarOpen(true);
       return;
     }
-
-    setCollapsed((current) => !current);
+    setCollapsed((c) => !c);
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <div className="hidden md:block">
-        <Sidebar user={user} onLogout={onLogout} collapsed={collapsed} />
+        <Sidebar user={user} onLogout={logout} collapsed={collapsed} />
       </div>
 
       <AnimatePresence>
@@ -69,30 +52,18 @@ export function AppLayout({
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
-              transition={{
-                type: "spring",
-                damping: 26,
-                stiffness: 260,
-              }}
+              transition={{ type: "spring", damping: 26, stiffness: 260 }}
               className="h-full w-[280px]"
-              onClick={(event) => event.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              <Sidebar
-                user={user}
-                onLogout={onLogout}
-                onNavigate={() => setMobileSidebarOpen(false)}
-              />
+              <Sidebar user={user} onLogout={logout} onNavigate={() => setMobileSidebarOpen(false)} />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar
-          user={user}
-          title={title}
-          onToggleSidebar={handleToggleSidebar}
-        />
+        <Topbar user={user} onToggleSidebar={handleToggleSidebar} />
 
         <main
           className="flex-1 overflow-y-auto p-4 md:p-6"
@@ -111,9 +82,7 @@ export function AppLayout({
             aria-label="Open AI assistant"
           >
             <Bot className="h-5 w-5" />
-            <span className="hidden sm:inline">
-              {t("app.dashboard.askAI")}
-            </span>
+            <span className="hidden sm:inline">{t("app.dashboard.askAI")}</span>
           </Link>
         )}
       </div>

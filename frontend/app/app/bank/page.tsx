@@ -1,10 +1,8 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 ﻿import { CreditCard, DollarSign, Download, Landmark, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, MetricTile, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { BANK_TRANSACTIONS, PAYMENT_METHODS } from "@/data/ecosystemData";
 import type { UserProfile } from "@/types";
@@ -19,7 +17,6 @@ export default function Page() {
 
 
   return (
-    <AppLayout user={user} title={t("app.nav.bank")} onLogout={onLogout}>
       <PageShell>
         <PageHeader
           eyebrow={t("app.bank.eyebrow")}
@@ -89,7 +86,6 @@ export default function Page() {
           </SurfaceCard>
         </div>
       </PageShell>
-    </AppLayout>
   );
 }
 

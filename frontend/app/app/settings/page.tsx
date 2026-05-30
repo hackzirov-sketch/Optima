@@ -1,12 +1,10 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { User, Bell, Plug, Github, Send, Instagram, Youtube, HardDrive, Mail, Calendar, BookOpen, CheckCircle2, XCircle, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, Pill, ProgressBar, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { AUTOMATION_RULES, POWER_VIEWS, WORKSPACE_SETTINGS } from "@/data/ecosystemData";
@@ -70,7 +68,6 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.settings")} onLogout={onLogout}>
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex w-fit gap-1 rounded-xl bg-card p-1 dark:bg-gray-800">
           {TABS.map((item) => (
@@ -278,6 +275,5 @@ export default function Page() {
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

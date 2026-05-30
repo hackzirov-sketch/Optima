@@ -1,12 +1,10 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlarmClock, CheckCircle2, FileText, FormInput, Plus, Repeat2, StickyNote, Timer, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import { DOC_PAGES, FORM_FIELDS, SMART_TASKS, TIME_ENTRIES } from "@/data/ecosystemData";
@@ -80,7 +78,7 @@ export default function TasksNotesPage() {
   const done = tasks.filter((task) => task.done);
 
   return (
-    <AppLayout user={user} title={t("app.nav.tasks")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader eyebrow="Tasks + Knowledge Hub" title="Smart task and docs operating room" description="UPZ task management now includes smart tables, quick tasks, docs/wiki, intake forms, recurring placeholders, reminders and focus time." >
           <ActionButton><Plus className="h-4 w-4" /> New smart task</ActionButton>
@@ -135,6 +133,6 @@ export default function TasksNotesPage() {
         <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onCreateTask={() => showNotice("Linked task created locally")} />
       </PageShell>
       <AnimatePresence><Toast message={notice} /></AnimatePresence>
-    </AppLayout>
+    </>
   );
 }

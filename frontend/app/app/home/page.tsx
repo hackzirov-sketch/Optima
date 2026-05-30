@@ -1,12 +1,10 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, Clock, Layers, ListTodo, MessageCircle, TrendingUp, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { MetricTile, PageHeader, PageShell, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import type { Task, UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
@@ -29,7 +27,7 @@ const RECENT_ACTIVITY = [
 ];
 
 export default function HomePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const [time, setTime] = useState(new Date());
 
@@ -60,7 +58,6 @@ export default function HomePage() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.home")} onLogout={logout}>
       <PageShell>
         <PageHeader
           eyebrow={dateStr}
@@ -123,6 +120,5 @@ export default function HomePage() {
           </SurfaceCard>
         </div>
       </PageShell>
-    </AppLayout>
   );
 }

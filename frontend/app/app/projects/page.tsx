@@ -1,11 +1,9 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, Plus, Target, UserPlus, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { ActivityTimeline, AutomationRuleCard, DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { ACTIVITY_LOG, AUTOMATION_RULES, GOALS, POWER_VIEWS, SMART_TASKS, TEAM_MEMBERS, TIME_ENTRIES } from "@/data/ecosystemData";
@@ -48,7 +46,7 @@ export default function Page() {
   }));
 
   return (
-    <AppLayout user={user} title={t("app.nav.projects")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader eyebrow="Smart Projects" title="Project command center" description="Kanban, table, timeline, calendar, workload, goals, automations and task detail drawers in one UPZ power-user workspace.">
           <ActionButton onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" /> Create project</ActionButton>
@@ -134,6 +132,6 @@ export default function Page() {
         <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onCreateTask={() => showNotice("Linked task created locally")} />
       </PageShell>
       <Toast message={notice} />
-    </AppLayout>
+    </>
   );
 }

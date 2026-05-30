@@ -1,6 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from "react";
 import {
@@ -44,7 +43,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge, type PremiumStatusId } from "@/components/premium/PremiumAssets";
 import { TEAM_MEMBERS, TEAM_SPACES } from "@/data/ecosystemData";
@@ -343,7 +341,7 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.teams")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader
           eyebrow={t("app.teams.eyebrow")}
@@ -1348,6 +1346,6 @@ export default function Page() {
         </Modal>
       </PageShell>
       <Toast message={notice} />
-    </AppLayout>
+    </>
   );
 }

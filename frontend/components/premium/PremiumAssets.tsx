@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
-import Lottie from "lottie-react";
+import dynamic from "next/dynamic";
+
+const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
 import { Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";

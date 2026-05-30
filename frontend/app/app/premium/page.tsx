@@ -1,6 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import {
@@ -21,7 +20,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, WidgetCard } from "@/components/app/PowerWorkspaceSystem";
 import { AI_AGENTS, AUTOMATION_RULES, DASHBOARD_WIDGETS, PREMIUM_BENEFITS, PREMIUM_COMPARISON, PREMIUM_PLANS } from "@/data/ecosystemData";
@@ -58,7 +56,7 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.premium")} onLogout={onLogout}>
+    <>
       <PageShell>
         <PageHeader
           eyebrow={t("app.premium.eyebrow")}
@@ -273,6 +271,6 @@ export default function Page() {
         </section>
       </PageShell>
       <Toast message={notice} />
-    </AppLayout>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, CheckCircle2, Menu, Search, Sparkles, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
 import { GLOBAL_SEARCH_ITEMS, NOTIFICATIONS } from "@/data/ecosystemData";
@@ -12,31 +13,32 @@ import { cn } from "./DesignSystem";
 
 interface TopbarProps {
   user: UserProfile;
-  title: string;
   onToggleSidebar?: () => void;
 }
 
-const TITLE_KEY_BY_LABEL: Record<string, string> = {
-  Home: "home",
-  Dashboard: "dashboard",
-  Workspace: "workspace",
-  Chat: "chat",
-  Meetings: "meetings",
-  Premium: "premium",
-  Projects: "projects",
-  Community: "community",
-  News: "news",
-  "Universal Bank": "bank",
-  "AI Assistant": "assistant",
-  Teams: "teams",
-  "Tasks & Notes": "tasks",
-  Profile: "profile",
-  Settings: "settings",
-};
+const PATH_TITLE_KEY: [string, string][] = [
+  ["/app/home", "home"],
+  ["/app/dashboard", "dashboard"],
+  ["/app/workspace", "workspace"],
+  ["/app/chat", "chat"],
+  ["/app/meetings", "meetings"],
+  ["/app/premium", "premium"],
+  ["/app/projects", "projects"],
+  ["/app/community", "community"],
+  ["/app/news", "news"],
+  ["/app/bank", "bank"],
+  ["/app/assistant", "assistant"],
+  ["/app/teams", "teams"],
+  ["/app/tasks", "tasks"],
+  ["/app/profile", "profile"],
+  ["/app/settings", "settings"],
+];
 
-export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
+export function Topbar({ user, onToggleSidebar }: TopbarProps) {
   const { t } = useTranslation();
+  const pathname = usePathname();
   const { status: wsStatus } = useWebSocket({ disabled: false });
+  const titleKey = PATH_TITLE_KEY.find(([path]) => pathname.startsWith(path))?.[1] ?? "home";
   const [searchOpen, setSearchOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -89,9 +91,7 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
   }, [query, searchItems]);
 
   const unreadCount = NOTIFICATIONS.filter((notification) => notification.unread && !readIds.includes(notification.id)).length;
-  const baseTitle = title.replace(/\s+\(.+\)$/, "");
-  const suffix = title.slice(baseTitle.length);
-  const localizedTitle = `${t(`app.nav.${TITLE_KEY_BY_LABEL[baseTitle] ?? baseTitle.toLowerCase()}`, baseTitle)}${suffix}`;
+  const localizedTitle = t(`app.nav.${titleKey}`);
 
   return (
     <header className="relative z-[60] flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-background/95 px-3 shadow-sm backdrop-blur-xl sm:px-4 md:px-5 xl:px-6">

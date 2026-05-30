@@ -5,7 +5,8 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { I18nInitializer } from '@/components/I18nInitializer';
-import { useState, useEffect } from 'react';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { useState } from 'react';
 import '@/i18n';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         <TooltipProvider>
           <I18nInitializer />
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

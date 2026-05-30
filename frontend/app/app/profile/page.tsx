@@ -1,12 +1,10 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 ﻿import { motion } from "framer-motion";
 import { Edit3, Award, Target, BookOpen, Briefcase, Star, GitBranch, Code2, Crown, ArrowRight, BadgeCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { AppLayout } from "@/components/app/AppLayout";
 import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge } from "@/components/premium/PremiumAssets";
 import type { UserProfile } from "@/types";
 
@@ -49,7 +47,6 @@ export default function Page() {
 
 
   return (
-    <AppLayout user={user} title={t("app.nav.profile")} onLogout={onLogout}>
       <div className="mx-auto max-w-3xl space-y-5">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -203,6 +200,5 @@ export default function Page() {
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

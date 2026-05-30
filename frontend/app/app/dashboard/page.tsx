@@ -1,6 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import {
   ArrowUpRight,
@@ -23,7 +22,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AppLayout } from "@/components/app/AppLayout";
 import { CommandCard, MetricTile, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { WidgetCard } from "@/components/app/PowerWorkspaceSystem";
 import { BANK_TRANSACTIONS, DASHBOARD_WIDGETS, ECOSYSTEM_MODULES, GOALS, NOTIFICATIONS } from "@/data/ecosystemData";
@@ -126,7 +124,6 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.dashboard")} onLogout={onLogout}>
       <PageShell>
         <PageHeader
           eyebrow={t("app.dashboard.eyebrow")}
@@ -302,6 +299,5 @@ export default function Page() {
           </SurfaceCard>
         </div>
       </PageShell>
-    </AppLayout>
   );
 }

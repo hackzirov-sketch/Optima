@@ -1,11 +1,9 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
 import { Bot, CalendarClock, CheckSquare, Lightbulb, MessageSquare, Send, Sparkles, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppLayout } from "@/components/app/AppLayout";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { CommandMenu, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import { AIAssistantStateBadge } from "@/components/premium/PremiumAssets";
@@ -55,7 +53,6 @@ export default function Page() {
   };
 
   return (
-    <AppLayout user={user} title={t("app.nav.assistant")} onLogout={onLogout}>
       <PageShell>
         <PageHeader
           eyebrow={t("app.assistant.eyebrow")}
@@ -211,6 +208,5 @@ export default function Page() {
         </SurfaceCard>
         <TaskDrawer task={drawerTask} onClose={() => setDrawerTaskId(null)} onCreateTask={() => sendMessage("Create this generated Smart Task")} />
       </PageShell>
-    </AppLayout>
   );
 }
