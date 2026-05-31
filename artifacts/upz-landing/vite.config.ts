@@ -4,13 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+const rawPort = process.env.PORT ?? "5173";
 
 const port = Number(rawPort);
 
@@ -77,10 +71,7 @@ export default defineConfig({
     port,
     strictPort: true,
     host: "0.0.0.0",
-    allowedHosts: process.env.ALLOWED_HOSTS?.split(",").map((host) => host.trim()).filter(Boolean) ?? [
-      "localhost",
-      "127.0.0.1",
-    ],
+    allowedHosts: true,
     fs: {
       strict: true,
     },
@@ -88,9 +79,6 @@ export default defineConfig({
   preview: {
     port,
     host: "0.0.0.0",
-    allowedHosts: process.env.ALLOWED_HOSTS?.split(",").map((host) => host.trim()).filter(Boolean) ?? [
-      "localhost",
-      "127.0.0.1",
-    ],
+    allowedHosts: true,
   },
 });
