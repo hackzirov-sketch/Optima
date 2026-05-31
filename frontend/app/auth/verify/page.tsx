@@ -14,12 +14,14 @@ export default function VerifyPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
   const verifyReady = code.trim().length === 6;
 
   const handleVerify = async () => {
     if (!verifyReady) return;
     setLoading(true);
+    setError("");
     try {
       const res = await authApi.verifyEmail(code);
 
@@ -59,12 +61,9 @@ export default function VerifyPage() {
 
         setSuccess(true);
         const route = res.redirect || '/onboarding';
-        const target = route === '/set-password' ? '/auth/set-password' : route === '/verify' ? '/auth/verify' : '/onboarding';
-        setTimeout(() => {
-          router.push(target);
-        }, 1200);
+        const target = route === '/set-password' ? '/auth/set-password' : '/onboarding';
+        setTimeout(() => router.push(target), 1200);
       } else {
-        // Verification succeeded in response but no tokens, try pending credentials
         const pendingEmail = sessionStorage.getItem('pending_verify_email');
         const pendingPassword = sessionStorage.getItem('pending_verify_password');
 
@@ -88,9 +87,7 @@ export default function VerifyPage() {
                 authProvider: 'email',
               });
               setSuccess(true);
-              setTimeout(() => {
-                router.push('/onboarding');
-              }, 1200);
+              setTimeout(() => router.push('/onboarding'), 1200);
               return;
             }
           } catch {
@@ -98,11 +95,11 @@ export default function VerifyPage() {
           }
         }
 
-        alert('Verification succeeded, but automatic sign-in failed. Please sign in manually.');
-        router.push('/auth/login');
+        setError('Verification succeeded, but automatic sign-in failed. Please sign in manually.');
+        setTimeout(() => router.push('/auth/login'), 2000);
       }
     } catch {
-      alert('Invalid code or verification failed.');
+      setError('Invalid code or verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -164,7 +161,6 @@ export default function VerifyPage() {
               We&apos;ve sent a 6-digit verification code to your email address. Please enter it below to verify your account.
             </p>
 
-            {/* Email hint if we have it stored */}
             <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-sm font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
               <Mail className="h-4 w-4 text-indigo-500" />
               Check the email you registered with
@@ -181,8 +177,14 @@ export default function VerifyPage() {
               type="text"
             />
 
+            {error && (
+              <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
+                {error}
+              </p>
+            )}
+
             <PrimaryButton onClick={handleVerify} disabled={!verifyReady || loading}>
-              {loading ? "Verifying..." : "Verify & Continue"} <ArrowRight className="h-4 w-4" />
+              {loading ? "Verifying…" : <><span>Verify &amp; Continue</span> <ArrowRight className="h-4 w-4" /></>}
             </PrimaryButton>
           </div>
         </>

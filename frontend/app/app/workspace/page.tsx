@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -49,8 +48,9 @@ import { useTranslation } from "react-i18next";
 import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, ViewSwitcher, WidgetCard, WorkspaceHierarchy } from "@/components/app/PowerWorkspaceSystem";
 import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMART_TASKS, WHITEBOARD_NODES, WORKSPACE_ZONE } from "@/data/ecosystemData";
-import type { Profession, TaskView, UserProfile } from "@/types";
+import type { Profession, TaskView } from "@/types";
 import { storage } from "@/utils/storage";
+import { useAuth } from "@/hooks/useAuth";
 
 
 
@@ -387,8 +387,6 @@ function formatStamp() {
 function taskMatchesPreset(taskText: string, filters: string[]) {
   return filters.some((filter) => taskText.includes(filter.toLowerCase()));
 }
-
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
   const { user, logout: onLogout } = useAuth();

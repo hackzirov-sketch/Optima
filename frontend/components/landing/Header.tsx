@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -11,16 +11,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   const { t } = useTranslation();
-  const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
-
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const navLinks = [
     { label: t("header.nav.features"), href: "#features" },
@@ -32,11 +25,7 @@ export function Header() {
   return (
     <header className="fixed left-0 right-0 top-0 z-50 px-3 py-3">
       <div
-        className={`container mx-auto flex h-16 items-center justify-between rounded-[24px] border px-3 transition-all duration-300 md:px-4 ${
-          isScrolled
-            ? "border-border shadow-xl backdrop-blur-xl"
-            : "border-white/80 bg-card/70 shadow-sm backdrop-blur-xl"
-        }`}
+        className="container mx-auto flex h-16 items-center justify-between rounded-[24px] border border-border/40 bg-white/90 px-3 shadow-sm backdrop-blur-xl transition-all duration-300 md:px-4"
       >
         <Link href="/" className="flex min-w-0 items-center gap-3 pr-4 group">
           <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 text-sm font-bold text-white shadow-md shadow-indigo-200 transition-transform group-hover:scale-105">
@@ -48,12 +37,12 @@ export function Header() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-2xl bg-muted p-1 md:flex">
+        <nav className="hidden items-center gap-1 p-1 md:flex">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+              className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               {link.label}
             </Link>
@@ -67,14 +56,14 @@ export function Header() {
             variant="outline"
             className="rounded-2xl font-semibold"
             data-testid="button-login"
-            onClick={() => navigate("/onboarding?mode=signin")}
+            onClick={() => navigate("/auth/login")}
           >
             {t("header.login")}
           </Button>
           <Button
             className="rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md shadow-indigo-200 hover:from-indigo-600 hover:to-blue-600"
             data-testid="button-get-started"
-            onClick={() => navigate("/onboarding?mode=signup")}
+            onClick={() => navigate("/auth/register")}
           >
             {t("header.getStarted")}
           </Button>
@@ -110,12 +99,12 @@ export function Header() {
             ))}
           </nav>
           <div className="mt-4 grid gap-2">
-            <Button variant="outline" className="w-full justify-center rounded-2xl" onClick={() => navigate("/onboarding?mode=signin")}>
+            <Button variant="outline" className="w-full justify-center rounded-2xl" onClick={() => navigate("/auth/login")}>
               {t("header.login")}
             </Button>
             <Button
               className="w-full justify-center rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
-              onClick={() => navigate("/onboarding?mode=signup")}
+              onClick={() => navigate("/auth/register")}
             >
               {t("header.getStarted")}
             </Button>

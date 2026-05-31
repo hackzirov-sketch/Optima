@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useMemo, useState } from "react";
 import {
   Calendar,
@@ -25,11 +24,9 @@ import {
   VideoOff,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { CLIP_ITEMS, MEETING_PARTICIPANTS, MEETING_ROOMS, SMART_TASKS } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
-
-
 
 type MeetingRoom = (typeof MEETING_ROOMS)[number];
 
@@ -127,8 +124,6 @@ function MeetingCard({
     </button>
   );
 }
-
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
   const { user, logout: onLogout } = useAuth();

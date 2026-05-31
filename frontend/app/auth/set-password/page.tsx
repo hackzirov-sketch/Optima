@@ -16,12 +16,14 @@ export default function SetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const ready = password.length >= 6 && passwordsMatch;
 
   const handleSetPassword = async () => {
     if (!ready) return;
+    setError('');
     setLoading(true);
     try {
       await authApi.setPassword(password);
@@ -39,9 +41,8 @@ export default function SetPasswordPage() {
         });
       }
       router.push('/onboarding');
-    } catch (err) {
-      alert('Unable to set password. Please sign in again.');
-      router.push('/auth/login');
+    } catch {
+      setError('Unable to set password. Please sign in again.');
     } finally {
       setLoading(false);
     }
@@ -106,8 +107,14 @@ export default function SetPasswordPage() {
           </p>
         )}
 
+        {error && (
+          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
+            {error}
+          </p>
+        )}
+
         <PrimaryButton onClick={handleSetPassword} disabled={!ready || loading}>
-          {loading ? 'Saving…' : 'Save password'} <ArrowRight className="h-4 w-4" />
+          {loading ? 'Saving…' : <><span>Save password</span> <ArrowRight className="h-4 w-4" /></>}
         </PrimaryButton>
       </div>
     </motion.div>

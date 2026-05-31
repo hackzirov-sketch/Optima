@@ -170,6 +170,12 @@ export const authApi = {
 
   setPassword: (password: string) =>
     request('POST', '/auth/set-password', { body: { password } }),
+
+  forgotPassword: (email: string) =>
+    request('POST', '/auth/forgot-password', { body: { email }, skipAuth: true }),
+
+  resetPassword: (token: string, password: string) =>
+    request('POST', '/auth/reset-password', { body: { token, password }, skipAuth: true }),
 };
 
 // ─── Users ────────────────────────────────────────────────────────────────

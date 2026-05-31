@@ -1,9 +1,13 @@
+'use client';
+
 import type { ComponentType } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
   BriefcaseBusiness,
   Building2,
+  ChevronUp,
   CreditCard,
   Crown,
   Home,
@@ -57,13 +61,6 @@ const NAV_GROUPS = [
       { path: "/app/news", labelKey: "news", icon: Newspaper },
       { path: "/app/bank", labelKey: "bank", icon: CreditCard },
       { path: "/app/premium", labelKey: "premium", icon: Crown, badgeKey: "pro" },
-    ],
-  },
-  {
-    titleKey: "account",
-    items: [
-      { path: "/app/profile", labelKey: "profile", icon: User },
-      { path: "/app/settings", labelKey: "settings", icon: Settings },
     ],
   },
 ];
@@ -177,22 +174,25 @@ function NavItem({
 export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: SidebarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const logoutButton = (
-    <motion.button
-      type="button"
-      onClick={onLogout}
-      className={cn(
-        "flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-300 dark:hover:bg-rose-500/15 dark:hover:text-rose-400",
-        collapsed && "justify-center px-0",
-      )}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: 0.1 }}
-    >
-      <LogOut className="h-[18px] w-[18px] flex-shrink-0" />
-      {!collapsed && <span>{t("app.nav.logout")}</span>}
-    </motion.button>
-  );
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
+
+  const menuItems = [
+    { href: "/app/profile", label: t("app.nav.profile"), icon: User },
+    { href: "/app/settings", label: t("app.nav.settings"), icon: Settings },
+    { href: "/app/premium", label: t("app.nav.premium"), icon: Crown },
+  ];
 
   return (
     <aside
@@ -259,25 +259,99 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
         ))}
       </nav>
 
-      <div className="border-t border-border px-3 py-4">
-        {!collapsed && (
-          <div className="mb-3 rounded-2xl bg-muted p-3 ring-1 ring-border">
-            <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 truncate text-sm font-semibold text-foreground">{user.name}</p>
-              <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 px-2 py-0.5 text-[10px] font-black text-white">{t("app.nav.pro")}</span>
-            </div>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}</p>
-          </div>
-        )}
+      {/* User section at the very bottom */}
+      <div ref={menuRef} className="relative border-t border-border px-3 py-3">
+        {/* User dropdown menu */}
+        <AnimatePresence>
+          {userMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 6, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.97 }}
+              transition={{ duration: 0.15 }}
+              className={cn(
+                "absolute bottom-full mb-2 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl",
+                collapsed ? "left-1 right-1" : "left-3 right-3",
+              )}
+            >
+              <div className="p-1.5">
+                {menuItems.map(({ href, label, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => { setUserMenuOpen(false); onNavigate?.(); }}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.07]",
+                      pathname.startsWith(href) && "bg-indigo-50 text-indigo-700 dark:bg-white/[0.08] dark:text-white",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    {label}
+                  </Link>
+                ))}
+              </div>
+              <div className="border-t border-border p-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15"
+                >
+                  <LogOut className="h-4 w-4 flex-shrink-0" />
+                  {t("app.nav.logout")}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* User button */}
         {collapsed ? (
           <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>{logoutButton}</TooltipTrigger>
+            <TooltipTrigger asChild>
+              <motion.button
+                type="button"
+                onClick={() => setUserMenuOpen((v) => !v)}
+                whileTap={{ scale: 0.97 }}
+                className={cn(
+                  "flex w-full items-center justify-center rounded-xl py-2 transition-colors hover:bg-muted",
+                  userMenuOpen && "bg-muted",
+                )}
+              >
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+                  {user.name.slice(0, 2).toUpperCase()}
+                </div>
+              </motion.button>
+            </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8} className="font-semibold">
-              {t("app.nav.logout")}
+              {user.name}
             </TooltipContent>
           </Tooltip>
         ) : (
-          logoutButton
+          <motion.button
+            type="button"
+            onClick={() => setUserMenuOpen((v) => !v)}
+            whileTap={{ scale: 0.97 }}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted",
+              userMenuOpen && "bg-muted",
+            )}
+          >
+            <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+              {user.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="min-w-0 truncate text-sm font-semibold text-foreground">{user.name}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}
+              </p>
+            </div>
+            <ChevronUp
+              className={cn(
+                "h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform",
+                userMenuOpen && "rotate-180",
+              )}
+            />
+          </motion.button>
         )}
       </div>
     </aside>

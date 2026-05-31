@@ -4,18 +4,30 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, ShieldCheck } from 'lucide-react';
+import { authApi } from '@/lib/api';
 import { AuthField, PrimaryButton } from '../shared';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const ready = email.includes('@');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!ready) return;
-    setSubmitted(true);
+    setError('');
+    setIsLoading(true);
+    try {
+      await authApi.forgotPassword(email);
+      setSubmitted(true);
+    } catch {
+      setSubmitted(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -54,6 +66,13 @@ export default function ForgotPasswordPage() {
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             If an account exists for <span className="font-semibold">{email}</span>, instructions will be sent to that address.
           </p>
+          <button
+            type="button"
+            onClick={() => router.push('/auth/login')}
+            className="mt-4 text-sm font-bold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+          >
+            Return to login
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -66,8 +85,15 @@ export default function ForgotPasswordPage() {
             type="email"
             autoComplete="email"
           />
-          <PrimaryButton onClick={handleSubmit} disabled={!ready}>
-            Send reset instructions
+
+          {error && (
+            <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
+              {error}
+            </p>
+          )}
+
+          <PrimaryButton onClick={handleSubmit} disabled={!ready || isLoading}>
+            {isLoading ? 'Sending…' : 'Send reset instructions'}
           </PrimaryButton>
         </div>
       )}

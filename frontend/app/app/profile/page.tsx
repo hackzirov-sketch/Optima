@@ -1,14 +1,11 @@
 'use client';
 
-
-﻿import { motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Edit3, Award, Target, BookOpen, Briefcase, Star, GitBranch, Code2, Crown, ArrowRight, BadgeCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge } from "@/components/premium/PremiumAssets";
-import type { UserProfile } from "@/types";
-
-
+import { useAuth } from "@/hooks/useAuth";
 
 const SKILLS_BY_PROFESSION: Record<string, string[]> = {
   developer: ["JavaScript", "TypeScript", "React", "Node.js", "Git", "REST APIs"],
@@ -30,8 +27,6 @@ const MOCK_REPOS = [
   { name: "api-server", lang: "Node.js", stars: 2, updated: "5d ago", color: "#68A063" },
   { name: "design-system", lang: "CSS", stars: 1, updated: "1w ago", color: "#264DE4" },
 ];
-
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
   const { user, logout: onLogout } = useAuth();

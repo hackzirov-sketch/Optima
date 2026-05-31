@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useEffect, useState } from "react";
 import {
   Activity,
@@ -46,8 +45,8 @@ import { useTranslation } from "react-i18next";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge, type PremiumStatusId } from "@/components/premium/PremiumAssets";
 import { TEAM_MEMBERS, TEAM_SPACES } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
+import { useAuth } from "@/hooks/useAuth";
 
 
 
@@ -211,8 +210,6 @@ function statusTone(status: string) {
   if (status === "In Progress") return "indigo" as const;
   return "slate" as const;
 }
-
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
   const { user, logout: onLogout } = useAuth();

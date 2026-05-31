@@ -26,10 +26,10 @@ export function FinalCTASection() {
           <p className="text-xl text-muted-foreground mb-10 leading-relaxed">{t("cta.subtitle")}</p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-            <Button size="lg" onClick={() => navigate("/onboarding")} className="w-full sm:w-auto h-14 px-10 text-lg bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white shadow-xl shadow-indigo-500/20 border-0 rounded-xl" data-testid="button-cta-get-started">
+            <Button size="lg" onClick={() => navigate("/auth/register")} className="w-full sm:w-auto h-14 px-10 text-lg bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white shadow-xl shadow-indigo-500/20 border-0 rounded-xl" data-testid="button-cta-get-started">
               {t("cta.getStarted")}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/onboarding")} className="w-full sm:w-auto h-14 px-10 text-lg border-2 rounded-xl" data-testid="button-cta-login">
+            <Button size="lg" variant="outline" onClick={() => navigate("/auth/login")} className="w-full sm:w-auto h-14 px-10 text-lg border-2 rounded-xl" data-testid="button-cta-login">
               {t("cta.login")}
             </Button>
           </div>

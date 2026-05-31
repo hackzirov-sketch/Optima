@@ -1,6 +1,5 @@
 'use client';
 
-
 import {
   ArrowUpRight,
   BarChart3,
@@ -26,10 +25,8 @@ import { CommandCard, MetricTile, PageHeader, PageShell, Pill, ProgressBar, Sect
 import { WidgetCard } from "@/components/app/PowerWorkspaceSystem";
 import { BANK_TRANSACTIONS, DASHBOARD_WIDGETS, ECOSYSTEM_MODULES, GOALS, NOTIFICATIONS } from "@/data/ecosystemData";
 import { WEEKLY_ACTIVITY } from "@/data/mockData";
-import type { UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
-
-
+import { useAuth } from "@/hooks/useAuth";
 
 const PROJECT_PROGRESS = [
   { nameKey: "productSystem", progress: 92, color: "#6366F1" },
@@ -88,8 +85,6 @@ const tooltipStyle = {
   contentStyle: { background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 16, color: "#111827", boxShadow: "0 12px 30px rgba(17,24,39,0.12)" },
   cursor: { fill: "rgba(99,102,241,0.08)" },
 };
-
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
   const { user, logout: onLogout } = useAuth();

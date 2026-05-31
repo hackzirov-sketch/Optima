@@ -157,8 +157,14 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <PrimaryButton onClick={handleSignin} disabled={!signinReady}>
-            Sign in <ArrowRight className="h-4 w-4" />
+          {error && (
+            <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
+              {error}
+            </p>
+          )}
+
+          <PrimaryButton onClick={handleSignin} disabled={!signinReady || isLoading}>
+            {isLoading ? 'Signing in…' : <><span>Sign in</span> <ArrowRight className="h-4 w-4" /></>}
           </PrimaryButton>
         </div>
 

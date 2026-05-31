@@ -69,7 +69,7 @@ export function HeroSection() {
             </motion.p>
 
             <motion.div variants={itemVariants} className="mb-8 flex w-full flex-col items-center gap-4 sm:w-auto sm:flex-row">
-              <Button size="lg" onClick={() => navigate("/onboarding")} className="h-12 w-full rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 px-8 text-base text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-blue-600 sm:w-auto" data-testid="button-hero-get-started">
+              <Button size="lg" onClick={() => navigate("/auth/register")} className="h-12 w-full rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 px-8 text-base text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-blue-600 sm:w-auto" data-testid="button-hero-get-started">
                 {t("hero.getStarted")}
               </Button>
               <a href="#features" className="inline-flex h-12 w-full items-center justify-center rounded-2xl px-8 text-base font-semibold text-foreground transition-colors hover:bg-card sm:w-auto" data-testid="button-hero-explore">

@@ -32,6 +32,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const passwordMismatch = confirmPw.length > 0 && password !== confirmPw;
   const usernameInvalid = username.length > 0 && !username.match(/^[a-zA-Z0-9_]+$/);
@@ -47,6 +49,8 @@ export default function RegisterPage() {
 
   const handleCreateAccount = async () => {
     if (!signupReady) return;
+    setError("");
+    setIsLoading(true);
     try {
       const registerPayload: RegisterDto = {
         email,
@@ -55,24 +59,24 @@ export default function RegisterPage() {
         firstName: fullName.split(' ')[0] || '',
         lastName: fullName.split(' ').slice(1).join(' '),
       };
-      
-      // Add optional phone number if provided
+
       if (phone.trim().length > 0) {
         const phoneDigits = phone.replace(/\D/g, '');
         if (phoneDigits.length >= 10 && phoneDigits.length <= 15) {
           registerPayload.phoneNumber = parseInt(phoneDigits, 10);
         }
       }
-      
+
       await authApi.register(registerPayload);
-      // Store credentials temporarily so verify page can auto-login
       sessionStorage.setItem('pending_verify_email', email);
       sessionStorage.setItem('pending_verify_password', password);
-      // Redirect to email verification
       router.push("/auth/verify");
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Registration failed";
-      alert(message);
+    } catch (err: unknown) {
+      const e = err as Record<string, unknown>;
+      const message = (e?.message as string) || (e?.error as string) || "Registration failed";
+      setError(message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -193,8 +197,14 @@ export default function RegisterPage() {
             </span>
           </label>
 
-          <PrimaryButton onClick={handleCreateAccount} disabled={!signupReady}>
-            Create account <ArrowRight className="h-4 w-4" />
+          {error && (
+            <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
+              {error}
+            </p>
+          )}
+
+          <PrimaryButton onClick={handleCreateAccount} disabled={!signupReady || isLoading}>
+            {isLoading ? 'Creating account…' : <><span>Create account</span> <ArrowRight className="h-4 w-4" /></>}
           </PrimaryButton>
         </div>
 
