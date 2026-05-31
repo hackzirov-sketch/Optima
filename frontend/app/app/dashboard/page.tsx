@@ -82,7 +82,7 @@ const AGENDA = [
 ];
 
 const tooltipStyle = {
-  contentStyle: { background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 16, color: "#111827", boxShadow: "0 12px 30px rgba(17,24,39,0.12)" },
+  contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 16, color: "hsl(var(--foreground))", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" },
   cursor: { fill: "rgba(99,102,241,0.08)" },
 };
 
@@ -126,12 +126,12 @@ export default function Page() {
           description={t("app.dashboard.description")}
         >
           <Link href="/app/assistant">
-            <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition-all hover:bg-indigo-500 active:scale-[0.98]">
+            <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 dark:shadow-indigo-900/30 transition-all hover:bg-indigo-500 active:scale-[0.98]">
               <Bot className="h-4 w-4" /> {t("app.dashboard.askAI")}
             </span>
           </Link>
           <Link href="/app/chat">
-            <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-slate-50 active:scale-[0.98]">
+            <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
               <MessageCircle className="h-4 w-4" /> {t("app.dashboard.openChat")}
             </span>
           </Link>
@@ -145,7 +145,7 @@ export default function Page() {
                 key={item}
                 type="button"
                 onClick={() => setPreset(item)}
-                className={`rounded-2xl px-3 py-2 text-xs font-black transition-colors ${preset === item ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground ring-1 ring-[#E5E7EB] hover:bg-card"}`}
+                className={`rounded-2xl px-3 py-2 text-xs font-black transition-colors ${preset === item ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground ring-1 ring-border hover:bg-card"}`}
               >
                 {item}
               </button>
@@ -167,7 +167,7 @@ export default function Page() {
         </SurfaceCard>
 
         <div className="grid gap-5 xl:grid-cols-[1.4fr_0.8fr]">
-          <SurfaceCard className="overflow-hidden bg-gradient-to-br from-white via-white to-indigo-50">
+          <SurfaceCard className="overflow-hidden bg-gradient-to-br from-card via-card to-indigo-50/40 dark:to-indigo-950/20">
             <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr] lg:items-center">
               <div>
                 <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -183,12 +183,12 @@ export default function Page() {
                 </p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   <Link href="/app/projects">
-                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition-all hover:bg-indigo-500 active:scale-[0.98]">
+                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 dark:shadow-indigo-900/30 transition-all hover:bg-indigo-500 active:scale-[0.98]">
                       <ArrowUpRight className="h-4 w-4" /> {t("app.dashboard.continueProjects")}
                     </span>
                   </Link>
                   <Link href="/app/workspace">
-                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-slate-50 active:scale-[0.98]">
+                    <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
                       <FolderOpen className="h-4 w-4" /> {t("app.dashboard.openWorkspace")}
                     </span>
                   </Link>
@@ -209,7 +209,7 @@ export default function Page() {
             <SectionTitle icon={Clock} title={t("app.dashboard.agenda")} description={t("app.dashboard.agendaDesc")} />
             <div className="space-y-3">
               {AGENDA.map((item) => (
-                <div key={`${item.time}-${item.titleKey}`} className="flex gap-3 rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+                <div key={`${item.time}-${item.titleKey}`} className="flex gap-3 rounded-2xl bg-muted p-3 ring-1 ring-border">
                   <span className="w-12 flex-shrink-0 text-xs font-bold text-indigo-600">{item.time}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-foreground">{t(`app.dashboard.agendaItems.${item.titleKey}`)}</span>
@@ -271,8 +271,8 @@ export default function Page() {
             <SectionTitle icon={BarChart3} title={t("app.dashboard.weeklyActivity")} description={t("app.dashboard.weeklyActivityDesc")} />
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={WEEKLY_ACTIVITY} barGap={4}>
-                <XAxis dataKey="day" tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+                <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
                 <Tooltip {...tooltipStyle} />
                 <Bar dataKey="tasks" fill="#6366F1" radius={[8, 8, 0, 0]} name={t("app.dashboard.chartTasks")} />
                 <Bar dataKey="messages" fill="#3B82F6" radius={[8, 8, 0, 0]} name={t("app.dashboard.chartMessages")} />
@@ -284,9 +284,9 @@ export default function Page() {
             <SectionTitle icon={TrendingUp} title={t("app.dashboard.productivityScore")} description={t("app.dashboard.productivityDesc")} />
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={PRODUCTIVITY_DATA}>
-                <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                <XAxis dataKey="week" tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[50, 100]} tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                <XAxis dataKey="week" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[50, 100]} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
                 <Tooltip {...tooltipStyle} />
                 <Line type="monotone" dataKey="score" stroke="#10B981" strokeWidth={3} dot={{ fill: "#10B981", strokeWidth: 0, r: 4 }} activeDot={{ r: 6, fill: "#10B981" }} name={t("app.dashboard.chartScore")} />
               </LineChart>

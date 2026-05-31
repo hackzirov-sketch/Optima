@@ -78,7 +78,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {!hideAssistantButton && (
           <Link
             href="/app/assistant"
-            className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-indigo-200 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+            className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 dark:shadow-indigo-950/50 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
             aria-label="Open AI assistant"
           >
             <Bot className="h-5 w-5" />

@@ -1,8 +1,8 @@
 'use client';
 
 import type { ComponentType } from "react";
-import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
+import { motion } from "framer-motion";
 import {
   Bot,
   BriefcaseBusiness,
@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
 import { PROFESSION_LABELS } from "@/data/mockData";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "./DesignSystem";
 
 const SIDEBAR_WIDTH_EXPANDED = 272;
@@ -174,19 +175,7 @@ function NavItem({
 export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: SidebarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [userMenuOpen]);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const menuItems = [
     { href: "/app/profile", label: t("app.nav.profile"), icon: User },
@@ -260,99 +249,90 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
       </nav>
 
       {/* User section at the very bottom */}
-      <div ref={menuRef} className="relative border-t border-border px-3 py-3">
-        {/* User dropdown menu */}
-        <AnimatePresence>
-          {userMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 6, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 4, scale: 0.97 }}
-              transition={{ duration: 0.15 }}
-              className={cn(
-                "absolute bottom-full mb-2 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl",
-                collapsed ? "left-1 right-1" : "left-3 right-3",
-              )}
-            >
-              <div className="p-1.5">
-                {menuItems.map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => { setUserMenuOpen(false); onNavigate?.(); }}
+      <div className="border-t border-border px-3 py-3">
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            {collapsed ? (
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.97 }}
                     className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.07]",
-                      pathname.startsWith(href) && "bg-indigo-50 text-indigo-700 dark:bg-white/[0.08] dark:text-white",
+                      "flex w-full items-center justify-center rounded-xl py-2 transition-colors hover:bg-muted",
+                      popoverOpen && "bg-muted",
                     )}
                   >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    {label}
-                  </Link>
-                ))}
-              </div>
-              <div className="border-t border-border p-1.5">
-                <button
-                  type="button"
-                  onClick={() => { setUserMenuOpen(false); onLogout(); }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15"
-                >
-                  <LogOut className="h-4 w-4 flex-shrink-0" />
-                  {t("app.nav.logout")}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* User button */}
-        {collapsed ? (
-          <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>
+                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+                      {user.name.slice(0, 2).toUpperCase()}
+                    </div>
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8} className="font-semibold">
+                  {user.name}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
               <motion.button
                 type="button"
-                onClick={() => setUserMenuOpen((v) => !v)}
                 whileTap={{ scale: 0.97 }}
                 className={cn(
-                  "flex w-full items-center justify-center rounded-xl py-2 transition-colors hover:bg-muted",
-                  userMenuOpen && "bg-muted",
+                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted",
+                  popoverOpen && "bg-muted",
                 )}
               >
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
                   {user.name.slice(0, 2).toUpperCase()}
                 </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="min-w-0 truncate text-sm font-semibold text-foreground">{user.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}
+                  </p>
+                </div>
+                <ChevronUp
+                  className={cn(
+                    "h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform",
+                    popoverOpen && "rotate-180",
+                  )}
+                />
               </motion.button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="font-semibold">
-              {user.name}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <motion.button
-            type="button"
-            onClick={() => setUserMenuOpen((v) => !v)}
-            whileTap={{ scale: 0.97 }}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted",
-              userMenuOpen && "bg-muted",
             )}
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="w-52 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-xl"
           >
-            <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
-              {user.name.slice(0, 2).toUpperCase()}
+            <div className="p-1.5">
+              {menuItems.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => { setPopoverOpen(false); onNavigate?.(); }}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.07]",
+                    pathname.startsWith(href) && "bg-indigo-50 text-indigo-700 dark:bg-white/[0.08] dark:text-white",
+                  )}
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  {label}
+                </Link>
+              ))}
             </div>
-            <div className="min-w-0 flex-1 text-left">
-              <p className="min-w-0 truncate text-sm font-semibold text-foreground">{user.name}</p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}
-              </p>
+            <div className="border-t border-border p-1.5">
+              <button
+                type="button"
+                onClick={() => { setPopoverOpen(false); onLogout(); }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15"
+              >
+                <LogOut className="h-4 w-4 flex-shrink-0" />
+                {t("app.nav.logout")}
+              </button>
             </div>
-            <ChevronUp
-              className={cn(
-                "h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform",
-                userMenuOpen && "rotate-180",
-              )}
-            />
-          </motion.button>
-        )}
+          </PopoverContent>
+        </Popover>
       </div>
     </aside>
   );
