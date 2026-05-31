@@ -27,6 +27,7 @@ interface MessageInputProps {
   onSend: () => void;
   onCancelReply: () => void;
   onCancelEdit: () => void;
+  isPremiumUser?: boolean;
 }
 
 export function MessageInput({
@@ -39,6 +40,7 @@ export function MessageInput({
   onSend,
   onCancelReply,
   onCancelEdit,
+  isPremiumUser = false,
 }: MessageInputProps) {
   const { t } = useTranslation();
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -312,6 +314,7 @@ export function MessageInput({
                 onSelect={appendEmoji}
                 onSelectAsset={appendEmojiAsset}
                 onSelectNative={appendNativeEmoji}
+                isPremiumUser={isPremiumUser}
               />
             </Suspense>
           </motion.div>

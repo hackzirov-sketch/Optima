@@ -16,6 +16,7 @@ type LottieComponent = ComponentType<{
     hideOnTransparent?: boolean;
     clearCanvas?: boolean;
   };
+  speed?: number;
   onComplete?: () => void;
 }>;
 
@@ -136,7 +137,7 @@ function useEmojiPlayback({
 
   useEffect(() => {
     if (!playing || !emoji?.animationSrc) return;
-    const timeout = window.setTimeout(stop, 1200);
+    const timeout = window.setTimeout(stop, 1260);
     return () => window.clearTimeout(timeout);
   }, [emoji?.animationSrc, playing]);
 
@@ -247,6 +248,7 @@ export const FastEmojiRenderer = memo(function FastEmojiRenderer({
             animationData={playback.animationData}
             loop={loop}
             autoplay
+            speed={0.95}
             rendererSettings={{
               preserveAspectRatio: "xMidYMid meet",
               progressiveLoad: false,

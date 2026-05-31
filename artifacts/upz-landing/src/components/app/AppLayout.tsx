@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { Bot } from "lucide-react";
@@ -21,7 +21,13 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const hideAssistantButton = location === "/app/chat" || location === "/app/assistant" || location === "/app/meetings";
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
+    setMobileSidebarOpen(false);
+  }, [location]);
 
   const handleToggleSidebar = () => {
     if (isMobile) {
@@ -33,8 +39,8 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F7FAFC] text-[#111827]">
-      <div className="hidden md:block">
+    <div className="fixed inset-0 flex h-dvh w-screen overflow-hidden bg-[#F7FAFC] text-[#111827]">
+      <div className="hidden h-dvh flex-shrink-0 md:block">
         <Sidebar user={user} onLogout={onLogout} collapsed={collapsed} />
       </div>
 
@@ -44,7 +50,7 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-[#111827]/35 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-[#111827]/35 md:hidden"
             onClick={() => setMobileSidebarOpen(false)}
           >
             <motion.div
@@ -61,21 +67,15 @@ export function AppLayout({ user, title, children, onLogout }: AppLayoutProps) {
         )}
       </AnimatePresence>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} title={title} onToggleSidebar={handleToggleSidebar} />
-        <main
-          className="flex-1 overflow-y-auto p-4 md:p-6"
-          style={{
-            background:
-              "radial-gradient(circle at 12% 0%, var(--upz-shell-glow-a), transparent 28%), radial-gradient(circle at 92% 8%, var(--upz-shell-glow-b), transparent 24%), var(--upz-bg)",
-          }}
-        >
+        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto bg-[#F7FAFC] p-4 md:p-6">
           {children}
         </main>
         {!hideAssistantButton && (
           <Link
             href="/app/assistant"
-            className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-indigo-200 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+            className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
             aria-label="Open AI assistant"
           >
             <Bot className="h-5 w-5" />

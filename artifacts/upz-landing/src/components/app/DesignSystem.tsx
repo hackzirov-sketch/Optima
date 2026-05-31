@@ -1,5 +1,4 @@
 ﻿import type { ReactNode } from "react";
-import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +12,6 @@ export const DESIGN_TOKENS = {
   muted: "#6B7280",
   indigo: "#6366F1",
   blue: "#3B82F6",
-  shadow: "0 18px 45px rgba(17, 24, 39, 0.08)",
 };
 
 interface PageShellProps {
@@ -34,19 +32,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, children }: PageHeaderProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="relative flex flex-col gap-4 overflow-hidden rounded-[28px] border border-[#E5E7EB] bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between"
-    >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-400" />
+    <section className="flex flex-col gap-4 border-b border-[#E5E7EB] bg-white px-1 pb-5 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
         {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-500">{eyebrow}</p>}
         <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#111827] md:text-3xl">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-[#6B7280]">{description}</p>
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
-    </motion.div>
+    </section>
   );
 }
 
@@ -57,15 +50,12 @@ interface SurfaceCardProps {
 }
 
 export function SurfaceCard({ children, className, delay = 0 }: SurfaceCardProps) {
+  void delay;
+
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, delay }}
-      className={cn("rounded-[24px] border border-[#E5E7EB] bg-white p-5 shadow-sm", className)}
-    >
+    <section className={cn("rounded-2xl border border-[#E5E7EB] bg-white p-5", className)}>
       {children}
-    </motion.section>
+    </section>
   );
 }
 
@@ -105,10 +95,7 @@ interface MetricTileProps {
 
 export function MetricTile({ label, value, icon: Icon, accent = "#6366F1", trend }: MetricTileProps) {
   return (
-    <motion.div
-      whileHover={{ y: -3 }}
-      className="rounded-[24px] border border-[#E5E7EB] bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-    >
+    <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">{label}</p>
         <span className="grid h-10 w-10 place-items-center rounded-2xl" style={{ background: `${accent}14`, color: accent }}>
@@ -117,7 +104,7 @@ export function MetricTile({ label, value, icon: Icon, accent = "#6366F1", trend
       </div>
       <div className="mt-4 text-2xl font-bold text-[#111827]">{value}</div>
       {trend && <div className="mt-2 text-xs font-medium text-emerald-600">{trend}</div>}
-    </motion.div>
+    </div>
   );
 }
 
@@ -149,7 +136,7 @@ interface ActionButtonProps {
 }
 
 const buttonVariant = {
-  primary: "bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-500",
+  primary: "bg-indigo-600 text-white hover:bg-indigo-500",
   secondary: "border border-[#E5E7EB] bg-white text-[#111827] hover:bg-slate-50",
   ghost: "text-[#6B7280] hover:bg-slate-100 hover:text-[#111827]",
   danger: "bg-rose-50 text-rose-700 hover:bg-rose-100",
@@ -160,7 +147,7 @@ export function ActionButton({ children, onClick, variant = "primary", className
     <button
       type={type}
       onClick={onClick}
-      className={cn("inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-all active:scale-[0.98]", buttonVariant[variant], className)}
+      className={cn("inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors", buttonVariant[variant], className)}
     >
       {children}
     </button>
@@ -176,7 +163,7 @@ interface SimpleTabsProps<T extends string> {
 
 export function SimpleTabs<T extends string>({ tabs, value, onChange, labels }: SimpleTabsProps<T>) {
   return (
-    <div className="flex flex-wrap gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-1 shadow-sm">
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-1">
       {tabs.map((tab) => (
         <button
           key={tab}
@@ -184,7 +171,7 @@ export function SimpleTabs<T extends string>({ tabs, value, onChange, labels }: 
           onClick={() => onChange(tab)}
           className={cn(
             "rounded-xl px-3 py-2 text-sm font-semibold capitalize transition-colors",
-            value === tab ? "bg-indigo-600 text-white shadow-sm" : "text-[#6B7280] hover:bg-slate-50 hover:text-[#111827]",
+            value === tab ? "bg-indigo-600 text-white" : "text-[#6B7280] hover:bg-slate-50 hover:text-[#111827]",
           )}
         >
           {labels?.[tab] ?? tab.replace(/-/g, " ")}
@@ -204,7 +191,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-[#F7FAFC] p-8 text-center">
-      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-indigo-600 ring-1 ring-[#E5E7EB]">
         <Icon className="h-6 w-6" />
       </span>
       <h3 className="mt-4 text-base font-semibold text-[#111827]">{title}</h3>
@@ -216,7 +203,7 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
 
 export function LoadingSkeleton() {
   return (
-    <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-5">
       <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100" />
       <div className="h-3 w-full animate-pulse rounded-full bg-slate-100" />
       <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
@@ -264,12 +251,10 @@ interface CommandCardProps {
 
 export function CommandCard({ icon: Icon, title, description, meta, accent = DESIGN_TOKENS.indigo, onClick }: CommandCardProps) {
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.99 }}
-      className="group flex w-full items-start gap-4 rounded-[24px] border border-[#E5E7EB] bg-white p-4 text-left shadow-sm transition-all hover:border-indigo-100 hover:shadow-md"
+      className="flex w-full items-start gap-4 rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left transition-colors hover:border-indigo-100"
     >
       <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl" style={{ background: `${accent}14`, color: accent }}>
         <Icon className="h-5 w-5" />
@@ -279,7 +264,7 @@ export function CommandCard({ icon: Icon, title, description, meta, accent = DES
         <span className="mt-1 block text-sm leading-5 text-[#6B7280]">{description}</span>
         {meta && <span className="mt-3 inline-flex rounded-full bg-[#F7FAFC] px-2.5 py-1 text-xs font-semibold text-[#6B7280] ring-1 ring-[#E5E7EB]">{meta}</span>}
       </span>
-    </motion.button>
+    </button>
   );
 }
 
@@ -291,14 +276,9 @@ export function Toast({ message }: ToastProps) {
   if (!message) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 8, scale: 0.99 }}
-      className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-semibold text-[#111827] shadow-2xl"
-    >
+    <div className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-semibold text-[#111827] shadow-lg">
       {message}
-    </motion.div>
+    </div>
   );
 }
 
@@ -314,12 +294,8 @@ export function Modal({ open, title, description, children, onClose }: ModalProp
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#111827]/35 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border border-[#E5E7EB] bg-white p-6 shadow-2xl"
-      >
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#111827]/35 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-lg rounded-2xl border border-[#E5E7EB] bg-white p-6 shadow-lg">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-[#111827]">{title}</h3>
@@ -330,7 +306,7 @@ export function Modal({ open, title, description, children, onClose }: ModalProp
           </button>
         </div>
         <div className="mt-5">{children}</div>
-      </motion.div>
+      </div>
     </div>
   );
 }

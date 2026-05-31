@@ -1,6 +1,7 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Clock3, Search, SmilePlus } from "lucide-react";
+import { Clock3, Lock, Search, SmilePlus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { loadGeneratedEmojis, type GeneratedEmoji, type GeneratedEmojiPayload } from "@/data/emojiData";
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/utils/storage";
 import { cn } from "./chatShared";
@@ -13,15 +14,6 @@ const OVERSCAN_ROWS = 3;
 const EMPTY_PAYLOAD: GeneratedEmojiPayload = {
   meta: { generatedAt: "", count: 0, totalBytes: 0, totalAnimated: 0, totalStatic: 0 },
   emojis: [],
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  recent: "Recent",
-  animated: "Animated",
-  static: "Static",
-  emoji: "Emoji",
-  emojis: "Emoji",
-  openmoji: "OpenMoji",
 };
 
 function readRecentIds() {
@@ -48,35 +40,50 @@ const EmojiGridButton = memo(function EmojiGridButton({
   emoji,
   active,
   onSelect,
+  isPremiumUser,
 }: {
   emoji: GeneratedEmoji;
   active: boolean;
   onSelect: (emoji: GeneratedEmoji) => void;
+  isPremiumUser: boolean;
 }) {
+  const { t } = useTranslation();
+  const locked = emoji.type === "animated" && !isPremiumUser;
   return (
     <button
       type="button"
-      onClick={() => onSelect(emoji)}
+      onClick={() => {
+        if (!locked) onSelect(emoji);
+      }}
       className={cn(
-        "grid h-11 w-11 place-items-center rounded-xl transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#8B7CF6]/55",
+        "relative grid h-11 w-11 place-items-center rounded-xl transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#8B7CF6]/55",
         active && "bg-white/12 ring-1 ring-white/20",
+        locked && "cursor-not-allowed opacity-55",
       )}
-      aria-label={`Send ${emoji.name}`}
-      title={emoji.name}
+      aria-label={locked ? `${emoji.name} ${t("app.chat.emojiPremiumLocked")}` : t("app.chat.sendEmoji", { name: emoji.name })}
+      title={locked ? t("app.chat.premiumRequired") : emoji.name}
     >
       <FastEmojiRenderer emoji={emoji} size="picker" mode="static" playOnClick={false} decorative />
+      {locked && (
+        <span className="absolute bottom-0.5 right-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/20">
+          <Lock className="h-2.5 w-2.5" />
+        </span>
+      )}
     </button>
   );
 });
 
 export function FastEmojiPicker({
   onSelectAsset,
+  isPremiumUser = false,
   className,
 }: {
   onSelectAsset?: (assetId: string) => void;
   onSelectNative?: (native: string) => void;
+  isPremiumUser?: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("animated");
   const [scrollTop, setScrollTop] = useState(0);
@@ -104,8 +111,9 @@ export function FastEmojiPicker({
   }, []);
 
   const categories = useMemo(() => {
-    const base = Array.from(new Set(allEmojis.map((emoji) => emoji.category))).sort();
-    return recentIds.length ? ["recent", ...base] : base;
+    const availableTypes = new Set(allEmojis.map((emoji) => emoji.type));
+    const base = ["animated", "static"].filter((item) => availableTypes.has(item as GeneratedEmoji["type"]));
+    return recentIds.length ? [...base, "recent"] : base;
   }, [allEmojis, recentIds.length]);
 
   const recentEmojis = useMemo(() => {
@@ -114,7 +122,7 @@ export function FastEmojiPicker({
   }, [allEmojis, recentIds]);
 
   const filtered = useMemo(() => {
-    const source = category === "recent" ? recentEmojis : allEmojis.filter((emoji) => emoji.category === category);
+    const source = category === "recent" ? recentEmojis : allEmojis.filter((emoji) => emoji.type === category);
     return normalizedQuery ? source.filter((emoji) => emojiMatchesQuery(emoji, normalizedQuery)) : source;
   }, [allEmojis, category, normalizedQuery, recentEmojis]);
 
@@ -135,6 +143,7 @@ export function FastEmojiPicker({
   const bottomSpacer = Math.max(0, (totalRows - endRow) * ROW_HEIGHT);
 
   const selectEmoji = (emoji: GeneratedEmoji) => {
+    if (emoji.type === "animated" && !isPremiumUser) return;
     onSelectAsset?.(emoji.id);
     const nextRecentIds = [emoji.id, ...recentIds.filter((id) => id !== emoji.id)];
     setRecentIds(nextRecentIds.slice(0, 24));
@@ -158,7 +167,7 @@ export function FastEmojiPicker({
         className,
       )}
       role="dialog"
-      aria-label="Emoji picker"
+      aria-label={t("app.chat.emojiPicker")}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
@@ -166,22 +175,22 @@ export function FastEmojiPicker({
       <div className="flex h-12 items-center gap-3 border-b border-white/8 px-4">
         <SmilePlus className="h-5 w-5 text-[#8B7CF6]" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold leading-none">Emoji</div>
-          <div className="mt-1 text-[11px] text-white/45">{payload.meta.count || "Loading"} indexed assets</div>
+          <div className="text-sm font-semibold leading-none">{t("app.chat.emoji")}</div>
+          <div className="mt-1 text-[11px] text-white/45">{payload.meta.count ? t("app.chat.indexedAssets", { count: payload.meta.count }) : t("app.chat.loading")}</div>
         </div>
         <div className="flex h-8 w-[min(240px,42vw)] items-center gap-2 rounded-full bg-[#222225] px-3">
           <Search className="h-4 w-4 text-white/45" aria-hidden="true" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
+            placeholder={t("app.chat.searchEmoji")}
             className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/40"
-            aria-label="Search emojis"
+            aria-label={t("app.chat.searchEmoji")}
           />
         </div>
       </div>
 
-      <div className="flex max-h-[54px] gap-1 overflow-x-auto border-b border-white/8 px-3 py-2" aria-label="Emoji categories">
+      <div className="flex max-h-[54px] gap-1 overflow-x-auto border-b border-white/8 px-3 py-2" aria-label={t("app.chat.emojiCategories")}>
         {categories.map((item) => (
           <button
             key={item}
@@ -194,7 +203,7 @@ export function FastEmojiPicker({
             aria-pressed={category === item}
           >
             {item === "recent" && <Clock3 className="h-4 w-4" aria-hidden="true" />}
-            {CATEGORY_LABELS[item] ?? item.replace(/-/g, " ")}
+            {t(`app.chat.emojiCategory.${item}`, item.replace(/-/g, " "))}
           </button>
         ))}
       </div>
@@ -205,13 +214,13 @@ export function FastEmojiPicker({
             <div style={{ height: topSpacer }} />
             <div className="grid grid-cols-7 justify-items-center gap-1 sm:grid-cols-10">
               {virtualItems.map((emoji, index) => (
-                <EmojiGridButton key={emoji.id} emoji={emoji} active={startRow * columns + index === activeIndex} onSelect={selectEmoji} />
+                <EmojiGridButton key={emoji.id} emoji={emoji} active={startRow * columns + index === activeIndex} onSelect={selectEmoji} isPremiumUser={isPremiumUser} />
               ))}
             </div>
             <div style={{ height: bottomSpacer }} />
           </div>
         ) : (
-          <div className="grid min-h-[112px] place-items-center text-sm font-medium text-white/48">Emoji topilmadi</div>
+          <div className="grid min-h-[112px] place-items-center text-sm font-medium text-white/48">{t("app.chat.emojiNotFound")}</div>
         )}
       </div>
     </div>

@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
@@ -8,33 +7,34 @@ export function FinalCTASection() {
   const [, navigate] = useLocation();
 
   return (
-    <section className="py-32 bg-background relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-tr from-indigo-500/10 to-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
-
+    <section className="bg-white py-24">
       <div className="container mx-auto px-4 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="max-w-3xl mx-auto"
-        >
-          <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">{t("cta.title")}</h2>
-          <p className="text-xl text-muted-foreground mb-10 leading-relaxed">{t("cta.subtitle")}</p>
+        <div className="mx-auto max-w-3xl">
+          <h2 className="mb-6 text-4xl font-bold text-[#111827] md:text-5xl">{t("cta.title")}</h2>
+          <p className="mb-10 text-xl leading-relaxed text-[#6B7280]">{t("cta.subtitle")}</p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-            <Button size="lg" onClick={() => navigate("/onboarding")} className="w-full sm:w-auto h-14 px-10 text-lg bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white shadow-xl shadow-indigo-500/20 border-0 rounded-xl" data-testid="button-cta-get-started">
+          <div className="mb-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Button
+              size="lg"
+              onClick={() => navigate("/onboarding")}
+              className="h-14 w-full rounded-xl border-0 bg-indigo-600 px-10 text-lg text-white hover:bg-indigo-500 sm:w-auto"
+              data-testid="button-cta-get-started"
+            >
               {t("cta.getStarted")}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/onboarding")} className="w-full sm:w-auto h-14 px-10 text-lg border-2 rounded-xl" data-testid="button-cta-login">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => navigate("/onboarding")}
+              className="h-14 w-full rounded-xl border-2 px-10 text-lg sm:w-auto"
+              data-testid="button-cta-login"
+            >
               {t("cta.login")}
             </Button>
           </div>
 
-          <div className="text-sm font-medium text-muted-foreground">
-            {t("cta.joinCount", { count: "10,000" })}
-          </div>
-        </motion.div>
+          <div className="text-sm font-medium text-[#6B7280]">{t("cta.joinCount", { count: "10,000" })}</div>
+        </div>
       </div>
     </section>
   );

@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pin, Smile } from "lucide-react";
+import { Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
-import { EmojiRenderer, ReactionButton, encodeNativeEmojiReaction, findEmojiAsset, getReactionAsset, normalizeReactionId } from "@/components/premium/PremiumAssets";
+import { EmojiRenderer, encodeNativeEmojiReaction, findEmojiAsset, getReactionAsset, normalizeReactionId } from "@/components/premium/PremiumAssets";
 import { Avatar, cn, formatMessageTime, getMessageText, getReplySnippet, getUser } from "./chatShared";
 import { FastEmojiRenderer } from "./FastEmojiRenderer";
 import { MessageOptionsMenu, type MessageOptionAction } from "./MessageOptionsMenu";
@@ -24,6 +24,7 @@ interface MessageBubbleProps {
   onForward: (message: ChatMessage) => void;
   onPin: (messageId: string) => void;
   onToggleReaction: (messageId: string, emoji: ChatReactionEmoji) => void;
+  isPremiumUser?: boolean;
 }
 
 type FloatingState = {
@@ -43,7 +44,7 @@ function isLargeEmojiOnly(text: string) {
   return visibleLength > 0 && visibleLength <= 4 && !hasWords && (hasNativeEmoji || assetTokenCount > 0);
 }
 
-function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOwn: boolean; large?: boolean }) {
+function PremiumMessageText({ text, isOwn, isPremiumUser, large = false }: { text: string; isOwn: boolean; isPremiumUser: boolean; large?: boolean }) {
   const parts: Array<string | { token: string; key: string; source: "premium" | "generated" }> = [];
   const pattern = /:([a-z0-9-]+):/g;
   let lastIndex = 0;
@@ -80,7 +81,7 @@ function PremiumMessageText({ text, isOwn, large = false }: { text: string; isOw
             {part.source === "premium" ? (
               <EmojiRenderer assetId={part.token} size={large ? 58 : 22} />
             ) : (
-              <FastEmojiRenderer emojiId={part.token} size={large ? "message" : "inline"} isPremiumUser={isOwn} playOnMount decorative />
+              <FastEmojiRenderer emojiId={part.token} size={large ? "message" : "inline"} isPremiumUser={isPremiumUser} playOnMount decorative />
             )}
           </span>
         ),
@@ -101,6 +102,7 @@ export function MessageBubble({
   onForward,
   onPin,
   onToggleReaction,
+  isPremiumUser = false,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -149,20 +151,6 @@ export function MessageBubble({
     const clampedX = alignRight ? Math.max(10, x - menuW) : Math.min(Math.max(10, x), vw - menuW - 10);
     const clampedY = above ? Math.max(minY, y - menuH - 8) : Math.max(minY, Math.min(y + 10, vh - menuH - 10));
     return { fixed: true, x: clampedX, y: clampedY, above, alignRight };
-  };
-
-  const openPickerFromHoverButton = (event: ReactMouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setMenuOpen(false);
-    setPicker(calcFixedPos(event, 284, 216));
-  };
-
-  const openMenuFromClick = (event: ReactMouseEvent | ReactPointerEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setPicker(null);
-    menuOpenedAtRef.current = Date.now();
-    setMenuOpen(true);
   };
 
   const openMenuFromContext = (event: ReactMouseEvent) => {
@@ -225,8 +213,6 @@ export function MessageBubble({
           <div className="group/message relative">
             <button
               type="button"
-              onPointerDown={openMenuFromClick}
-              onClick={openMenuFromClick}
               onContextMenu={openMenuFromContext}
               className={cn(
                 "upz-message-bubble group/bubble relative px-3.5 py-2 text-left text-[15px] leading-relaxed shadow-sm transition-all duration-150 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30",
@@ -260,24 +246,13 @@ export function MessageBubble({
               </div>
             )}
             <div className="whitespace-pre-wrap break-words">
-              <PremiumMessageText text={text} isOwn={isOwn} large={largeEmojiOnly} />
+              <PremiumMessageText text={text} isOwn={isOwn} isPremiumUser={isPremiumUser} large={largeEmojiOnly} />
             </div>
             <div className={cn("mt-1 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-[#54865A]" : "text-[#6C7B86]", largeEmojiOnly && "text-xs")}>
               {message.edited && <span>{t("app.chat.edited")}</span>}
               <span>{formatMessageTime(message.timestamp)}</span>
               {isOwn && <span className={message.read === false ? "text-[#7FA786]" : "text-[#36A8E3]"}>{message.read === false ? t("app.chat.sent") : t("app.chat.readStatus")}</span>}
             </div>
-            </button>
-            <button
-              type="button"
-              onClick={openPickerFromHoverButton}
-              className={cn(
-                "absolute top-1.5 z-10 grid h-7 w-7 place-items-center rounded-full bg-white/90 text-[#6C7B86] opacity-0 shadow-md shadow-black/10 backdrop-blur transition-all hover:scale-105 hover:text-[#168ACD] focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#4BA3D8]/30 group-hover/message:opacity-100 dark:border-gray-700 dark:bg-gray-800/88 dark:text-gray-300",
-                isOwn ? "left-1.5" : "right-1.5",
-              )}
-              aria-label="Open quick reactions"
-            >
-              <Smile className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -286,15 +261,25 @@ export function MessageBubble({
             {message.reactions.map((reaction) => {
               const reactionId = normalizeReactionId(reaction.emoji);
               const active = reaction.userIds.includes("me");
+              const generatedReaction = /^(static|animated)-/.test(reactionId);
               return (
-                <ReactionButton
+                <button
                   key={reactionId}
-                  asset={getReactionAsset(reactionId)}
-                  active={active}
-                  count={reaction.userIds.length}
-                  compact
+                  type="button"
                   onClick={() => onToggleReaction(message.id, reactionId)}
-                />
+                  className={cn(
+                    "inline-flex h-7 items-center gap-1 rounded-full border px-1.5 text-xs font-bold transition-colors",
+                    active ? "border-[#8B7CF6]/35 bg-[#8B7CF6]/12 text-[#4F46E5]" : "border-white/70 bg-white/85 text-[#6C7B86] hover:bg-white",
+                    "dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700",
+                  )}
+                >
+                  {generatedReaction ? (
+                    <FastEmojiRenderer emojiId={reactionId} size="reaction" mode="animated" isPremiumUser playOnMount playOnClick decorative />
+                  ) : (
+                    <EmojiRenderer asset={getReactionAsset(reactionId)} size={20} decorative />
+                  )}
+                  <span>{reaction.userIds.length}</span>
+                </button>
               );
             })}
           </div>
@@ -325,7 +310,7 @@ export function MessageBubble({
         createPortal(
           <div style={pickerStyle}>
             <Suspense fallback={<div className="w-[240px] rounded-[22px] border border-white/80 bg-white/92 p-4 text-xs font-bold text-gray-500 shadow-xl">Loading reactions</div>}>
-              <ReactionPicker activeEmojis={activeReactionEmojis} onSelect={handleReaction} onSelectNative={handleNativeReaction} />
+              <ReactionPicker activeEmojis={activeReactionEmojis} onSelect={handleReaction} onSelectNative={handleNativeReaction} isPremiumUser={isPremiumUser} />
             </Suspense>
           </div>,
           document.body,

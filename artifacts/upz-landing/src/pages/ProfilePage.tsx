@@ -3,7 +3,7 @@ import { Edit3, Award, Target, BookOpen, Briefcase, Star, GitBranch, Code2, Crow
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/app/AppLayout";
-import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge } from "@/components/premium/PremiumAssets";
+import { PremiumGradientBadge, PremiumStatusBadge } from "@/components/premium/PremiumAssets";
 import type { UserProfile } from "@/types";
 
 interface Props { user: UserProfile; onLogout: () => void; }
@@ -37,6 +37,7 @@ export default function ProfilePage({ user, onLogout }: Props) {
   const goal = t(`app.goals.${user.goal}`, user.goal);
   const experience = t(`app.experience.${user.experience}`, user.experience);
   const joinedLabel = daysSince === 0 ? t("app.profile.joinedToday") : t("app.profile.joinedDays", { count: daysSince });
+  const isPremium = Boolean(user.isPremium);
 
   return (
     <AppLayout user={user} title={t("app.nav.profile")} onLogout={onLogout}>
@@ -48,19 +49,19 @@ export default function ProfilePage({ user, onLogout }: Props) {
         >
           <div className="absolute right-0 top-0 h-64 w-64 -translate-y-1/2 translate-x-1/2 rounded-full bg-indigo-200/40 blur-3xl" />
           <div className="relative z-10 flex items-start gap-5">
-            <PremiumAvatarRing className="h-20 w-20 flex-shrink-0 rounded-[24px] p-[3px]">
+            <div className="h-20 w-20 flex-shrink-0 rounded-[24px] p-[3px]">
               <div className="relative flex h-full w-full items-center justify-center rounded-[21px] text-3xl font-bold text-white" style={{ background: "linear-gradient(135deg, #6366F1, #3B82F6)" }}>
                 {user.name.slice(0, 2).toUpperCase()}
-                <PremiumStatusBadge status="available" size={24} className="absolute -bottom-2 -right-2 border-indigo-100" />
+                {isPremium && <PremiumStatusBadge status="available" size={24} className="absolute -bottom-2 -right-2 border-indigo-100" />}
               </div>
-            </PremiumAvatarRing>
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold text-[#111827]">{user.name}</h2>
-                    <BadgeCheck className="h-5 w-5 text-blue-500" aria-label="Verified premium profile" />
-                    <PremiumGradientBadge />
+                    {isPremium && <BadgeCheck className="h-5 w-5 text-blue-500" aria-label="Verified premium profile" />}
+                    {isPremium && <PremiumGradientBadge />}
                   </div>
                   <p className="mt-0.5 text-sm text-indigo-600">{profession}</p>
                 </div>
@@ -96,26 +97,23 @@ export default function ProfilePage({ user, onLogout }: Props) {
           </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50 p-5 shadow-sm dark:border-indigo-900 dark:from-indigo-950/50 dark:via-gray-800 dark:to-blue-950/50"
-        >
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50 p-5 shadow-sm dark:border-indigo-900 dark:from-indigo-950/50 dark:via-gray-800 dark:to-blue-950/50">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
                 <Crown className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-sm font-black text-gray-900 dark:text-gray-100">{t("app.premium.currentPlan")}</p>
-                <p className="mt-1 max-w-lg text-sm leading-6 text-gray-500 dark:text-gray-400">{t("app.premium.heroDesc")}</p>
+                <p className="text-sm font-black text-gray-900 dark:text-gray-100">{isPremium ? t("app.premium.currentPlan") : t("app.profile.freePlan")}</p>
+                <p className="mt-1 max-w-lg text-sm leading-6 text-gray-500 dark:text-gray-400">{isPremium ? t("app.premium.heroDesc") : t("app.profile.freePlanDesc")}</p>
               </div>
             </div>
-            <Link href="/app/premium" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-indigo-200 transition-colors hover:bg-indigo-500">
-              {t("app.premium.upgrade")}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {!isPremium && (
+              <Link href="/app/premium" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-indigo-200 transition-colors hover:bg-indigo-500">
+                {t("app.premium.upgrade")}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </div>
         </motion.div>
 

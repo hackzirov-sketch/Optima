@@ -541,6 +541,34 @@ html {
     background-color: var(--upz-surface-soft) !important;
   }
 
+  .dark .hover\:bg-white:hover,
+  .dark .hover\:bg-white\/90:hover,
+  .dark .hover\:bg-white\/80:hover,
+  .dark .hover\:bg-white\/70:hover,
+  .dark .hover\:bg-\[\#F7FAFC\]:hover,
+  .dark .hover\:bg-slate-50:hover,
+  .dark .hover\:bg-slate-100:hover,
+  .dark .hover\:bg-gray-50:hover,
+  .dark .hover\:bg-gray-100:hover {
+    background-color: var(--upz-surface-raised) !important;
+  }
+
+  .dark .hover\:bg-indigo-50:hover,
+  .dark .hover\:bg-indigo-100:hover,
+  .dark .hover\:bg-blue-50:hover,
+  .dark .hover\:bg-emerald-50:hover,
+  .dark .hover\:bg-amber-50:hover,
+  .dark .hover\:bg-rose-50:hover,
+  .dark .hover\:bg-red-50:hover {
+    background-color: rgb(49 46 129 / 0.34) !important;
+  }
+
+  .dark .focus-within\:bg-white:focus-within,
+  .dark .group-focus-within\:bg-white:focus-within,
+  .dark .group:focus-within .group-focus-within\:bg-white {
+    background-color: var(--upz-surface-raised) !important;
+  }
+
   .dark .bg-slate-100,
   .dark .bg-indigo-50,
   .dark .bg-blue-50,
@@ -554,6 +582,12 @@ html {
   .dark .text-\[\#111827\],
   .dark .text-gray-200,
   .dark .text-gray-700 {
+    color: var(--upz-text) !important;
+  }
+
+  .dark .hover\:text-\[\#111827\]:hover,
+  .dark .hover\:text-gray-900:hover,
+  .dark .hover\:text-slate-900:hover {
     color: var(--upz-text) !important;
   }
 

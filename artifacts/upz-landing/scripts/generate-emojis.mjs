@@ -15,6 +15,9 @@ const ALL_EXTENSIONS = new Set([...STATIC_EXTENSIONS, ...ANIMATED_IMAGE_EXTENSIO
 
 const TELEGRAM_PACK_PATTERN = /^(Animated|Static)(-|\s+)Emoji/i;
 const TELEGRAM_PART_PATTERN = /part[-\s]*(\d+)/i;
+const TYPE_ORDER = { animated: 0, static: 1 };
+const KIND_ORDER = { face: 0, people: 1, other: 2 };
+let sourceOrderIndex = 0;
 
 function sanitizeToken(value, fallback = "emoji") {
   const normalized = value
@@ -33,6 +36,24 @@ function publicPath(filePath) {
 function detectPart(relativePath) {
   const match = String(relativePath).match(/(?:^|[/\\\s_-])part[\s_-]*(\d+)/i);
   return match ? `part-${match[1]}` : undefined;
+}
+
+function getPartNumber(part) {
+  return Number(String(part ?? "").match(/\d+/)?.[0] ?? 99);
+}
+
+function inferKind(filePath) {
+  const lower = filePath.toLowerCase();
+  const base = path.parse(filePath).name.toLowerCase();
+  if (/(face|smile|laugh|cry|angry|kiss|heart|wink|sad|cool|think|grin|joy)/.test(base)) return "face";
+  if (/(hand|person|man|woman|baby|girl|boy|people|police|doctor|teacher|worker|monkey)/.test(base)) return "people";
+  // EmojiSaver names are opaque. Use a stable hash so faces/people surface first without randomizing every run.
+  let hash = 0;
+  for (let i = 0; i < lower.length; i += 1) hash = (hash * 31 + lower.charCodeAt(i)) >>> 0;
+  const bucket = hash % 100;
+  if (bucket < 42) return "face";
+  if (bucket < 62) return "people";
+  return "other";
 }
 
 function makeKeywords(filePath) {
@@ -59,6 +80,16 @@ async function walk(directory) {
     }
   }
   return files;
+}
+
+async function getSourceOrder(filePath) {
+  const fileInfo = await stat(filePath);
+  const parentInfo = await stat(path.dirname(filePath)).catch(() => fileInfo);
+  return {
+    filePath,
+    fileInfo,
+    sourceOrder: parentInfo.birthtimeMs || parentInfo.mtimeMs || fileInfo.birthtimeMs || fileInfo.mtimeMs || sourceOrderIndex++,
+  };
 }
 
 function createUniqueId(base, usedIds) {
@@ -93,17 +124,26 @@ async function buildManifest() {
 
   for (const entry of topDirs) {
     const name = entry.name.trim();
-    if (name === "emojis" || name === "openmoji") {
-      scanDirs.push(path.join(publicRoot, entry.name));
-    } else if (TELEGRAM_PACK_PATTERN.test(name)) {
+    if (TELEGRAM_PACK_PATTERN.test(name)) {
       scanDirs.push(path.join(publicRoot, entry.name));
     }
   }
 
-  const sourceFiles = [];
+  const rawSourceFiles = [];
   for (const dir of scanDirs) {
-    sourceFiles.push(...(await walk(dir)));
+    rawSourceFiles.push(...(await walk(dir)));
   }
+
+  const sourceRecords = await Promise.all(rawSourceFiles.map(getSourceOrder));
+  sourceRecords.sort((a, b) => {
+    const partDelta = getPartNumber(detectPart(path.relative(publicRoot, a.filePath))) - getPartNumber(detectPart(path.relative(publicRoot, b.filePath)));
+    if (partDelta) return partDelta;
+    const timeDelta = a.sourceOrder - b.sourceOrder;
+    if (timeDelta) return timeDelta;
+    return a.filePath.localeCompare(b.filePath);
+  });
+  const sourceOrderByPath = new Map(sourceRecords.map((record, index) => [record.filePath, index]));
+  const sourceFiles = sourceRecords.map((record) => record.filePath);
 
   const byBasename = new Map();
   for (const filePath of sourceFiles) {
@@ -116,7 +156,7 @@ async function buildManifest() {
   const usedIds = new Set();
   const items = [];
 
-  for (const filePath of sourceFiles.sort((a, b) => a.localeCompare(b))) {
+  for (const filePath of sourceFiles) {
     const extension = path.extname(filePath).toLowerCase();
     const relativePath = path.relative(publicRoot, filePath);
     const siblings = byBasename.get(path.join(path.dirname(filePath), path.parse(filePath).name).toLowerCase()) ?? [];
@@ -165,21 +205,33 @@ async function buildManifest() {
     }
 
     const size = await stat(filePath);
+    const sourceOrder = sourceOrderByPath.get(filePath) ?? sourceOrderIndex++;
 
     items.push({
       id: uniqueId,
       name: parsed.name.replace(/[-_]+/g, " "),
       type,
-      category: isTelegram ? type : detectCategory(relativePath),
+      category: isTelegram ? `${type}-${inferKind(previewFile)}` : detectCategory(relativePath),
       previewSrc: publicPath(previewFile),
       animationSrc,
       keywords: makeKeywords(filePath),
       part: detectPart(relativePath),
       bytes: size.size,
+      sourceOrder,
     });
   }
 
-  return items;
+  return items.sort((a, b) => {
+    const typeDelta = TYPE_ORDER[a.type] - TYPE_ORDER[b.type];
+    if (typeDelta) return typeDelta;
+    const kindA = String(a.category).replace(`${a.type}-`, "");
+    const kindB = String(b.category).replace(`${b.type}-`, "");
+    const kindDelta = KIND_ORDER[kindA] - KIND_ORDER[kindB];
+    if (kindDelta) return kindDelta;
+    const partDelta = getPartNumber(a.part) - getPartNumber(b.part);
+    if (partDelta) return partDelta;
+    return (a.sourceOrder ?? 0) - (b.sourceOrder ?? 0);
+  });
 }
 
 const emojis = await buildManifest();
@@ -199,6 +251,7 @@ export type GeneratedEmoji = {
   keywords: string[];
   part?: string;
   bytes: number;
+  sourceOrder: number;
 };
 
 export const GENERATED_EMOJI_META = ${JSON.stringify({ generatedAt, count: emojis.length, totalBytes, totalAnimated: emojis.filter((e) => e.type === "animated").length, totalStatic: emojis.filter((e) => e.type === "static").length }, null, 2)} as const;

@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, Plus, Target, UserPlus, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AppLayout } from "@/components/app/AppLayout";
-import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
+import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { ActivityTimeline, AutomationRuleCard, DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { ACTIVITY_LOG, AUTOMATION_RULES, GOALS, POWER_VIEWS, SMART_TASKS, TEAM_MEMBERS, TIME_ENTRIES } from "@/data/ecosystemData";
-import type { SmartTask, TaskView, UserProfile } from "@/types";
+import type { SmartTask, TaskStatus, TaskView, UserProfile } from "@/types";
 
 interface Props {
   user: UserProfile;
@@ -17,18 +17,26 @@ export default function ProjectsPage({ user, onLogout }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [view, setView] = useState<TaskView>("board");
   const [query, setQuery] = useState("");
+  const [tasks, setTasks] = useState<SmartTask[]>(SMART_TASKS);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<SmartTask | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const filteredTasks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return SMART_TASKS;
-    return SMART_TASKS.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.status} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));
-  }, [query]);
+    if (!normalized) return tasks;
+    return tasks.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.status} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));
+  }, [query, tasks]);
 
   const showNotice = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 1800);
+  };
+
+  const moveTask = (taskId: string, status: TaskStatus) => {
+    setTasks((current) => current.map((task) => (task.id === taskId ? { ...task, status } : task)));
+    setSelectedTask((current) => (current?.id === taskId ? { ...current, status } : current));
+    showNotice(`Task moved to ${status.replace("_", " ")}`);
   };
 
   const tableRows = filteredTasks.map((task) => ({
@@ -61,12 +69,34 @@ export default function ProjectsPage({ user, onLogout }: Props) {
           <SurfaceCard>
             <SectionTitle icon={ClipboardList} title="Smart Task board" description="ClickUp-style capability translated to Optima cards, fields and detail drawer." />
             <div className="grid gap-4 xl:grid-cols-5">
-              {["backlog", "todo", "in_progress", "review", "done"].map((status) => (
-                <div key={status} className="rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3">
+              {(["backlog", "todo", "in_progress", "review", "done"] as TaskStatus[]).map((status) => (
+                <div
+                  key={status}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const taskId = event.dataTransfer.getData("text/plain") || draggingId;
+                    if (taskId) moveTask(taskId, status);
+                    setDraggingId(null);
+                  }}
+                  className={cn("rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] p-3 transition-colors", draggingId && "border-indigo-200 bg-indigo-50")}
+                >
                   <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black capitalize text-[#111827]">{status.replace("_", " ")}</h3><Pill tone="slate">{filteredTasks.filter((task) => task.status === status).length}</Pill></div>
                   <div className="space-y-3">
                     {filteredTasks.filter((task) => task.status === status).map((task) => (
-                      <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="w-full rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                      <button
+                        key={task.id}
+                        type="button"
+                        draggable
+                        onDragStart={(event) => {
+                          setDraggingId(task.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", task.id);
+                        }}
+                        onDragEnd={() => setDraggingId(null)}
+                        onClick={() => setSelectedTask(task)}
+                        className={cn("w-full cursor-grab rounded-2xl border border-[#E5E7EB] bg-white p-4 text-left transition-colors hover:border-indigo-200 active:cursor-grabbing", draggingId === task.id && "opacity-50")}
+                      >
                         <p className="font-black leading-snug text-[#111827]">{task.title}</p>
                         <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#6B7280]">{task.description}</p>
                         <div className="mt-3 flex flex-wrap gap-1.5">{task.tags.slice(0, 2).map((tag) => <Pill key={tag} tone="blue">{tag}</Pill>)}</div>
@@ -80,7 +110,7 @@ export default function ProjectsPage({ user, onLogout }: Props) {
           </SurfaceCard>
         )}
 
-        {(view === "list" || view === "table") && <DataTable columns={["Task", "Status", "Owner", "Priority", "Due"]} rows={tableRows} onRowClick={(id) => setSelectedTask(SMART_TASKS.find((task) => task.id === id) ?? null)} />}
+        {(view === "list" || view === "table") && <DataTable columns={["Task", "Status", "Owner", "Priority", "Due"]} rows={tableRows} onRowClick={(id) => setSelectedTask(tasks.find((task) => task.id === id) ?? null)} />}
 
         {(view === "timeline" || view === "calendar") && (
           <SurfaceCard>

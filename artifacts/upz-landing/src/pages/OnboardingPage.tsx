@@ -35,6 +35,8 @@ import { storage } from "@/utils/storage";
 type AuthMode = "signin" | "signup";
 type LoginMethod = "email" | "phone";
 type WizardStep = "auth" | "profession" | "goal" | "experience";
+const PREMIUM_LOGIN = "premium";
+const PREMIUM_PASSWORD = "premium123";
 
 const PROFESSIONS: { id: Profession; icon: ReactNode; desc: string }[] = [
   { id: "developer", icon: <Code2 className="h-5 w-5" />, desc: "Software, products, systems" },
@@ -67,6 +69,7 @@ function createDemoProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     goal: "find_work",
     experience: "intermediate",
     joinedAt: Date.now(),
+    isPremium: false,
     ...overrides,
   };
 }
@@ -166,7 +169,7 @@ export default function OnboardingPage() {
     password.length >= 6 &&
     password === confirmPassword &&
     acceptedTerms;
-  const signinReady = signinIdentifier.trim().length > 3 && signinPassword.length >= 4;
+  const signinReady = true;
   const profileReady = (step === "profession" && profession) || (step === "goal" && goal) || (step === "experience" && experience);
 
   const primaryName = useMemo(() => {
@@ -182,18 +185,25 @@ export default function OnboardingPage() {
   };
 
   const handleSignin = () => {
-    if (!signinReady) return;
     const existing = storage.getUser();
+    const premiumLogin = signinIdentifier.trim().toLowerCase() === PREMIUM_LOGIN && signinPassword === PREMIUM_PASSWORD;
     saveAndEnter({
       ...existing,
-      name: existing?.name ?? primaryName,
+      name: premiumLogin ? "Premium User" : existing?.name ?? primaryName,
       email: loginMethod === "email" ? signinIdentifier : existing?.email,
       phone: loginMethod === "phone" ? signinIdentifier : existing?.phone,
+      isPremium: premiumLogin,
     });
   };
 
   const handleSocialDemo = (provider: string) => {
-    saveAndEnter({ name: storage.getUser()?.name ?? `${provider} User`, authProvider: provider.toLowerCase() });
+    saveAndEnter({
+      name: `${provider} User`,
+      authProvider: provider.toLowerCase(),
+      email: undefined,
+      phone: undefined,
+      isPremium: false,
+    });
   };
 
   const handleCreateAccount = () => {
@@ -211,6 +221,7 @@ export default function OnboardingPage() {
       phone,
       username,
       joinedAt: Date.now(),
+      isPremium: false,
     });
   };
 
@@ -260,21 +271,21 @@ export default function OnboardingPage() {
             <div className="relative">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-bold text-indigo-100 backdrop-blur">
                 <ShieldCheck className="h-4 w-4" />
-                Secure MVP access
+                {t("app.onboarding.secureAccess")}
               </span>
               <h1 className="mt-7 max-w-lg text-4xl font-black tracking-tight xl:text-5xl">
-                One calm account for your whole productivity zone.
+                {t("app.onboarding.heroTitle")}
               </h1>
               <p className="mt-4 max-w-md text-sm leading-7 text-slate-300">
-                Sign in with email or phone, create a richer profile, then enter your Optima workspace with chat, meetings, projects, bank, news, community, and AI.
+                {t("app.onboarding.heroDesc")}
               </p>
             </div>
 
             <div className="relative grid gap-3">
               {[
-                ["Multi-entry login", "Email or phone sign-in for the MVP demo."],
-                ["Complete registration", "Full name, email, phone, username, and password."],
-                ["Workspace ready", "Profile setup continues after account creation."],
+                [t("app.onboarding.side.multiTitle"), t("app.onboarding.side.multiDesc")],
+                [t("app.onboarding.side.registrationTitle"), t("app.onboarding.side.registrationDesc")],
+                [t("app.onboarding.side.readyTitle"), t("app.onboarding.side.readyDesc")],
               ].map(([title, desc]) => (
                 <div key={title} className="rounded-[24px] border border-white/10 bg-white/[0.07] p-4 backdrop-blur-xl">
                   <div className="flex items-start gap-3">
@@ -299,10 +310,10 @@ export default function OnboardingPage() {
                 className="inline-flex items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm font-bold text-[#6B7280] shadow-sm transition-all hover:-translate-y-0.5 hover:text-[#111827] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back
+                {t("app.common.back")}
               </button>
               <div className="hidden items-center gap-2 sm:flex">
-                {["Account", "Role", "Goal", "Level"].map((label, index) => (
+                {[t("app.onboarding.steps.account"), t("app.onboarding.steps.role"), t("app.onboarding.steps.goal"), t("app.onboarding.steps.level")].map((label, index) => (
                   <StepPill key={label} label={label} active={index <= stepIndex} />
                 ))}
               </div>
@@ -321,22 +332,22 @@ export default function OnboardingPage() {
                   <div className="mb-7 text-center sm:text-left">
                     <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:ring-indigo-400/20">
                       <Sparkles className="h-4 w-4" />
-                      Optima account
+                      {t("app.onboarding.accountBadge")}
                     </span>
                     <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                      {authMode === "signup" ? "Create your productivity account" : "Welcome back to Optima"}
+                      {authMode === "signup" ? t("app.onboarding.createTitle") : t("app.onboarding.welcomeBack")}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-[#6B7280] dark:text-slate-400">
                       {authMode === "signup"
-                        ? "Register with both email and phone so future backend login, verification, and team invites are ready."
-                        : "Choose email or phone, enter your password, and continue into the local MVP workspace."}
+                        ? t("app.onboarding.createDesc")
+                        : t("app.onboarding.signinDesc")}
                     </p>
                   </div>
 
                   <div className="mb-5 grid grid-cols-2 rounded-[22px] border border-[#E5E7EB] bg-[#F7FAFC] p-1 dark:border-slate-700 dark:bg-slate-900/80">
                     {[
-                      ["signin", "Sign in"],
-                      ["signup", "Create account"],
+                      ["signin", t("app.onboarding.signIn")],
+                      ["signup", t("app.onboarding.createAccount")],
                     ].map(([mode, label]) => (
                       <button
                         key={mode}
@@ -362,7 +373,7 @@ export default function OnboardingPage() {
                           className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition-all ${loginMethod === "email" ? "bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-200" : "text-[#6B7280] dark:text-slate-400"}`}
                         >
                           <Mail className="h-4 w-4" />
-                          Email
+                          {t("app.onboarding.email")}
                         </button>
                         <button
                           type="button"
@@ -370,13 +381,13 @@ export default function OnboardingPage() {
                           className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition-all ${loginMethod === "phone" ? "bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-200" : "text-[#6B7280] dark:text-slate-400"}`}
                         >
                           <Phone className="h-4 w-4" />
-                          Phone
+                          {t("app.onboarding.phone")}
                         </button>
                       </div>
 
                       <AuthField
                         icon={loginMethod === "email" ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
-                        label={loginMethod === "email" ? "Email address" : "Phone number"}
+                        label={loginMethod === "email" ? t("app.onboarding.emailAddress") : t("app.onboarding.phoneNumber")}
                         value={signinIdentifier}
                         onChange={setSigninIdentifier}
                         placeholder={loginMethod === "email" ? "you@example.com" : "+998 90 123 45 67"}
@@ -385,14 +396,14 @@ export default function OnboardingPage() {
                       />
                       <AuthField
                         icon={<Lock className="h-4 w-4" />}
-                        label="Password"
+                        label={t("app.onboarding.password")}
                         value={signinPassword}
                         onChange={setSigninPassword}
                         placeholder="Enter your password"
                         type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
                         action={
-                          <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label="Toggle password visibility">
+                          <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label={t("app.onboarding.togglePassword")}>
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                         }
@@ -400,7 +411,7 @@ export default function OnboardingPage() {
 
                       <div className="flex justify-end">
                         <button type="button" className="text-sm font-black text-indigo-600 hover:text-indigo-500 dark:text-indigo-300">
-                          Forgot password?
+                          {t("app.onboarding.forgotPassword")}
                         </button>
                       </div>
 
@@ -408,64 +419,64 @@ export default function OnboardingPage() {
                         type="button"
                         onClick={handleSignin}
                         disabled={!signinReady}
-                        whileTap={signinReady ? { scale: 0.98 } : undefined}
+                        whileTap={{ scale: 0.98 }}
                         className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 text-sm font-black text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-45 dark:shadow-indigo-950/30"
                       >
-                        Sign in
+                        {signinIdentifier.trim().toLowerCase() === PREMIUM_LOGIN ? t("app.onboarding.signInPremium") : t("app.onboarding.continueFree")}
                         <ArrowRight className="h-4 w-4" />
                       </motion.button>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <AuthField icon={<User className="h-4 w-4" />} label="Full name" value={fullName} onChange={setFullName} placeholder="Jasur Karimov" autoComplete="name" />
+                      <AuthField icon={<User className="h-4 w-4" />} label={t("app.onboarding.fullName")} value={fullName} onChange={setFullName} placeholder="Jasur Karimov" autoComplete="name" />
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <AuthField icon={<Mail className="h-4 w-4" />} label="Email" value={email} onChange={setEmail} placeholder="your@email.com" type="email" autoComplete="email" />
-                        <AuthField icon={<Phone className="h-4 w-4" />} label="Phone" value={phone} onChange={setPhone} placeholder="+998 90 123 45 67" type="tel" autoComplete="tel" />
+                        <AuthField icon={<Mail className="h-4 w-4" />} label={t("app.onboarding.email")} value={email} onChange={setEmail} placeholder="your@email.com" type="email" autoComplete="email" />
+                        <AuthField icon={<Phone className="h-4 w-4" />} label={t("app.onboarding.phone")} value={phone} onChange={setPhone} placeholder="+998 90 123 45 67" type="tel" autoComplete="tel" />
                       </div>
-                      <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={setUsername} placeholder="@jasur_karimov" autoComplete="username" />
+                      <AuthField icon={<AtSign className="h-4 w-4" />} label={t("app.onboarding.username")} value={username} onChange={setUsername} placeholder="@jasur_karimov" autoComplete="username" />
                       <div className="grid gap-4 sm:grid-cols-2">
                         <AuthField
                           icon={<Lock className="h-4 w-4" />}
-                          label="Password"
+                          label={t("app.onboarding.password")}
                           value={password}
                           onChange={setPassword}
                           placeholder="Create a strong password"
                           type={showPassword ? "text" : "password"}
                           autoComplete="new-password"
                           action={
-                            <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label="Toggle password visibility">
+                            <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label={t("app.onboarding.togglePassword")}>
                               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                           }
                         />
                         <AuthField
                           icon={<Lock className="h-4 w-4" />}
-                          label="Confirm password"
+                          label={t("app.onboarding.confirmPassword")}
                           value={confirmPassword}
                           onChange={setConfirmPassword}
                           placeholder="Repeat your password"
                           type={showConfirmPassword ? "text" : "password"}
                           autoComplete="new-password"
                           action={
-                            <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label="Toggle confirm password visibility">
+                            <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white" aria-label={t("app.onboarding.toggleConfirmPassword")}>
                               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                           }
                         />
                       </div>
-                      {passwordMismatch && <p className="text-sm font-bold text-rose-600">Passwords do not match yet.</p>}
+                      {passwordMismatch && <p className="text-sm font-bold text-rose-600">{t("app.onboarding.passwordMismatch")}</p>}
 
                       <label className="flex items-start gap-3 rounded-2xl bg-[#F7FAFC] p-3 text-sm text-[#6B7280] dark:bg-slate-900/70 dark:text-slate-400">
                         <button
                           type="button"
                           onClick={() => setAcceptedTerms((current) => !current)}
                           className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-lg border transition-all ${acceptedTerms ? "border-indigo-500 bg-indigo-500 text-white" : "border-[#D1D5DB] bg-white dark:border-slate-600 dark:bg-slate-950"}`}
-                          aria-label="Accept terms"
+                          aria-label={t("app.onboarding.acceptTerms")}
                         >
                           {acceptedTerms && <Check className="h-3.5 w-3.5" />}
                         </button>
                         <span>
-                          I agree to the <span className="font-black text-indigo-600 dark:text-indigo-300">Terms of Service</span> and <span className="font-black text-indigo-600 dark:text-indigo-300">Privacy Policy</span>.
+                          {t("app.onboarding.termsPrefix")} <span className="font-black text-indigo-600 dark:text-indigo-300">{t("app.onboarding.terms")}</span> {t("app.onboarding.and")} <span className="font-black text-indigo-600 dark:text-indigo-300">{t("app.onboarding.privacy")}</span>.
                         </span>
                       </label>
 
@@ -476,7 +487,7 @@ export default function OnboardingPage() {
                         whileTap={signupReady ? { scale: 0.98 } : undefined}
                         className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 text-sm font-black text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-45 dark:shadow-indigo-950/30"
                       >
-                        Create account
+                        {t("app.onboarding.createAccount")}
                         <ArrowRight className="h-4 w-4" />
                       </motion.button>
                     </div>
@@ -484,7 +495,7 @@ export default function OnboardingPage() {
 
                   <div className="my-6 flex items-center gap-3 text-xs font-bold text-[#9CA3AF]">
                     <span className="h-px flex-1 bg-[#E5E7EB] dark:bg-slate-800" />
-                    {authMode === "signup" ? "or sign up with" : "or continue with"}
+                    {authMode === "signup" ? t("app.onboarding.orSignUpWith") : t("app.onboarding.orContinueWith")}
                     <span className="h-px flex-1 bg-[#E5E7EB] dark:bg-slate-800" />
                   </div>
 
@@ -505,8 +516,8 @@ export default function OnboardingPage() {
                 >
                   {step === "profession" && (
                     <div>
-                      <h2 className="text-3xl font-black tracking-tight">What best describes you?</h2>
-                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">We will tailor your Optima workspace to your field.</p>
+                      <h2 className="text-3xl font-black tracking-tight">{t("app.onboarding.professionTitle")}</h2>
+                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">{t("app.onboarding.professionDesc")}</p>
                       <div className="mt-6 grid gap-3 sm:grid-cols-2">
                         {PROFESSIONS.map((item) => (
                           <button
@@ -518,7 +529,7 @@ export default function OnboardingPage() {
                             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-300">{item.icon}</span>
                             <span className="min-w-0 flex-1">
                               <span className="block font-black">{t(`app.professions.${item.id}`)}</span>
-                              <span className="mt-1 block text-xs text-[#6B7280] dark:text-slate-400">{item.desc}</span>
+                              <span className="mt-1 block text-xs text-[#6B7280] dark:text-slate-400">{t(`app.onboarding.professionDescriptions.${item.id}`, item.desc)}</span>
                             </span>
                             {profession === item.id && <CheckCircle2 className="h-5 w-5 text-indigo-600" />}
                           </button>
@@ -529,8 +540,8 @@ export default function OnboardingPage() {
 
                   {step === "goal" && (
                     <div>
-                      <h2 className="text-3xl font-black tracking-tight">What is your main goal?</h2>
-                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">This helps us recommend the right tools first.</p>
+                      <h2 className="text-3xl font-black tracking-tight">{t("app.onboarding.goalTitle")}</h2>
+                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">{t("app.onboarding.goalDesc")}</p>
                       <div className="mt-6 grid gap-3">
                         {GOALS.map((item) => (
                           <button
@@ -550,8 +561,8 @@ export default function OnboardingPage() {
 
                   {step === "experience" && (
                     <div>
-                      <h2 className="text-3xl font-black tracking-tight">Your experience level?</h2>
-                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">No judgment. This only calibrates the workspace suggestions.</p>
+                      <h2 className="text-3xl font-black tracking-tight">{t("app.onboarding.experienceTitle")}</h2>
+                      <p className="mt-2 text-sm text-[#6B7280] dark:text-slate-400">{t("app.onboarding.experienceDesc")}</p>
                       <div className="mt-6 grid gap-3">
                         {EXPERIENCES.map((item) => (
                           <button
@@ -563,7 +574,7 @@ export default function OnboardingPage() {
                             <span className="h-3 w-3 rounded-full" style={{ background: item.color }} />
                             <span className="min-w-0 flex-1">
                               <span className="block font-black">{t(`app.experience.${item.id}`)}</span>
-                              <span className="mt-1 block text-xs text-[#6B7280] dark:text-slate-400">{item.desc}</span>
+                              <span className="mt-1 block text-xs text-[#6B7280] dark:text-slate-400">{t(`app.onboarding.experienceDescriptions.${item.id}`, item.desc)}</span>
                             </span>
                             {experience === item.id && <CheckCircle2 className="h-5 w-5 text-indigo-600" />}
                           </button>
@@ -580,7 +591,7 @@ export default function OnboardingPage() {
                       whileTap={profileReady ? { scale: 0.98 } : undefined}
                       className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 text-sm font-black text-white shadow-lg shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-45 dark:shadow-indigo-950/30"
                     >
-                      {step === "experience" ? "Launch workspace" : "Continue"}
+                      {step === "experience" ? t("app.onboarding.launchWorkspace") : t("app.common.continue")}
                       <ArrowRight className="h-4 w-4" />
                     </motion.button>
                   </div>

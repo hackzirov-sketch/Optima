@@ -31,6 +31,7 @@ export interface UserProfile {
   phone?: string;
   username?: string;
   authProvider?: string;
+  isPremium?: boolean;
 }
 
 export interface Task {

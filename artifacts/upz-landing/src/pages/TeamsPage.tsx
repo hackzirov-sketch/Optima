@@ -851,7 +851,7 @@ export default function TeamsPage({ user, onLogout }: Props) {
           </div>
         </section>
 
-        {false && (<>
+        {TEAM_MEMBERS.length < 0 && (<>
         <SurfaceCard className="overflow-hidden p-0">
           <div className="grid gap-0 xl:grid-cols-[1.15fr_0.85fr]">
             <div className="relative overflow-hidden p-5 sm:p-6">

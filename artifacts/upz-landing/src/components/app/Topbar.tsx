@@ -167,7 +167,7 @@ export function Topbar({ user, title, onToggleSidebar }: TopbarProps) {
         <div className="hidden items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-[#F7FAFC] px-2 py-1.5 sm:flex lg:max-xl:hidden">
           <div className="relative grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm shadow-indigo-200" title={user.name}>
             {user.name.slice(0, 2).toUpperCase()}
-            <PremiumStatusBadge status="available" size={13} className="absolute -bottom-1 -right-1 rounded-full p-0" />
+            {user.isPremium && <PremiumStatusBadge status="available" size={13} className="absolute -bottom-1 -right-1 rounded-full p-0" />}
           </div>
           <div className="hidden text-left lg:block">
             <p className="max-w-28 truncate text-xs font-bold text-[#111827]">{user.name}</p>

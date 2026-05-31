@@ -68,7 +68,7 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
   return { ...message, reactions: reactions.filter((reaction) => reaction.userIds.length > 0) };
 }
 
-export default function ChatPage(_: Props) {
+export default function ChatPage({ user }: Props) {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
@@ -400,6 +400,7 @@ export default function ChatPage(_: Props) {
                       onForward={handleForward}
                       onPin={handlePinMessage}
                       onToggleReaction={handleToggleReaction}
+                      isPremiumUser={Boolean(user.isPremium)}
                     />
                   ))}
                 </AnimatePresence>
@@ -434,6 +435,7 @@ export default function ChatPage(_: Props) {
                 setEditingMessage(null);
                 setDraft("");
               }}
+              isPremiumUser={Boolean(user.isPremium)}
             />
           </section>
         ) : (
