@@ -233,6 +233,47 @@ export class TasksService {
     return { data, total };
   }
 
+  async findAllByWorkspace(
+    workspaceId: string,
+    userId: string,
+    dto: FilterTasksDto,
+  ): Promise<{ data: Task[]; total: number }> {
+    await this.assertMember(workspaceId, userId);
+
+    const qb = this.taskRepo
+      .createQueryBuilder('task')
+      .innerJoin('task.project', 'project')
+      .leftJoinAndSelect('task.assignee', 'assignee')
+      .leftJoinAndSelect('task.creator', 'creator')
+      .leftJoinAndSelect('task.column', 'column')
+      .where('project.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('task.deletedAt IS NULL')
+      .andWhere('task.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (dto.status)
+      qb.andWhere('task.status = :status', { status: dto.status });
+    if (dto.type) qb.andWhere('task.type = :type', { type: dto.type });
+    if (dto.priority)
+      qb.andWhere('task.priority = :priority', { priority: dto.priority });
+    if (dto.assigneeId)
+      qb.andWhere('task.assigneeId = :assigneeId', {
+        assigneeId: dto.assigneeId,
+      });
+    if (dto.projectId)
+      qb.andWhere('task.projectId = :projectId', { projectId: dto.projectId });
+    if (dto.search)
+      qb.andWhere('task.title ILIKE :search', { search: `%${dto.search}%` });
+
+    qb.orderBy('task.position', 'ASC').addOrderBy('task.createdAt', 'ASC');
+
+    const page = dto.page ?? 1;
+    const limit = Math.min(dto.limit ?? 200, 500);
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
+  }
+
   async findById(taskId: string, userId: string): Promise<Task> {
     const task = await this.taskRepo.findOne({
       where: { id: taskId },

@@ -403,7 +403,10 @@ export default function Page() {
     refresh: refreshProjects,
   } = useProjects(activeWorkspace?.id);
   const projectIds = useMemo(() => realProjects.map((p) => p.id), [realProjects]);
-  const { tasks: realTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(projectIds);
+  const { tasks: realTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(
+    activeWorkspace?.id,
+    projectIds,
+  );
   const {
     members: realMembers,
     loading: membersLoading,

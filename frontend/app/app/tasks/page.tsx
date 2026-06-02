@@ -48,7 +48,10 @@ export default function TasksPage() {
   const { projects } = useProjects(activeWorkspace?.id);
   const { members } = useMembers(activeWorkspace?.id);
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
-  const { tasks: apiTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(projectIds);
+  const { tasks: apiTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(
+    activeWorkspace?.id,
+    projectIds,
+  );
 
   const [newTask, setNewTask] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("medium");

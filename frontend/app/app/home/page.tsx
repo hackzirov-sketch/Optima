@@ -24,7 +24,10 @@ export default function HomePage() {
   const { t, i18n } = useTranslation();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const { projects, loading: projectsLoading } = useProjects(activeWorkspace?.id);
-  const { tasks: apiTasks, loading: tasksLoading } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { tasks: apiTasks, loading: tasksLoading } = useAllWorkspaceTasks(
+    activeWorkspace?.id,
+    projects.map((p) => p.id),
+  );
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
   const [time, setTime] = useState(new Date());
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});

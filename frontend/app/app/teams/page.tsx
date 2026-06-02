@@ -224,7 +224,10 @@ export default function Page() {
   const { members, loading: membersLoading, invite } = useMembers(activeWorkspace?.id);
   const { groups, loading: groupsLoading, createGroup, deleteGroup } = useGroups(activeWorkspace?.id);
   const { projects } = useProjects(activeWorkspace?.id);
-  const { tasks: allTasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { tasks: allTasks } = useAllWorkspaceTasks(
+    activeWorkspace?.id,
+    projects.map((p) => p.id),
+  );
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("junior");
   const [groupName, setGroupName] = useState("");

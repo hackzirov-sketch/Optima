@@ -51,15 +51,39 @@ export function useTasks(projectId: string | undefined) {
   return { tasks, loading, error, refresh: load, createTask, updateTask, moveTask, deleteTask };
 }
 
-export function useAllWorkspaceTasks(projectIds: string[]) {
+/**
+ * Load tasks for a workspace in one request when `workspaceId` is set.
+ * Falls back to per-project requests only when workspace id is missing.
+ */
+export function useAllWorkspaceTasks(
+  workspaceId: string | undefined,
+  projectIds: string[] = [],
+) {
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const projectKey = projectIds.join(',');
+
   const load = useCallback(async () => {
+    if (workspaceId) {
+      setLoading(true);
+      try {
+        const res = await tasksApi.listByWorkspace(workspaceId, { limit: 500 });
+        setTasks(res?.data ?? []);
+      } catch (err) {
+        console.error('[useAllWorkspaceTasks] workspace load failed', err);
+        setTasks([]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!projectIds.length) {
       setTasks([]);
       return;
     }
+
     setLoading(true);
     try {
       const results = await Promise.all(
@@ -67,12 +91,12 @@ export function useAllWorkspaceTasks(projectIds: string[]) {
       );
       setTasks(results.flat());
     } catch (err) {
-      console.error('[useAllWorkspaceTasks]', err);
+      console.error('[useAllWorkspaceTasks] project fallback failed', err);
       setTasks([]);
     } finally {
       setLoading(false);
     }
-  }, [projectIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceId, projectKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();

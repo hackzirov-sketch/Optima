@@ -64,6 +64,19 @@ export class TasksController {
     return this.tasksService.findAll(projectId, userId, filters);
   }
 
+  @Get('workspaces/:workspaceId/tasks')
+  @ApiOperation({
+    summary: 'List all tasks in a workspace (single request, avoids N+1 per project)',
+  })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace UUID' })
+  findAllByWorkspace(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
+    @Query() filters: FilterTasksDto,
+  ) {
+    return this.tasksService.findAllByWorkspace(workspaceId, userId, filters);
+  }
+
   @Get('tasks/:taskId')
   @ApiOperation({ summary: 'Get task details by ID' })
   findById(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { storage } from '@/utils/storage';
 import type { UserProfile } from '@/types';
 import { authApi, setTokens, clearTokens } from '@/lib/api';
+import { mapApiUserToProfile } from '@/lib/userProfile';
 import { disconnectWebSocket } from '@/hooks/useWebSocket';
 
 type LoginResult = { success: boolean; redirect?: string; message?: string };
@@ -98,6 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await authApi.me();
         if (res?.data) {
           setBackendUser({ id: res.data.id, email: res.data.email });
+          const merged = mapApiUserToProfile(res.data, savedUser);
+          storage.saveUser(merged);
+          setUser(merged);
         }
       } catch (err: unknown) {
         const status = (err as Record<string, unknown>)?.status;
@@ -153,16 +157,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res?.data?.accessToken) {
         setTokens(res.data.accessToken, res.data.refreshToken);
         const { user: apiUser } = res.data;
-        const profile: UserProfile = {
-          name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
-          profession: 'developer',
-          goal: 'build_portfolio',
-          experience: 'intermediate',
-          joinedAt: Date.now(),
-          email: apiUser.email,
-          username: apiUser.username,
-          authProvider: 'email',
-        };
+        const existing = storage.getUser();
+        const profile = mapApiUserToProfile(apiUser, existing);
+        profile.authProvider = 'email';
         login(profile);
         setBackendUser({ id: apiUser.id, email: apiUser.email });
         return { success: true };

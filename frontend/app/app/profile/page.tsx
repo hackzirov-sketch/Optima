@@ -38,7 +38,7 @@ export default function Page() {
   const { t, i18n } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { projects } = useProjects(activeWorkspace?.id);
-  const { tasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { tasks } = useAllWorkspaceTasks(activeWorkspace?.id, projects.map((p) => p.id));
 
   const [backendUser, setBackendUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(true);

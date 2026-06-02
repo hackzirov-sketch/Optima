@@ -37,6 +37,11 @@ export class FilterTasksDto {
   @IsUUID()
   columnId?: string;
 
+  @ApiProperty({ required: false, description: 'Filter by project UUID (workspace list)' })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
   @ApiProperty({
     required: false,
     description: 'Filter by parent task UUID (get subtasks)',

@@ -48,6 +48,8 @@ interface RequestOptions {
   body?: unknown;
   params?: Record<string, string | number | boolean>;
   skipAuth?: boolean;
+  /** @internal prevents refresh loop on retried request */
+  _isRetry?: boolean;
 }
 
 interface ApiErrorPayload {
@@ -64,7 +66,7 @@ async function request<T = unknown>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { body, params, skipAuth } = options;
+  const { body, params, skipAuth, _isRetry } = options;
 
   let url = `${API_BASE}${path}`;
   if (params) {
@@ -95,22 +97,10 @@ async function request<T = unknown>(
   });
 
   // Auto-refresh on 401
-  if (res.status === 401 && !skipAuth) {
+  if (res.status === 401 && !skipAuth && !_isRetry) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      headers['Authorization'] = `Bearer ${getAccessToken()}`;
-      const retry = await fetch(url, {
-        method,
-        headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!retry.ok) {
-        const err = await retry.json().catch(() => ({}));
-        throw { status: retry.status, ...(err as object) };
-      }
-      return retry.json() as Promise<T>;
+      return request<T>(method, path, { ...options, _isRetry: true });
     }
     clearTokens();
     if (typeof window !== 'undefined') {
@@ -143,7 +133,12 @@ async function request<T = unknown>(
   return res.json() as Promise<T>;
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
 async function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
   const rt = getRefreshToken();
   if (!rt) return false;
   try {
@@ -161,7 +156,12 @@ async function tryRefresh(): Promise<boolean> {
     return false;
   } catch {
     return false;
+  } finally {
+    refreshInFlight = null;
   }
+  })();
+
+  return refreshInFlight;
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -496,6 +496,18 @@ export const tasksApi = {
     return { data: unwrapApiList(res) };
   },
 
+  listByWorkspace: async (
+    workspaceId: string,
+    params?: Record<string, string | number>,
+  ) => {
+    const res = await request<{ data: ApiTask[] | ApiNestedList<ApiTask>; total?: number }>(
+      'GET',
+      `/workspaces/${workspaceId}/tasks`,
+      { params: params as Record<string, string> },
+    );
+    return { data: unwrapApiList(res), total: res?.total };
+  },
+
   getById: (taskId: string) =>
     request<{ data: ApiTask }>('GET', `/tasks/${taskId}`),
 
@@ -525,8 +537,11 @@ export const tasksApi = {
   getWatchers: (taskId: string) =>
     request<{ data: ApiUser[] }>('GET', `/tasks/${taskId}/watchers`),
 
-  addTag: (taskId: string, name: string) =>
-    request('POST', `/tasks/${taskId}/tags`, { body: { name } }),
+  addTag: (taskId: string, tagId: string) =>
+    request('POST', `/tasks/${taskId}/tags`, { body: { tagId } }),
+
+  getTags: (taskId: string) =>
+    request<{ data: unknown[] }>('GET', `/tasks/${taskId}/tags`),
 
   removeTag: (taskId: string, tagId: string) =>
     request('DELETE', `/tasks/${taskId}/tags/${tagId}`),
@@ -721,49 +736,76 @@ export interface ApiWorkspaceAnalytics {
 
 export interface ApiPush {
   id: string;
+  taskId: string;
   userId: string;
-  title: string;
-  description?: string;
+  repositoryId: string;
+  branchName: string;
   status: string;
-  repoUrl?: string;
-  branch?: string;
-  commitHash?: string;
+  commitMessage: string;
+  commitSha?: string;
+  commitsCount?: number;
+  githubCommitSha?: string;
+  githubPrUrl?: string;
+  githubPrNumber?: number;
+  rejectedReason?: string | null;
   createdAt: string;
+}
+
+export interface SubmitPushDto {
+  taskId: string;
+  repositoryId: string;
+  branchName: string;
+  commitMessage: string;
+  commitSha?: string;
+  commitsCount: number;
+  diffBundleBase64: string;
+  cliVersion?: string;
 }
 
 export interface ApiPushComment {
   id: string;
   pushId: string;
-  userId: string;
-  text: string;
-  resolved?: boolean;
+  authorId: string;
+  content: string;
+  filePath?: string;
+  lineNumber?: number;
+  isResolved?: boolean;
   createdAt: string;
 }
 
 export const pushesApi = {
-  listMine: (params?: { page?: number; limit?: number; status?: string }) =>
+  listMine: (params?: { page?: number; limit?: number; status?: string; taskId?: string }) =>
     request<{ data: ApiPush[]; total: number }>('GET', '/pushes', { params: params as Record<string, string | number | boolean> }),
 
   getById: (pushId: string) =>
     request<{ data: ApiPush }>('GET', `/pushes/${pushId}`),
 
-  submit: (data: { title: string; description?: string; repoUrl?: string; branch?: string; commitHash?: string }) =>
+  submit: (data: SubmitPushDto) =>
     request<{ data: ApiPush }>('POST', '/pushes', { body: data }),
 
   approve: (pushId: string) =>
-    request('PATCH', `/pushes/${pushId}/approve`),
+    request<{ data: ApiPush }>('PATCH', `/pushes/${pushId}/approve`),
 
-  reject: (pushId: string) =>
-    request('PATCH', `/pushes/${pushId}/reject`),
+  reject: (pushId: string, reason?: string) =>
+    request<{ data: ApiPush }>('PATCH', `/pushes/${pushId}/reject`, {
+      body: reason ? { reason } : {},
+    }),
+
+  downloadUrl: (pushId: string) =>
+    request<{ data: { url: string; expiresIn: number } }>('GET', `/pushes/${pushId}/download`),
 
   getComments: (pushId: string) =>
     request<{ data: ApiPushComment[] }>('GET', `/pushes/${pushId}/comments`),
 
-  addComment: (pushId: string, text: string) =>
-    request<{ data: ApiPushComment }>('POST', `/pushes/${pushId}/comments`, { body: { text } }),
+  addComment: (pushId: string, content: string, extra?: Partial<Pick<ApiPushComment, 'filePath' | 'lineNumber'>>) =>
+    request<{ data: ApiPushComment }>('POST', `/pushes/${pushId}/comments`, {
+      body: { content, ...extra },
+    }),
 
-  updateComment: (pushId: string, commentId: string, text: string) =>
-    request<{ data: ApiPushComment }>('PATCH', `/pushes/${pushId}/comments/${commentId}`, { body: { text } }),
+  updateComment: (pushId: string, commentId: string, content: string) =>
+    request<{ data: ApiPushComment }>('PATCH', `/pushes/${pushId}/comments/${commentId}`, {
+      body: { content },
+    }),
 
   deleteComment: (pushId: string, commentId: string) =>
     request('DELETE', `/pushes/${pushId}/comments/${commentId}`),

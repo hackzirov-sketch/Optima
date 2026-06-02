@@ -99,7 +99,10 @@ export default function Page() {
   const { t } = useTranslation();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const { projects, loading: projectsLoading } = useProjects(activeWorkspace?.id);
-  const { tasks, loading: tasksLoading } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { tasks, loading: tasksLoading } = useAllWorkspaceTasks(
+    activeWorkspace?.id,
+    projects.map((p) => p.id),
+  );
   const { members } = useMembers(activeWorkspace?.id);
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
 
