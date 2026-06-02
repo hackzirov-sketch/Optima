@@ -197,11 +197,14 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      // Background task to send a new verification email for OTP
-      await this.authQueue.add('on-register', {
-        userId: user.id,
-        email: user.email,
-      });
+      try {
+        await this.authQueue.add('on-register', {
+          userId: user.id,
+          email: user.email,
+        });
+      } catch (e) {
+        this.logger.warn(`BullMQ on-register queue failed: ${e instanceof Error ? e.message : e}`);
+      }
 
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
@@ -224,11 +227,14 @@ export class AuthService {
     }
 
     if (!user.isVerified) {
-      // Background task to send a new verification email
-      await this.authQueue.add('on-register', {
-        userId: user.id,
-        email: user.email,
-      });
+      try {
+        await this.authQueue.add('on-register', {
+          userId: user.id,
+          email: user.email,
+        });
+      } catch (e) {
+        this.logger.warn(`BullMQ on-register queue failed: ${e instanceof Error ? e.message : e}`);
+      }
 
       throw new UnauthorizedException({
         code: ErrorCode.PENDING_VERIFICATION,

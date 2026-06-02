@@ -8,10 +8,16 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
 
   constructor(private configService: ConfigService) {
+    const port = this.configService.get<number>('SMTP_PORT') || 587;
+    const secure = port === 465;
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
-      port: this.configService.get<number>('SMTP_PORT') || 587,
-      secure: false, // true for 465, false for other ports
+      port,
+      secure,
+      requireTLS: !secure, // force STARTTLS on port 587
+      connectionTimeout: 10_000, // 10s
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: {
         user: this.configService.get<string>('SMTP_USER'),
         pass: this.configService.get<string>('SMTP_PASS'),

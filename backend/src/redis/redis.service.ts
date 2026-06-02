@@ -2,11 +2,18 @@ import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
+interface MemEntry {
+  value: string;
+  expiresAt: number;
+}
+
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis | null = null;
   private disabled = false;
+  // In-memory fallback for OAuth codes and password reset tokens when Redis is down
+  private readonly memStore = new Map<string, MemEntry>();
 
   constructor(private readonly config: ConfigService) {}
 
@@ -64,72 +71,93 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  private memSet(key: string, value: string, ttlSeconds: number): void {
+    this.memStore.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+  }
+
+  private memGetAndDelete(key: string): string | null {
+    const entry = this.memStore.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.memStore.delete(key);
+      return null;
+    }
+    this.memStore.delete(key);
+    return entry.value;
+  }
+
   async setOAuthCode(
     code: string,
     tokens: { accessToken: string; refreshToken: string },
   ): Promise<void> {
+    const key = `upz:oauth:${code}`;
+    const serialized = JSON.stringify(tokens);
     try {
       const client = this.getClient();
-      if (!client) return;
-      await client.set(
-        `upz:oauth:${code}`,
-        JSON.stringify(tokens),
-        'EX',
-        60, // 60-second TTL — one-time use
-      );
+      if (client) {
+        await client.set(key, serialized, 'EX', 60);
+        return;
+      }
     } catch (e) {
-      this.logger.warn(
-        `Redis OAuth code set failed: ${e instanceof Error ? e.message : e}`,
-      );
+      this.logger.warn(`Redis OAuth code set failed: ${e instanceof Error ? e.message : e}`);
     }
+    this.memSet(key, serialized, 60);
   }
 
   async getAndDeleteOAuthCode(
     code: string,
   ): Promise<{ accessToken: string; refreshToken: string } | null> {
+    const key = `upz:oauth:${code}`;
     try {
       const client = this.getClient();
-      if (!client) return null;
-      const key = `upz:oauth:${code}`;
-      const raw = await client.get(key);
-      if (!raw) return null;
-      await client.del(key); // one-time use
-      return JSON.parse(raw) as { accessToken: string; refreshToken: string };
+      if (client) {
+        const raw = await client.get(key);
+        if (raw) {
+          await client.del(key);
+          return JSON.parse(raw) as { accessToken: string; refreshToken: string };
+        }
+      }
     } catch (e) {
-      this.logger.warn(
-        `Redis OAuth code get failed: ${e instanceof Error ? e.message : e}`,
-      );
-      return null;
+      this.logger.warn(`Redis OAuth code get failed: ${e instanceof Error ? e.message : e}`);
     }
+    const raw = this.memGetAndDelete(key);
+    return raw ? (JSON.parse(raw) as { accessToken: string; refreshToken: string }) : null;
   }
 
   async setPasswordResetToken(token: string, userId: string): Promise<void> {
+    const key = `upz:pwd_reset:${token}`;
     try {
       const client = this.getClient();
-      if (!client) return;
-      await client.set(`upz:pwd_reset:${token}`, userId, 'EX', 900); // 15 min
+      if (client) {
+        await client.set(key, userId, 'EX', 900);
+        return;
+      }
     } catch (e) {
       this.logger.warn(`Redis pwd-reset set failed: ${e instanceof Error ? e.message : e}`);
     }
+    this.memSet(key, userId, 900);
   }
 
   async getAndDeletePasswordResetToken(token: string): Promise<string | null> {
+    const key = `upz:pwd_reset:${token}`;
     try {
       const client = this.getClient();
-      if (!client) return null;
-      const key = `upz:pwd_reset:${token}`;
-      const userId = await client.get(key);
-      if (!userId) return null;
-      await client.del(key);
-      return userId;
+      if (client) {
+        const userId = await client.get(key);
+        if (userId) {
+          await client.del(key);
+          return userId;
+        }
+      }
     } catch (e) {
       this.logger.warn(`Redis pwd-reset get failed: ${e instanceof Error ? e.message : e}`);
-      return null;
     }
+    return this.memGetAndDelete(key);
   }
 
   onModuleDestroy() {
     this.client?.disconnect();
     this.client = null;
+    this.memStore.clear();
   }
 }
