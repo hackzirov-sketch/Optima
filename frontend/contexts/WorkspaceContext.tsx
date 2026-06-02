@@ -11,6 +11,8 @@ interface WorkspaceState {
   error: string | null;
   setActiveWorkspace: (ws: ApiWorkspace) => void;
   createWorkspace: (name: string, description?: string) => Promise<ApiWorkspace>;
+  updateWorkspace: (wsId: string, data: { name?: string; description?: string }) => Promise<ApiWorkspace>;
+  deleteWorkspace: (wsId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
 }
 
@@ -65,13 +67,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createWorkspace = useCallback(async (name: string, description?: string) => {
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now().toString(36);
     const res = await workspacesApi.create({ name, slug, description });
     const ws = res.data;
     setWorkspaces((prev) => [...prev, ws]);
     setActiveWorkspace(ws);
     return ws;
   }, [setActiveWorkspace]);
+
+  const updateWorkspace = useCallback(async (wsId: string, data: { name?: string; description?: string }) => {
+    const res = await workspacesApi.update(wsId, data);
+    const updated = res.data;
+    setWorkspaces((prev) => prev.map((w) => w.id === wsId ? updated : w));
+    if (activeWorkspace?.id === wsId) setActiveWorkspaceState(updated);
+    return updated;
+  }, [activeWorkspace?.id]);
+
+  const deleteWorkspace = useCallback(async (wsId: string) => {
+    await workspacesApi.delete(wsId);
+    setWorkspaces((prev) => {
+      const remaining = prev.filter((w) => w.id !== wsId);
+      if (activeWorkspace?.id === wsId) setActiveWorkspaceState(remaining[0] ?? null);
+      return remaining;
+    });
+  }, [activeWorkspace?.id]);
 
   return (
     <WorkspaceContext.Provider value={{
@@ -81,6 +100,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       error,
       setActiveWorkspace,
       createWorkspace,
+      updateWorkspace,
+      deleteWorkspace,
       refreshWorkspaces: loadWorkspaces,
     }}>
       {children}

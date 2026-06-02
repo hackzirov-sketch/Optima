@@ -129,6 +129,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     storage.setOnboarded();
     setUser(profile);
     broadcast({ type: 'login', profile });
+
+    // If a workspace invite was pending (user was redirected to login), accept it now
+    const pendingInvite = sessionStorage.getItem('pending_invite_token');
+    if (pendingInvite) {
+      sessionStorage.removeItem('pending_invite_token');
+      router.push(`/app/invite/${pendingInvite}`);
+    }
   };
 
   const logout = async () => {

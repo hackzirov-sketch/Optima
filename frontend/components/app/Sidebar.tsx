@@ -13,6 +13,7 @@ import {
   Home,
   LayoutDashboard,
   Layers,
+  Plus,
   ListTodo,
   LogOut,
   MessageCircle,
@@ -177,7 +178,10 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
   const { t } = useTranslation();
   const pathname = usePathname();
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const { workspaces, activeWorkspace, setActiveWorkspace } = useWorkspace();
+  const [newWsOpen, setNewWsOpen] = useState(false);
+  const [newWsName, setNewWsName] = useState('');
+  const [newWsLoading, setNewWsLoading] = useState(false);
+  const { workspaces, activeWorkspace, setActiveWorkspace, createWorkspace } = useWorkspace();
 
   const menuItems = [
     { href: "/app/profile", label: t("app.nav.profile"), icon: User },
@@ -207,25 +211,60 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
           )}
         </div>
         {!collapsed && activeWorkspace && (
-          <div className="mt-3">
-            {workspaces.length === 1 ? (
-              <div className="rounded-2xl bg-muted px-3 py-2">
-                <p className="truncate text-xs font-bold text-foreground">{activeWorkspace.name}</p>
-                <p className="text-[10px] text-muted-foreground">Workspace</p>
+          <div className="mt-3 space-y-1.5">
+            <select
+              value={activeWorkspace.id}
+              onChange={(e) => {
+                const ws = workspaces.find((w) => w.id === e.target.value);
+                if (ws) setActiveWorkspace(ws);
+              }}
+              className="w-full rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-bold text-foreground outline-none"
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+
+            {/* New workspace inline form */}
+            {newWsOpen ? (
+              <div className="flex gap-1">
+                <input
+                  autoFocus
+                  value={newWsName}
+                  onChange={(e) => setNewWsName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && newWsName.trim() && !newWsLoading) {
+                      setNewWsLoading(true);
+                      try { await createWorkspace(newWsName.trim()); setNewWsName(''); setNewWsOpen(false); }
+                      catch { /* ignore */ }
+                      finally { setNewWsLoading(false); }
+                    }
+                    if (e.key === 'Escape') { setNewWsOpen(false); setNewWsName(''); }
+                  }}
+                  placeholder="Workspace name…"
+                  className="min-w-0 flex-1 rounded-xl border border-indigo-300 bg-card px-2 py-1.5 text-xs text-foreground outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newWsName.trim() || newWsLoading) return;
+                    setNewWsLoading(true);
+                    try { await createWorkspace(newWsName.trim()); setNewWsName(''); setNewWsOpen(false); }
+                    catch { /* ignore */ }
+                    finally { setNewWsLoading(false); }
+                  }}
+                  disabled={newWsLoading || !newWsName.trim()}
+                  className="rounded-xl bg-indigo-600 px-2 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {newWsLoading ? '…' : 'Add'}
+                </button>
               </div>
             ) : (
-              <select
-                value={activeWorkspace.id}
-                onChange={(e) => {
-                  const ws = workspaces.find((w) => w.id === e.target.value);
-                  if (ws) setActiveWorkspace(ws);
-                }}
-                className="w-full rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-bold text-foreground outline-none"
+              <button
+                onClick={() => setNewWsOpen(true)}
+                className="flex w-full items-center gap-1.5 rounded-2xl px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>{ws.name}</option>
-                ))}
-              </select>
+                <Plus className="h-3 w-3" /> New workspace
+              </button>
             )}
           </div>
         )}
