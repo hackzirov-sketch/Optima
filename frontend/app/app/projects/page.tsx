@@ -64,11 +64,25 @@ export default function Page() {
     commits: string; pushes: string; approvedPushes: string; tasksCompleted: string;
   } | null>(null);
 
+  type ProjectAnalyticsResponse = {
+    data?: {
+      aggregates?: {
+        commits: string;
+        pushes: string;
+        approvedPushes: string;
+        tasksCompleted: string;
+      };
+    };
+  };
+
   useEffect(() => {
     if (!currentProjectId) return;
     setProjectAnalytics(null);
     analyticsApi.getProjectAnalytics(currentProjectId)
-      .then((res: any) => setProjectAnalytics(res?.data?.aggregates ?? null))
+      .then((res) => {
+        const typed = res as ProjectAnalyticsResponse;
+        setProjectAnalytics(typed?.data?.aggregates ?? null);
+      })
       .catch(() => {});
   }, [currentProjectId]);
 

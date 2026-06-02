@@ -60,7 +60,7 @@ export default function InvitePage() {
             <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-emerald-50 dark:bg-emerald-950/40">
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
-            <h1 className="text-xl font-black text-foreground">You've joined the workspace!</h1>
+            <h1 className="text-xl font-black text-foreground">You&apos;ve joined the workspace!</h1>
             <p className="mt-2 text-sm text-muted-foreground">Redirecting to your workspace…</p>
             <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-muted">
               <motion.div

@@ -1,9 +1,14 @@
 import type { NextConfig } from 'next';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  outputFileTracingRoot: path.resolve(__dirname),
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
 
   images: {
     // Wildcards skip optimization and are a security risk; list known hosts explicitly
@@ -21,7 +26,7 @@ const nextConfig: NextConfig = {
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': require('path').resolve(__dirname, './'),
+      '@': path.resolve(__dirname, './'),
     };
     return config;
   },
