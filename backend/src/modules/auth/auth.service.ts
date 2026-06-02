@@ -17,6 +17,7 @@ import ms from 'ms';
 import { UAParser } from 'ua-parser-js';
 
 import { UsersService } from '../users/users.service';
+import { MailService } from '../mail/mail.service';
 import { RedisService } from '../../redis/redis.service';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
@@ -28,6 +29,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { User } from '../../database/entities/user.entity';
 
@@ -37,6 +40,7 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
+    private mailService: MailService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private redisService: RedisService,
@@ -588,6 +592,46 @@ export class AuthService {
       user,
     };
   } // end generateTokens
+
+  // ── Password reset ────────────────────────────────────────────────────────
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (user && user.isActive) {
+      const token = crypto.randomUUID();
+      await this.redisService.setPasswordResetToken(token, user.id);
+      const frontendUrl = this.getFrontendUrl();
+      const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
+      await this.mailService.sendPasswordResetEmail(dto.email, resetUrl);
+    }
+    // Always return success to prevent email enumeration
+    return { success: true, message: 'If an account exists, a reset email has been sent.' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const userId = await this.redisService.getAndDeletePasswordResetToken(dto.token);
+    if (!userId) {
+      throw new BadRequestException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    const bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 12;
+    const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
+
+    const user = await this.usersService.findById(userId);
+    const providers = user?.providers || [];
+    if (!providers.includes('local')) providers.push('local');
+
+    await this.usersService.update(userId, {
+      passwordHash,
+      providers,
+      needsPasswordSetup: false,
+    });
+
+    return { success: true, message: 'Password reset successfully' };
+  }
 
   // ── OAuth session code helpers ────────────────────────────────────────────
   // Instead of putting tokens in the redirect URL (visible in browser history,

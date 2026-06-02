@@ -24,6 +24,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Auth')
@@ -67,6 +69,24 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
   ) {
     return this.authService.login(dto, ip, userAgent);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @Throttle({ default: { ttl: 3600000, limit: 5 } }) // 5 per hour
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send password reset email' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @Throttle({ default: { ttl: 3600000, limit: 5 } }) // 5 per hour
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using one-time token from email' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Public()

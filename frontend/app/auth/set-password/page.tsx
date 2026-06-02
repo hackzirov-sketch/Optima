@@ -19,7 +19,7 @@ export default function SetPasswordPage() {
   const [error, setError] = useState('');
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const ready = password.length >= 6 && passwordsMatch;
+  const ready = password.length >= 8 && passwordsMatch;
 
   const handleSetPassword = async () => {
     if (!ready) return;
@@ -40,7 +40,7 @@ export default function SetPasswordPage() {
           authProvider: 'email',
         });
       }
-      router.push('/onboarding');
+      router.push('/app/home');
     } catch {
       setError('Unable to set password. Please sign in again.');
     } finally {

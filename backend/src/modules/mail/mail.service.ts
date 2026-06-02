@@ -42,4 +42,27 @@ export class MailService {
       this.logger.error(`Failed to send email to ${email}`, error.stack);
     }
   }
+
+  async sendPasswordResetEmail(email: string, resetUrl: string) {
+    try {
+      await this.transporter.sendMail({
+        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Password Reset — UPZ',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Reset your UPZ password</h2>
+            <p>Click the button below to reset your password. This link expires in 15 minutes.</p>
+            <a href="${resetUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">
+              Reset Password
+            </a>
+            <p>If you didn't request a password reset, you can safely ignore this email.</p>
+          </div>
+        `,
+      });
+      this.logger.log(`Password reset email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send reset email to ${email}`, error.stack);
+    }
+  }
 }

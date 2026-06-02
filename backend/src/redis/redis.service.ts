@@ -81,6 +81,27 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  async setPasswordResetToken(token: string, userId: string): Promise<void> {
+    try {
+      await this.getClient().set(`upz:pwd_reset:${token}`, userId, 'EX', 900); // 15 min
+    } catch (e) {
+      this.logger.warn(`Redis pwd-reset set failed: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  async getAndDeletePasswordResetToken(token: string): Promise<string | null> {
+    try {
+      const key = `upz:pwd_reset:${token}`;
+      const userId = await this.getClient().get(key);
+      if (!userId) return null;
+      await this.getClient().del(key);
+      return userId;
+    } catch (e) {
+      this.logger.warn(`Redis pwd-reset get failed: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }
+  }
+
   onModuleDestroy() {
     this.client?.disconnect();
     this.client = null;

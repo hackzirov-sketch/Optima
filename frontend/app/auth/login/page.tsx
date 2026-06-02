@@ -42,15 +42,14 @@ export default function LoginPage() {
     try {
       const result = await loginWithBackend(signinId, signinPw);
       if (result.success) {
-        if (storage.isOnboarded()) {
-          router.push('/app/home');
-        } else {
-          router.push('/onboarding');
-        }
+        router.push('/app/home');
         return;
       }
 
       if (result.redirect) {
+        // Save credentials so verify page can auto-login after email verification
+        sessionStorage.setItem('pending_verify_email', signinId);
+        sessionStorage.setItem('pending_verify_password', signinPw);
         router.push(`/auth${result.redirect}`);
         return;
       }

@@ -100,9 +100,13 @@ async function request<T = unknown>(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     console.error(`[API] ${method} ${path} failed:`, res.status, err);
+    const errorObj = err?.error && typeof err.error === 'object' ? err.error : null;
     throw {
       status: res.status,
-      message: err?.message || err?.error || err?.msg,
+      message: errorObj?.message || (typeof err?.message === 'string' ? err.message : undefined) || err?.msg,
+      code: errorObj?.code,
+      redirect: errorObj?.redirect,
+      requiresPasswordSetup: errorObj?.requiresPasswordSetup,
       ...err,
     };
   }

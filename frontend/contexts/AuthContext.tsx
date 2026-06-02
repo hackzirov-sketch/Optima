@@ -111,13 +111,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Login failed: No tokens received' };
     } catch (err) {
       const error = err as Record<string, unknown>;
+      const code = error?.code as string | undefined;
       let errorMessage = 'Login failed';
-      if (error?.message && error.message !== 'Login failed') errorMessage = error.message as string;
-      else if ((error?.error as Record<string, unknown>)?.message) errorMessage = (error.error as Record<string, unknown>).message as string;
+      if (typeof error?.message === 'string' && error.message) errorMessage = error.message;
       else if (error?.status === 401) errorMessage = 'Invalid email or password';
       else if (error?.status === 400) errorMessage = 'Invalid request format';
       else if (error?.status) errorMessage = `Server error (${error.status})`;
-      return { success: false, message: errorMessage, redirect: error?.redirect as string | undefined };
+
+      let redirect = error?.redirect as string | undefined;
+      if (!redirect && (code === 'PENDING_VERIFICATION' || code === 'PASSWORD_SETUP_REQUIRED')) {
+        redirect = '/verify';
+      }
+
+      return { success: false, message: errorMessage, redirect };
     }
   };
 

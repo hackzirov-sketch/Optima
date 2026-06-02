@@ -1,19 +1,16 @@
 'use client';
 
-
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle, Clock, Layers, ListTodo, MessageCircle, TrendingUp, Zap } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Layers, ListTodo, Loader2, MessageCircle, TrendingUp, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MetricTile, PageHeader, PageShell, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
-import type { Task, UserProfile } from "@/types";
-import { storage } from "@/utils/storage";
-import { INITIAL_TASKS } from "@/data/mockData";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useNotifications } from "@/hooks/useNotifications";
+import { tasksApi } from "@/lib/api";
 
 const QUICK_ACTIONS = [
   { labelKey: "newTask", icon: ListTodo, href: "/app/tasks", color: "#6366F1" },
@@ -22,127 +19,209 @@ const QUICK_ACTIONS = [
   { labelKey: "dashboard", icon: TrendingUp, href: "/app/dashboard", color: "#F59E0B" },
 ];
 
-const RECENT_ACTIVITY = [
-  { labelKey: "completedTask", timeKey: "twoHours" },
-  { labelKey: "newMessage", timeKey: "threeHours" },
-  { labelKey: "updatedNote", timeKey: "fiveHours" },
-  { labelKey: "joinedChat", timeKey: "oneDay" },
-  { labelKey: "onboarding", timeKey: "oneDay" },
-];
-
 export default function HomePage() {
-  const { user, hasBackendSession } = useAuth();
+  const { user } = useAuth();
   const { t, i18n } = useTranslation();
-  const { activeWorkspace } = useWorkspace();
-  const { projects } = useProjects(activeWorkspace?.id);
-  const { tasks: apiTasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
-  const { unreadCount: notifUnread } = useNotifications();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const { projects, loading: projectsLoading } = useProjects(activeWorkspace?.id);
+  const { tasks: apiTasks, loading: tasksLoading } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
   const [time, setTime] = useState(new Date());
-
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const saved = storage.getTasks();
-    if (saved.length === 0) {
-      storage.saveTasks(INITIAL_TASKS);
-      setTasks(INITIAL_TASKS);
-    } else {
-      setTasks(saved);
-    }
     const timer = window.setInterval(() => setTime(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const todaysTasks = hasBackendSession
-    ? apiTasks.filter((t) => t.status !== 'done').slice(0, 3).map((t) => ({
-        id: t.id,
-        text: t.title,
-        done: false,
-        createdAt: Date.now(),
-        priority: (t.priority as Task['priority']) ?? 'medium',
-      }))
-    : tasks.filter((task) => !task.done).slice(0, 3);
-  const completedCount = hasBackendSession
-    ? apiTasks.filter((t) => t.status === 'done').length
-    : tasks.filter((task) => task.done).length;
+  const getStatus = (taskId: string, original: string) => localStatus[taskId] ?? original;
+
+  const pendingTasks = apiTasks
+    .filter((task) => getStatus(task.id, task.status) !== 'done')
+    .slice(0, 5);
+
+  const completedCount = apiTasks.filter((task) => getStatus(task.id, task.status) === 'done').length;
+  const totalCount = apiTasks.length;
+  const focusScore = totalCount === 0 ? 100 : Math.round((completedCount / totalCount) * 100);
+
   const dateStr = time.toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
   const timeStr = time.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
   const goalLabel = user ? t(`app.goals.${user?.goal}`, user?.goal ?? "") : '';
 
-  const toggleTask = (id: string) => {
-    if (hasBackendSession) return; // real tasks managed on /tasks page
-    const updated = tasks.map((task) => (task.id === id ? { ...task, done: !task.done } : task));
-    setTasks(updated);
-    storage.saveTasks(updated);
+  const toggleTask = async (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'done' ? 'backlog' : 'done';
+    setLocalStatus((prev) => ({ ...prev, [taskId]: newStatus }));
+    try {
+      await tasksApi.move(taskId, { status: newStatus });
+    } catch {
+      setLocalStatus((prev) => ({ ...prev, [taskId]: currentStatus }));
+    }
   };
 
+  const recentActivity = notifications.slice(0, 5);
+
   return (
-      <PageShell>
-        <PageHeader
-          eyebrow={dateStr}
-          title={t("app.home.welcome", { name: user?.name })}
-          description={t("app.home.description", { goal: goalLabel })}
-        >
-          <div className="rounded-2xl bg-muted px-4 py-3 text-right">
-            <div className="font-mono text-2xl font-bold text-foreground">{timeStr}</div>
-            <div className="text-xs text-muted-foreground">
-              {t("app.home.tasksDoneCount", {
-                done: completedCount,
-                total: hasBackendSession ? apiTasks.length : tasks.length,
+    <PageShell>
+      <PageHeader
+        eyebrow={dateStr}
+        title={t("app.home.welcome", { name: user?.name })}
+        description={t("app.home.description", { goal: goalLabel })}
+      >
+        <div className="rounded-2xl bg-muted px-4 py-3 text-right">
+          <div className="font-mono text-2xl font-bold text-foreground">{timeStr}</div>
+          <div className="text-xs text-muted-foreground">
+            {tasksLoading
+              ? 'Loading…'
+              : t("app.home.tasksDoneCount", { done: completedCount, total: totalCount })
+            }
+          </div>
+        </div>
+      </PageHeader>
+
+      {/* Metrics */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricTile
+          label={t("app.home.metrics.focusScore")}
+          value={tasksLoading ? '…' : `${focusScore}%`}
+          icon={Zap}
+          trend={t("app.home.metrics.focusTrend")}
+        />
+        <MetricTile
+          label={t("app.home.metrics.openProjects")}
+          value={projectsLoading ? '…' : String(projects.length)}
+          icon={Layers}
+          accent="#3B82F6"
+          trend={t("app.home.metrics.projectTrend")}
+        />
+        <MetricTile
+          label={t("app.home.metrics.unreadItems")}
+          value={notifsLoading ? '…' : String(unreadCount)}
+          icon={MessageCircle}
+          accent="#F59E0B"
+          trend={t("app.home.metrics.unreadTrend")}
+        />
+      </div>
+
+      {/* Quick actions */}
+      <SurfaceCard>
+        <SectionTitle icon={Zap} title={t("app.home.quickActions")} description={t("app.home.quickActionsDesc")} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {QUICK_ACTIONS.map((action) => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border bg-muted p-4 transition-all hover:-translate-y-1 hover:bg-card hover:shadow-sm"
+            >
+              <span
+                className="grid h-11 w-11 place-items-center rounded-2xl"
+                style={{ background: `${action.color}14`, color: action.color }}
+              >
+                <action.icon className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-semibold text-foreground">
+                {t(`app.home.actions.${action.labelKey}`)}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </SurfaceCard>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Pending tasks */}
+        <SurfaceCard>
+          <SectionTitle
+            icon={ListTodo}
+            title={t("app.home.todaysTasks")}
+            description={t("app.home.todaysTasksDesc")}
+            action={
+              <Link href="/app/tasks" className="rounded-2xl px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50">
+                {t("app.home.viewAll")}
+              </Link>
+            }
+          />
+
+          {wsLoading || tasksLoading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…
+            </div>
+          ) : !activeWorkspace ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Select or create a workspace to see tasks.
+            </p>
+          ) : pendingTasks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {totalCount === 0 ? 'No tasks yet — create one in Projects.' : 'All tasks completed! 🎉'}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pendingTasks.map((task) => {
+                const status = getStatus(task.id, task.status);
+                const isDone = status === 'done';
+                return (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => toggleTask(task.id, status)}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+                  >
+                    {isDone
+                      ? <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+                      : <Circle className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                    }
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                      {task.title}
+                    </span>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      task.priority === 'high'
+                        ? 'bg-rose-50 text-rose-600'
+                        : task.priority === 'medium'
+                          ? 'bg-amber-50 text-amber-600'
+                          : 'bg-indigo-50 text-indigo-600'
+                    }`}>
+                      {task.priority}
+                    </span>
+                  </button>
+                );
               })}
             </div>
-          </div>
-        </PageHeader>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <MetricTile label={t("app.home.metrics.focusScore")} value={`${Math.max(0, 100 - todaysTasks.length * 5)}%`} icon={Zap} trend={t("app.home.metrics.focusTrend")} />
-          <MetricTile label={t("app.home.metrics.openProjects")} value={String(projects.length || '—')} icon={Layers} accent="#3B82F6" trend={t("app.home.metrics.projectTrend")} />
-          <MetricTile label={t("app.home.metrics.unreadItems")} value={String(notifUnread || '—')} icon={MessageCircle} accent="#F59E0B" trend={t("app.home.metrics.unreadTrend")} />
-        </div>
-
-        <SurfaceCard>
-          <SectionTitle icon={Zap} title={t("app.home.quickActions")} description={t("app.home.quickActionsDesc")} />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {QUICK_ACTIONS.map((action) => (
-              <Link key={action.href} href={action.href} className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border bg-muted p-4 transition-all hover:-translate-y-1 hover:bg-card hover:shadow-sm">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: `${action.color}14`, color: action.color }}>
-                  <action.icon className="h-5 w-5" />
-                </span>
-                <span className="text-sm font-semibold text-foreground">{t(`app.home.actions.${action.labelKey}`)}</span>
-              </Link>
-            ))}
-          </div>
+          )}
         </SurfaceCard>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <SurfaceCard>
-            <SectionTitle icon={ListTodo} title={t("app.home.todaysTasks")} description={t("app.home.todaysTasksDesc")} action={<Link href="/app/tasks" className="rounded-2xl px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50">{t("app.home.viewAll")}</Link>} />
-            <div className="space-y-3">
-              {todaysTasks.map((task) => (
-                <button key={task.id} type="button" onClick={() => toggleTask(task.id)} className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm">
-                  {task.done ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 text-muted-foreground" />}
-                  <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">{t(`app.mock.tasks.${task.id}`, task.text)}</span>
-                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-600">{t(`app.priority.${task.priority}`, task.priority)}</span>
-                </button>
-              ))}
-            </div>
-          </SurfaceCard>
+        {/* Recent activity (real notifications) */}
+        <SurfaceCard>
+          <SectionTitle icon={Clock} title={t("app.home.recentActivity")} description={t("app.home.recentActivityDesc")} />
 
-          <SurfaceCard>
-            <SectionTitle icon={Clock} title={t("app.home.recentActivity")} description={t("app.home.recentActivityDesc")} />
+          {notifsLoading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </div>
+          ) : recentActivity.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No recent activity yet.
+            </p>
+          ) : (
             <div className="space-y-3">
-              {RECENT_ACTIVITY.map((item) => (
-                <div key={item.labelKey} className="flex items-start gap-3 rounded-2xl bg-muted p-4">
-                  <span className="mt-1 h-2 w-2 rounded-full bg-indigo-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{t(`app.home.activity.${item.labelKey}`)}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{t(`app.home.time.${item.timeKey}`)}</p>
+              {recentActivity.map((notif) => (
+                <div key={notif.id} className="flex items-start gap-3 rounded-2xl bg-muted p-4">
+                  <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${notif.isRead ? 'bg-slate-300' : 'bg-indigo-500'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">{notif.title}</p>
+                    {notif.body && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{notif.body}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(notif.createdAt).toLocaleTimeString(i18n.language, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
-          </SurfaceCard>
-        </div>
-      </PageShell>
+          )}
+        </SurfaceCard>
+      </div>
+    </PageShell>
   );
 }

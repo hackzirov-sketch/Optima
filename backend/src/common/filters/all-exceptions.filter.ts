@@ -26,6 +26,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let code = ErrorCode.INTERNAL_ERROR;
     let details = null;
 
+    let redirect: string | undefined;
+    let requiresPasswordSetup: boolean | undefined;
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse: any = exception.getResponse();
@@ -33,6 +36,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = exceptionResponse.message || exception.message;
       code = exceptionResponse.code || ErrorCode.INTERNAL_ERROR;
       details = exceptionResponse.errors || null;
+      redirect = exceptionResponse.redirect;
+      requiresPasswordSetup = exceptionResponse.requiresPasswordSetup;
 
       // Handle class-validator errors
       if (
@@ -80,6 +85,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code,
         message,
         details,
+        ...(redirect !== undefined && { redirect }),
+        ...(requiresPasswordSetup !== undefined && { requiresPasswordSetup }),
         timestamp: new Date().toISOString(),
         path: request.url,
       },

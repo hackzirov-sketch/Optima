@@ -60,8 +60,7 @@ export default function VerifyPage() {
         }
 
         setSuccess(true);
-        const route = res.redirect || '/onboarding';
-        const target = route === '/set-password' ? '/auth/set-password' : '/onboarding';
+        const target = res.redirect === '/set-password' ? '/auth/set-password' : '/app/home';
         setTimeout(() => router.push(target), 1200);
       } else {
         const pendingEmail = sessionStorage.getItem('pending_verify_email');
@@ -87,7 +86,7 @@ export default function VerifyPage() {
                 authProvider: 'email',
               });
               setSuccess(true);
-              setTimeout(() => router.push('/onboarding'), 1200);
+              setTimeout(() => router.push('/app/home'), 1200);
               return;
             }
           } catch {
