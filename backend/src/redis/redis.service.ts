@@ -13,9 +13,9 @@ export class RedisService implements OnModuleDestroy {
     if (!this.client) {
       const url =
         this.config.get<string>('redis.url') || 'redis://localhost:6379';
-      const password = this.config.get<string>('redis.password');
+
       this.client = new Redis(url, {
-        password: password || undefined,
+        // Credentials are read directly from REDIS_URL.
         maxRetriesPerRequest: 2,
         lazyConnect: true,
       });
