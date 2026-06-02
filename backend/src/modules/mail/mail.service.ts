@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { lookup } from 'dns';
 
 @Injectable()
 export class MailService {
@@ -18,11 +19,13 @@ export class MailService {
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
+      // Force IPv4: Render blocks IPv6 outbound, Gmail DNS returns IPv6 by default
+      lookup: (hostname, options, callback) => lookup(hostname, { ...options, family: 4 }, callback),
       auth: {
         user: this.configService.get<string>('SMTP_USER'),
         pass: this.configService.get<string>('SMTP_PASS'),
       },
-    });
+    } as any);
   }
 
   async sendVerificationEmail(email: string, code: string) {
