@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "dist");
+const publicDir = path.join(__dirname, "public");
 const port = Number(process.env.PORT ?? "5173");
 const basePath = (process.env.BASE_PATH ?? "/").replace(/\/+$/, "") || "/";
 const host = process.env.HOST ?? "0.0.0.0";
@@ -41,7 +42,19 @@ app.use(
   }),
 );
 
-// Other static files (emojis, images, etc.)
+// Emoji assets — served from public/ (cleaned from dist/ for deploy size)
+if (fs.existsSync(publicDir)) {
+  app.use(
+    mount || "/",
+    express.static(publicDir, {
+      index: false,
+      maxAge: 3600,
+      setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=3600"),
+    }),
+  );
+}
+
+// Other static files
 app.use(
   mount || "/",
   express.static(distDir, {

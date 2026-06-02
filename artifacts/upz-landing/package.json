@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build": "vite build --config vite.config.ts && node scripts/cleanup-dist.mjs",
     "generate:emojis": "node scripts/generate-emojis.mjs",
     "start": "node server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
