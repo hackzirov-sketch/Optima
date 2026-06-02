@@ -34,7 +34,7 @@ const MOCK_REPOS = [
 ];
 
 export default function Page() {
-  const { user, logout: onLogout } = useAuth();
+  const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { projects } = useProjects(activeWorkspace?.id);
