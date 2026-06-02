@@ -1,9 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bot, CheckCircle2, Clock3, GitBranch, GripVertical, Search, Sparkles, X } from "lucide-react";
-import type { AutomationRule, DashboardWidget, SmartField as SmartFieldType, SmartTask, TaskView, WorkspaceZone } from "@/types";
+import { Bot, CheckCircle2, Clock3, GitBranch, GripVertical, Loader2, Search, Sparkles, X } from "lucide-react";
+import type { AutomationRule, DashboardWidget, SmartField as SmartFieldType, SmartTask, TaskStatus, TaskView, WorkspaceZone } from "@/types";
+import { tasksApi } from "@/lib/api";
 import { ActionButton, Pill, ProgressBar, cn } from "./DesignSystem";
+
+export type TaskDrawerSavePayload = {
+  title: string;
+  description: string;
+  priority: SmartTask["priority"];
+  status: TaskStatus;
+};
 
 const viewLabels: Record<TaskView, string> = {
   list: "List",
@@ -313,11 +321,46 @@ export function TaskDrawer({
   task,
   onClose,
   onCreateTask,
+  onSave,
 }: {
   task: SmartTask | null;
   onClose: () => void;
   onCreateTask?: () => void;
+  onSave?: (payload: TaskDrawerSavePayload) => Promise<void>;
 }) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<SmartTask["priority"]>("medium");
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [saving, setSaving] = useState(false);
+  const [activityLines, setActivityLines] = useState<string[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  useEffect(() => {
+    if (!task) return;
+    setTitle(task.title);
+    setDescription(task.description);
+    setPriority(task.priority);
+    setStatus(task.status);
+    setActivityLines(task.activity);
+    setActivityLoading(true);
+    tasksApi
+      .getActivities(task.id)
+      .then((res) => {
+        const items = res?.data ?? [];
+        if (items.length > 0) {
+          setActivityLines(
+            items.map((a) => {
+              const when = new Date(a.createdAt).toLocaleString();
+              return `${when} — ${a.type.replace(/_/g, " ")}`;
+            }),
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
+  }, [task?.id]);
+
   useEffect(() => {
     if (!task) return;
     const onKey = (event: KeyboardEvent) => {
@@ -326,6 +369,19 @@ export function TaskDrawer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, task]);
+
+  const handleSave = async () => {
+    if (!onSave || !title.trim()) return;
+    setSaving(true);
+    try {
+      await onSave({ title: title.trim(), description: description.trim(), priority, status });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editable = Boolean(onSave);
 
   return (
     <AnimatePresence>
@@ -340,13 +396,55 @@ export function TaskDrawer({
           >
             <div className="border-b border-border p-5">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap gap-2">
-                    <Pill tone={statusTone[task.status]}>{statusLabel[task.status]}</Pill>
-                    <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>
-                  </div>
-                  <h2 className="mt-3 text-xl font-black text-foreground">{task.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.description}</p>
+                <div className="min-w-0 flex-1 space-y-3">
+                  {editable ? (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={status}
+                          onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                          className="rounded-xl border border-border bg-muted px-2 py-1 text-xs font-semibold capitalize outline-none"
+                        >
+                          {Object.keys(statusLabel).map((s) => (
+                            <option key={s} value={s}>{statusLabel[s]}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={priority}
+                          onChange={(e) => setPriority(e.target.value as SmartTask["priority"])}
+                          className="rounded-xl border border-border bg-muted px-2 py-1 text-xs font-semibold outline-none"
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-muted px-3 py-2 text-lg font-bold text-foreground outline-none focus:border-[var(--upz-nav-brand)]"
+                      />
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        placeholder="Description"
+                        className="w-full resize-none rounded-xl border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:border-[var(--upz-nav-brand)]"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        <Pill tone={statusTone[task.status]}>{statusLabel[task.status]}</Pill>
+                        <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>
+                      </div>
+                      <h2 className="text-xl font-black text-foreground">{task.title}</h2>
+                      <p className="text-sm leading-6 text-muted-foreground">{task.description || "—"}</p>
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Assignee: {task.assignee} · Due: {task.dueDate}
+                  </p>
                 </div>
                 <button type="button" onClick={onClose} className="rounded-2xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Close task drawer">
                   <X className="h-5 w-5" />
@@ -355,48 +453,67 @@ export function TaskDrawer({
             </div>
 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {task.fields.map((field) => (
-                  <SmartField key={field.id} field={field} />
-                ))}
-              </div>
-              <div className="rounded-[24px] border border-border bg-muted p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-black text-foreground">Nested Actions</h3>
-                  <Pill tone="blue">{task.subtasks.filter((item) => item.done).length}/{task.subtasks.length}</Pill>
-                </div>
-                <div className="space-y-2">
-                  {task.subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-border">
-                      {subtask.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Clock3 className="h-4 w-4 text-muted-foreground" />}
-                      {subtask.text}
-                    </div>
+              {task.fields.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {task.fields.map((field) => (
+                    <SmartField key={field.id} field={field} />
                   ))}
                 </div>
-              </div>
-              <div>
-                <h3 className="mb-3 font-black text-foreground">Comments</h3>
-                <div className="space-y-3">
-                  {task.comments.map((comment) => (
-                    <div key={comment.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
-                      <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
-                        <span>{comment.author}</span>
-                        <span>{comment.time}</span>
+              )}
+              {task.subtasks.length > 0 && (
+                <div className="rounded-[24px] border border-border bg-muted p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-black text-foreground">Subtasks</h3>
+                    <Pill tone="blue">{task.subtasks.filter((item) => item.done).length}/{task.subtasks.length}</Pill>
+                  </div>
+                  <div className="space-y-2">
+                    {task.subtasks.map((subtask) => (
+                      <div key={subtask.id} className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-border">
+                        {subtask.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Clock3 className="h-4 w-4 text-muted-foreground" />}
+                        {subtask.text}
                       </div>
-                      <p className="mt-2 text-sm text-foreground">{comment.text}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              {task.comments.length > 0 && (
+                <div>
+                  <h3 className="mb-3 font-black text-foreground">Comments</h3>
+                  <div className="space-y-3">
+                    {task.comments.map((comment) => (
+                      <div key={comment.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+                        <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
+                          <span>{comment.author}</span>
+                          <span>{comment.time}</span>
+                        </div>
+                        <p className="mt-2 text-sm text-foreground">{comment.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <h3 className="mb-3 font-black text-foreground">Activity</h3>
-                <ActivityTimeline items={task.activity} />
+                {activityLoading ? (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </p>
+                ) : activityLines.length > 0 ? (
+                  <ActivityTimeline items={activityLines} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">No activity yet.</p>
+                )}
               </div>
             </div>
 
             <div className="flex flex-wrap justify-end gap-2 border-t border-border p-4">
               <ActionButton variant="secondary" onClick={onClose}>Close</ActionButton>
-              <ActionButton onClick={onCreateTask}>Create linked task</ActionButton>
+              {editable && (
+                <ActionButton onClick={handleSave} disabled={saving || !title.trim()}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                </ActionButton>
+              )}
+              {onCreateTask && <ActionButton variant="secondary" onClick={onCreateTask}>Create linked task</ActionButton>}
             </div>
           </motion.aside>
         </div>

@@ -181,7 +181,28 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   });
 
   function attachListeners(socket: import('socket.io-client').Socket) {
-    socket.on('new_message', (msg: WsMessage) => cbRefs.current.onNewMessage?.(msg));
+    socket.on('new_message', (raw: Record<string, unknown>) => {
+      const senderId = (raw.senderId ?? raw.userId) as string | undefined;
+      const content = (raw.content ?? raw.text) as string | undefined;
+      const createdAt = raw.createdAt as string | number | undefined;
+      const timestamp =
+        typeof raw.timestamp === 'number'
+          ? raw.timestamp
+          : createdAt
+            ? new Date(createdAt).getTime()
+            : Date.now();
+
+      const msg: WsMessage = {
+        id: String(raw.id),
+        roomId: String(raw.roomId),
+        userId: senderId ?? 'unknown',
+        text: content ?? '',
+        replyToId: (raw.replyToId as string | null | undefined) ?? undefined,
+        timestamp,
+        reactions: Array.isArray(raw.reactions) ? (raw.reactions as WsMessage['reactions']) : [],
+      };
+      cbRefs.current.onNewMessage?.(msg);
+    });
     socket.on('typing', (evt: TypingEvent) => cbRefs.current.onTyping?.(evt));
     socket.on('notification', (n: WsNotification) => cbRefs.current.onNotification?.(n));
     socket.on('reaction_updated', (evt: ReactionEvent) => cbRefs.current.onReactionUpdated?.(evt));

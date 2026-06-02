@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, FolderOpen, Loader2, Plus, Target, Zap } from "lucide-react";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
-import { DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
+import { DataTable, FilterBar, TaskDrawer, type TaskDrawerSavePayload, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { POWER_VIEWS } from "@/data/ecosystemData";
 import type { SmartTask, TaskView } from "@/types";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useMembers } from "@/hooks/useMembers";
 import { useTasks } from "@/hooks/useTasks";
-import { analyticsApi, type ApiMember, type ApiTask, type CreateTaskDto } from "@/lib/api";
+import { analyticsApi, projectsApi, type ApiMember, type ApiTask, type CreateTaskDto } from "@/lib/api";
 
 function buildMemberMap(members: ApiMember[]): Map<string, string> {
   const m = new Map<string, string>();
@@ -57,10 +57,13 @@ export default function Page() {
   const [taskPriority, setTaskPriority] = useState("medium");
   const [activeProjectId, setActiveProjectId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectDesc, setEditProjectDesc] = useState("");
 
-  const { projects, loading: projectsLoading, createProject } = useProjects(activeWorkspace?.id);
+  const { projects, loading: projectsLoading, createProject, deleteProject, refresh: refreshProjects } = useProjects(activeWorkspace?.id);
   const { members } = useMembers(activeWorkspace?.id);
-  const { tasks, loading: tasksLoading, createTask, moveTask, deleteTask } = useTasks(
+  const { tasks, loading: tasksLoading, createTask, updateTask, moveTask, deleteTask } = useTasks(
     activeProjectId ?? projects[0]?.id,
   );
 
@@ -171,6 +174,58 @@ export default function Page() {
     }
   };
 
+  const saveSelectedTask = async (payload: TaskDrawerSavePayload) => {
+    if (!selectedTask) return;
+    await updateTask(selectedTask.id, {
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      status: payload.status,
+    });
+    showNotice("Task saved");
+  };
+
+  const activeProject = projects.find((p) => p.id === currentProjectId);
+
+  const openEditProject = () => {
+    if (!activeProject) return;
+    setEditProjectName(activeProject.name);
+    setEditProjectDesc(activeProject.description ?? "");
+    setEditProjectOpen(true);
+  };
+
+  const handleUpdateProject = async () => {
+    if (!currentProjectId || !editProjectName.trim()) return;
+    setSaving(true);
+    try {
+      await projectsApi.update(currentProjectId, {
+        name: editProjectName.trim(),
+        description: editProjectDesc.trim() || undefined,
+      });
+      await refreshProjects();
+      setEditProjectOpen(false);
+      showNotice("Project updated");
+    } catch {
+      showNotice("Failed to update project");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!currentProjectId || !confirm("Delete this project and all its tasks?")) return;
+    setSaving(true);
+    try {
+      await deleteProject(currentProjectId);
+      setActiveProjectId(undefined);
+      showNotice("Project deleted");
+    } catch {
+      showNotice("Failed to delete project");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!activeWorkspace) {
     return (
       <PageShell>
@@ -219,6 +274,22 @@ export default function Page() {
           </SurfaceCard>
         ) : (
           <>
+            {activeProject && (
+              <div className="flex flex-wrap items-center gap-2">
+                <ActionButton variant="secondary" onClick={openEditProject} className="py-2 text-xs">
+                  Edit project
+                </ActionButton>
+                <button
+                  type="button"
+                  onClick={handleDeleteProject}
+                  disabled={saving}
+                  className="rounded-2xl border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/30"
+                >
+                  Delete project
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {projects.map((proj) => (
                 <button
@@ -450,7 +521,31 @@ export default function Page() {
           </div>
         </Modal>
 
-        <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onCreateTask={() => showNotice("Linked task created")} />
+        <Modal open={editProjectOpen} title="Edit project" description={activeProject?.name} onClose={() => setEditProjectOpen(false)}>
+          <div className="space-y-3">
+            <input
+              value={editProjectName}
+              onChange={(e) => setEditProjectName(e.target.value)}
+              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm outline-none focus:border-indigo-400"
+              placeholder="Project name"
+            />
+            <textarea
+              value={editProjectDesc}
+              onChange={(e) => setEditProjectDesc(e.target.value)}
+              rows={2}
+              className="w-full resize-none rounded-2xl border border-border bg-muted px-4 py-3 text-sm outline-none focus:border-indigo-400"
+              placeholder="Description"
+            />
+            <div className="flex justify-end gap-2">
+              <ActionButton variant="secondary" onClick={() => setEditProjectOpen(false)}>Cancel</ActionButton>
+              <ActionButton onClick={handleUpdateProject} disabled={saving || !editProjectName.trim()}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </ActionButton>
+            </div>
+          </div>
+        </Modal>
+
+        <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onSave={saveSelectedTask} />
       </PageShell>
       <Toast message={notice} />
     </>

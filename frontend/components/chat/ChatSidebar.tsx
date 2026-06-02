@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Bot, Bookmark, FolderOpen, Hash, MessageCircle, Pin, Search, User, Users } from "lucide-react";
+import { ArrowLeft, Bot, Bookmark, FolderOpen, Hash, MessageCircle, Pin, Plus, Search, User, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatRoom, ChatUser } from "@/types";
 import { ChatListItem } from "./ChatListItem";
@@ -14,6 +14,7 @@ interface ChatSidebarProps {
   onQueryChange: (query: string) => void;
   onSelectRoom: (roomId: string) => void;
   onBackToApp?: () => void;
+  onCreateRoom?: () => void;
   className?: string;
 }
 
@@ -41,7 +42,7 @@ const CHAT_CATEGORIES: Array<{
   { id: "saved", label: "Saved", icon: Bookmark, match: (room) => room.type === "saved" },
 ];
 
-export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSelectRoom, onBackToApp, className }: ChatSidebarProps) {
+export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSelectRoom, onBackToApp, onCreateRoom, className }: ChatSidebarProps) {
   const { t } = useTranslation();
   const [activeCategory, setActiveCategory] = useState<ChatCategory>("all");
   const normalizedQuery = query.trim().toLowerCase();
@@ -158,7 +159,17 @@ export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSe
         )}
       </div>
 
-      <div className="border-t border-gray-200 p-3 dark:border-gray-700">
+      <div className="space-y-2 border-t border-gray-200 p-3 dark:border-gray-700">
+        {onCreateRoom && (
+          <button
+            type="button"
+            onClick={onCreateRoom}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200 dark:hover:bg-indigo-950"
+          >
+            <Plus className="h-4 w-4" />
+            {t("app.chat.newChat", "Yangi guruh")}
+          </button>
+        )}
         <button
           type="button"
           className="flex w-full items-center justify-between rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-left transition-colors hover:border-indigo-400/25 hover:bg-indigo-500/10 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10"

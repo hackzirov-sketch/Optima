@@ -22,7 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMembers } from "@/hooks/useMembers";
-import { chatApi } from "@/lib/api";
+import { chatApi, mapApiChatRoomType } from "@/lib/api";
 
 const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6'];
 const AI_USER: ChatUser = { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' };
@@ -77,6 +77,10 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
   return { ...message, reactions: reactions.filter((reaction) => reaction.userIds.length > 0) };
 }
 
+function isPersistedChatRoom(room: ChatRoom) {
+  return !room.id.startsWith("r-") && room.type !== "ai" && room.type !== "saved";
+}
+
 export default function ChatPage() {
   const { user, hasBackendSession, backendUser } = useAuth();
   const { t } = useTranslation();
@@ -115,6 +119,9 @@ export default function ChatPage() {
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [creatingRoom, setCreatingRoom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── WebSocket integration ────────────────────────────────────────────────
@@ -129,9 +136,11 @@ export default function ChatPage() {
           if (room.id !== msg.roomId) return room;
           // Deduplicate
           if (room.messages.some((m) => m.id === msg.id)) return room;
+          const senderId =
+            backendUser?.id && msg.userId === backendUser.id ? "me" : msg.userId;
           const newMsg: ChatMessage = {
             id: msg.id,
-            userId: msg.userId,
+            userId: senderId,
             text: msg.text,
             timestamp: msg.timestamp,
             replyToId: msg.replyToId ?? undefined,
@@ -140,7 +149,7 @@ export default function ChatPage() {
           return {
             ...room,
             messages: [...room.messages, newMsg],
-            unread: msg.userId !== "me" ? (room.unread ?? 0) + 1 : room.unread,
+            unread: senderId !== "me" ? (room.unread ?? 0) + 1 : room.unread,
           };
         }),
       );
@@ -188,7 +197,7 @@ export default function ChatPage() {
       const apiRooms: ChatRoom[] = (res?.data ?? []).map((r) => ({
         id: r.id,
         name: r.name,
-        type: r.type as ChatRoom['type'],
+        type: mapApiChatRoomType(r.type) as ChatRoom["type"],
         memberIds: r.memberIds ?? [],
         messages: [],
         unread: r.unreadCount ?? 0,
@@ -212,21 +221,23 @@ export default function ChatPage() {
     if (!hasBackendSession || !activeId) return;
     // Only load for rooms that don't start with mock prefix
     if (activeId.startsWith("r-")) return;
-    chatApi.getMessages(activeId, 1, 50).then((res) => {
-      const myId = backendUser?.id;
-      const apiMessages: ChatMessage[] = (res?.data ?? []).map((m) => ({
-        id: m.id,
-        userId: myId && m.userId === myId ? 'me' : m.userId,
-        text: m.text,
-        timestamp: m.timestamp,
-        replyToId: m.replyToId ?? undefined,
-        reactions: m.reactions ?? [],
-      }));
+    chatApi.getMessages(activeId, 1, 50, backendUser?.id).then((res) => {
+      const apiMessages: ChatMessage[] = (res?.data ?? [])
+        .map((m) => ({
+          id: m.id,
+          userId: m.userId,
+          text: m.text,
+          timestamp: m.timestamp,
+          replyToId: m.replyToId ?? undefined,
+          edited: m.edited,
+          reactions: m.reactions ?? [],
+        }))
+        .reverse();
       setRooms((prev) => prev.map((r) =>
         r.id === activeId ? { ...r, messages: apiMessages } : r,
       ));
     }).catch(console.error);
-  }, [hasBackendSession, activeId]);
+  }, [hasBackendSession, activeId, backendUser?.id]);
 
   useEffect(() => {
     storage.saveChatRooms(rooms);
@@ -267,16 +278,65 @@ export default function ChatPage() {
     if (!text || !activeRoom) return;
 
     if (editingMessage) {
-      updateActiveRoom((room) => ({
-        ...room,
-        messages: room.messages.map((message) =>
-          message.id === editingMessage.id
-            ? { ...message, text, edited: true, timestamp: Date.now() }
-            : message,
-        ),
-      }));
-      setEditingMessage(null);
+      const applyEdit = () => {
+        updateActiveRoom((room) => ({
+          ...room,
+          messages: room.messages.map((message) =>
+            message.id === editingMessage.id
+              ? { ...message, text, edited: true, timestamp: Date.now() }
+              : message,
+          ),
+        }));
+        setEditingMessage(null);
+        setDraft("");
+      };
+
+      if (isPersistedChatRoom(activeRoom) && !editingMessage.id.startsWith("m-")) {
+        chatApi
+          .editMessage(editingMessage.id, text, backendUser?.id)
+          .then(applyEdit)
+          .catch((err) => {
+            console.error(err);
+            setNotice(t("app.chat.saveFailed", "Saqlashda xatolik"));
+          });
+        return;
+      }
+
+      applyEdit();
+      return;
+    }
+
+    const persisted = isPersistedChatRoom(activeRoom);
+
+    if (persisted) {
+      if (isConnected) {
+        wsSend(activeRoom.id, text, replyTo?.id);
+        updateActiveRoom((room) => ({ ...room, unread: 0 }));
+      } else {
+        chatApi
+          .sendMessage(activeRoom.id, text, replyTo?.id, backendUser?.id)
+          .then(({ data }) => {
+            const newMessage: ChatMessage = {
+              id: data.id,
+              userId: data.userId,
+              text: data.text,
+              timestamp: data.timestamp,
+              read: true,
+              replyToId: data.replyToId,
+            };
+            updateActiveRoom((room) => ({
+              ...room,
+              unread: 0,
+              messages: [...room.messages, newMessage],
+            }));
+          })
+          .catch((err) => {
+            console.error(err);
+            setNotice(t("app.chat.sendFailed", "Xabar yuborilmadi"));
+          });
+      }
       setDraft("");
+      setReplyTo(null);
       return;
     }
 
@@ -288,14 +348,6 @@ export default function ChatPage() {
       read: true,
       replyToId: replyTo?.id,
     };
-
-    // Emit through WebSocket + REST API if connected (non-AI, non-demo rooms)
-    if (activeRoom.type !== "ai" && activeRoom.type !== "saved" && !activeRoom.id.startsWith("r-")) {
-      if (isConnected) wsSend(activeRoom.id, text, replyTo?.id);
-      else chatApi.sendMessage(activeRoom.id, text, replyTo?.id).catch(console.error);
-    } else if (isConnected && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
-      wsSend(activeRoom.id, text, replyTo?.id);
-    }
 
     updateActiveRoom((room) => ({
       ...room,
@@ -320,16 +372,28 @@ export default function ChatPage() {
   };
 
   const handleDeleteMessage = (messageId: string) => {
-    updateActiveRoom((room) => ({
-      ...room,
-      pinnedMessageId: room.pinnedMessageId === messageId ? undefined : room.pinnedMessageId,
-      messages: room.messages.filter((message) => message.id !== messageId),
-    }));
-    if (replyTo?.id === messageId) setReplyTo(null);
-    if (editingMessage?.id === messageId) {
-      setEditingMessage(null);
-      setDraft("");
+    const removeLocal = () => {
+      updateActiveRoom((room) => ({
+        ...room,
+        pinnedMessageId: room.pinnedMessageId === messageId ? undefined : room.pinnedMessageId,
+        messages: room.messages.filter((message) => message.id !== messageId),
+      }));
+      if (replyTo?.id === messageId) setReplyTo(null);
+      if (editingMessage?.id === messageId) {
+        setEditingMessage(null);
+        setDraft("");
+      }
+    };
+
+    if (activeRoom && isPersistedChatRoom(activeRoom) && !messageId.startsWith("m-")) {
+      chatApi.deleteMessage(messageId).then(removeLocal).catch((err) => {
+        console.error(err);
+        setNotice(t("app.chat.deleteFailed", "O'chirib bo'lmadi"));
+      });
+      return;
     }
+
+    removeLocal();
   };
 
   const handleReply = (message: ChatMessage) => {
@@ -358,12 +422,58 @@ export default function ChatPage() {
   };
 
   const handleToggleReaction = (messageId: string, emoji: ChatReactionEmoji) => {
+    const targetEmoji = normalizeReactionId(emoji);
+    const message = activeRoom?.messages.find((item) => item.id === messageId);
+    const existing = message?.reactions?.find((reaction) => normalizeReactionId(reaction.emoji) === targetEmoji);
+    const removing = existing?.userIds.includes("me");
+
     updateActiveRoom((room) => ({
       ...room,
-      messages: room.messages.map((message) => (message.id === messageId ? updateMessageReaction(message, emoji) : message)),
+      messages: room.messages.map((item) => (item.id === messageId ? updateMessageReaction(item, emoji) : item)),
     }));
-    if (isConnected && activeRoom && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
-      wsReaction(activeRoom.id, messageId, emoji);
+
+    if (!activeRoom || !isPersistedChatRoom(activeRoom) || messageId.startsWith("m-")) {
+      if (isConnected && activeRoom && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
+        wsReaction(activeRoom.id, messageId, emoji);
+      }
+      return;
+    }
+
+    const apiCall = removing
+      ? chatApi.removeReaction(messageId, targetEmoji)
+      : chatApi.addReaction(messageId, targetEmoji);
+    apiCall.catch((err) => {
+      console.error(err);
+      setNotice(t("app.chat.reactionFailed", "Reaksiya saqlanmadi"));
+    });
+  };
+
+  const handleCreateRoom = async () => {
+    const name = newRoomName.trim();
+    if (!activeWorkspace || !name || creatingRoom) return;
+    setCreatingRoom(true);
+    try {
+      const res = await chatApi.createRoom(activeWorkspace.id, { type: "group", name });
+      const created = res.data;
+      const room: ChatRoom = {
+        id: created.id,
+        name: created.name,
+        type: mapApiChatRoomType(created.type) as ChatRoom["type"],
+        memberIds: created.memberIds ?? [],
+        messages: [],
+        unread: 0,
+        pinned: false,
+      };
+      setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
+      setActiveId(room.id);
+      setMobilePane("chat");
+      setCreateRoomOpen(false);
+      setNewRoomName("");
+    } catch (err) {
+      console.error(err);
+      setNotice(t("app.chat.createRoomFailed", "Chat yaratilmadi"));
+    } finally {
+      setCreatingRoom(false);
     }
   };
 
@@ -441,6 +551,7 @@ export default function ChatPage() {
           onQueryChange={setSearchQuery}
           onSelectRoom={handleSelectRoom}
           onBackToApp={handleBackToApp}
+          onCreateRoom={hasBackendSession && activeWorkspace ? () => setCreateRoomOpen(true) : undefined}
           className={cn("w-full md:flex md:w-[360px] md:flex-shrink-0", mobilePane === "chat" ? "hidden" : "flex")}
         />
 
@@ -632,6 +743,54 @@ export default function ChatPage() {
         )}
       </div>
       <AnimatePresence>
+        {createRoomOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4"
+            onClick={() => !creatingRoom && setCreateRoomOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl border border-gray-200 bg-card p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 className="text-lg font-semibold text-foreground">{t("app.chat.newChat", "Yangi guruh")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("app.chat.newChatDesc", "Jamoa chat xonasini yarating")}</p>
+              <input
+                value={newRoomName}
+                onChange={(event) => setNewRoomName(event.target.value)}
+                placeholder={t("app.chat.roomNamePlaceholder", "Masalan: Frontend jamoa")}
+                className="mt-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-indigo-300 dark:border-gray-600 dark:bg-gray-800"
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void handleCreateRoom();
+                }}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={creatingRoom}
+                  onClick={() => setCreateRoomOpen(false)}
+                  className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                >
+                  {t("common.cancel", "Bekor")}
+                </button>
+                <button
+                  type="button"
+                  disabled={creatingRoom || !newRoomName.trim()}
+                  onClick={() => void handleCreateRoom()}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {creatingRoom ? t("common.loading", "…") : t("common.create", "Yaratish")}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
         <Toast message={notice} />
       </AnimatePresence>
     </div>

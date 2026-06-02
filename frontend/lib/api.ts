@@ -261,6 +261,11 @@ export const usersApi = {
   updateSettings: (settings: Partial<ApiUserSettings>) =>
     request<{ data: ApiUserSettings }>('PATCH', '/users/me/settings', { body: settings }),
 
+  updateAvatar: (avatarUrl: string) =>
+    request<{ data: { avatarUrl: string } }>('PATCH', '/users/me/avatar', { body: { avatarUrl } }),
+
+  deleteMe: () => request('DELETE', '/users/me'),
+
   getById: (id: string) => request<{ data: ApiUser }>('GET', `/users/${id}`),
 };
 
@@ -561,28 +566,92 @@ export interface ApiChatMessage {
   attachments?: { id: string; url: string; name: string; size: number }[];
 }
 
-export const chatApi = {
-  listRooms: (workspaceId: string) =>
-    request<{ data: ApiChatRoom[] }>('GET', `/workspaces/${workspaceId}/chat/rooms`),
+/** Raw chat message shape from Nest (content, senderId, createdAt). */
+export type ApiChatMessageRaw = {
+  id: string;
+  roomId: string;
+  senderId?: string;
+  userId?: string;
+  content?: string;
+  text?: string;
+  replyToId?: string | null;
+  createdAt?: string;
+  timestamp?: number;
+  isEdited?: boolean;
+  edited?: boolean;
+  reactions?: { emoji: string; userIds: string[] }[];
+};
 
-  createRoom: (workspaceId: string, data: { name: string; type: string; memberIds?: string[] }) =>
+export function mapApiChatMessage(raw: ApiChatMessageRaw, myUserId?: string): ApiChatMessage {
+  const senderId = raw.senderId ?? raw.userId ?? '';
+  const createdAt = raw.createdAt;
+  const timestamp =
+    typeof raw.timestamp === 'number'
+      ? raw.timestamp
+      : createdAt
+        ? new Date(createdAt).getTime()
+        : Date.now();
+
+  return {
+    id: raw.id,
+    roomId: raw.roomId,
+    userId: myUserId && senderId === myUserId ? 'me' : senderId,
+    text: (raw.content ?? raw.text ?? '').trim(),
+    replyToId: raw.replyToId ?? undefined,
+    timestamp,
+    edited: raw.isEdited ?? raw.edited,
+    reactions: raw.reactions,
+  };
+}
+
+export function mapApiChatRoomType(type: string): string {
+  if (type === 'direct') return '1on1';
+  if (type === 'workspace') return 'team';
+  return type;
+}
+
+export const chatApi = {
+  listRooms: async (workspaceId: string) => {
+    const res = await request<{ data: ApiChatRoom[] | ApiChatRoom }>(
+      'GET',
+      `/workspaces/${workspaceId}/chat/rooms`,
+    );
+    const rooms = unwrapApiList(res as { data?: ApiChatRoom[] | ApiNestedList<ApiChatRoom> });
+    return { data: rooms };
+  },
+
+  createRoom: (
+    workspaceId: string,
+    data: { type: string; name?: string; groupId?: string; projectId?: string },
+  ) =>
     request<{ data: ApiChatRoom }>('POST', `/workspaces/${workspaceId}/chat/rooms`, { body: data }),
 
   getRoom: (roomId: string) =>
     request<{ data: ApiChatRoom }>('GET', `/chat/rooms/${roomId}`),
 
-  getMessages: (roomId: string, page = 1, limit = 50) =>
-    request<{ data: ApiChatMessage[]; total: number }>('GET', `/chat/rooms/${roomId}/messages`, {
-      params: { page, limit },
-    }),
+  getMessages: async (roomId: string, page = 1, limit = 50, myUserId?: string) => {
+    const res = await request<{ data: ApiChatMessageRaw[] | ApiNestedList<ApiChatMessageRaw> }>(
+      'GET',
+      `/chat/rooms/${roomId}/messages`,
+      { params: { page, limit } },
+    );
+    const raw = unwrapApiList(res);
+    return { data: raw.map((m) => mapApiChatMessage(m, myUserId)) };
+  },
 
-  sendMessage: (roomId: string, text: string, replyToId?: string) =>
-    request<{ data: ApiChatMessage }>('POST', `/chat/rooms/${roomId}/messages`, {
-      body: { text, replyToId },
-    }),
+  sendMessage: async (roomId: string, text: string, replyToId?: string, myUserId?: string) => {
+    const res = await request<{ data: ApiChatMessageRaw }>('POST', `/chat/rooms/${roomId}/messages`, {
+      body: { content: text, replyToId },
+    });
+    return { data: mapApiChatMessage(res.data, myUserId) };
+  },
 
-  editMessage: (messageId: string, text: string) =>
-    request<{ data: ApiChatMessage }>('PATCH', `/chat/messages/${messageId}`, { body: { text } }),
+  editMessage: async (messageId: string, text: string, myUserId?: string) => {
+    const res = await request<{ data: ApiChatMessageRaw }>('PATCH', `/chat/messages/${messageId}`, {
+      body: { content: text },
+    });
+    return { data: mapApiChatMessage(res.data, myUserId) };
+  },
 
   deleteMessage: (messageId: string) =>
     request('DELETE', `/chat/messages/${messageId}`),

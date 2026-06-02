@@ -50,6 +50,7 @@ import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMembers } from "@/hooks/useMembers";
+import { useGroups } from "@/hooks/useGroups";
 import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 
@@ -221,10 +222,13 @@ export default function Page() {
   const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { members, loading: membersLoading, invite } = useMembers(activeWorkspace?.id);
+  const { groups, loading: groupsLoading, createGroup, deleteGroup } = useGroups(activeWorkspace?.id);
   const { projects } = useProjects(activeWorkspace?.id);
   const { tasks: allTasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState("junior");
+  const [groupName, setGroupName] = useState("");
+  const [groupSaving, setGroupSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(OPTIMA_EMPLOYEES[0].id);
   const [activeDepartment, setActiveDepartment] = useState("All");
@@ -412,7 +416,11 @@ export default function Page() {
                     onChange={(e) => setInviteRole(e.target.value)}
                     className="rounded-xl border border-border bg-muted px-3 py-2 text-xs font-bold text-muted-foreground outline-none"
                   >
-                    <option value="member">Member</option>
+                    <option value="guest">Guest</option>
+                    <option value="junior">Junior</option>
+                    <option value="middle">Middle</option>
+                    <option value="senior">Senior</option>
+                    <option value="lead">Lead</option>
                     <option value="admin">Admin</option>
                   </select>
                   <ActionButton
@@ -429,6 +437,74 @@ export default function Page() {
                     disabled={!inviteEmail.trim()}
                   >
                     <UserCog className="h-4 w-4" /> Invite
+                  </ActionButton>
+                </div>
+              </>
+            )}
+          </SurfaceCard>
+        )}
+
+        {activeWorkspace && (
+          <SurfaceCard>
+            <SectionTitle icon={Layers3} title="Teams (groups)" description="Backend groups for this workspace." />
+            {groupsLoading ? (
+              <p className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading groups…
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {groups.map((group) => (
+                    <div key={group.id} className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-muted px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{group.name}</p>
+                        {group.description && (
+                          <p className="truncate text-xs text-muted-foreground">{group.description}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteGroup(group.id).catch(() => {})}
+                        className="text-xs font-semibold text-rose-500 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                  {groups.length === 0 && (
+                    <p className="col-span-full py-4 text-center text-sm text-muted-foreground">No groups yet.</p>
+                  )}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key !== 'Enter' || !groupName.trim() || groupSaving) return;
+                      setGroupSaving(true);
+                      try {
+                        await createGroup(groupName.trim());
+                        setGroupName('');
+                      } catch { /* ignore */ }
+                      finally { setGroupSaving(false); }
+                    }}
+                    placeholder="New group name…"
+                    className="min-w-0 flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none"
+                  />
+                  <ActionButton
+                    className="py-2"
+                    disabled={!groupName.trim() || groupSaving}
+                    onClick={async () => {
+                      if (!groupName.trim()) return;
+                      setGroupSaving(true);
+                      try {
+                        await createGroup(groupName.trim());
+                        setGroupName('');
+                      } catch { /* ignore */ }
+                      finally { setGroupSaving(false); }
+                    }}
+                  >
+                    {groupSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   </ActionButton>
                 </div>
               </>

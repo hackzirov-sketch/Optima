@@ -78,12 +78,32 @@ export default function InvitePage() {
             </div>
             <h1 className="text-xl font-black text-foreground">Invitation failed</h1>
             <p className="mt-2 text-sm text-muted-foreground">{errorMsg}</p>
-            <button
-              onClick={() => router.push('/app/home')}
-              className="mt-6 rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500"
-            >
-              Go to Home
-            </button>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => router.push('/app/home')}
+                className="rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500"
+              >
+                Go to Home
+              </button>
+              {isAuthenticated && token && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatus('loading');
+                    invitationsApi.decline(token as string)
+                      .then(() => router.push('/app/home'))
+                      .catch(() => {
+                        setErrorMsg('Could not decline invitation.');
+                        setStatus('error');
+                      });
+                  }}
+                  className="rounded-2xl border border-border px-6 py-2.5 text-sm font-bold text-muted-foreground hover:bg-muted"
+                >
+                  Decline invite
+                </button>
+              )}
+            </div>
           </>
         )}
       </motion.div>

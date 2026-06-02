@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
-import { DataTable, FilterBar, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
+import { DataTable, FilterBar, TaskDrawer, type TaskDrawerSavePayload } from "@/components/app/PowerWorkspaceSystem";
 import type { Priority, SmartTask } from "@/types";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -133,6 +133,18 @@ export default function TasksPage() {
     }
   };
 
+  const saveSelectedTask = async (payload: TaskDrawerSavePayload) => {
+    if (!selectedTask) return;
+    await tasksApi.update(selectedTask.id, {
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      status: payload.status,
+    });
+    showNotice("Task saved");
+    await refreshTasks();
+  };
+
   return (
     <>
       <PageShell>
@@ -251,7 +263,11 @@ export default function TasksPage() {
           </div>
         </SurfaceCard>
 
-        <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onCreateTask={() => showNotice("Subtask created")} />
+        <TaskDrawer
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onSave={saveSelectedTask}
+        />
       </PageShell>
       <Toast message={notice} />
     </>
