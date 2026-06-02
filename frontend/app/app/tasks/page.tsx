@@ -3,24 +3,32 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import type { Priority, SmartTask } from "@/types";
-import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
+import { useMembers } from "@/hooks/useMembers";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
-import { tasksApi, type ApiTask, type CreateTaskDto } from "@/lib/api";
+import { tasksApi, type ApiMember, type ApiTask, type CreateTaskDto } from "@/lib/api";
 
-function apiTaskToSmart(t: ApiTask): SmartTask {
+function buildMemberMap(members: ApiMember[]): Map<string, string> {
+  const m = new Map<string, string>();
+  members.forEach((member) => {
+    const name = `${member.user?.firstName ?? ''} ${member.user?.lastName ?? ''}`.trim() || member.user?.email || 'Unknown';
+    m.set(member.userId, name);
+  });
+  return m;
+}
+
+function apiTaskToSmart(t: ApiTask, memberMap: Map<string, string>): SmartTask {
   return {
     id: t.id,
     title: t.title,
     description: t.description ?? '',
     status: (t.status as SmartTask['status']) ?? 'backlog',
     priority: (t.priority as SmartTask['priority']) ?? 'medium',
-    assignee: t.assigneeId ?? 'Unassigned',
+    assignee: memberMap.get(t.assigneeId ?? '') ?? 'Unassigned',
     dueDate: t.dueDate ?? '—',
     project: t.projectId,
     tags: [],
@@ -34,14 +42,13 @@ function apiTaskToSmart(t: ApiTask): SmartTask {
   };
 }
 
-export default function TasksNotesPage() {
-  const { user } = useAuth();
-  const { t } = useTranslation();
+export default function TasksPage() {
   const { activeWorkspace } = useWorkspace();
 
   const { projects } = useProjects(activeWorkspace?.id);
-  const projectIds = projects.map((p) => p.id);
-  const { tasks: apiTasks, loading: tasksLoading } = useAllWorkspaceTasks(projectIds);
+  const { members } = useMembers(activeWorkspace?.id);
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const { tasks: apiTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(projectIds);
 
   const [newTask, setNewTask] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("medium");
@@ -56,14 +63,16 @@ export default function TasksNotesPage() {
     window.setTimeout(() => setNotice(null), 2000);
   };
 
+  const memberMap = useMemo(() => buildMemberMap(members), [members]);
+
   const filteredTasks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const smart = apiTasks.map(apiTaskToSmart);
+    const smart = apiTasks.map((t) => apiTaskToSmart(t, memberMap));
     if (!normalized) return smart;
     return smart.filter((task) =>
-      `${task.title} ${task.status} ${task.priority}`.toLowerCase().includes(normalized),
+      `${task.title} ${task.status} ${task.priority} ${task.assignee}`.toLowerCase().includes(normalized),
     );
-  }, [apiTasks, query]);
+  }, [apiTasks, query, memberMap]);
 
   const rows = filteredTasks.map((task) => ({
     id: task.id,
@@ -95,8 +104,7 @@ export default function TasksNotesPage() {
       await tasksApi.create(dto);
       setNewTask("");
       showNotice("Task created");
-      // Simple page reload to refresh task list — ideally use a ref-based refresh
-      window.location.reload();
+      await refreshTasks();
     } catch {
       showNotice("Failed to create task");
     } finally {
@@ -109,7 +117,7 @@ export default function TasksNotesPage() {
       const newStatus = currentStatus === 'done' ? 'backlog' : 'done';
       await tasksApi.move(id, { status: newStatus });
       showNotice(newStatus === 'done' ? "Marked done" : "Reopened");
-      setTimeout(() => window.location.reload(), 500);
+      await refreshTasks();
     } catch {
       showNotice("Failed to update task");
     }
@@ -119,7 +127,7 @@ export default function TasksNotesPage() {
     try {
       await tasksApi.delete(id);
       showNotice("Task deleted");
-      setTimeout(() => window.location.reload(), 500);
+      await refreshTasks();
     } catch {
       showNotice("Failed to delete task");
     }
@@ -171,13 +179,13 @@ export default function TasksNotesPage() {
               onChange={(event) => setNewTask(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && addTask()}
               placeholder="Task title…"
-              className="min-w-0 flex-1 bg-transparent px-2 text-sm text-foreground outline-none"
+              className="min-w-0 flex-1 bg-transparent px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
             {projects.length > 1 && (
               <select
                 value={newProjectId}
                 onChange={(e) => setNewProjectId(e.target.value)}
-                className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground outline-none"
+                className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground outline-none"
               >
                 <option value="">First project</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -186,7 +194,7 @@ export default function TasksNotesPage() {
             <select
               value={newPriority}
               onChange={(event) => setNewPriority(event.target.value as Priority)}
-              className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground outline-none"
+              className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground outline-none"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -198,7 +206,7 @@ export default function TasksNotesPage() {
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+            <div className="rounded-2xl bg-muted p-3 ring-1 ring-border">
               <h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
                 Pending {pending.length}
               </h3>
@@ -210,14 +218,14 @@ export default function TasksNotesPage() {
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      className="flex items-center gap-2 rounded-xl bg-card p-2 ring-1 ring-[#E5E7EB]"
+                      className="flex items-center gap-2 rounded-xl bg-card p-2 ring-1 ring-border"
                     >
-                      <button onClick={() => toggleTask(task.id, task.status)}>
+                      <button type="button" onClick={() => toggleTask(task.id, task.status)}>
                         <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                       </button>
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{task.title}</span>
                       <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>
-                      <button onClick={() => deleteTaskById(task.id)}>
+                      <button type="button" onClick={() => deleteTaskById(task.id)}>
                         <Trash2 className="h-4 w-4 text-rose-500" />
                       </button>
                     </motion.div>
@@ -225,14 +233,14 @@ export default function TasksNotesPage() {
                 </AnimatePresence>
               </div>
             </div>
-            <div className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+            <div className="rounded-2xl bg-muted p-3 ring-1 ring-border">
               <h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">
                 Completed {done.length}
               </h3>
               <div className="space-y-2">
                 {done.slice(0, 10).map((task) => (
-                  <div key={task.id} className="flex items-center gap-2 rounded-xl bg-card p-2 text-sm text-muted-foreground line-through ring-1 ring-[#E5E7EB]">
-                    <button onClick={() => toggleTask(task.id, task.status)}>
+                  <div key={task.id} className="flex items-center gap-2 rounded-xl bg-card p-2 text-sm text-muted-foreground line-through ring-1 ring-border">
+                    <button type="button" onClick={() => toggleTask(task.id, task.status)}>
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     </button>
                     {task.title}

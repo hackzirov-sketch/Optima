@@ -5,9 +5,9 @@ import { motion } from "framer-motion";
 import { User, Bell, Plug, Github, Send, Instagram, Youtube, HardDrive, Mail, Calendar, BookOpen, CheckCircle2, XCircle, Settings2, ShieldCheck, SlidersHorizontal, Monitor, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
-import { ActionButton, Pill, ProgressBar, SectionTitle, SurfaceCard, Modal } from "@/components/app/DesignSystem";
+import { ActionButton, Pill, SectionTitle, SurfaceCard, Modal } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
-import { usersApi, authApi, type ApiUser, type ApiUserSettings, type ApiSession } from "@/lib/api";
+import { usersApi, authApi, type ApiUserSettings, type ApiSession } from "@/lib/api";
 import { AUTOMATION_RULES, POWER_VIEWS, WORKSPACE_SETTINGS } from "@/data/ecosystemData";
 import type { TaskView } from "@/types";
 import { storage } from "@/utils/storage";
@@ -52,7 +52,6 @@ export default function Page() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("account");
 
   // ── Real user state ──────────────────────────────────────────────────────
-  const [backendUser, setBackendUser] = useState<ApiUser | null>(null);
   const [userLoading, setUserLoading] = useState(true);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -67,7 +66,6 @@ export default function Page() {
       .then((res) => {
         const u = res?.data;
         if (u) {
-          setBackendUser(u);
           setFirstName(u.firstName ?? "");
           setLastName(u.lastName ?? "");
           setUsernameVal(u.username ?? "");
@@ -91,6 +89,7 @@ export default function Page() {
         setUserLoading(false);
         setNotifLoading(false);
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSaveChanges = async () => {
@@ -102,7 +101,6 @@ export default function Page() {
         lastName: lastName.trim(),
         username: usernameVal.trim() || undefined,
       });
-      if (res?.data) setBackendUser(res.data);
       // Keep localStorage in sync
       if (user) storage.saveUser({ ...user, name: `${firstName} ${lastName}`.trim(), username: usernameVal });
       setSaved(true);
@@ -480,7 +478,7 @@ export default function Page() {
               <SectionTitle icon={ShieldCheck} title="Permissions" description="Role-ready settings prepared for backend integration." />
               <div className="grid gap-3 md:grid-cols-2">
                 {["Admin can create spaces", "Members can manage assigned tasks", "Guests can comment only", "Moderators can review community posts"].map((rule) => (
-                  <div key={rule} className="rounded-2xl bg-muted p-3 text-sm font-semibold text-foreground ring-1 ring-[#E5E7EB]">
+                  <div key={rule} className="rounded-2xl bg-muted p-3 text-sm font-semibold text-foreground ring-1 ring-border">
                     {rule}
                   </div>
                 ))}

@@ -217,7 +217,7 @@ function statusTone(status: string) {
 }
 
 export default function Page() {
-  const { user, logout: onLogout } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { members, loading: membersLoading, invite } = useMembers(activeWorkspace?.id);
@@ -1042,7 +1042,7 @@ export default function Page() {
                       return (
                         <div key={day.day} className="grid grid-cols-[42px_1fr] items-center gap-3">
                           <span className="text-xs font-black text-muted-foreground">{day.day}</span>
-                          <div className="flex h-8 overflow-hidden rounded-2xl bg-card ring-1 ring-[#E5E7EB]">
+                          <div className="flex h-8 overflow-hidden rounded-2xl bg-card ring-1 ring-border">
                             <div className="bg-emerald-500" style={{ width: `${(day.done / total) * 100}%` }} />
                             <div className="bg-blue-500" style={{ width: `${(day.review / total) * 100}%` }} />
                             <div className="bg-amber-400" style={{ width: `${(day.risk / total) * 100}%` }} />
@@ -1084,7 +1084,7 @@ export default function Page() {
                     onClick={() => setActiveDepartment(department)}
                     className={cn(
                       "rounded-full px-3 py-1.5 text-xs font-black ring-1 transition-colors",
-                      activeDepartment === department ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
+                      activeDepartment === department ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-border hover:bg-indigo-50 hover:text-indigo-700",
                     )}
                   >
                     {department}
@@ -1134,14 +1134,14 @@ export default function Page() {
                     { label: "Streak", value: selectedEmployee.streak, icon: Flame },
                     { label: "Focus", value: selectedEmployee.focus, icon: Zap },
                   ].map(({ label, value, icon: Icon }) => (
-                    <div key={label} className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                    <div key={label} className="rounded-2xl bg-card p-3 ring-1 ring-border">
                       <Icon className="h-4 w-4 text-indigo-600" />
                       <p className="mt-2 text-xl font-black text-foreground">{value}</p>
                       <p className="text-xs text-muted-foreground">{label}</p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 rounded-2xl bg-card p-4 ring-1 ring-[#E5E7EB]">
+                <div className="mt-4 rounded-2xl bg-card p-4 ring-1 ring-border">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black text-foreground">Work trend</p>
                     <Pill tone="blue">AI insight</Pill>
@@ -1191,21 +1191,21 @@ export default function Page() {
                       {running ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     </button>
                   </div>
-                  <div className="mt-4 rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                  <div className="mt-4 rounded-2xl bg-card p-3 ring-1 ring-border">
                     <div className="mb-2 flex items-center justify-between text-xs font-black text-muted-foreground">
                       <span>{running ? "Timer running" : "Timer"}</span>
                       <span>{task.timer}</span>
                     </div>
                     <ProgressBar value={task.completion} />
                   </div>
-                  <div className="mt-3 rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                  <div className="mt-3 rounded-2xl bg-card p-3 ring-1 ring-border">
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">AI prediction</p>
                     <p className="mt-1 text-sm font-semibold text-foreground">{task.prediction}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleProofUpload(task.id)}
-                    className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                    className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-border transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                   >
                     <UploadCloud className="h-4 w-4" />
                     {proofReady ? "Proof attached" : "Upload proof"}
@@ -1235,7 +1235,7 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => handleBotAction(event.action)}
-                        className="mt-3 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                        className="mt-3 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-border transition-colors hover:bg-indigo-50 hover:text-indigo-700"
                       >
                         {event.action}
                       </button>
@@ -1308,7 +1308,7 @@ export default function Page() {
                   ["Alex", "@Otabek reaction menu timer paused, review requested.", "Task mention"],
                   ["AI", "Summary: 2 blockers cleared, 1 overload risk remains.", "AI summary"],
                 ].map(([name, body, badge]) => (
-                  <div key={body} className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                  <div key={body} className="rounded-2xl bg-card p-3 ring-1 ring-border">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-black text-foreground">{name}</p>
                       <Pill tone={badge === "AI summary" ? "indigo" : "blue"}>{badge}</Pill>
@@ -1316,8 +1316,9 @@ export default function Page() {
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>
                     <div className="mt-2 flex gap-1.5">
                       {["/emojis/fire.svg", "/emojis/clap.svg", "/emojis/done.svg"].map((src) => (
-                        <span key={src} className="grid h-7 w-7 place-items-center rounded-full bg-muted ring-1 ring-[#E5E7EB]">
-                          <img src={src} alt="Premium reaction" className="h-4 w-4" loading="lazy" decoding="async" />
+                        <span key={src} className="grid h-7 w-7 place-items-center rounded-full bg-muted ring-1 ring-border">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt="Premium reaction" className="h-4 w-4" loading="lazy" decoding="async" />
                         </span>
                       ))}
                     </div>
@@ -1375,6 +1376,7 @@ export default function Page() {
                         {member.role === "Admin" && <PremiumGradientBadge label="Creator" icon="/emojis/trophy.svg" />}
                       </p>
                       <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={TEAM_FOCUS_ASSETS[member.focus as keyof typeof TEAM_FOCUS_ASSETS] ?? "/emojis/gem.svg"} alt={`${member.focus} skill icon`} className="h-4 w-4" loading="lazy" decoding="async" />
                         {t(`app.teams.focus.${member.focus.toLowerCase()}`, member.focus)}
                       </p>
@@ -1411,7 +1413,7 @@ export default function Page() {
             <SectionTitle icon={Shield} title="Roles and permissions" description="Admin/member roles are ready for future backend permissions." />
             <div className="space-y-3">
               {["Create projects", "Manage automations", "Invite members", "Approve deliverables"].map((permission, index) => (
-                <div key={permission} className="flex items-center justify-between rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+                <div key={permission} className="flex items-center justify-between rounded-2xl bg-muted p-3 ring-1 ring-border">
                   <span className="text-sm font-bold text-foreground">{permission}</span>
                   <div className="flex gap-2">
                     <Pill tone="indigo">Admin</Pill>

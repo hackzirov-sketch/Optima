@@ -2,25 +2,33 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, FolderOpen, Loader2, Plus, Target, Zap } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { POWER_VIEWS } from "@/data/ecosystemData";
 import type { SmartTask, TaskView } from "@/types";
-import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
+import { useMembers } from "@/hooks/useMembers";
 import { useTasks } from "@/hooks/useTasks";
-import { analyticsApi, type ApiTask, type CreateTaskDto } from "@/lib/api";
+import { analyticsApi, type ApiMember, type ApiTask, type CreateTaskDto } from "@/lib/api";
 
-function apiTaskToSmartTask(t: ApiTask): SmartTask {
+function buildMemberMap(members: ApiMember[]): Map<string, string> {
+  const m = new Map<string, string>();
+  members.forEach((member) => {
+    const name = `${member.user?.firstName ?? ''} ${member.user?.lastName ?? ''}`.trim() || member.user?.email || 'Unknown';
+    m.set(member.userId, name);
+  });
+  return m;
+}
+
+function apiTaskToSmartTask(t: ApiTask, memberMap: Map<string, string>): SmartTask {
   return {
     id: t.id,
     title: t.title,
     description: t.description ?? '',
     status: (t.status as SmartTask['status']) ?? 'backlog',
     priority: (t.priority as SmartTask['priority']) ?? 'medium',
-    assignee: t.assigneeId ?? 'Unassigned',
+    assignee: memberMap.get(t.assigneeId ?? '') ?? 'Unassigned',
     dueDate: t.dueDate ?? '—',
     project: t.projectId,
     tags: [],
@@ -35,8 +43,6 @@ function apiTaskToSmartTask(t: ApiTask): SmartTask {
 }
 
 export default function Page() {
-  const { user } = useAuth();
-  const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
 
   const [view, setView] = useState<TaskView>("board");
@@ -53,11 +59,14 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
 
   const { projects, loading: projectsLoading, createProject } = useProjects(activeWorkspace?.id);
+  const { members } = useMembers(activeWorkspace?.id);
   const { tasks, loading: tasksLoading, createTask, moveTask, deleteTask } = useTasks(
     activeProjectId ?? projects[0]?.id,
   );
 
   const currentProjectId = activeProjectId ?? projects[0]?.id;
+
+  const memberMap = useMemo(() => buildMemberMap(members), [members]);
 
   // Project analytics from backend
   const [projectAnalytics, setProjectAnalytics] = useState<{
@@ -99,7 +108,10 @@ export default function Page() {
     );
   }, [query, tasks]);
 
-  const smartTasks = filteredTasks.map(apiTaskToSmartTask);
+  const smartTasks = useMemo(
+    () => filteredTasks.map((t) => apiTaskToSmartTask(t, memberMap)),
+    [filteredTasks, memberMap],
+  );
 
   const tableRows = smartTasks.map((task) => ({
     id: task.id,
@@ -216,7 +228,7 @@ export default function Page() {
                   className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition-all ${
                     (currentProjectId === proj.id)
                       ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300"
-                      : "border-border bg-card text-muted-foreground hover:border-indigo-200 hover:text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-indigo-200 hover:text-foreground dark:hover:border-indigo-500/40"
                   }`}
                 >
                   {proj.name}
@@ -248,7 +260,7 @@ export default function Page() {
 
             {!tasksLoading && view === "board" && (
               <SurfaceCard>
-                <SectionTitle icon={ClipboardList} title="Task board" description="Drag-and-drop style kanban — click column status to move tasks." />
+                <SectionTitle icon={ClipboardList} title="Task board" description="Click the → button to move tasks forward through the workflow." />
                 <div className="grid gap-4 xl:grid-cols-5">
                   {["backlog", "todo", "in_progress", "review", "done"].map((status) => (
                     <div key={status} className="rounded-2xl border border-border bg-muted p-3">
@@ -270,7 +282,7 @@ export default function Page() {
                                   <button
                                     type="button"
                                     onClick={() => handleMoveTask(task.id, status === "backlog" ? "todo" : status === "todo" ? "in_progress" : status === "in_progress" ? "review" : "done")}
-                                    className="rounded-xl px-2 py-1 text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50"
+                                    className="rounded-xl px-2 py-1 text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/15"
                                   >
                                     →
                                   </button>
@@ -278,7 +290,7 @@ export default function Page() {
                                 <button
                                   type="button"
                                   onClick={() => deleteTask(task.id).catch(() => showNotice("Failed to delete"))}
-                                  className="rounded-xl px-2 py-1 text-[10px] font-semibold text-red-500 hover:bg-red-50"
+                                  className="rounded-xl px-2 py-1 text-[10px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15"
                                 >
                                   ✕
                                 </button>
@@ -329,7 +341,6 @@ export default function Page() {
 
             {!tasksLoading && view === "dashboard" && (
               <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-                {/* Real task status breakdown */}
                 <SurfaceCard>
                   <SectionTitle icon={Target} title="Task breakdown" description="Progress by status for this project." />
                   {tasks.length === 0 ? (
@@ -344,7 +355,7 @@ export default function Page() {
                           review: '#F59E0B', done: '#10B981',
                         };
                         return (
-                          <div key={status} className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+                          <div key={status} className="rounded-2xl border border-border bg-muted p-4">
                             <div className="mb-2 flex items-center justify-between">
                               <p className="text-sm font-black capitalize text-foreground">{status.replace('_', ' ')}</p>
                               <Pill tone={status === 'done' ? 'green' : status === 'in_progress' ? 'blue' : 'slate'}>
@@ -359,7 +370,6 @@ export default function Page() {
                   )}
                 </SurfaceCard>
 
-                {/* Real project analytics */}
                 <SurfaceCard>
                   <SectionTitle icon={Zap} title="Project analytics" description="Aggregated activity for this project." />
                   <div className="grid grid-cols-2 gap-3">
@@ -373,7 +383,7 @@ export default function Page() {
                     ].map(({ label, value, accent }) => (
                       <div key={label} className="rounded-2xl border border-border bg-muted p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                        <p className="mt-2 text-2xl font-black text-foreground" style={{ color: accent }}>
+                        <p className="mt-2 text-2xl font-black" style={{ color: accent }}>
                           {value}
                         </p>
                       </div>
@@ -392,14 +402,14 @@ export default function Page() {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
-              className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300"
+              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
               placeholder="Project name"
               autoFocus
             />
             <textarea
               value={projectDesc}
               onChange={(e) => setProjectDesc(e.target.value)}
-              className="min-h-20 w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300"
+              className="min-h-20 w-full resize-none rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
               placeholder="Description (optional)"
             />
             <div className="flex justify-end gap-2 pt-2">
@@ -418,14 +428,14 @@ export default function Page() {
               value={taskTitle}
               onChange={(e) => setTaskTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateTask()}
-              className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-indigo-300"
+              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
               placeholder="Task title"
               autoFocus
             />
             <select
               value={taskPriority}
               onChange={(e) => setTaskPriority(e.target.value)}
-              className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none"
+              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400"
             >
               <option value="low">Low priority</option>
               <option value="medium">Medium priority</option>
