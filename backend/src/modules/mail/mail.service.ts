@@ -14,15 +14,16 @@ export class MailService {
       host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
       port,
       secure,
-      requireTLS: !secure, // force STARTTLS on port 587
-      connectionTimeout: 10_000, // 10s
+      requireTLS: !secure,
+      family: 4, // force IPv4 — Render does not have IPv6 outbound
+      connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
       auth: {
         user: this.configService.get<string>('SMTP_USER'),
         pass: this.configService.get<string>('SMTP_PASS'),
       },
-    });
+    } as any);
   }
 
   async sendVerificationEmail(email: string, code: string) {
