@@ -31,6 +31,7 @@ import { PROFESSION_LABELS } from "@/data/mockData";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "./DesignSystem";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 
 const SIDEBAR_WIDTH_EXPANDED = 272;
 const SIDEBAR_WIDTH_COLLAPSED = 68;
@@ -176,6 +177,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
   const { t } = useTranslation();
   const pathname = usePathname();
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const { workspaces, activeWorkspace, setActiveWorkspace } = useWorkspace();
 
   const menuItems = [
     { href: "/app/profile", label: t("app.nav.profile"), icon: User },
@@ -204,15 +206,27 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             </div>
           )}
         </div>
-        {!collapsed && (
-          <div className="mt-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-3 ring-1 ring-indigo-100 dark:from-indigo-500/15 dark:to-blue-500/15 dark:ring-indigo-500/25">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">{t("app.nav.zoneHealth")}</span>
-              <span className="rounded-full bg-card px-2 py-0.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">88%</span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-white/60 dark:bg-white/10">
-              <div className="h-full w-[88%] rounded-full bg-gradient-to-r from-indigo-500 to-blue-500" />
-            </div>
+        {!collapsed && activeWorkspace && (
+          <div className="mt-3">
+            {workspaces.length === 1 ? (
+              <div className="rounded-2xl bg-muted px-3 py-2">
+                <p className="truncate text-xs font-bold text-foreground">{activeWorkspace.name}</p>
+                <p className="text-[10px] text-muted-foreground">Workspace</p>
+              </div>
+            ) : (
+              <select
+                value={activeWorkspace.id}
+                onChange={(e) => {
+                  const ws = workspaces.find((w) => w.id === e.target.value);
+                  if (ws) setActiveWorkspace(ws);
+                }}
+                className="w-full rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-bold text-foreground outline-none"
+              >
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>{ws.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
       </div>
@@ -251,10 +265,10 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
       {/* User section at the very bottom */}
       <div className="border-t border-border px-3 py-3">
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            {collapsed ? (
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
+          {collapsed ? (
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.97 }}
@@ -267,12 +281,14 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                       {user.name.slice(0, 2).toUpperCase()}
                     </div>
                   </motion.button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8} className="font-semibold">
-                  {user.name}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="font-semibold">
+                {user.name}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <PopoverTrigger asChild>
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.97 }}
@@ -297,8 +313,8 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                   )}
                 />
               </motion.button>
-            )}
-          </PopoverTrigger>
+            </PopoverTrigger>
+          )}
           <PopoverContent
             side="top"
             align="start"

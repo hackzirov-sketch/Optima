@@ -151,6 +151,7 @@ interface ActionButtonProps {
   variant?: "primary" | "secondary" | "ghost" | "danger";
   className?: string;
   type?: "button" | "submit";
+  disabled?: boolean;
 }
 
 const buttonVariant = {
@@ -160,12 +161,13 @@ const buttonVariant = {
   danger:    "bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25",
 };
 
-export function ActionButton({ children, onClick, variant = "primary", className, type = "button" }: ActionButtonProps) {
+export function ActionButton({ children, onClick, variant = "primary", className, type = "button", disabled }: ActionButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
-      className={cn("inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-all active:scale-[0.98]", buttonVariant[variant], className)}
+      disabled={disabled}
+      className={cn("inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed", buttonVariant[variant], className)}
     >
       {children}
     </button>

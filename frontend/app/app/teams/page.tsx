@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
@@ -47,6 +48,8 @@ import { PremiumAvatarRing, PremiumGradientBadge, PremiumStatusBadge, type Premi
 import { TEAM_MEMBERS, TEAM_SPACES } from "@/data/ecosystemData";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useMembers } from "@/hooks/useMembers";
 
 
 
@@ -214,6 +217,10 @@ function statusTone(status: string) {
 export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
+  const { activeWorkspace } = useWorkspace();
+  const { members, loading: membersLoading, invite } = useMembers(activeWorkspace?.id);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(OPTIMA_EMPLOYEES[0].id);
   const [activeDepartment, setActiveDepartment] = useState("All");
@@ -348,6 +355,82 @@ export default function Page() {
           <ActionButton onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" /> {t("app.teams.createTeam")}</ActionButton>
           <ActionButton variant="secondary"><MessageCircle className="h-4 w-4" /> {t("app.teams.openTeamChat")}</ActionButton>
         </PageHeader>
+
+        {/* Real workspace members */}
+        {activeWorkspace && (
+          <SurfaceCard>
+            <SectionTitle icon={Users} title={`${activeWorkspace.name} — Members`} description="Real workspace members from the backend." />
+            {membersLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {members.map((member) => (
+                    <div key={member.id} className="rounded-2xl border border-border bg-muted p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-indigo-100 font-black text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          {(member.user?.firstName?.[0] ?? '?').toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-foreground">
+                            {member.user?.firstName} {member.user?.lastName}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{member.user?.email}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <Pill tone={member.role === 'owner' ? 'indigo' : member.role === 'admin' ? 'blue' : 'slate'}>
+                          {member.role}
+                        </Pill>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(member.joinedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {members.length === 0 && (
+                    <div className="col-span-full py-6 text-center text-sm text-muted-foreground">
+                      No members yet — invite someone below.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:items-center">
+                  <input
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="Email address to invite…"
+                    className="min-w-0 flex-1 bg-transparent px-2 text-sm text-foreground outline-none"
+                  />
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className="rounded-xl border border-border bg-muted px-3 py-2 text-xs font-bold text-muted-foreground outline-none"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <ActionButton
+                    className="py-2"
+                    onClick={async () => {
+                      if (!inviteEmail.trim()) return;
+                      try {
+                        await invite(inviteEmail.trim(), inviteRole);
+                        setInviteEmail("");
+                      } catch {
+                        // invitation error shown via toast in future
+                      }
+                    }}
+                    disabled={!inviteEmail.trim()}
+                  >
+                    <UserCog className="h-4 w-4" /> Invite
+                  </ActionButton>
+                </div>
+              </>
+            )}
+          </SurfaceCard>
+        )}
 
         <section className="overflow-hidden rounded-[30px] border border-slate-800/90 bg-[#070A12] text-slate-100 shadow-[0_28px_80px_rgba(2,6,23,0.42)]">
           <div className="grid min-h-[720px] xl:grid-cols-[190px_minmax(0,1fr)] 2xl:grid-cols-[200px_minmax(0,1fr)_300px]">

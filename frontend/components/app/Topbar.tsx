@@ -7,10 +7,11 @@ import { Bell, CheckCircle2, Menu, Search, Sparkles, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
-import { GLOBAL_SEARCH_ITEMS, NOTIFICATIONS } from "@/data/ecosystemData";
+import { GLOBAL_SEARCH_ITEMS } from "@/data/ecosystemData";
 import { LanguageSwitcher } from "@/components/landing/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "./DesignSystem";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface TopbarProps {
   user: UserProfile;
@@ -44,7 +45,7 @@ export function Topbar({ user, onToggleSidebar }: TopbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [readIds, setReadIds] = useState<string[]>([]);
+  const { notifications: realNotifs, unreadCount: realUnreadCount, markRead, markAllRead } = useNotifications();
 
   const searchItems = useMemo(
     () =>
@@ -53,18 +54,6 @@ export function Topbar({ user, onToggleSidebar }: TopbarProps) {
         title: t(`app.search.items.${index}.title`, item.title),
         detail: t(`app.search.items.${index}.detail`, item.detail),
         typeLabel: t(`app.search.types.${item.type}`, item.type),
-      })),
-    [t],
-  );
-
-  const notifications = useMemo(
-    () =>
-      NOTIFICATIONS.map((notification) => ({
-        ...notification,
-        category: t(`app.notifications.${notification.id}.category`, notification.category),
-        title: t(`app.notifications.${notification.id}.title`, notification.title),
-        body: t(`app.notifications.${notification.id}.body`, notification.body),
-        time: t(`app.notifications.${notification.id}.time`, notification.time),
       })),
     [t],
   );
@@ -92,7 +81,7 @@ export function Topbar({ user, onToggleSidebar }: TopbarProps) {
     return searchItems.filter((item) => `${item.typeLabel} ${item.title} ${item.detail}`.toLowerCase().includes(normalized));
   }, [query, searchItems]);
 
-  const unreadCount = NOTIFICATIONS.filter((notification) => notification.unread && !readIds.includes(notification.id)).length;
+  const unreadCount = realUnreadCount;
   const localizedTitle = t(`app.nav.${titleKey}`);
 
   const closeAll = () => {
@@ -271,32 +260,34 @@ export function Topbar({ user, onToggleSidebar }: TopbarProps) {
                   <h3 className="text-sm font-bold text-foreground">{t("app.topbar.notifications")}</h3>
                   <p className="text-xs text-muted-foreground">{t("app.topbar.notificationsDesc")}</p>
                 </div>
-                <button type="button" onClick={() => setReadIds(NOTIFICATIONS.map((item) => item.id))} className="rounded-xl px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/15">
+                <button type="button" onClick={() => markAllRead()} className="rounded-xl px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/15">
                   {t("app.topbar.markAllRead")}
                 </button>
               </div>
               <div className="max-h-[380px] space-y-1 overflow-y-auto">
-                {notifications.map((notification) => {
-                  const unread = notification.unread && !readIds.includes(notification.id);
-                  return (
-                    <button
-                      key={notification.id}
-                      type="button"
-                      onClick={() => setReadIds((current) => [...new Set([...current, notification.id])])}
-                      className={cn("flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted", unread && "bg-indigo-50/70 dark:bg-indigo-500/10")}
-                    >
-                      <span className={cn("mt-1 h-2 w-2 rounded-full", unread ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-600")} />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{notification.category}</span>
-                          <span className="text-xs text-muted-foreground">{notification.time}</span>
-                        </span>
-                        <span className="mt-1 block text-sm font-semibold text-foreground">{notification.title}</span>
-                        <span className="block text-xs leading-5 text-muted-foreground">{notification.body}</span>
+                {realNotifs.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
+                    No notifications
+                  </div>
+                )}
+                {realNotifs.map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => { markRead(notification.id); }}
+                    className={cn("flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted", !notification.isRead && "bg-indigo-50/70 dark:bg-indigo-500/10")}
+                  >
+                    <span className={cn("mt-1 h-2 w-2 flex-shrink-0 rounded-full", !notification.isRead ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-600")} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{notification.type}</span>
+                        <span className="text-xs text-muted-foreground">{new Date(notification.createdAt).toLocaleDateString()}</span>
                       </span>
-                    </button>
-                  );
-                })}
+                      <span className="mt-1 block text-sm font-semibold text-foreground">{notification.title}</span>
+                      <span className="block text-xs leading-5 text-muted-foreground">{notification.body}</span>
+                    </span>
+                  </button>
+                ))}
               </div>
               <div className="mt-2 flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />

@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { I18nInitializer } from '@/components/I18nInitializer';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import { useState } from 'react';
 import '@/i18n';
 
@@ -29,7 +30,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <TooltipProvider>
           <I18nInitializer />
           <AuthProvider>
-            {children}
+            <WorkspaceProvider>
+              {children}
+            </WorkspaceProvider>
           </AuthProvider>
           <Toaster />
         </TooltipProvider>

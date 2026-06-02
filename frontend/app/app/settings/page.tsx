@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { ActionButton, Pill, ProgressBar, SectionTitle, SurfaceCard, Modal } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
+import { usersApi } from "@/lib/api";
 import { AUTOMATION_RULES, POWER_VIEWS, WORKSPACE_SETTINGS } from "@/data/ecosystemData";
 import type { TaskView } from "@/types";
 import { storage } from "@/utils/storage";
@@ -66,9 +67,15 @@ export default function Page() {
     storage.saveActiveView(view);
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!user) return;
     storage.saveUser({ ...user, name: displayName });
+    try {
+      const [firstName, ...rest] = displayName.trim().split(' ');
+      await usersApi.updateMe({ firstName, lastName: rest.join(' ') || undefined });
+    } catch {
+      // Backend update failed silently; local save succeeded
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

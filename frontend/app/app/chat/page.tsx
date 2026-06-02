@@ -20,6 +20,8 @@ import type { ChatMessage, ChatReactionEmoji, ChatRoom, UserProfile } from "@/ty
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { chatApi } from "@/lib/api";
 
 
 
@@ -74,6 +76,7 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
 export default function ChatPage() {
   const { user, hasBackendSession } = useAuth();
   const { t } = useTranslation();
+  const { activeWorkspace } = useWorkspace();
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
@@ -153,6 +156,52 @@ export default function ChatPage() {
     });
   }, [activeRoom, normalizedChatSearch, t]);
 
+  // Load real chat rooms when connected
+  useEffect(() => {
+    if (!hasBackendSession || !activeWorkspace) return;
+    chatApi.listRooms(activeWorkspace.id).then((res) => {
+      const apiRooms: ChatRoom[] = (res?.data ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type as ChatRoom['type'],
+        memberIds: r.memberIds ?? [],
+        messages: [],
+        unread: r.unreadCount ?? 0,
+        pinned: false,
+      }));
+      if (apiRooms.length > 0) {
+        // Merge: keep AI/saved demo rooms, prepend real rooms
+        setRooms((prev) => {
+          const demoRooms = prev.filter((r) => ["r-ai", "r-saved"].includes(r.id));
+          const realIds = new Set(apiRooms.map((r) => r.id));
+          const filtered = demoRooms.filter((r) => !realIds.has(r.id));
+          return [...apiRooms, ...filtered];
+        });
+        setActiveId((cur) => cur === (MOCK_CHAT_ROOMS[0]?.id ?? "") ? (apiRooms[0]?.id ?? cur) : cur);
+      }
+    }).catch(console.error);
+  }, [hasBackendSession, activeWorkspace]);
+
+  // Load messages for active room from API
+  useEffect(() => {
+    if (!hasBackendSession || !activeId) return;
+    // Only load for rooms that don't start with mock prefix
+    if (activeId.startsWith("r-")) return;
+    chatApi.getMessages(activeId, 1, 50).then((res) => {
+      const apiMessages: ChatMessage[] = (res?.data ?? []).map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        text: m.text,
+        timestamp: m.timestamp,
+        replyToId: m.replyToId ?? undefined,
+        reactions: m.reactions ?? [],
+      }));
+      setRooms((prev) => prev.map((r) =>
+        r.id === activeId ? { ...r, messages: apiMessages } : r,
+      ));
+    }).catch(console.error);
+  }, [hasBackendSession, activeId]);
+
   useEffect(() => {
     storage.saveChatRooms(rooms);
   }, [rooms]);
@@ -214,8 +263,11 @@ export default function ChatPage() {
       replyToId: replyTo?.id,
     };
 
-    // Emit through WebSocket if connected (non-AI rooms)
-    if (isConnected && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
+    // Emit through WebSocket + REST API if connected (non-AI, non-demo rooms)
+    if (activeRoom.type !== "ai" && activeRoom.type !== "saved" && !activeRoom.id.startsWith("r-")) {
+      if (isConnected) wsSend(activeRoom.id, text, replyTo?.id);
+      else chatApi.sendMessage(activeRoom.id, text, replyTo?.id).catch(console.error);
+    } else if (isConnected && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
       wsSend(activeRoom.id, text, replyTo?.id);
     }
 

@@ -10,6 +10,10 @@ import type { Task, UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
 import { INITIAL_TASKS } from "@/data/mockData";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useProjects } from "@/hooks/useProjects";
+import { useAllWorkspaceTasks } from "@/hooks/useTasks";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const QUICK_ACTIONS = [
   { labelKey: "newTask", icon: ListTodo, href: "/app/tasks", color: "#6366F1" },
@@ -27,8 +31,12 @@ const RECENT_ACTIVITY = [
 ];
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, hasBackendSession } = useAuth();
   const { t, i18n } = useTranslation();
+  const { activeWorkspace } = useWorkspace();
+  const { projects } = useProjects(activeWorkspace?.id);
+  const { tasks: apiTasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
+  const { unreadCount: notifUnread } = useNotifications();
   const [time, setTime] = useState(new Date());
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -45,13 +53,24 @@ export default function HomePage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const todaysTasks = tasks.filter((task) => !task.done).slice(0, 3);
-  const completedCount = tasks.filter((task) => task.done).length;
+  const todaysTasks = hasBackendSession
+    ? apiTasks.filter((t) => t.status !== 'done').slice(0, 3).map((t) => ({
+        id: t.id,
+        text: t.title,
+        done: false,
+        createdAt: Date.now(),
+        priority: (t.priority as Task['priority']) ?? 'medium',
+      }))
+    : tasks.filter((task) => !task.done).slice(0, 3);
+  const completedCount = hasBackendSession
+    ? apiTasks.filter((t) => t.status === 'done').length
+    : tasks.filter((task) => task.done).length;
   const dateStr = time.toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
   const timeStr = time.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
   const goalLabel = user ? t(`app.goals.${user?.goal}`, user?.goal ?? "") : '';
 
   const toggleTask = (id: string) => {
+    if (hasBackendSession) return; // real tasks managed on /tasks page
     const updated = tasks.map((task) => (task.id === id ? { ...task, done: !task.done } : task));
     setTasks(updated);
     storage.saveTasks(updated);
@@ -66,14 +85,19 @@ export default function HomePage() {
         >
           <div className="rounded-2xl bg-muted px-4 py-3 text-right">
             <div className="font-mono text-2xl font-bold text-foreground">{timeStr}</div>
-            <div className="text-xs text-muted-foreground">{t("app.home.tasksDoneCount", { done: completedCount, total: tasks.length })}</div>
+            <div className="text-xs text-muted-foreground">
+              {t("app.home.tasksDoneCount", {
+                done: completedCount,
+                total: hasBackendSession ? apiTasks.length : tasks.length,
+              })}
+            </div>
           </div>
         </PageHeader>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <MetricTile label={t("app.home.metrics.focusScore")} value="88%" icon={Zap} trend={t("app.home.metrics.focusTrend")} />
-          <MetricTile label={t("app.home.metrics.openProjects")} value="4" icon={Layers} accent="#3B82F6" trend={t("app.home.metrics.projectTrend")} />
-          <MetricTile label={t("app.home.metrics.unreadItems")} value="9" icon={MessageCircle} accent="#F59E0B" trend={t("app.home.metrics.unreadTrend")} />
+          <MetricTile label={t("app.home.metrics.focusScore")} value={`${Math.max(0, 100 - todaysTasks.length * 5)}%`} icon={Zap} trend={t("app.home.metrics.focusTrend")} />
+          <MetricTile label={t("app.home.metrics.openProjects")} value={String(projects.length || '—')} icon={Layers} accent="#3B82F6" trend={t("app.home.metrics.projectTrend")} />
+          <MetricTile label={t("app.home.metrics.unreadItems")} value={String(notifUnread || '—')} icon={MessageCircle} accent="#F59E0B" trend={t("app.home.metrics.unreadTrend")} />
         </div>
 
         <SurfaceCard>

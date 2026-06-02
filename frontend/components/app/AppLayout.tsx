@@ -7,18 +7,26 @@ import { usePathname } from "next/navigation";
 import { Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { WorkspaceSetup } from "./WorkspaceSetup";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, hasBackendSession } = useAuth();
 
+  const { workspaces, activeWorkspace, loading: wsLoading } = useWorkspace();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   if (!user) return null;
+
+  // If backend session exists but user has no workspaces, show setup
+  if (hasBackendSession && !wsLoading && workspaces.length === 0) {
+    return <WorkspaceSetup />;
+  }
 
   const hideAssistantButton =
     pathname === "/app/chat" ||
