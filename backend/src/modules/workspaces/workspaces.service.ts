@@ -13,6 +13,15 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { WorkspaceRole } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import {
+  applySoftDelete,
+  isActiveEntity,
+  isSoftDeleted,
+} from '../../common/utils/soft-delete';
+import {
+  assertWorkspaceBillingOwner,
+  assertWorkspaceManager,
+} from '../../common/utils/workspace-auth';
 
 @Injectable()
 export class WorkspacesService {
@@ -71,12 +80,14 @@ export class WorkspacesService {
       where: { userId },
       relations: ['workspace'],
     });
-    return members.map((m) => m.workspace).filter((ws) => ws.deletedAt == null);
+    return members
+      .map((m) => m.workspace)
+      .filter((ws) => ws && !isSoftDeleted(ws));
   }
 
   async findById(id: string): Promise<Workspace> {
     const workspace = await this.workspaceRepo.findOne({ where: { id } });
-    if (!workspace || workspace.deletedAt) {
+    if (!isActiveEntity(workspace)) {
       throw new NotFoundException({
         code: ErrorCode.WORKSPACE_NOT_FOUND,
         message: 'Workspace not found',
@@ -87,7 +98,7 @@ export class WorkspacesService {
 
   async findBySlug(slug: string, userId: string): Promise<Workspace> {
     const workspace = await this.workspaceRepo.findOne({ where: { slug } });
-    if (!workspace || workspace.deletedAt) {
+    if (!isActiveEntity(workspace)) {
       throw new NotFoundException({
         code: ErrorCode.WORKSPACE_NOT_FOUND,
         message: 'Workspace not found',
@@ -109,23 +120,10 @@ export class WorkspacesService {
     dto: UpdateWorkspaceDto,
   ): Promise<Workspace> {
     const workspace = await this.findById(id);
-
-    // Authorization check would typically happen in a guard, but doing a basic check here
-    if (workspace.ownerId !== userId) {
-      const member = await this.memberRepo.findOne({
-        where: { workspaceId: id, userId },
-      });
-      if (
-        !member ||
-        (member.role !== WorkspaceRole.OWNER &&
-          member.role !== WorkspaceRole.ADMIN)
-      ) {
-        throw new ConflictException({
-          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-          message: 'Not allowed to update workspace',
-        });
-      }
-    }
+    const member = await this.memberRepo.findOne({
+      where: { workspaceId: id, userId },
+    });
+    assertWorkspaceManager(workspace, userId, member);
 
     if (dto.slug && dto.slug !== workspace.slug) {
       const existing = await this.workspaceRepo.findOne({
@@ -143,18 +141,11 @@ export class WorkspacesService {
     return this.workspaceRepo.save(workspace);
   }
 
+  /** Soft-delete workspace. Only billing owner (`ownerId`), not ADMIN members. */
   async remove(id: string, userId: string): Promise<void> {
     const workspace = await this.findById(id);
-
-    if (workspace.ownerId !== userId) {
-      throw new ConflictException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Only the owner can delete the workspace',
-      });
-    }
-
-    workspace.deletedAt = new Date();
-    workspace.deletedBy = userId;
+    assertWorkspaceBillingOwner(workspace, userId);
+    applySoftDelete(workspace, userId);
     await this.workspaceRepo.save(workspace);
   }
 }

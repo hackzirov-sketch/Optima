@@ -22,6 +22,7 @@ import { AddReviewCommentDto } from './dto/add-review-comment.dto';
 import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
 import { PushStatus, WorkspaceRole } from '../../common/enums';
+import { isActiveEntity } from '../../common/utils/soft-delete';
 
 const REVIEW_ROLES = new Set([
   WorkspaceRole.OWNER,
@@ -71,7 +72,7 @@ export class PushesService {
       where: { id: pushId },
       relations: ['task', 'repository'],
     });
-    if (!push || push.deletedAt) throw new NotFoundException('Push not found');
+    if (!isActiveEntity(push)) throw new NotFoundException('Push not found');
     return push;
   }
 
@@ -95,13 +96,14 @@ export class PushesService {
     const qb = this.pushRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.task', 'task')
-      .where('p.user_id = :userId', { userId })
-      .andWhere('p.deleted_at IS NULL')
-      .orderBy('p.created_at', 'DESC')
+      .where('p.userId = :userId', { userId })
+      .andWhere('p.deletedAt IS NULL')
+      .andWhere('p.isDeleted = :isDeleted', { isDeleted: false })
+      .orderBy('p.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
-    if (q.taskId) qb.andWhere('p.task_id = :taskId', { taskId: q.taskId });
+    if (q.taskId) qb.andWhere('p.taskId = :taskId', { taskId: q.taskId });
     if (q.status) qb.andWhere('p.status = :status', { status: q.status });
 
     const [data, total] = await qb.getManyAndCount();
@@ -110,7 +112,7 @@ export class PushesService {
 
   async submit(userId: string, dto: SubmitPushDto) {
     const task = await this.taskRepo.findOne({ where: { id: dto.taskId } });
-    if (!task || task.deletedAt) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
 
     await this.assertMember(task.workspaceId, userId);
 

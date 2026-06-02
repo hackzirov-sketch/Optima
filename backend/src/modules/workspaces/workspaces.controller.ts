@@ -63,7 +63,11 @@ export class WorkspacesController {
   }
 
   @Delete(':wsId')
-  @ApiOperation({ summary: 'Delete a workspace' })
+  @ApiOperation({
+    summary: 'Soft-delete workspace (billing owner only)',
+    description:
+      'Only the workspace billing owner (`ownerId`) may delete. Workspace ADMIN members can update settings but cannot delete the workspace.',
+  })
   deleteWorkspace(
     @Param('wsId') wsId: string,
     @CurrentUser('id') userId: string,

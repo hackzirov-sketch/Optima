@@ -1,13 +1,16 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { UserSettings } from '../../../database/entities/user-settings.entity';
 import { UserVerification } from '../../../database/entities/user-verification.entity';
+import { User } from '../../../database/entities/user.entity';
 import { MailService } from '../../mail/mail.service';
+
+const VERIFICATION_COOLDOWN_MS = 2 * 60 * 1000;
 
 @Processor('auth')
 export class AuthProcessor extends WorkerHost {
@@ -20,6 +23,8 @@ export class AuthProcessor extends WorkerHost {
     private userSettingsRepository: Repository<UserSettings>,
     @InjectRepository(UserVerification)
     private userVerificationsRepository: Repository<UserVerification>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {
     super();
   }
@@ -28,42 +33,73 @@ export class AuthProcessor extends WorkerHost {
     switch (job.name) {
       case 'on-register':
         return this.handleOnRegister(job.data);
+      case 'resend-verification':
+        return this.handleResendVerification(job.data);
       default:
         this.logger.warn(`Unknown job name: ${job.name}`);
     }
   }
 
+  /** Idempotent: default settings only; verification email only for unverified users. */
   private async handleOnRegister(data: { userId: string; email: string }) {
     const { userId, email } = data;
+    this.logger.log(`on-register: settings for user ${userId}`);
 
-    this.logger.log(`Processing background tasks for user ${userId}`);
-
-    // 1. Create default settings if not exist
     const existingSettings = await this.userSettingsRepository.findOne({
       where: { userId },
     });
     if (!existingSettings) {
-      const settings = this.userSettingsRepository.create({ userId });
-      await this.userSettingsRepository.save(settings);
+      await this.userSettingsRepository.save(
+        this.userSettingsRepository.create({ userId }),
+      );
     }
 
-    // 2. Generate and send verification code (skip in development — users are auto-verified)
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user?.isVerified) {
+      await this.issueVerificationCode(userId, email);
+    }
+  }
+
+  /** Resend verification with cooldown — safe to call from login retries. */
+  private async handleResendVerification(data: { userId: string; email: string }) {
+    const { userId, email } = data;
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || user.isVerified) {
+      this.logger.debug(`resend-verification skipped for ${userId} (verified or missing)`);
+      return;
+    }
+
+    await this.issueVerificationCode(userId, email);
+  }
+
+  private async issueVerificationCode(userId: string, email: string) {
     const isDev = this.configService.get<string>('NODE_ENV') === 'development';
-    if (!isDev) {
-      await this.userVerificationsRepository.delete({ userId });
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-      const verification = this.userVerificationsRepository.create({
-        userId,
-        code,
-        expiresAt,
-      });
-      await this.userVerificationsRepository.save(verification);
-
-      await this.mailService.sendVerificationEmail(email, code);
+    if (isDev) {
+      this.logger.debug(`Skipping verification email in development for ${userId}`);
+      return;
     }
 
-    this.logger.log(`Finished background tasks for user ${userId}`);
+    const recent = await this.userVerificationsRepository.findOne({
+      where: {
+        userId,
+        createdAt: MoreThan(new Date(Date.now() - VERIFICATION_COOLDOWN_MS)),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (recent) {
+      this.logger.debug(`Verification cooldown active for ${userId}`);
+      return;
+    }
+
+    await this.userVerificationsRepository.delete({ userId });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await this.userVerificationsRepository.save(
+      this.userVerificationsRepository.create({ userId, code, expiresAt }),
+    );
+
+    await this.mailService.sendVerificationEmail(email, code);
+    this.logger.log(`Verification email queued for ${email}`);
   }
 }

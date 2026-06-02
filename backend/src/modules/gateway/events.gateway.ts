@@ -240,19 +240,33 @@ export class EventsGateway
 
   // ─── Message reaction ─────────────────────────────────
   @SubscribeMessage('add_reaction')
-  handleAddReaction(
+  async handleAddReaction(
     @MessageBody() data: AddReactionWsDto,
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException('Not authenticated');
 
-    this.server.to(`room:${data.roomId}`).emit('reaction_updated', {
-      messageId: data.messageId,
-      roomId: data.roomId,
-      emoji: data.emoji,
-      userId,
-    });
+    try {
+      const action = await this.chatService.toggleReaction(
+        data.messageId,
+        userId,
+        data.emoji,
+      );
+
+      this.server.to(`room:${data.roomId}`).emit('reaction_updated', {
+        messageId: data.messageId,
+        roomId: data.roomId,
+        emoji: data.emoji,
+        userId,
+        action,
+      });
+    } catch (err: unknown) {
+      client.emit('error', {
+        code: 'REACTION_FAILED',
+        message: err instanceof Error ? err.message : 'Failed to save reaction',
+      });
+    }
   }
 
   // ─── Message read receipt ────────────────────────────

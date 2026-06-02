@@ -15,6 +15,10 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateColumnDto } from './dto/create-column.dto';
 import { UpdateColumnDto } from './dto/update-column.dto';
 import { WorkspaceRole, TaskStatus } from '../../common/enums';
+import {
+  applySoftDelete,
+  isActiveEntity,
+} from '../../common/utils/soft-delete';
 
 @Injectable()
 export class ProjectsService {
@@ -40,7 +44,7 @@ export class ProjectsService {
       relations: ['workspace', 'group'],
     });
 
-    if (!project || project.deletedAt) {
+    if (!isActiveEntity(project)) {
       throw new NotFoundException('Project not found');
     }
 
@@ -239,8 +243,7 @@ export class ProjectsService {
 
   async remove(id: string, userId: string): Promise<void> {
     const project = await this.checkProjectAccess(id, userId, true);
-    project.deletedAt = new Date();
-    project.deletedBy = userId;
+    applySoftDelete(project, userId);
     await this.projectRepo.save(project);
   }
 

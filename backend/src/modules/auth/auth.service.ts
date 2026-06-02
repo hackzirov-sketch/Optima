@@ -156,25 +156,7 @@ export class AuthService {
       needsPasswordSetup: false,
     });
 
-    // 4. Offload heavy tasks to Queue (Settings, Email sending)
-    try {
-      await this.authQueue.add(
-        'on-register',
-        {
-          userId: user.id,
-          email: user.email,
-        },
-        {
-          removeOnComplete: true,
-          attempts: 3,
-        },
-      );
-    } catch (error) {
-      this.logger.warn(
-        `BullMQ on-register queue failed (Redis may be down): ${error instanceof Error ? error.message : error}`,
-      );
-      // In high-load test, we continue even if background task fails to be queued
-    }
+    await this.enqueueOnRegister(user.id, user.email);
 
     return {
       message: 'Registration successful. Verification code sent to email.',
@@ -197,14 +179,7 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      try {
-        await this.authQueue.add('on-register', {
-          userId: user.id,
-          email: user.email,
-        });
-      } catch (e) {
-        this.logger.warn(`BullMQ on-register queue failed: ${e instanceof Error ? e.message : e}`);
-      }
+      await this.enqueueResendVerification(user.id, user.email);
 
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
@@ -227,14 +202,7 @@ export class AuthService {
     }
 
     if (!user.isVerified) {
-      try {
-        await this.authQueue.add('on-register', {
-          userId: user.id,
-          email: user.email,
-        });
-      } catch (e) {
-        this.logger.warn(`BullMQ on-register queue failed: ${e instanceof Error ? e.message : e}`);
-      }
+      await this.enqueueResendVerification(user.id, user.email);
 
       throw new UnauthorizedException({
         code: ErrorCode.PENDING_VERIFICATION,
@@ -284,11 +252,7 @@ export class AuthService {
         needsPasswordSetup: true,
       });
 
-      // Background task for social login settings too
-      await this.authQueue.add('on-register', {
-        userId: user.id,
-        email: user.email,
-      });
+      await this.enqueueOnRegister(user.id, user.email);
     }
 
     if (ip) {
@@ -342,10 +306,7 @@ export class AuthService {
           needsPasswordSetup: true,
         });
 
-        await this.authQueue.add('on-register', {
-          userId: user.id,
-          email: user.email,
-        });
+        await this.enqueueOnRegister(user.id, user.email);
       }
 
       githubAccount = this.githubAccountsRepository.create({
@@ -674,5 +635,46 @@ export class AuthService {
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
     };
+  }
+
+  /** Settings bootstrap — deduped per user via stable job id. */
+  private async enqueueOnRegister(userId: string, email: string): Promise<void> {
+    try {
+      await this.authQueue.add(
+        'on-register',
+        { userId, email },
+        {
+          jobId: `on-register:${userId}`,
+          removeOnComplete: true,
+          attempts: 3,
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `BullMQ on-register failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  /** Verification resend — cooldown handled in AuthProcessor. */
+  private async enqueueResendVerification(
+    userId: string,
+    email: string,
+  ): Promise<void> {
+    try {
+      await this.authQueue.add(
+        'resend-verification',
+        { userId, email },
+        {
+          jobId: `resend-verification:${userId}`,
+          removeOnComplete: true,
+          attempts: 2,
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `BullMQ resend-verification failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 }

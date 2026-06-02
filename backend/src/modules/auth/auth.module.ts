@@ -14,6 +14,7 @@ import { UserSettings } from '../../database/entities/user-settings.entity';
 import { UserIpLog } from '../../database/entities/user-ip-log.entity';
 import { GithubAccount } from '../../database/entities/github-account.entity';
 import { UserVerification } from '../../database/entities/user-verification.entity';
+import { User } from '../../database/entities/user.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -36,6 +37,7 @@ import { AuthProcessor } from './processors/auth.processor';
       UserIpLog,
       GithubAccount,
       UserVerification,
+      User,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

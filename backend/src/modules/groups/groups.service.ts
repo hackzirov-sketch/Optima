@@ -13,6 +13,10 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { WorkspaceRole } from '../../common/enums';
+import {
+  applySoftDelete,
+  isActiveEntity,
+} from '../../common/utils/soft-delete';
 
 @Injectable()
 export class GroupsService {
@@ -105,7 +109,7 @@ export class GroupsService {
       relations: ['members', 'members.user'],
     });
 
-    if (!group || group.deletedAt) {
+    if (!isActiveEntity(group)) {
       throw new NotFoundException('Group not found');
     }
 
@@ -156,8 +160,7 @@ export class GroupsService {
       }
     }
 
-    group.deletedAt = new Date();
-    group.deletedBy = userId;
+    applySoftDelete(group, userId);
     await this.groupRepo.save(group);
   }
 

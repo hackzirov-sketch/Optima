@@ -19,6 +19,7 @@ import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
+import { applySoftDelete } from '../../common/utils/soft-delete';
 
 @Injectable()
 export class ChatService {
@@ -158,8 +159,7 @@ export class ChatService {
     await this.assertRoomMember(msg.roomId, userId);
     if (msg.senderId !== userId)
       throw new ForbiddenException('You can only delete your own messages');
-    msg.isDeleted = true;
-    msg.deletedAt = new Date();
+    applySoftDelete(msg);
     await this.messageRepo.save(msg);
   }
 
@@ -197,5 +197,29 @@ export class ChatService {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
     if (!msg) throw new NotFoundException('Message not found');
     await this.reactionRepo.delete({ messageId, userId, emoji });
+  }
+
+  /** Toggle reaction for WebSocket clients (same semantics as REST add/remove). */
+  async toggleReaction(
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<'added' | 'removed'> {
+    const msg = await this.messageRepo.findOne({ where: { id: messageId } });
+    if (!msg || msg.isDeleted) throw new NotFoundException('Message not found');
+    await this.assertRoomMember(msg.roomId, userId);
+
+    const existing = await this.reactionRepo.findOne({
+      where: { messageId, userId, emoji },
+    });
+    if (existing) {
+      await this.reactionRepo.delete({ messageId, userId, emoji });
+      return 'removed';
+    }
+
+    await this.reactionRepo.save(
+      this.reactionRepo.create({ messageId, userId, emoji }),
+    );
+    return 'added';
   }
 }

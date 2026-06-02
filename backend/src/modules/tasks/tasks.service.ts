@@ -19,6 +19,10 @@ import { MoveTaskDto } from './dto/move-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { AddDependencyDto } from './dto/add-dependency.dto';
 import { WorkspaceRole, TaskStatus } from '../../common/enums';
+import {
+  applySoftDelete,
+  isActiveEntity,
+} from '../../common/utils/soft-delete';
 
 @Injectable()
 export class TasksService {
@@ -62,7 +66,7 @@ export class TasksService {
 
   private async getTask(taskId: string): Promise<Task> {
     const task = await this.taskRepo.findOne({ where: { id: taskId } });
-    if (!task || task.deletedAt) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
     return task;
   }
 
@@ -234,7 +238,7 @@ export class TasksService {
       where: { id: taskId },
       relations: ['assignee', 'creator', 'reviewer', 'column', 'subtasks'],
     });
-    if (!task || task.deletedAt) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
     await this.assertMember(task.workspaceId, userId);
     return task;
   }
@@ -307,8 +311,7 @@ export class TasksService {
         'Only task creator, lead, admin or owner can delete tasks',
       );
 
-    task.deletedAt = new Date();
-    task.deletedBy = userId;
+    applySoftDelete(task, userId);
     await this.taskRepo.save(task);
   }
 
