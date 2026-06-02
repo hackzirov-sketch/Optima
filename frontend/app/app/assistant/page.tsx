@@ -8,7 +8,6 @@ import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } 
 import { CommandMenu, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import { AIAssistantStateBadge } from "@/components/premium/PremiumAssets";
 import { AI_AGENTS, AI_IDEAS, AUTOMATION_RULES, LEARNING_PATHS, SMART_TASKS } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 
 
 
@@ -27,10 +26,9 @@ const INITIAL_MESSAGES: AssistantMessage[] = [
 const SUGGESTIONS = ["createTasks", "learnNext", "saasIdea", "teamActivity"] as const;
 const MODES = ["learning", "projects", "tasks", "team"] as const;
 
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, logout: onLogout } = useAuth();
+  
   const { t } = useTranslation();
   const [messages, setMessages] = useState<AssistantMessage[]>(INITIAL_MESSAGES);
   const [draft, setDraft] = useState("");

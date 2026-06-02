@@ -24,7 +24,6 @@ import {
   VideoOff,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "@/hooks/useAuth";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { CLIP_ITEMS, MEETING_PARTICIPANTS, MEETING_ROOMS, SMART_TASKS } from "@/data/ecosystemData";
 
@@ -126,7 +125,7 @@ function MeetingCard({
 }
 
 export default function Page() {
-  const { user } = useAuth();
+  
   const { t } = useTranslation();
   const [activeId, setActiveId] = useState(MEETING_ROOMS[0]?.id ?? "");
   const [code, setCode] = useState("");

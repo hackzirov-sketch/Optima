@@ -23,7 +23,6 @@ import { useTranslation } from "react-i18next";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { AutomationRuleCard, WidgetCard } from "@/components/app/PowerWorkspaceSystem";
 import { AI_AGENTS, AUTOMATION_RULES, DASHBOARD_WIDGETS, PREMIUM_BENEFITS, PREMIUM_COMPARISON, PREMIUM_PLANS } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 
 
 

@@ -100,7 +100,7 @@ export default function Page() {
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const { projects, loading: projectsLoading } = useProjects(activeWorkspace?.id);
   const { tasks, loading: tasksLoading } = useAllWorkspaceTasks(projects.map((p) => p.id));
-  const { members, loading: membersLoading } = useMembers(activeWorkspace?.id);
+  const { members } = useMembers(activeWorkspace?.id);
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
 
   // Workspace analytics from API

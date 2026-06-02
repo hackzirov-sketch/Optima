@@ -96,7 +96,7 @@ export default function Page() {
     setSaving(true);
     setSaveError("");
     try {
-      const res = await usersApi.updateMe({
+      await usersApi.updateMe({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         username: usernameVal.trim() || undefined,

@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { CommunityRoleIcon, PREMIUM_REACTIONS, PremiumGradientBadge, ReactionButton } from "@/components/premium/PremiumAssets";
 import { COMMUNITY_CHANNELS, COMMUNITY_GROUPS, COMMUNITY_THREADS, FEATURED_CREATORS, PROFESSIONAL_COMMUNITIES, SMART_TASKS, WORKSPACE_ZONE } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 
 
 

@@ -6,7 +6,6 @@ import { Bookmark, Flame, Newspaper, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SimpleTabs, SurfaceCard } from "@/components/app/DesignSystem";
 import { NEWS_ARTICLES } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 
 
 

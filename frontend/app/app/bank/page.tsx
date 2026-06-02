@@ -5,14 +5,12 @@
 import { useTranslation } from "react-i18next";
 import { ActionButton, MetricTile, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { BANK_TRANSACTIONS, PAYMENT_METHODS } from "@/data/ecosystemData";
-import type { UserProfile } from "@/types";
 
 
 
-import { useAuth } from "@/hooks/useAuth";
 
 export default function Page() {
-  const { user, logout: onLogout } = useAuth();
+  
   const { t } = useTranslation();
 
 
