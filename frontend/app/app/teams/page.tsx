@@ -50,6 +50,8 @@ import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMembers } from "@/hooks/useMembers";
+import { useProjects } from "@/hooks/useProjects";
+import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 
 
 
@@ -219,6 +221,8 @@ export default function Page() {
   const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { members, loading: membersLoading, invite } = useMembers(activeWorkspace?.id);
+  const { projects } = useProjects(activeWorkspace?.id);
+  const { tasks: allTasks } = useAllWorkspaceTasks(projects.map((p) => p.id));
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [modalOpen, setModalOpen] = useState(false);
@@ -1329,8 +1333,13 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Users} title={t("app.teams.dashboard")} description={t("app.teams.dashboardDesc")} />
             <div className="grid gap-3 sm:grid-cols-2">
-              {TEAM_METRICS.map((metric) => (
-                <div key={metric.labelKey} className="rounded-2xl bg-muted p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm">
+              {[
+                { label: "Workspace members", value: members.length, icon: Users, tone: "indigo" as const, trend: `${projects.length} projects` },
+                { label: "Active tasks", value: allTasks.filter((t) => t.status !== 'done').length, icon: CheckCircle2, tone: "blue" as const, trend: `${allTasks.filter((t) => t.status === 'done').length} done` },
+                { label: "Total tasks", value: allTasks.length, icon: Gauge, tone: "green" as const, trend: "across all projects" },
+                { label: "In review", value: allTasks.filter((t) => t.status === 'review').length, icon: LineChart, tone: "amber" as const, trend: "awaiting approval" },
+              ].map((metric) => (
+                <div key={metric.label} className="rounded-2xl bg-muted p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{metric.label}</p>
                     <span className="grid h-9 w-9 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">

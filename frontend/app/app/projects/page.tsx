@@ -1,17 +1,17 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, FolderOpen, Loader2, Plus, Target, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
-import { AutomationRuleCard, DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
-import { AUTOMATION_RULES, GOALS, POWER_VIEWS } from "@/data/ecosystemData";
+import { DataTable, FilterBar, TaskDrawer, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
+import { POWER_VIEWS } from "@/data/ecosystemData";
 import type { SmartTask, TaskView } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
-import type { ApiTask, CreateTaskDto } from "@/lib/api";
+import { analyticsApi, type ApiTask, type CreateTaskDto } from "@/lib/api";
 
 function apiTaskToSmartTask(t: ApiTask): SmartTask {
   return {
@@ -58,6 +58,19 @@ export default function Page() {
   );
 
   const currentProjectId = activeProjectId ?? projects[0]?.id;
+
+  // Project analytics from backend
+  const [projectAnalytics, setProjectAnalytics] = useState<{
+    commits: string; pushes: string; approvedPushes: string; tasksCompleted: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    setProjectAnalytics(null);
+    analyticsApi.getProjectAnalytics(currentProjectId)
+      .then((res: any) => setProjectAnalytics(res?.data?.aggregates ?? null))
+      .catch(() => {});
+  }, [currentProjectId]);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -302,23 +315,54 @@ export default function Page() {
 
             {!tasksLoading && view === "dashboard" && (
               <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                {/* Real task status breakdown */}
                 <SurfaceCard>
-                  <SectionTitle icon={Target} title="Milestones" description="Goal tracking and OKR-style progress." />
-                  {GOALS.map((goal) => (
-                    <div key={goal.id} className="mb-4 rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
-                      <div className="flex items-center justify-between">
-                        <p className="font-black text-foreground">{goal.title}</p>
-                        <Pill tone="blue">{goal.owner}</Pill>
-                      </div>
-                      <ProgressBar value={goal.progress} label={goal.dueDate} />
+                  <SectionTitle icon={Target} title="Task breakdown" description="Progress by status for this project." />
+                  {tasks.length === 0 ? (
+                    <p className="py-4 text-sm text-muted-foreground">No tasks yet in this project.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {(['backlog', 'todo', 'in_progress', 'review', 'done'] as const).map((status) => {
+                        const count = tasks.filter((t) => t.status === status).length;
+                        const pct = Math.round((count / tasks.length) * 100);
+                        const colors: Record<string, string> = {
+                          backlog: '#94A3B8', todo: '#6366F1', in_progress: '#3B82F6',
+                          review: '#F59E0B', done: '#10B981',
+                        };
+                        return (
+                          <div key={status} className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+                            <div className="mb-2 flex items-center justify-between">
+                              <p className="text-sm font-black capitalize text-foreground">{status.replace('_', ' ')}</p>
+                              <Pill tone={status === 'done' ? 'green' : status === 'in_progress' ? 'blue' : 'slate'}>
+                                {count} tasks
+                              </Pill>
+                            </div>
+                            <ProgressBar value={pct} accent={colors[status]} label={`${pct}%`} />
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  )}
                 </SurfaceCard>
+
+                {/* Real project analytics */}
                 <SurfaceCard>
-                  <SectionTitle icon={Zap} title="Flow Automations" description="Trigger/action rules." />
-                  <div className="space-y-3">
-                    {AUTOMATION_RULES.map((rule) => (
-                      <AutomationRuleCard key={rule.id} rule={rule} onToggle={() => showNotice(`${rule.name} toggled`)} />
+                  <SectionTitle icon={Zap} title="Project analytics" description="Aggregated activity for this project." />
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Tasks completed', value: projectAnalytics?.tasksCompleted ?? tasks.filter(t => t.status === 'done').length, accent: '#10B981' },
+                      { label: 'Total tasks', value: tasks.length, accent: '#6366F1' },
+                      { label: 'In progress', value: tasks.filter(t => t.status === 'in_progress').length, accent: '#3B82F6' },
+                      { label: 'In review', value: tasks.filter(t => t.status === 'review').length, accent: '#F59E0B' },
+                      { label: 'Commits', value: projectAnalytics?.commits ?? '—', accent: '#8B5CF6' },
+                      { label: 'Code pushes', value: projectAnalytics?.pushes ?? '—', accent: '#EC4899' },
+                    ].map(({ label, value, accent }) => (
+                      <div key={label} className="rounded-2xl border border-border bg-muted p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                        <p className="mt-2 text-2xl font-black text-foreground" style={{ color: accent }}>
+                          {value}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 </SurfaceCard>

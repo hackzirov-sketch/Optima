@@ -51,8 +51,10 @@ import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMA
 import type { Profession, TaskView } from "@/types";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
-
-
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useProjects } from "@/hooks/useProjects";
+import { useAllWorkspaceTasks } from "@/hooks/useTasks";
+import { useMembers } from "@/hooks/useMembers";
 
 type WorkspaceItemType = "Board" | "Doc" | "Automation" | "Dashboard";
 
@@ -391,6 +393,11 @@ function taskMatchesPreset(taskText: string, filters: string[]) {
 export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
+  const { activeWorkspace } = useWorkspace();
+  const { projects: realProjects } = useProjects(activeWorkspace?.id);
+  const { tasks: realTasks } = useAllWorkspaceTasks(realProjects.map((p) => p.id));
+  const { members: realMembers } = useMembers(activeWorkspace?.id);
+
   const [activeView, setActiveView] = useState<TaskView>(() => storage.getActiveView() ?? "board");
   const [activeBoard, setActiveBoard] = useState(() => storage.getActiveBoard() ?? "Roadmap");
   const [activeProfession, setActiveProfession] = useState<Profession>(() => storage.getWorkspaceProfession() ?? user?.profession ?? "student");
@@ -684,9 +691,9 @@ export default function Page() {
     <>
       <PageShell>
         <PageHeader
-          eyebrow="Power Workspace"
+          eyebrow={activeWorkspace?.name ?? "Power Workspace"}
           title={`${activePreset.template} for ${user?.name}`}
-          description="Control, create and save your workspace by profession. UPZ keeps boards, views, integrations and saved workspace states local for this MVP."
+          description={activeWorkspace ? `${realProjects.length} projects · ${realTasks.length} tasks · ${realMembers.length} members` : "Control, create and save your workspace by profession."}
         >
           <ActionButton onClick={handleCreateItem}><Plus className="h-4 w-4" /> Create</ActionButton>
           <ActionButton variant="secondary" onClick={handleSaveSnapshot}><Save className="h-4 w-4" /> Save view</ActionButton>
@@ -708,10 +715,10 @@ export default function Page() {
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {[
-                    { label: "Filtered tasks", value: String(filteredTasks.length), icon: Target, tone: "indigo" as const },
-                    { label: "Avg progress", value: `${avgProgress}%`, icon: CheckCircle2, tone: "green" as const },
-                    { label: "Review / risk", value: String(reviewCount + highPriorityCount), icon: ShieldCheck, tone: reviewCount ? "amber" as const : "blue" as const },
-                    { label: "Tools online", value: `${connectedCount}/${INTEGRATIONS.length}`, icon: Database, tone: missingRecommended.length ? "amber" as const : "green" as const },
+                    { label: "Projects", value: String(realProjects.length), icon: Target, tone: "indigo" as const },
+                    { label: "Tasks done", value: String(realTasks.filter((t) => t.status === 'done').length), icon: CheckCircle2, tone: "green" as const },
+                    { label: "Active tasks", value: String(realTasks.filter((t) => t.status !== 'done').length), icon: ShieldCheck, tone: "blue" as const },
+                    { label: "Members", value: String(realMembers.length), icon: Database, tone: "amber" as const },
                   ].map(({ label, value, icon: Icon, tone }) => (
                     <div key={label} className="rounded-2xl border border-border bg-card/86 p-4 shadow-sm backdrop-blur">
                       <div className="flex items-center justify-between gap-3">
@@ -719,7 +726,7 @@ export default function Page() {
                         <span className="grid h-9 w-9 place-items-center rounded-2xl bg-muted text-indigo-600"><Icon className="h-4 w-4" /></span>
                       </div>
                       <p className="mt-3 text-2xl font-black text-foreground">{value}</p>
-                      <Pill tone={tone} className="mt-3">Live demo</Pill>
+                      <Pill tone={tone} className="mt-3">Live</Pill>
                     </div>
                   ))}
                 </div>

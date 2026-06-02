@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { storage } from '@/utils/storage';
 import type { UserProfile } from '@/types';
-import { authApi, setTokens, clearTokens, getAccessToken } from '@/lib/api';
+import { authApi, setTokens, clearTokens } from '@/lib/api';
 import { disconnectWebSocket } from '@/hooks/useWebSocket';
 
 type LoginResult = { success: boolean; redirect?: string; message?: string };
@@ -29,13 +29,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const initialized = useRef(false);
 
+  // ── Full logout helper (clears all state) ────────────────────────────────
+  const clearAuthState = () => {
+    clearTokens();
+    disconnectWebSocket();
+    storage.clearUser();
+    storage.clearOnboarded();
+    setUser(null);
+    setBackendUser(null);
+  };
+
+  // ── Listen for session-expired event (fired by api.ts on 401) ───────────
+  useEffect(() => {
+    const handleExpired = () => {
+      clearAuthState();
+      router.push('/auth/login');
+    };
+    window.addEventListener('upz:session-expired', handleExpired);
+    return () => window.removeEventListener('upz:session-expired', handleExpired);
+  }, [router]);
+
+  // ── Multi-tab sync via BroadcastChannel ─────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const channel = new BroadcastChannel('upz_auth');
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'logout') {
+        setUser(null);
+        setBackendUser(null);
+      }
+      if (e.data?.type === 'login') {
+        const profile = e.data.profile as UserProfile | undefined;
+        if (profile) setUser(profile);
+      }
+    };
+
+    channel.addEventListener('message', handleMessage);
+    return () => {
+      channel.removeEventListener('message', handleMessage);
+      channel.close();
+    };
+  }, []);
+
+  // ── App init: restore session ────────────────────────────────────────────
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
     const init = async () => {
       const savedUser = storage.getUser();
-      const isOnboarded = storage.isOnboarded();
       const pathname = window.location.pathname;
       const isAppRoute = pathname.startsWith('/app');
 
@@ -45,22 +88,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!isOnboarded && isAppRoute) {
-        router.push('/onboarding');
-        setLoading(false);
-        return;
-      }
-
       setUser(savedUser);
 
-      const token = getAccessToken();
-      if (token) {
-        try {
-          const res = await authApi.me();
-          if (res?.data) setBackendUser({ id: res.data.id, email: res.data.email });
-        } catch {
-          clearTokens();
+      // Always attempt session restore — handles:
+      // 1. Valid access token → success directly
+      // 2. Expired access token + valid refresh token → auto-refresh → success
+      // 3. Both tokens missing/expired → throws → clear all state
+      try {
+        const res = await authApi.me();
+        if (res?.data) {
+          setBackendUser({ id: res.data.id, email: res.data.email });
         }
+      } catch (err: unknown) {
+        const status = (err as Record<string, unknown>)?.status;
+        if (status === 401) {
+          // Refresh token also expired — force full logout
+          clearAuthState();
+          if (isAppRoute) router.push('/auth/login');
+        }
+        // Network errors: keep user logged in locally (offline mode)
       }
 
       setLoading(false);
@@ -69,22 +115,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
   }, [router]);
 
+  // ── Login helpers ────────────────────────────────────────────────────────
+  const broadcast = (msg: Record<string, unknown>) => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const ch = new BroadcastChannel('upz_auth');
+      ch.postMessage(msg);
+      ch.close();
+    }
+  };
+
   const login = (profile: UserProfile) => {
     storage.saveUser(profile);
     storage.setOnboarded();
     setUser(profile);
+    broadcast({ type: 'login', profile });
   };
 
   const logout = async () => {
     try {
-      const token = getAccessToken();
-      if (token) await authApi.logout();
+      await authApi.logout();
     } catch { /* ignore */ }
-    clearTokens();
-    disconnectWebSocket();
-    storage.clearOnboarded();
-    setUser(null);
-    setBackendUser(null);
+    clearAuthState();
+    broadcast({ type: 'logout' });
     router.push('/');
   };
 

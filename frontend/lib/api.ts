@@ -2,26 +2,37 @@ import cookie from "js-cookie"
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
 
-// ─── Token management ─────────────────────────────────────────────────────
+// ─── Token management (both tokens in cookies) ────────────────────────────
+
+const IS_PROD = process.env.NODE_ENV === 'production';
+const COOKIE_OPTS = { secure: IS_PROD, sameSite: 'lax' as const, path: '/' };
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('upz_access_token');
+  // Fallback: migrate old localStorage token on first load
+  const fromCookie = cookie.get('upz_access_token');
+  if (fromCookie) return fromCookie;
+  const fromLocal = localStorage.getItem('upz_access_token');
+  if (fromLocal) {
+    cookie.set('upz_access_token', fromLocal, { ...COOKIE_OPTS, expires: 1 });
+    localStorage.removeItem('upz_access_token');
+    return fromLocal;
+  }
+  return null;
 }
 
 export function setTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem('upz_access_token', accessToken);
-  cookie.set('upz_refresh_token', refreshToken, {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    expires: 7,
-  });
+  // Access token: 1 day cookie (auto-refreshed before expiry by tryRefresh)
+  cookie.set('upz_access_token', accessToken, { ...COOKIE_OPTS, expires: 1 });
+  // Refresh token: 7 day cookie
+  cookie.set('upz_refresh_token', refreshToken, { ...COOKIE_OPTS, expires: 7 });
 }
 
 export function clearTokens() {
-  localStorage.removeItem('upz_access_token');
+  cookie.remove('upz_access_token', { path: '/' });
   cookie.remove('upz_refresh_token', { path: '/' });
+  // Also clear old localStorage token if present
+  if (typeof window !== 'undefined') localStorage.removeItem('upz_access_token');
 }
 
 function getRefreshToken(): string | null {
@@ -37,6 +48,15 @@ interface RequestOptions {
   body?: unknown;
   params?: Record<string, string | number | boolean>;
   skipAuth?: boolean;
+}
+
+interface ApiErrorPayload {
+  status: number;
+  message?: string;
+  code?: string;
+  redirect?: string;
+  requiresPasswordSetup?: boolean;
+  [key: string]: unknown;
 }
 
 async function request<T = unknown>(
@@ -93,15 +113,16 @@ async function request<T = unknown>(
       return retry.json() as Promise<T>;
     }
     clearTokens();
-    if (typeof window !== 'undefined') window.location.href = '/';
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upz:session-expired'));
+    }
     throw { status: 401, message: 'Session expired' };
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    console.error(`[API] ${method} ${path} failed:`, res.status, err);
     const errorObj = err?.error && typeof err.error === 'object' ? err.error : null;
-    throw {
+    const payload: ApiErrorPayload = {
       status: res.status,
       message: errorObj?.message || (typeof err?.message === 'string' ? err.message : undefined) || err?.msg,
       code: errorObj?.code,
@@ -109,6 +130,13 @@ async function request<T = unknown>(
       requiresPasswordSetup: errorObj?.requiresPasswordSetup,
       ...err,
     };
+
+    // 401/403 are expected in some guarded routes (permissions/session); avoid noisy console errors.
+    if (res.status !== 401 && res.status !== 403) {
+      console.error(`[API] ${method} ${path} failed:`, res.status, err);
+    }
+
+    throw payload;
   }
 
   if (res.status === 204) return null as T;
@@ -147,6 +175,16 @@ export interface RegisterDto {
   username: string
   phoneNumber?: number
 }
+export interface ApiUserSettings {
+  notificationsEnabled: boolean;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  notifyTaskAssigned: boolean;
+  notifyPushReviewed: boolean;
+  notifyPrEvents: boolean;
+  notifyMentions: boolean;
+}
+
 export interface ApiUser {
   id: string;
   email: string;
@@ -156,6 +194,7 @@ export interface ApiUser {
   avatarUrl?: string;
   role?: string;
   createdAt: string;
+  settings?: ApiUserSettings;
 }
 export interface AuthResponse { accessToken: string; refreshToken: string; user: ApiUser }
 export interface VerifyEmailResponse extends AuthResponse { redirect?: string }
@@ -201,8 +240,12 @@ export const authApi = {
 
 export interface ApiSession {
   id: string;
-  userAgent?: string;
-  ip?: string;
+  deviceName?: string;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  location?: string;
+  provider?: string;
   createdAt: string;
   lastUsedAt?: string;
 }
@@ -215,8 +258,8 @@ export const usersApi = {
   updateMe: (data: { firstName?: string; lastName?: string; username?: string; avatarUrl?: string }) =>
     request<{ data: ApiUser }>('PATCH', '/users/me', { body: data }),
 
-  updateSettings: (settings: Record<string, unknown>) =>
-    request<{ data: ApiUser }>('PATCH', '/users/me/settings', { body: settings }),
+  updateSettings: (settings: Partial<ApiUserSettings>) =>
+    request<{ data: ApiUserSettings }>('PATCH', '/users/me/settings', { body: settings }),
 
   getById: (id: string) => request<{ data: ApiUser }>('GET', `/users/${id}`),
 };

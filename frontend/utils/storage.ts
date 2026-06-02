@@ -44,6 +44,7 @@ export const storage = {
 
   getUser: () => get<UserProfile>(K.USER),
   saveUser: (u: UserProfile) => set(K.USER, u),
+  clearUser: () => localStorage.removeItem(K.USER),
 
   getTasks: (): Task[] => get<Task[]>(K.TASKS) ?? [],
   saveTasks: (tasks: Task[]) => set(K.TASKS, tasks),

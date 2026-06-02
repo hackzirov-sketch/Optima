@@ -14,14 +14,18 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { cn, getMessageText, getReplySnippet, getRoomName } from "@/components/chat/chatShared";
 import { normalizeReactionId } from "@/components/premium/PremiumAssets";
-import { MOCK_CHAT_ROOMS, MOCK_USERS } from "@/data/mockData";
+import { MOCK_CHAT_ROOMS } from "@/data/mockData";
 import { SMART_TASKS } from "@/data/ecosystemData";
-import type { ChatMessage, ChatReactionEmoji, ChatRoom, UserProfile } from "@/types";
+import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useMembers } from "@/hooks/useMembers";
 import { chatApi } from "@/lib/api";
+
+const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6'];
+const AI_USER: ChatUser = { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' };
 
 
 
@@ -74,9 +78,30 @@ function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): 
 }
 
 export default function ChatPage() {
-  const { user, hasBackendSession } = useAuth();
+  const { user, hasBackendSession, backendUser } = useAuth();
   const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
+  const { members } = useMembers(activeWorkspace?.id);
+
+  // Build real users list: current user + workspace members + AI
+  const chatUsers: ChatUser[] = useMemo(() => {
+    const currentUser: ChatUser = {
+      id: 'me',
+      name: user?.name ?? 'Me',
+      initials: (user?.name ?? 'M').slice(0, 2).toUpperCase(),
+      color: '#6366F1',
+      status: 'online',
+    };
+    const memberUsers: ChatUser[] = members.map((m, i) => ({
+      id: m.userId,
+      name: `${m.user.firstName} ${m.user.lastName}`.trim(),
+      initials: `${m.user.firstName?.[0] ?? ''}${m.user.lastName?.[0] ?? ''}`.toUpperCase(),
+      color: USER_COLORS[i % USER_COLORS.length],
+      status: 'online' as const,
+      role: m.role,
+    }));
+    return [AI_USER, currentUser, ...memberUsers];
+  }, [user, members]);
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
@@ -151,7 +176,7 @@ export default function ChatPage() {
     if (!activeRoom) return [];
     if (!normalizedChatSearch) return activeRoom.messages;
     return activeRoom.messages.filter((message) => {
-      const sender = MOCK_USERS.find((candidate) => candidate.id === message.userId)?.name ?? "";
+      const sender = chatUsers.find((candidate) => candidate.id === message.userId)?.name ?? "";
       return `${sender} ${getMessageText(message, t)}`.toLowerCase().includes(normalizedChatSearch);
     });
   }, [activeRoom, normalizedChatSearch, t]);
@@ -188,9 +213,10 @@ export default function ChatPage() {
     // Only load for rooms that don't start with mock prefix
     if (activeId.startsWith("r-")) return;
     chatApi.getMessages(activeId, 1, 50).then((res) => {
+      const myId = backendUser?.id;
       const apiMessages: ChatMessage[] = (res?.data ?? []).map((m) => ({
         id: m.id,
-        userId: m.userId,
+        userId: myId && m.userId === myId ? 'me' : m.userId,
         text: m.text,
         timestamp: m.timestamp,
         replyToId: m.replyToId ?? undefined,
@@ -409,7 +435,7 @@ export default function ChatPage() {
       >
         <ChatSidebar
           rooms={rooms}
-          users={MOCK_USERS}
+          users={chatUsers}
           activeId={activeRoom?.id}
           query={searchQuery}
           onQueryChange={setSearchQuery}
@@ -422,7 +448,7 @@ export default function ChatPage() {
           <section className={cn("relative min-w-0 flex-1 flex-col", mobilePane === "list" ? "hidden md:flex" : "flex")}>
             <ChatHeader
               room={activeRoom}
-              users={MOCK_USERS}
+              users={chatUsers}
               onBackToList={() => setMobilePane("list")}
               onAction={handleHeaderAction}
               onStartCall={handleStartCall}
@@ -465,7 +491,7 @@ export default function ChatPage() {
                 <ChatCallOverlay
                   key={activeCall.roomId}
                   room={callRoom}
-                  users={MOCK_USERS}
+                  users={chatUsers}
                   mode={activeCall.mode}
                   startedAt={activeCall.startedAt}
                   onClose={() => setActiveCall(null)}
@@ -546,7 +572,7 @@ export default function ChatPage() {
                       key={message.id}
                       room={activeRoom}
                       message={message}
-                      users={MOCK_USERS}
+                      users={chatUsers}
                       replyMessage={activeRoom.messages.find((candidate) => candidate.id === message.replyToId)}
                       isPinned={activeRoom.pinnedMessageId === message.id}
                       onReply={handleReply}
@@ -578,7 +604,7 @@ export default function ChatPage() {
 
             <MessageInput
               room={activeRoom}
-              users={MOCK_USERS}
+              users={chatUsers}
               value={draft}
               replyTo={replyTo}
               editingMessage={editingMessage}

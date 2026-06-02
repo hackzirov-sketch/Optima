@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { projectsApi, type ApiProject, type ApiColumn } from '@/lib/api';
 
+type ApiErrorLike = {
+  status?: number;
+  message?: string;
+};
+
 export function useProjects(workspaceId: string | undefined) {
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(false);
@@ -15,7 +20,16 @@ export function useProjects(workspaceId: string | undefined) {
     try {
       const res = await projectsApi.listByWorkspace(workspaceId);
       setProjects(res?.data ?? []);
-    } catch (err) {
+    } catch (err: unknown) {
+      const apiErr = err as ApiErrorLike;
+
+      if (apiErr?.status === 403) {
+        // Permission denied for this workspace; keep UI stable without noisy crash-like logs.
+        setProjects([]);
+        setError('You do not have access to this workspace projects');
+        return;
+      }
+
       console.error('[useProjects] load failed', err);
       setError('Failed to load projects');
     } finally {
