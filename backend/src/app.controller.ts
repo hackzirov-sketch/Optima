@@ -1,12 +1,21 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { Public } from './common/decorators/public.decorator';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  @Public()
+  @Get(['health', 'healt'])
+  getHealth() {
+    return {
+      ok: true,
+      service: 'upz-backend',
+      timestamp: new Date().toISOString(),
+    };
+  }
 
+  @Public()
   @Get()
   getHello(): string {
-    return this.appService.getHello();
+    return 'UPZ backend is running';
   }
 }

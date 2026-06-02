@@ -6,6 +6,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
+import { AppController } from './app.controller';
 
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
@@ -35,6 +36,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
+  controllers: [AppController],
   imports: [
     // ── Config (global) ────────────────────────────
     ConfigModule.forRoot({
