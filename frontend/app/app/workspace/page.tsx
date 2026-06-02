@@ -45,7 +45,6 @@ import {
   Video,
   Workflow,
 } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, ViewSwitcher, WidgetCard, WorkspaceHierarchy } from "@/components/app/PowerWorkspaceSystem";
 import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMART_TASKS, WHITEBOARD_NODES, WORKSPACE_ZONE } from "@/data/ecosystemData";
@@ -395,8 +394,7 @@ function taskMatchesPreset(taskText: string, filters: string[]) {
 }
 
 export default function Page() {
-  const { user, logout: onLogout } = useAuth();
-  const { t } = useTranslation();
+  const { user } = useAuth();
   const { activeWorkspace, updateWorkspace, deleteWorkspace, refreshWorkspaces } = useWorkspace();
   const {
     projects: realProjects,
@@ -432,6 +430,7 @@ export default function Page() {
   useEffect(() => {
     setWsName(activeWorkspace?.name ?? '');
     setWsDesc(activeWorkspace?.description ?? '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.id]);
 
   // ── Invitations state ────────────────────────────────────────────────────
@@ -549,7 +548,6 @@ export default function Page() {
   const activePreset = PROFESSION_PRESETS[activeProfession] ?? PROFESSION_PRESETS.developer;
   const createdBoards = createdItems.filter((item) => item.type === "Board" && item.profession === activeProfession).map((item) => item.title);
   const quickBoards = Array.from(new Set([...activePreset.boards, ...createdBoards]));
-  const connectedCount = INTEGRATIONS.filter((integration) => integrationState[integration.id]).length;
   const missingRecommended = activePreset.integrations.filter((id) => !integrationState[id]);
   const integrationCoverage = Math.round(((activePreset.integrations.length - missingRecommended.length) / Math.max(activePreset.integrations.length, 1)) * 100);
   const enabledRules = workspaceRules.filter((rule) => rule.enabled).length;
