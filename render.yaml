@@ -6,7 +6,7 @@ services:
     healthCheckPath: /
     autoDeploy: true
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/upz-landing run generate:emojis && pnpm --filter @workspace/upz-landing run build
-    startCommand: pnpm --filter @workspace/upz-landing run start
+    startCommand: node artifacts/upz-landing/server.js
     envVars:
       - key: NODE_VERSION
         value: 22

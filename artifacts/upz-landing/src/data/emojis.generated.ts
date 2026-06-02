@@ -15,7 +15,7 @@ export type GeneratedEmoji = {
 };
 
 export const GENERATED_EMOJI_META = {
-  "generatedAt": "2026-06-02T08:18:12.498Z",
+  "generatedAt": "2026-06-02T09:27:52.639Z",
   "count": 2854,
   "totalBytes": 178501759,
   "totalAnimated": 997,
