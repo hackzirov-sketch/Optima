@@ -53,10 +53,12 @@ import type { Profession, TaskView } from "@/types";
 import type { ApiMember, ApiProject, ApiTask } from "@/lib/api";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
+import { WorkspaceBackendPanel } from "@/components/app/workspace/WorkspaceBackendPanel";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useMembers } from "@/hooks/useMembers";
+import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
 
 type WorkspaceItemType = "Board" | "Doc" | "Automation" | "Dashboard";
 
@@ -396,9 +398,27 @@ export default function Page() {
   const { user, logout: onLogout } = useAuth();
   const { t } = useTranslation();
   const { activeWorkspace, updateWorkspace, deleteWorkspace, refreshWorkspaces } = useWorkspace();
-  const { projects: realProjects } = useProjects(activeWorkspace?.id);
-  const { tasks: realTasks } = useAllWorkspaceTasks(realProjects.map((p) => p.id));
-  const { members: realMembers } = useMembers(activeWorkspace?.id);
+  const {
+    projects: realProjects,
+    loading: projectsLoading,
+    createProject,
+    refresh: refreshProjects,
+  } = useProjects(activeWorkspace?.id);
+  const projectIds = useMemo(() => realProjects.map((p) => p.id), [realProjects]);
+  const { tasks: realTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(projectIds);
+  const {
+    members: realMembers,
+    loading: membersLoading,
+    refresh: refreshMembers,
+    invite: inviteMember,
+    updateRole,
+    removeMember,
+  } = useMembers(activeWorkspace?.id);
+  const {
+    analytics,
+    loading: analyticsLoading,
+    refresh: refreshAnalytics,
+  } = useWorkspaceAnalytics(activeWorkspace?.id);
 
   // ── Workspace settings state ─────────────────────────────────────────────
   const [wsName, setWsName] = useState(activeWorkspace?.name ?? '');
@@ -418,7 +438,7 @@ export default function Page() {
   const [invitations, setInvitations] = useState<import('@/lib/api').ApiInvitation[]>([]);
   const [invLoading, setInvLoading] = useState(false);
   const [invEmail, setInvEmail] = useState('');
-  const [invRole, setInvRole] = useState('member');
+  const [invRole, setInvRole] = useState('junior');
   const [invSending, setInvSending] = useState(false);
 
   useEffect(() => {
@@ -441,8 +461,10 @@ export default function Page() {
       const res = await workspacesApi.listInvitations(activeWorkspace.id);
       setInvitations(res?.data ?? []);
       setInvEmail('');
-    } catch { /* ignore */ }
-    finally { setInvSending(false); }
+      setNotice('Invitation sent');
+    } catch {
+      setNotice('Could not send invitation — check email and role');
+    } finally { setInvSending(false); }
   };
 
   const handleCancelInvite = async (id: string) => {
@@ -459,8 +481,10 @@ export default function Page() {
       await updateWorkspace(activeWorkspace.id, { name: wsName.trim(), description: wsDesc.trim() || undefined });
       setWsSaved(true);
       setTimeout(() => setWsSaved(false), 2000);
-    } catch { /* ignore */ }
-    finally { setWsSaving(false); }
+      setNotice('Workspace saved');
+    } catch {
+      setNotice('Could not save workspace');
+    } finally { setWsSaving(false); }
   };
 
   const handleDeleteWs = async () => {
@@ -555,9 +579,11 @@ export default function Page() {
     return focused.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));
   }, [focusFilter, professionTasks, query]);
 
-  // When real tasks exist, map them to the display shape; otherwise fall back to mock filtered tasks
+  // Backend workspace: only real tasks. Demo (no workspace): profession mock tasks.
   const effectiveDisplayTasks = useMemo(() => {
-    if (!activeWorkspace || realTasks.length === 0) return filteredTasks;
+    if (!activeWorkspace) return filteredTasks;
+    if (realTasks.length === 0) return [];
+
     const norm = query.trim().toLowerCase();
     const mapped = realTasks.map((t: ApiTask) => ({
       id: t.id,
@@ -810,7 +836,11 @@ export default function Page() {
         <PageHeader
           eyebrow={activeWorkspace?.name ?? "Power Workspace"}
           title={`${activePreset.template} for ${user?.name}`}
-          description={activeWorkspace ? `${realProjects.length} projects · ${realTasks.length} tasks · ${realMembers.length} members` : "Control, create and save your workspace by profession."}
+          description={
+            activeWorkspace
+              ? `${analytics?.projectCount ?? realProjects.length} projects · ${analytics?.totalTasks ?? realTasks.length} tasks · ${analytics?.memberCount ?? realMembers.length} members`
+              : "Control, create and save your workspace by profession."
+          }
         >
           <ActionButton onClick={handleCreateItem}><Plus className="h-4 w-4" /> Create</ActionButton>
           <ActionButton variant="secondary" onClick={handleSaveSnapshot}><Save className="h-4 w-4" /> Save view</ActionButton>
@@ -877,9 +907,12 @@ export default function Page() {
                     onChange={(e) => setInvRole(e.target.value)}
                     className="rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground outline-none"
                   >
-                    <option value="member">Member</option>
+                    <option value="guest">Guest</option>
+                    <option value="junior">Junior</option>
+                    <option value="middle">Middle</option>
+                    <option value="senior">Senior</option>
+                    <option value="lead">Lead</option>
                     <option value="admin">Admin</option>
-                    <option value="viewer">Viewer</option>
                   </select>
                   <ActionButton onClick={handleSendInvite} disabled={invSending || !invEmail.trim()} className="py-2">
                     {invSending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
@@ -913,6 +946,27 @@ export default function Page() {
               </div>
             </SurfaceCard>
           </div>
+        )}
+
+        {activeWorkspace && (
+          <WorkspaceBackendPanel
+            workspace={activeWorkspace}
+            analytics={analytics}
+            analyticsLoading={analyticsLoading}
+            members={realMembers}
+            membersLoading={membersLoading}
+            projects={realProjects}
+            projectsLoading={projectsLoading}
+            onRefreshMembers={refreshMembers}
+            onRefreshProjects={refreshProjects}
+            onRefreshAnalytics={refreshAnalytics}
+            onRefreshTasks={refreshTasks}
+            onCreateProject={createProject}
+            onInvite={inviteMember}
+            onUpdateRole={updateRole}
+            onRemoveMember={removeMember}
+            onNotice={setNotice}
+          />
         )}
 
         {/* Delete workspace confirmation modal */}
@@ -1288,7 +1342,7 @@ export default function Page() {
               <SectionTitle icon={LockKeyhole} title="Team access matrix" description="A backend-ready permission preview for workspace roles." />
               <button
                 type="button"
-                onClick={() => setNotice("Invite flow placeholder opened locally")}
+                onClick={() => document.getElementById('workspace-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
               >
                 <UserPlus className="h-4 w-4" />
@@ -1580,8 +1634,16 @@ export default function Page() {
 
             {effectiveDisplayTasks.length === 0 && (
               <SurfaceCard className="border-dashed text-center">
-                <p className="font-black text-foreground">No matching workspace items</p>
-                <p className="mt-2 text-sm text-muted-foreground">Try another profession preset or clear search.</p>
+                <p className="font-black text-foreground">
+                  {activeWorkspace ? 'No tasks in this workspace yet' : 'No matching workspace items'}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {activeWorkspace
+                    ? tasksLoading
+                      ? 'Loading tasks from the server…'
+                      : 'Create a project and add tasks in the panel above, or open Projects.'
+                    : 'Try another profession preset or clear search.'}
+                </p>
               </SurfaceCard>
             )}
 

@@ -55,14 +55,28 @@ export function useAllWorkspaceTasks(projectIds: string[]) {
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!projectIds.length) { setTasks([]); return; }
+  const load = useCallback(async () => {
+    if (!projectIds.length) {
+      setTasks([]);
+      return;
+    }
     setLoading(true);
-    Promise.all(projectIds.map((id) => tasksApi.listByProject(id).then((r) => r?.data ?? [])))
-      .then((results) => setTasks(results.flat()))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      const results = await Promise.all(
+        projectIds.map((id) => tasksApi.listByProject(id).then((r) => r?.data ?? [])),
+      );
+      setTasks(results.flat());
+    } catch (err) {
+      console.error('[useAllWorkspaceTasks]', err);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
   }, [projectIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { tasks, loading };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { tasks, loading, refresh: load };
 }

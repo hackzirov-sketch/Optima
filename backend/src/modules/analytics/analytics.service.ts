@@ -42,6 +42,10 @@ export class AnalyticsService {
       where: { workspaceId, deletedAt: IsNull() },
     });
 
+    const memberCount = await this.wsMemberRepo.count({
+      where: { workspaceId },
+    });
+
     const taskByStatus = await this.taskRepo
       .createQueryBuilder('t')
       .select('t.status', 'status')
@@ -51,7 +55,23 @@ export class AnalyticsService {
       .groupBy('t.status')
       .getRawMany();
 
-    return { workspaceId, projectCount, taskByStatus };
+    const totalTasks = taskByStatus.reduce(
+      (sum, row) => sum + Number(row.count ?? 0),
+      0,
+    );
+    const completedTasks = taskByStatus
+      .filter((row) => row.status === 'done')
+      .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
+
+    return {
+      workspaceId,
+      projectCount,
+      memberCount,
+      totalTasks,
+      completedTasks,
+      openTasks: totalTasks - completedTasks,
+      taskByStatus,
+    };
   }
 
   async projectAnalytics(projectId: string, userId: string) {

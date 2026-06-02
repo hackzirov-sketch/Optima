@@ -352,8 +352,12 @@ export const groupsApi = {
 
   getById: (id: string) => request<{ data: ApiGroup }>('GET', `/groups/${id}`),
 
-  create: (data: { workspaceId: string; name: string; description?: string }) =>
-    request<{ data: ApiGroup }>('POST', '/groups', { body: data }),
+  create: (data: { workspaceId: string; name: string; description?: string; slug?: string }) => {
+    const slug =
+      data.slug ??
+      `${data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`;
+    return request<{ data: ApiGroup }>('POST', '/groups', { body: { ...data, slug } });
+  },
 
   update: (id: string, data: { name?: string; description?: string }) =>
     request<{ data: ApiGroup }>('PATCH', `/groups/${id}`, { body: data }),
@@ -427,6 +431,19 @@ export const projectsApi = {
 
 // ─── Tasks ────────────────────────────────────────────────────────────────
 
+type ApiNestedList<T> = { data: T[]; total?: number };
+
+/** Backend may return `{ data: T[] }` or `{ data: { data: T[], total } }` after the global envelope. */
+export function unwrapApiList<T>(
+  response: { data?: T[] | ApiNestedList<T> } | null | undefined,
+): T[] {
+  const payload = response?.data;
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload === 'object' && Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
 export interface ApiTask {
   id: string;
   title: string;
@@ -465,8 +482,14 @@ export interface CreateTaskDto {
 }
 
 export const tasksApi = {
-  listByProject: (projectId: string, params?: Record<string, string>) =>
-    request<{ data: ApiTask[] }>('GET', `/projects/${projectId}/tasks`, { params }),
+  listByProject: async (projectId: string, params?: Record<string, string>) => {
+    const res = await request<{ data: ApiTask[] | ApiNestedList<ApiTask> }>(
+      'GET',
+      `/projects/${projectId}/tasks`,
+      { params },
+    );
+    return { data: unwrapApiList(res) };
+  },
 
   getById: (taskId: string) =>
     request<{ data: ApiTask }>('GET', `/tasks/${taskId}`),
@@ -477,8 +500,10 @@ export const tasksApi = {
   update: (taskId: string, data: Partial<CreateTaskDto>) =>
     request<{ data: ApiTask }>('PATCH', `/tasks/${taskId}`, { body: data }),
 
-  move: (taskId: string, data: { columnId?: string; status?: string; order?: number }) =>
-    request<{ data: ApiTask }>('PATCH', `/tasks/${taskId}/move`, { body: data }),
+  move: (taskId: string, data: { columnId?: string; status?: string; order?: number; position?: number }) =>
+    request<{ data: ApiTask }>('PATCH', `/tasks/${taskId}/move`, {
+      body: { columnId: data.columnId, status: data.status, position: data.position ?? data.order },
+    }),
 
   delete: (taskId: string) =>
     request('DELETE', `/tasks/${taskId}`),
@@ -612,11 +637,15 @@ export const analyticsApi = {
 };
 
 export interface ApiWorkspaceAnalytics {
+  workspaceId?: string;
+  projectCount?: number;
+  memberCount?: number;
   totalMembers?: number;
   totalProjects?: number;
   totalTasks?: number;
   completedTasks?: number;
   openTasks?: number;
+  taskByStatus?: { status: string; count: string | number }[];
 }
 
 // ─── Pushes ───────────────────────────────────────────────────────────────
