@@ -503,6 +503,25 @@ export default function Page() {
   const [fieldDraft, setFieldDraft] = useState("");
   const [controls, setControls] = useState<Record<(typeof CONTROL_SWITCHES)[number]["id"], boolean>>({ autoSave: true, reviewGate: true, integrationGuard: true });
 
+  // ── Real-task helpers ─────────────────────────────────────────────────────
+  const memberNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    realMembers.forEach((member: any) => {
+      const name = member.user
+        ? (`${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim() || member.user.email)
+        : 'Unknown';
+      const uid = member.userId ?? member.user?.id ?? '';
+      if (uid) m.set(uid, name);
+    });
+    return m;
+  }, [realMembers]);
+
+  const projectNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    realProjects.forEach((p: any) => m.set(p.id, p.name));
+    return m;
+  }, [realProjects]);
+
   const activePreset = PROFESSION_PRESETS[activeProfession] ?? PROFESSION_PRESETS.developer;
   const createdBoards = createdItems.filter((item) => item.type === "Board" && item.profession === activeProfession).map((item) => item.title);
   const quickBoards = Array.from(new Set([...activePreset.boards, ...createdBoards]));
@@ -536,11 +555,34 @@ export default function Page() {
     return focused.filter((task) => `${task.title} ${task.project} ${task.assignee} ${task.tags.join(" ")}`.toLowerCase().includes(normalized));
   }, [focusFilter, professionTasks, query]);
 
+  // When real tasks exist, map them to the display shape; otherwise fall back to mock filtered tasks
+  const effectiveDisplayTasks = useMemo(() => {
+    if (!activeWorkspace || realTasks.length === 0) return filteredTasks;
+    const norm = query.trim().toLowerCase();
+    const mapped = realTasks.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description ?? '',
+      status: (t.status ?? 'todo') as "backlog" | "todo" | "in_progress" | "review" | "blocked" | "done",
+      priority: (t.priority ?? 'medium') as "low" | "medium" | "high",
+      assignee: memberNameMap.get(t.assigneeId ?? '') || 'Unassigned',
+      project: projectNameMap.get(t.projectId) ?? 'Project',
+      tags: [] as string[],
+      progress: t.status === 'done' ? 100 : t.status === 'in_progress' ? 50 : t.status === 'review' ? 75 : t.status === 'blocked' ? 25 : 0,
+      dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—',
+      estimate: t.estimatedHours ? `${t.estimatedHours}h` : '—',
+      timeTracked: '—',
+      fields: [] as any[],
+    }));
+    if (!norm) return mapped;
+    return mapped.filter((t) => `${t.title} ${t.project} ${t.assignee}`.toLowerCase().includes(norm));
+  }, [activeWorkspace, realTasks, filteredTasks, query, memberNameMap, projectNameMap]);
+
   const workloadLanes = useMemo(() => {
 
     const workload = new Map<string, { owner: string; tasks: number; progress: number; risk: number; focus: string }>();
 
-    filteredTasks.forEach((task) => {
+    effectiveDisplayTasks.forEach((task) => {
       const existing = workload.get(task.assignee) ?? { owner: task.assignee, tasks: 0, progress: 0, risk: 0, focus: task.project };
       existing.tasks += 1;
       existing.progress += task.progress;
@@ -551,14 +593,14 @@ export default function Page() {
 
     return Array.from(workload.values()).slice(0, 4).map((lane) => ({
       ...lane,
-      capacity: Math.min(100, Math.round((lane.tasks / Math.max(filteredTasks.length, 1)) * 100) + lane.risk * 12),
+      capacity: Math.min(100, Math.round((lane.tasks / Math.max(effectiveDisplayTasks.length, 1)) * 100) + lane.risk * 12),
       progress: Math.round(lane.progress / Math.max(lane.tasks, 1)),
     }));
-  }, [filteredTasks]);
+  }, [effectiveDisplayTasks]);
 
-  const avgProgress = Math.round(filteredTasks.reduce((sum, task) => sum + task.progress, 0) / Math.max(filteredTasks.length, 1));
-  const highPriorityCount = filteredTasks.filter((task) => task.priority === "high").length;
-  const reviewCount = filteredTasks.filter((task) => task.status === "review" || task.status === "blocked").length;
+  const avgProgress = Math.round(effectiveDisplayTasks.reduce((sum, task) => sum + task.progress, 0) / Math.max(effectiveDisplayTasks.length, 1));
+  const highPriorityCount = effectiveDisplayTasks.filter((task) => task.priority === "high").length;
+  const reviewCount = effectiveDisplayTasks.filter((task) => task.status === "review" || task.status === "blocked").length;
   const savedScore = Math.min(100, snapshots.length * 24 + createdItems.length * 12);
   const readinessScore = Math.round((WORKSPACE_ZONE.health + avgProgress + integrationCoverage + savedScore + automationScore + fieldScore + milestoneScore) / 7);
   const workspaceSignals = [
@@ -587,7 +629,7 @@ export default function Page() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const taskRows = filteredTasks.map((task) => ({
+  const taskRows = effectiveDisplayTasks.map((task) => ({
     id: task.id,
     cells: [
       <span key="title" className="font-black">{task.title}</span>,
@@ -896,7 +938,7 @@ export default function Page() {
         <SurfaceCard className="overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="relative overflow-hidden p-5 sm:p-6">
-              <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 rounded-full bg-indigo-100/70 blur-3xl" />
+              <div className="pointer-events-none absolute right-0 top-0 h-44 w-44 rounded-full bg-indigo-100/70 blur-3xl dark:bg-indigo-500/20" />
               <div className="relative flex flex-col gap-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -929,7 +971,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={applyProfessionTemplate}
-                    className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm dark:border-indigo-500/25 dark:bg-indigo-500/10"
                   >
                     <span className="grid h-9 w-9 place-items-center rounded-xl bg-card text-indigo-600 shadow-sm"><Workflow className="h-4 w-4" /></span>
                     <span>
@@ -940,7 +982,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={connectRecommendedIntegrations}
-                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm dark:hover:border-indigo-500/25"
                   >
                     <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-indigo-600"><Database className="h-4 w-4" /></span>
                     <span>
@@ -951,7 +993,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={handleSaveSnapshot}
-                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-100 hover:shadow-sm dark:hover:border-indigo-500/25"
                   >
                     <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-indigo-600"><Save className="h-4 w-4" /></span>
                     <span>
@@ -992,11 +1034,11 @@ export default function Page() {
                       key={control.id}
                       type="button"
                       onClick={() => setControls((current) => ({ ...current, [control.id]: !current[control.id] }))}
-                      className={cn("rounded-2xl border p-3 text-left transition-all", controls[control.id] ? "border-indigo-100 bg-card shadow-sm" : "border-border bg-card/60")}
+                      className={cn("rounded-2xl border p-3 text-left transition-all", controls[control.id] ? "border-indigo-100 bg-card shadow-sm dark:border-indigo-500/25" : "border-border bg-card/60")}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-black text-foreground">{control.label}</span>
-                        <span className={cn("h-5 w-9 rounded-full p-0.5 transition-colors", controls[control.id] ? "bg-indigo-600" : "bg-slate-200")}>
+                        <span className={cn("h-5 w-9 rounded-full p-0.5 transition-colors", controls[control.id] ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}>
                           <span className={cn("block h-4 w-4 rounded-full bg-card transition-transform", controls[control.id] && "translate-x-4")} />
                         </span>
                       </div>
@@ -1027,7 +1069,7 @@ export default function Page() {
                   }}
                   className={cn(
                     "rounded-[22px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                    active ? "border-indigo-200 bg-indigo-50/70 shadow-sm" : "border-border bg-muted hover:bg-card",
+                    active ? "border-indigo-200 bg-indigo-50/70 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-500/10" : "border-border bg-muted hover:bg-card",
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -1056,7 +1098,7 @@ export default function Page() {
                   onClick={() => setFocusFilter(filter)}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors",
-                    focusFilter === filter ? "bg-indigo-600 text-white ring-indigo-600" : "bg-card text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700",
+                    focusFilter === filter ? "bg-indigo-600 text-white ring-indigo-600" : "bg-card text-muted-foreground ring-border hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300",
                   )}
                 >
                   {filter}
@@ -1070,7 +1112,7 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={ShieldCheck} title="Workspace readiness" description="A compact health score for tasks, tools, saved states and workspace structure." />
             <div className="grid gap-4 md:grid-cols-[160px_1fr] md:items-center">
-              <div className="mx-auto grid h-36 w-36 place-items-center rounded-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 ring-1 ring-indigo-100">
+              <div className="mx-auto grid h-36 w-36 place-items-center rounded-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 ring-1 ring-indigo-100 dark:from-indigo-500/10 dark:via-card dark:to-blue-500/10 dark:ring-indigo-500/25">
                 <div className="text-center">
                   <p className="text-4xl font-black text-foreground">{readinessScore}</p>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">ready</p>
@@ -1093,13 +1135,13 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Workflow} title={`${activePreset.label} blueprint`} description="Suggested operating structure generated from the selected profession preset." />
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-border">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Boards</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {activePreset.boards.map((board) => <Pill key={board} tone="blue">{board}</Pill>)}
                 </div>
               </div>
-              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-border">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Controls</p>
                 <div className="mt-3 space-y-2">
                   {CONTROL_SWITCHES.map((control) => (
@@ -1110,7 +1152,7 @@ export default function Page() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-2xl bg-muted p-4 ring-1 ring-[#E5E7EB]">
+              <div className="rounded-2xl bg-muted p-4 ring-1 ring-border">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Tool coverage</p>
                 <p className="mt-3 text-2xl font-black text-foreground">{integrationCoverage}%</p>
                 <p className="mt-1 text-xs text-muted-foreground">{missingRecommended.length ? `${missingRecommended.length} recommended tools missing` : "Recommended tools connected"}</p>
@@ -1133,7 +1175,7 @@ export default function Page() {
                 className="group rounded-[24px] border border-border bg-muted p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-card hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm ring-1 ring-indigo-100 dark:ring-indigo-500/25">
                     <Rocket className="h-5 w-5 transition-transform group-hover:-rotate-12 group-hover:scale-110" />
                   </span>
                   <Pill tone={kit.profession === "all" ? "blue" : "green"}>{kit.profession === "all" ? "Universal" : activePreset.label}</Pill>
@@ -1168,10 +1210,10 @@ export default function Page() {
                   onClick={() => setWorkspaceRules((current) => current.map((item) => item.id === rule.id ? { ...item, enabled: !item.enabled } : item))}
                   className={cn(
                     "flex w-full items-start gap-3 rounded-[22px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                    rule.enabled ? "border-indigo-100 bg-indigo-50/60" : "border-border bg-muted hover:bg-card",
+                    rule.enabled ? "border-indigo-100 bg-indigo-50/60 dark:border-indigo-500/25 dark:bg-indigo-500/10" : "border-border bg-muted hover:bg-card",
                   )}
                 >
-                  <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", rule.enabled ? "bg-card text-indigo-600 shadow-sm" : "bg-card text-muted-foreground ring-1 ring-[#E5E7EB]")}>
+                  <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-2xl", rule.enabled ? "bg-card text-indigo-600 shadow-sm" : "bg-card text-muted-foreground ring-1 ring-border")}>
                     <PlayCircle className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -1208,7 +1250,7 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={addCustomField}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#111827] px-4 text-sm font-black text-white transition-all hover:-translate-y-0.5 hover:bg-indigo-600"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-black text-white transition-all hover:-translate-y-0.5 hover:bg-indigo-500"
                 >
                   <Plus className="h-4 w-4" />
                   Add field
@@ -1223,7 +1265,7 @@ export default function Page() {
                   onClick={() => setWorkspaceFields((current) => current.map((item) => item.id === field.id ? { ...item, enabled: !item.enabled } : item))}
                   className={cn(
                     "flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition-colors",
-                    field.enabled ? "border-emerald-100 bg-emerald-50/70" : "border-border bg-muted hover:bg-card",
+                    field.enabled ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-500/25 dark:bg-emerald-500/10" : "border-border bg-muted hover:bg-card",
                   )}
                 >
                   <span className="min-w-0">
@@ -1247,7 +1289,7 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => setNotice("Invite flow placeholder opened locally")}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
               >
                 <UserPlus className="h-4 w-4" />
                 Invite member
@@ -1280,7 +1322,7 @@ export default function Page() {
             <SectionTitle icon={Bell} title="Workspace signal feed" description="Small alerts that keep the workspace controlled without heavy panels." />
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[
-                { title: "Focus lane active", body: `${focusFilter} filter is shaping ${filteredTasks.length} visible items.`, icon: Filter, tone: "blue" as const },
+                { title: "Focus lane active", body: `${focusFilter} filter is shaping ${effectiveDisplayTasks.length} visible items.`, icon: Filter, tone: "blue" as const },
                 { title: "Review pressure", body: `${reviewCount + highPriorityCount} items need attention or priority review.`, icon: ShieldCheck, tone: reviewCount ? "amber" as const : "green" as const },
                 { title: "Integration coverage", body: missingRecommended.length ? `${missingRecommended.length} recommended tools still ready to connect.` : "All recommended tools are connected in demo mode.", icon: Database, tone: missingRecommended.length ? "amber" as const : "green" as const },
                 { title: "Saved workspace", body: `${snapshots.length} saved snapshots and ${createdItems.length} local objects are stored.`, icon: Save, tone: snapshots.length ? "indigo" as const : "slate" as const },
@@ -1318,7 +1360,7 @@ export default function Page() {
               </button>
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-[180px_1fr]">
-              <div className="rounded-[24px] bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-4 text-center ring-1 ring-indigo-100">
+              <div className="rounded-[24px] bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-4 text-center ring-1 ring-indigo-100 dark:from-indigo-500/10 dark:via-card dark:to-blue-500/10 dark:ring-indigo-500/25">
                 <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm">
                   <Gauge className="h-5 w-5" />
                 </span>
@@ -1365,11 +1407,11 @@ export default function Page() {
                     <Pill tone={lane.capacity > 72 ? "amber" : "green"}>{lane.capacity}% capacity</Pill>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                    <div className="rounded-2xl bg-card p-3 ring-1 ring-border">
                       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Progress</p>
                       <ProgressBar value={lane.progress} />
                     </div>
-                    <div className="rounded-2xl bg-card p-3 ring-1 ring-[#E5E7EB]">
+                    <div className="rounded-2xl bg-card p-3 ring-1 ring-border">
                       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Risk load</p>
                       <div className="mt-3 flex items-center justify-between">
                         <span className="text-2xl font-black text-foreground">{lane.risk}</span>
@@ -1380,7 +1422,7 @@ export default function Page() {
                 </div>
               ))}
               {workloadLanes.length === 0 && (
-                <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB]">No workload lanes in the current filter.</p>
+                <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-border">No workload lanes in the current filter.</p>
               )}
             </div>
           </SurfaceCard>
@@ -1406,7 +1448,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => createIntakeRoute(title)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-[#E5E7EB] transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                    className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground ring-1 ring-border transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
                   >
                     <Workflow className="h-4 w-4" />
                     Create route
@@ -1422,7 +1464,7 @@ export default function Page() {
               <button
                 type="button"
                 onClick={saveViewPreset}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
               >
                 <Save className="h-4 w-4" />
                 Save preset
@@ -1492,7 +1534,7 @@ export default function Page() {
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {GOVERNANCE_CHECKS.map((check) => (
-                  <div key={check.title} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-[#E5E7EB]">
+                  <div key={check.title} className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
                     <div className="flex items-start justify-between gap-3">
                       <p className="font-black text-foreground">{check.title}</p>
                       <Pill tone={check.tone}>{check.status}</Pill>
@@ -1516,7 +1558,7 @@ export default function Page() {
                     key={board}
                     type="button"
                     onClick={() => setActiveBoard(board)}
-                    className={cn("rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors", activeBoard === board ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-[#E5E7EB] hover:bg-indigo-50 hover:text-indigo-700")}
+                    className={cn("rounded-full px-3 py-1.5 text-xs font-bold ring-1 transition-colors", activeBoard === board ? "bg-indigo-600 text-white ring-indigo-600" : "bg-muted text-muted-foreground ring-border hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300")}
                   >
                     {board}
                   </button>
@@ -1536,25 +1578,25 @@ export default function Page() {
 
             <FilterBar query={query} onQueryChange={setQuery} chips={[...activePreset.filters.slice(0, 4), "Saved view"]} />
 
-            {filteredTasks.length === 0 && (
+            {effectiveDisplayTasks.length === 0 && (
               <SurfaceCard className="border-dashed text-center">
                 <p className="font-black text-foreground">No matching workspace items</p>
                 <p className="mt-2 text-sm text-muted-foreground">Try another profession preset or clear search.</p>
               </SurfaceCard>
             )}
 
-            {activeView === "board" && filteredTasks.length > 0 && (
+            {activeView === "board" && effectiveDisplayTasks.length > 0 && (
               <SurfaceCard>
-                <SectionTitle icon={LayoutDashboard} title={`${activePreset.label} board view`} description="Profession-filtered Smart Tasks grouped by workflow status." />
+                <SectionTitle icon={LayoutDashboard} title={`${activePreset.label} board view`} description="Tasks grouped by workflow status." />
                 <div className="grid gap-3 xl:grid-cols-4">
                   {(["todo", "in_progress", "review", "done"] as const).map((status) => (
-                    <div key={status} className="rounded-2xl bg-muted p-3 ring-1 ring-[#E5E7EB]">
+                    <div key={status} className="rounded-2xl bg-muted p-3 ring-1 ring-border">
                       <div className="mb-3 flex items-center justify-between">
                         <h3 className="text-sm font-black capitalize text-foreground">{status.replace("_", " ")}</h3>
-                        <Pill tone="slate">{filteredTasks.filter((task) => task.status === status).length}</Pill>
+                        <Pill tone="slate">{effectiveDisplayTasks.filter((task) => task.status === status).length}</Pill>
                       </div>
                       <div className="space-y-2">
-                        {filteredTasks.filter((task) => task.status === status).map((task) => (
+                        {effectiveDisplayTasks.filter((task) => task.status === status).map((task) => (
                           <div key={task.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                             <p className="text-sm font-black text-foreground">{task.title}</p>
                             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1574,9 +1616,9 @@ export default function Page() {
 
             {activeView === "calendar" && (
               <SurfaceCard>
-                <SectionTitle icon={Calendar} title="Calendar control" description="Deadline preview for filtered Smart Tasks, meetings and reminders." />
+                <SectionTitle icon={Calendar} title="Calendar control" description="Deadline preview for tasks, meetings and reminders." />
                 <div className="grid gap-3 md:grid-cols-4">
-                  {filteredTasks.map((task) => (
+                  {effectiveDisplayTasks.map((task) => (
                     <div key={task.id} className="rounded-2xl border border-border bg-muted p-4">
                       <p className="text-xs font-black uppercase tracking-[0.14em] text-indigo-500">{task.dueDate}</p>
                       <p className="mt-2 text-sm font-black text-foreground">{task.title}</p>
@@ -1589,9 +1631,9 @@ export default function Page() {
 
             {activeView === "timeline" && (
               <SurfaceCard>
-                <SectionTitle icon={Sparkles} title="Timeline control" description="Launch lane with progress, estimate and tracked focus time." />
+                <SectionTitle icon={Sparkles} title="Timeline control" description="Task progress, estimate and due date overview." />
                 <div className="space-y-3">
-                  {filteredTasks.map((task) => (
+                  {effectiveDisplayTasks.map((task) => (
                     <div key={task.id} className="grid gap-3 rounded-2xl border border-border bg-muted p-4 md:grid-cols-[1fr_2fr_0.5fr] md:items-center">
                       <div>
                         <p className="font-black text-foreground">{task.title}</p>
@@ -1620,7 +1662,7 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Save} title="Saved workspace states" description="Restore profession, view and board presets you saved locally." />
             <div className="space-y-2">
-              {snapshots.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB]">No saved workspace states yet. Use Save view to create one.</p>}
+              {snapshots.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-border">No saved workspace states yet. Use Save view to create one.</p>}
               {snapshots.map((snapshot) => (
                 <button key={snapshot.id} type="button" onClick={() => restoreSnapshot(snapshot)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-muted p-3 text-left transition-colors hover:bg-card hover:shadow-sm">
                   <span className="min-w-0">
@@ -1636,7 +1678,7 @@ export default function Page() {
           <SurfaceCard>
             <SectionTitle icon={Plus} title="Created locally" description="Demo objects created from this workspace. Backend-ready shape, localStorage only." />
             <div className="grid gap-2 md:grid-cols-2">
-              {createdItems.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-[#E5E7EB] md:col-span-2">Create a board, doc, automation or dashboard to see it here.</p>}
+              {createdItems.length === 0 && <p className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground ring-1 ring-border md:col-span-2">Create a board, doc, automation or dashboard to see it here.</p>}
               {createdItems.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-border bg-muted p-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1667,9 +1709,9 @@ export default function Page() {
 
           <SurfaceCard>
             <SectionTitle icon={Sparkles} title="UPZ Canvas + Intake" description="Whiteboard nodes, intake fields and screen notes placeholders." />
-            <div className="relative h-56 overflow-hidden rounded-[24px] bg-muted ring-1 ring-[#E5E7EB]">
+            <div className="relative h-56 overflow-hidden rounded-[24px] bg-muted ring-1 ring-border">
               {WHITEBOARD_NODES.map((node) => (
-                <div key={node.id} className="absolute rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-[#E5E7EB]" style={{ left: `${node.x}%`, top: `${node.y}%` }}>{node.title}</div>
+                <div key={node.id} className="absolute rounded-2xl bg-card px-3 py-2 text-xs font-black text-foreground shadow-sm ring-1 ring-border" style={{ left: `${node.x}%`, top: `${node.y}%` }}>{node.title}</div>
               ))}
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1686,7 +1728,7 @@ export default function Page() {
               const connected = integrationState[id];
               const recommended = activePreset.integrations.includes(id);
               return (
-                <div key={id} className={cn("rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm", recommended ? "border-indigo-100 bg-indigo-50/45" : "border-border bg-muted")}>
+                <div key={id} className={cn("rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:bg-card hover:shadow-sm", recommended ? "border-indigo-100 bg-indigo-50/45 dark:border-indigo-500/25 dark:bg-indigo-500/10" : "border-border bg-muted")}>
                   <div className="flex items-start justify-between gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-2xl bg-card text-indigo-600 shadow-sm"><Icon className="h-5 w-5" /></span>
                     <div className="flex gap-1">
@@ -1699,7 +1741,7 @@ export default function Page() {
                   <button
                     type="button"
                     onClick={() => setIntegrationState((current) => ({ ...current, [id]: !current[id] }))}
-                    className={cn("mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-black transition-colors", connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-card text-muted-foreground ring-1 ring-[#E5E7EB] hover:text-indigo-700")}
+                    className={cn("mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-black transition-colors", connected ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/25" : "bg-card text-muted-foreground ring-1 ring-border hover:text-indigo-700 dark:hover:text-indigo-300")}
                   >
                     {connected ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                     {connected ? "Connected" : "Connect demo"}
