@@ -1,6 +1,5 @@
 import {
   ArrowUpRight,
-  BarChart3,
   Bell,
   Bot,
   CalendarDays,
@@ -10,7 +9,6 @@ import {
   LayoutDashboard,
   MessageCircle,
   Target,
-  TrendingUp,
   Users,
   WalletCards,
   Zap,
@@ -18,12 +16,11 @@ import {
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppLayout } from "@/components/app/AppLayout";
+import { DashboardCharts } from "@/components/app/DashboardCharts";
 import { CommandCard, MetricTile, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { WidgetCard } from "@/components/app/PowerWorkspaceSystem";
 import { BANK_TRANSACTIONS, DASHBOARD_WIDGETS, ECOSYSTEM_MODULES, GOALS, NOTIFICATIONS } from "@/data/ecosystemData";
-import { WEEKLY_ACTIVITY } from "@/data/mockData";
 import type { UserProfile } from "@/types";
 import { storage } from "@/utils/storage";
 
@@ -37,14 +34,6 @@ const PROJECT_PROGRESS = [
   { nameKey: "internalExpansion", progress: 76, color: "#3B82F6" },
   { nameKey: "backendIntegration", progress: 40, color: "#10B981" },
   { nameKey: "mobileUx", progress: 58, color: "#F59E0B" },
-];
-
-const PRODUCTIVITY_DATA = [
-  { week: "W1", score: 62 },
-  { week: "W2", score: 74 },
-  { week: "W3", score: 68 },
-  { week: "W4", score: 81 },
-  { week: "W5", score: 88 },
 ];
 
 const TODAY_COMMANDS = [
@@ -84,11 +73,6 @@ const AGENDA = [
   { time: "14:00", titleKey: "moderation", areaKey: "community" },
   { time: "16:00", titleKey: "demo", areaKey: "workspace" },
 ];
-
-const tooltipStyle = {
-  contentStyle: { background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 16, color: "#111827", boxShadow: "0 12px 30px rgba(17,24,39,0.12)" },
-  cursor: { fill: "rgba(99,102,241,0.08)" },
-};
 
 export default function DashboardPage({ user, onLogout }: Props) {
   const { t } = useTranslation();
@@ -269,33 +253,7 @@ export default function DashboardPage({ user, onLogout }: Props) {
           </div>
         </SurfaceCard>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <SurfaceCard>
-            <SectionTitle icon={BarChart3} title={t("app.dashboard.weeklyActivity")} description={t("app.dashboard.weeklyActivityDesc")} />
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={WEEKLY_ACTIVITY} barGap={4}>
-                <XAxis dataKey="day" tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-                <Tooltip {...tooltipStyle} />
-                <Bar dataKey="tasks" fill="#6366F1" radius={[8, 8, 0, 0]} name={t("app.dashboard.chartTasks")} />
-                <Bar dataKey="messages" fill="#3B82F6" radius={[8, 8, 0, 0]} name={t("app.dashboard.chartMessages")} />
-              </BarChart>
-            </ResponsiveContainer>
-          </SurfaceCard>
-
-          <SurfaceCard>
-            <SectionTitle icon={TrendingUp} title={t("app.dashboard.productivityScore")} description={t("app.dashboard.productivityDesc")} />
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={PRODUCTIVITY_DATA}>
-                <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                <XAxis dataKey="week" tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[50, 100]} tick={{ fill: "#6B7280", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-                <Tooltip {...tooltipStyle} />
-                <Line type="monotone" dataKey="score" stroke="#10B981" strokeWidth={3} dot={{ fill: "#10B981", strokeWidth: 0, r: 4 }} activeDot={{ r: 6, fill: "#10B981" }} name={t("app.dashboard.chartScore")} />
-              </LineChart>
-            </ResponsiveContainer>
-          </SurfaceCard>
-        </div>
+        <DashboardCharts />
       </PageShell>
     </AppLayout>
   );

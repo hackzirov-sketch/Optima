@@ -1,23 +1,9 @@
-export type GeneratedEmoji = {
-  id: string;
-  name: string;
-  type: "static" | "animated";
-  category: string;
-  previewSrc: string;
-  animationSrc?: string;
-  keywords: string[];
-  part?: string;
-  bytes: number;
-};
+import { type GeneratedEmoji, GENERATED_EMOJI_CATEGORY_LOADERS } from "./emojis.generated";
+
+export type { GeneratedEmoji };
 
 export type GeneratedEmojiPayload = {
-  meta: {
-    generatedAt: string;
-    count: number;
-    totalBytes: number;
-    totalAnimated: number;
-    totalStatic: number;
-  };
+  meta: Record<string, unknown>;
   emojis: GeneratedEmoji[];
 };
 
@@ -29,10 +15,17 @@ export async function loadGeneratedEmojis() {
   return payloadCache;
 }
 
+export function loadEmojiCategory(category: string): Promise<GeneratedEmoji[]> {
+  const loader = GENERATED_EMOJI_CATEGORY_LOADERS[category];
+  if (!loader) return Promise.reject(new Error(`Unknown category: ${category}`));
+  return loader().then((m) => m.default);
+}
+
 export async function loadGeneratedEmojiById(id: string) {
   if (!byIdCache) {
-    const payload = await loadGeneratedEmojis();
-    byIdCache = new Map(payload.emojis.map((emoji) => [emoji.id, emoji]));
+    const all = Object.values(GENERATED_EMOJI_CATEGORY_LOADERS);
+    const results = await Promise.all(all.map((loader) => loader().then((m) => m.default)));
+    byIdCache = new Map(results.flat().map((emoji) => [emoji.id, emoji]));
   }
   return byIdCache.get(id);
 }

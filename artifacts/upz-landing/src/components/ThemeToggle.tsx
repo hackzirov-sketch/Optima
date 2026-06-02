@@ -1,6 +1,6 @@
 import { Moon, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useTheme } from "@/utils/theme";
+import { useTheme } from "next-themes";
 
 interface ThemeToggleProps {
   compact?: boolean;
@@ -8,13 +8,14 @@ interface ThemeToggleProps {
 
 export function ThemeToggle({ compact = false }: ThemeToggleProps) {
   const { t } = useTranslation();
-  const { isDark, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
   const label = isDark ? t("app.theme.switchToLight") : t("app.theme.switchToDark");
 
   return (
     <button
       type="button"
-      onClick={toggleTheme}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={label}
       title={label}
       className="group inline-flex h-10 items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white/80 px-2.5 text-sm font-semibold text-[#6B7280] shadow-sm backdrop-blur transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:text-[#111827] dark:border-slate-700/80 dark:bg-slate-900/75 dark:text-slate-300 dark:hover:border-indigo-400/40 dark:hover:bg-slate-800 dark:hover:text-white"

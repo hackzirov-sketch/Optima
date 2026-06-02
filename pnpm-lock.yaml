@@ -411,46 +411,6 @@ importers:
       '@emoji-mart/data':
         specifier: ^1.2.1
         version: 1.2.1
-      '@lottiefiles/react-lottie-player':
-        specifier: ^3.6.0
-        version: 3.6.0(react@19.1.0)
-      animated-fluent-emojis:
-        specifier: ^0.1.2
-        version: 0.1.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      compression:
-        specifier: ^1.7.5
-        version: 1.8.1
-      emoji-mart:
-        specifier: ^5.6.0
-        version: 5.6.0
-      express:
-        specifier: ^5.1.0
-        version: 5.2.1
-      frimousse:
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.1.0)(typescript@5.9.3)
-      i18next:
-        specifier: ^26.0.8
-        version: 26.0.8(typescript@5.9.3)
-      i18next-browser-languagedetector:
-        specifier: ^8.2.1
-        version: 8.2.1
-      lottie-react:
-        specifier: ^2.4.1
-        version: 2.4.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      openmoji:
-        specifier: ^17.0.0
-        version: 17.0.0
-      react-i18next:
-        specifier: ^17.0.6
-        version: 17.0.6(i18next@26.0.8(typescript@5.9.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.0.0
-        version: 9.39.4
-      '@hookform/resolvers':
-        specifier: ^3.10.0
-        version: 3.10.0(react-hook-form@7.71.2(react@19.1.0))
       '@radix-ui/react-accordion':
         specifier: ^1.2.4
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -532,6 +492,100 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.0
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.90.21(react@19.1.0)
+      '@workspace/api-client-react':
+        specifier: workspace:*
+        version: link:../../lib/api-client-react
+      class-variance-authority:
+        specifier: 'catalog:'
+        version: 0.7.1
+      clsx:
+        specifier: 'catalog:'
+        version: 2.1.1
+      cmdk:
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      compression:
+        specifier: ^1.7.5
+        version: 1.8.1
+      date-fns:
+        specifier: ^3.6.0
+        version: 3.6.0
+      embla-carousel-react:
+        specifier: ^8.6.0
+        version: 8.6.0(react@19.1.0)
+      emoji-mart:
+        specifier: ^5.6.0
+        version: 5.6.0
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      framer-motion:
+        specifier: 'catalog:'
+        version: 12.35.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      frimousse:
+        specifier: ^0.3.0
+        version: 0.3.0(react@19.1.0)(typescript@5.9.3)
+      i18next:
+        specifier: ^26.0.8
+        version: 26.0.8(typescript@5.9.3)
+      i18next-browser-languagedetector:
+        specifier: ^8.2.1
+        version: 8.2.1
+      input-otp:
+        specifier: ^1.4.2
+        version: 1.4.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      lottie-react:
+        specifier: ^2.4.1
+        version: 2.4.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.545.0(react@19.1.0)
+      next-themes:
+        specifier: ^0.4.6
+        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
+      react-day-picker:
+        specifier: ^9.11.1
+        version: 9.14.0(react@19.1.0)
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.1.0(react@19.1.0)
+      react-hook-form:
+        specifier: ^7.55.0
+        version: 7.71.2(react@19.1.0)
+      react-i18next:
+        specifier: ^17.0.6
+        version: 17.0.6(i18next@26.0.8(typescript@5.9.3))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      react-resizable-panels:
+        specifier: ^2.1.7
+        version: 2.1.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      recharts:
+        specifier: ^2.15.2
+        version: 2.15.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.5.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      vaul:
+        specifier: ^1.1.2
+        version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      wouter:
+        specifier: ^3.3.5
+        version: 3.9.0(react@19.1.0)
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.0.0
+        version: 9.39.4
       '@replit/vite-plugin-cartographer':
         specifier: 'catalog:'
         version: 0.5.1
@@ -547,9 +601,6 @@ importers:
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.2.1(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3))
-      '@tanstack/react-query':
-        specifier: 'catalog:'
-        version: 5.90.21(react@19.1.0)
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -571,24 +622,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 5.1.4(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3))
-      '@workspace/api-client-react':
-        specifier: workspace:*
-        version: link:../../lib/api-client-react
-      class-variance-authority:
-        specifier: 'catalog:'
-        version: 0.7.1
-      clsx:
-        specifier: 'catalog:'
-        version: 2.1.1
-      cmdk:
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      date-fns:
-        specifier: ^3.6.0
-        version: 3.6.0
-      embla-carousel-react:
-        specifier: ^8.6.0
-        version: 8.6.0(react@19.1.0)
       eslint:
         specifier: ^9.0.0
         version: 9.39.4(jiti@2.6.1)
@@ -598,72 +631,21 @@ importers:
       eslint-plugin-react-refresh:
         specifier: ^0.4.0
         version: 0.4.26(eslint@9.39.4(jiti@2.6.1))
-      framer-motion:
-        specifier: 'catalog:'
-        version: 12.35.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      input-otp:
-        specifier: ^1.4.2
-        version: 1.4.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
-      lucide-react:
-        specifier: 'catalog:'
-        version: 0.545.0(react@19.1.0)
-      next-themes:
-        specifier: ^0.4.6
-        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      react:
-        specifier: 'catalog:'
-        version: 19.1.0
-      react-day-picker:
-        specifier: ^9.11.1
-        version: 9.14.0(react@19.1.0)
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.1.0(react@19.1.0)
-      react-hook-form:
-        specifier: ^7.55.0
-        version: 7.71.2(react@19.1.0)
-      react-icons:
-        specifier: ^5.4.0
-        version: 5.6.0(react@19.1.0)
-      react-resizable-panels:
-        specifier: ^2.1.7
-        version: 2.1.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      recharts:
-        specifier: ^2.15.2
-        version: 2.15.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      sonner:
-        specifier: ^2.0.7
-        version: 2.0.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      tailwind-merge:
-        specifier: 'catalog:'
-        version: 3.5.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.2.1
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
       typescript-eslint:
         specifier: ^8.0.0
         version: 8.60.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
-      vaul:
-        specifier: ^1.1.2
-        version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       vite:
         specifier: 'catalog:'
         version: 7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3)
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@25.3.5)(jsdom@29.1.1)(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.3))
-      wouter:
-        specifier: ^3.3.5
-        version: 3.9.0(react@19.1.0)
-      zod:
-        specifier: 'catalog:'
-        version: 3.25.76
 
   lib/api-client-react:
     dependencies:
@@ -999,11 +981,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@lottiefiles/react-lottie-player@3.6.0':
-    resolution: {integrity: sha512-WK5TriLJT93VF3w4IjSVyveiedraZCnDhKzCPhpbeLgQeMi6zufxa3dXNc4HmAFRXq+LULPAy+Idv1rAfkReMA==}
-    peerDependencies:
-      react: 16 - 19
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2095,12 +2072,6 @@ packages:
 
   ajv@8.18.0:
     resolution: {integrity: sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==}
-
-  animated-fluent-emojis@0.1.2:
-    resolution: {integrity: sha512-JPKvOk8JVwDqPk9tza2c1qSBcufkJJJDQQ87kV1GpikZ0IWVFJkH1S8avAB+/zDUPfDOCatnIfKmrEDPfrycJg==}
-    peerDependencies:
-      react: ^18.3.1
-      react-dom: ^18.3.1
 
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
@@ -3208,9 +3179,6 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openmoji@17.0.0:
-    resolution: {integrity: sha512-EBnYrNGdcdw+OSXmENeNE1yBNRu6tOraTmoOyUbJkTmvT/+XETp8RZLSJFzD3lrPc5N9CzsyPnRTk0Vp4UaI9w==}
-
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -3453,11 +3421,6 @@ packages:
         optional: true
       typescript:
         optional: true
-
-  react-icons@5.6.0:
-    resolution: {integrity: sha512-RH93p5ki6LfOiIt0UtDyNg/cee+HLVR6cHHtW3wALfo+eOHTp8RnU2kRkI6E+H19zMIs03DyxUG/GfZMOGvmiA==}
-    peerDependencies:
-      react: '*'
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -4370,11 +4333,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@lottiefiles/react-lottie-player@3.6.0(react@19.1.0)':
-    dependencies:
-      lottie-web: 5.13.0
-      react: 19.1.0
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -5644,11 +5602,6 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  animated-fluent-emojis@0.1.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
-    dependencies:
-      react: 19.1.0
-      react-dom: 19.1.0(react@19.1.0)
-
   ansi-colors@4.1.3: {}
 
   ansi-regex@5.0.1: {}
@@ -6609,8 +6562,6 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openmoji@17.0.0: {}
-
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -6885,10 +6836,6 @@ snapshots:
     optionalDependencies:
       react-dom: 19.1.0(react@19.1.0)
       typescript: 5.9.3
-
-  react-icons@5.6.0(react@19.1.0):
-    dependencies:
-      react: 19.1.0
 
   react-is@16.13.1: {}
 

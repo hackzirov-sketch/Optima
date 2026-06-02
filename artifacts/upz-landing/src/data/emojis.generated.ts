@@ -15,7 +15,7 @@ export type GeneratedEmoji = {
 };
 
 export const GENERATED_EMOJI_META = {
-  "generatedAt": "2026-06-01T18:46:09.227Z",
+  "generatedAt": "2026-06-02T08:18:12.498Z",
   "count": 2854,
   "totalBytes": 178501759,
   "totalAnimated": 997,
@@ -41243,4 +41243,13 @@ export const GENERATED_EMOJIS = [
 
 export const GENERATED_EMOJI_BY_ID = Object.fromEntries(GENERATED_EMOJIS.map((emoji) => [emoji.id, emoji])) as Record<string, GeneratedEmoji>;
 
-export const GENERATED_EMOJI_CATEGORIES = Array.from(new Set(GENERATED_EMOJIS.map((e) => e.category).filter(Boolean).sort())) as readonly string[];
+export const GENERATED_EMOJI_CATEGORIES = ["animated-face","animated-other","animated-people","static-face","static-other","static-people"] as const satisfies readonly string[];
+
+export const GENERATED_EMOJI_CATEGORY_LOADERS: Record<string, () => Promise<{ default: GeneratedEmoji[] }>> = {
+  "animated-face": () => import("./emojis.animated-face.json") as Promise<{ default: GeneratedEmoji[] }>,
+  "animated-other": () => import("./emojis.animated-other.json") as Promise<{ default: GeneratedEmoji[] }>,
+  "animated-people": () => import("./emojis.animated-people.json") as Promise<{ default: GeneratedEmoji[] }>,
+  "static-face": () => import("./emojis.static-face.json") as Promise<{ default: GeneratedEmoji[] }>,
+  "static-other": () => import("./emojis.static-other.json") as Promise<{ default: GeneratedEmoji[] }>,
+  "static-people": () => import("./emojis.static-people.json") as Promise<{ default: GeneratedEmoji[] }>,
+};
