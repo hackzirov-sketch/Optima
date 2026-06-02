@@ -50,6 +50,7 @@ import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionT
 import { DataTable, FilterBar, ViewSwitcher, WidgetCard, WorkspaceHierarchy } from "@/components/app/PowerWorkspaceSystem";
 import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMART_TASKS, WHITEBOARD_NODES, WORKSPACE_ZONE } from "@/data/ecosystemData";
 import type { Profession, TaskView } from "@/types";
+import type { ApiMember, ApiProject, ApiTask } from "@/lib/api";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -506,19 +507,18 @@ export default function Page() {
   // ── Real-task helpers ─────────────────────────────────────────────────────
   const memberNameMap = useMemo(() => {
     const m = new Map<string, string>();
-    realMembers.forEach((member: any) => {
+    realMembers.forEach((member: ApiMember) => {
       const name = member.user
         ? (`${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim() || member.user.email)
         : 'Unknown';
-      const uid = member.userId ?? member.user?.id ?? '';
-      if (uid) m.set(uid, name);
+      if (member.userId) m.set(member.userId, name);
     });
     return m;
   }, [realMembers]);
 
   const projectNameMap = useMemo(() => {
     const m = new Map<string, string>();
-    realProjects.forEach((p: any) => m.set(p.id, p.name));
+    realProjects.forEach((p: ApiProject) => m.set(p.id, p.name));
     return m;
   }, [realProjects]);
 
@@ -559,7 +559,7 @@ export default function Page() {
   const effectiveDisplayTasks = useMemo(() => {
     if (!activeWorkspace || realTasks.length === 0) return filteredTasks;
     const norm = query.trim().toLowerCase();
-    const mapped = realTasks.map((t: any) => ({
+    const mapped = realTasks.map((t: ApiTask) => ({
       id: t.id,
       title: t.title,
       description: t.description ?? '',
@@ -572,7 +572,7 @@ export default function Page() {
       dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—',
       estimate: t.estimatedHours ? `${t.estimatedHours}h` : '—',
       timeTracked: '—',
-      fields: [] as any[],
+      fields: [] as { label: string; value: string }[],
     }));
     if (!norm) return mapped;
     return mapped.filter((t) => `${t.title} ${t.project} ${t.assignee}`.toLowerCase().includes(norm));
