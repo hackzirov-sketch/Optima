@@ -22,7 +22,7 @@ import {
   User,
   Users,
   Video,
-  Zap,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -104,23 +104,23 @@ function NavItem({
         collapsed ? "justify-center px-0" : "font-medium",
         active
           ? cn(
-              "font-semibold text-indigo-700 dark:text-white",
+              "font-semibold text-[var(--upz-nav-navy)] dark:text-white",
               collapsed
                 ? ""
-                : "bg-indigo-50/70 pl-6 dark:bg-white/[0.08]",
+                : "bg-[var(--upz-nav-accent)] pl-6 dark:bg-white/[0.08]",
             )
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/[0.05] dark:hover:text-slate-100",
+          : "text-slate-600 hover:bg-slate-50 hover:text-[var(--upz-nav-navy)] dark:text-slate-300 dark:hover:bg-white/[0.05] dark:hover:text-slate-100",
       )}
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.1 }}
     >
       {active && collapsed && (
-        <span className="absolute inset-1 rounded-lg bg-indigo-50 dark:bg-white/10" aria-hidden />
+        <span className="absolute inset-1 rounded-lg bg-[var(--upz-nav-accent)] dark:bg-white/10" aria-hidden />
       )}
 
       {active && !collapsed && (
         <span
-          className="absolute left-3.5 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-indigo-500 dark:bg-indigo-400"
+          className="absolute left-3.5 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[var(--upz-nav-brand)] dark:bg-blue-400"
           aria-hidden
         />
       )}
@@ -129,7 +129,7 @@ function NavItem({
         className={cn(
           "relative z-[1] h-[18px] w-[18px] flex-shrink-0 transition-colors",
           active
-            ? "text-indigo-600 dark:text-indigo-300"
+            ? "text-[var(--upz-nav-brand)] dark:text-blue-300"
             : "text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200",
         )}
       />
@@ -142,8 +142,8 @@ function NavItem({
               className={cn(
                 "relative z-[1] ml-auto flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
                 active
-                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200"
-                  : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300",
+                  ? "bg-[var(--upz-nav-accent)] text-[var(--upz-nav-navy)] dark:bg-blue-500/20 dark:text-blue-200"
+                  : "bg-[var(--upz-nav-accent)] text-[var(--upz-nav-brand)] dark:bg-blue-500/20 dark:text-blue-300",
               )}
             >
               {badgeLabel}
@@ -191,34 +191,40 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
 
   return (
     <aside
-      className="flex h-full flex-col border-r border-border bg-sidebar shadow-sm"
+      className="flex h-full flex-col border-r border-slate-200/90 bg-white dark:border-slate-800 dark:bg-slate-950"
       style={{
         width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
         transition: "width 0.2s ease",
         flexShrink: 0,
       }}
     >
-      <div className="border-b border-border px-3 py-5">
-        <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-500 shadow-sm shadow-indigo-200">
-            <Zap className="h-5 w-5 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <span className="block text-sm font-bold tracking-wide text-foreground">UPZ</span>
-              <span className="block truncate text-xs text-muted-foreground">Universal Productivity Zone</span>
+      <div className="flex-shrink-0 border-b border-slate-200/90 dark:border-slate-800">
+        <div className="flex min-h-[88px] items-center px-4">
+          <div className={cn("flex w-full items-center gap-3", collapsed && "justify-center")}>
+            <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-[var(--upz-nav-brand)] shadow-sm shadow-blue-200/60 dark:shadow-none">
+              <Sparkles className="h-[18px] w-[18px] text-white" strokeWidth={2.25} />
             </div>
-          )}
+            {!collapsed && (
+              <div className="min-w-0">
+                <span className="block text-[17px] font-bold leading-tight tracking-tight text-[var(--upz-nav-navy)] dark:text-slate-100">
+                  UPZ
+                </span>
+                <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-[0.22em] text-[#8BB0E0] dark:text-slate-500">
+                  {activeWorkspace?.name?.toUpperCase() ?? t("app.brand.badge")}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         {!collapsed && activeWorkspace && (
-          <div className="mt-3 space-y-1.5">
+          <div className="space-y-1.5 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
             <select
               value={activeWorkspace.id}
               onChange={(e) => {
                 const ws = workspaces.find((w) => w.id === e.target.value);
                 if (ws) setActiveWorkspace(ws);
               }}
-              className="w-full rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-bold text-foreground outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-[var(--upz-nav-accent)] px-3 py-2 text-xs font-semibold text-[var(--upz-nav-navy)] outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             >
               {workspaces.map((ws) => (
                 <option key={ws.id} value={ws.id}>{ws.name}</option>
@@ -277,7 +283,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             className={cn(groupIndex > 0 && "mt-6 border-t border-border/80 pt-5")}
           >
             {!collapsed && (
-              <div className="sticky top-0 z-10 -mx-1 mb-2.5 bg-sidebar/95 px-1 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.26em] text-muted-foreground/60 backdrop-blur-sm">
+              <div className="sticky top-0 z-10 -mx-1 mb-2.5 bg-white/95 px-1 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.26em] text-slate-400 backdrop-blur-sm dark:bg-slate-950/95">
                 {t(`app.nav.${group.titleKey}`)}
               </div>
             )}
@@ -316,7 +322,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                       popoverOpen && "bg-muted",
                     )}
                   >
-                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+                    <div className="grid h-9 w-9 place-items-center rounded-full bg-[var(--upz-nav-brand)] text-xs font-bold text-white shadow-sm">
                       {user.name.slice(0, 2).toUpperCase()}
                     </div>
                   </motion.button>
@@ -336,7 +342,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                   popoverOpen && "bg-muted",
                 )}
               >
-                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-xs font-bold text-white shadow-sm">
+                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-[var(--upz-nav-brand)] text-xs font-bold text-white shadow-sm">
                   {user.name.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1 text-left">
@@ -368,7 +374,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                   onClick={() => { setPopoverOpen(false); onNavigate?.(); }}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.07]",
-                    pathname.startsWith(href) && "bg-indigo-50 text-indigo-700 dark:bg-white/[0.08] dark:text-white",
+                    pathname.startsWith(href) && "bg-[var(--upz-nav-accent)] text-[var(--upz-nav-navy)] dark:bg-white/[0.08] dark:text-white",
                   )}
                 >
                   <Icon className="h-4 w-4 flex-shrink-0" />

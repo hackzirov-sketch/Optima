@@ -62,6 +62,11 @@
   --upz-chat-glow-a: rgba(99, 102, 241, 0.10);
   --upz-chat-glow-b: rgba(59, 130, 246, 0.08);
   --upz-surface-raised: #FFFFFF;
+  --upz-nav-navy: #0A2D5C;
+  --upz-nav-brand: #1D6FD4;
+  --upz-nav-accent: #E8F2FC;
+  --upz-nav-header-from: #FFFFFF;
+  --upz-nav-header-to: #EEF5FF;
 }
 
 .dark {
@@ -119,6 +124,11 @@
   --upz-chat-bg-b: #111827;
   --upz-chat-glow-a: rgba(99, 102, 241, 0.18);
   --upz-chat-glow-b: rgba(14, 165, 233, 0.12);
+  --upz-nav-navy: #E2E8F0;
+  --upz-nav-brand: #3B82F6;
+  --upz-nav-accent: rgba(59, 130, 246, 0.15);
+  --upz-nav-header-from: #0F172A;
+  --upz-nav-header-to: #111827;
 }
 
 html {

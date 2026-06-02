@@ -260,7 +260,11 @@
       "smm": "SMM mutaxassisi",
       "creator": "Kontent yaratuvchi"
     },
+    "brand": {
+      "badge": "DEMO"
+    },
     "topbar": {
+      "greeting": "Xush kelibsiz",
       "synced": "Lokal saqlandi",
       "tagline": "Ishlang, o'rganing, daromad qiling va hamkorlik qiling.",
       "searchLong": "Foydalanuvchi, chat, vazifa, loyiha qidirish",

@@ -260,7 +260,11 @@
       "smm": "SMM Specialist",
       "creator": "Content Creator"
     },
+    "brand": {
+      "badge": "DEMO"
+    },
     "topbar": {
+      "greeting": "Welcome",
       "synced": "Synced locally",
       "tagline": "Build, learn, earn, and collaborate in one workspace.",
       "searchLong": "Search users, chats, tasks, projects",

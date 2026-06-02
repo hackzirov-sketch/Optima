@@ -73,13 +73,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onToggleSidebar={handleToggleSidebar} />
 
-        <main
-          className="flex-1 overflow-y-auto p-4 md:p-6"
-          style={{
-            background:
-              "radial-gradient(circle at 12% 0%, var(--upz-shell-glow-a), transparent 28%), radial-gradient(circle at 92% 8%, var(--upz-shell-glow-b), transparent 24%), var(--upz-bg)",
-          }}
-        >
+        <main className="flex-1 overflow-y-auto bg-[#EEF5FF] p-4 md:p-6 dark:bg-[var(--upz-bg)]">
           {children}
         </main>
 

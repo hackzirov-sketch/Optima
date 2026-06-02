@@ -260,7 +260,11 @@
       "smm": "SMM Uzman?",
       "creator": "??erik ?reticisi"
     },
+    "brand": {
+      "badge": "DEMO"
+    },
     "topbar": {
+      "greeting": "Hoş geldiniz",
       "synced": "Yerelde senkronize",
       "tagline": "Tek ?al??ma alan?nda ?al??, ??ren, kazan ve i? birli?i yap.",
       "searchLong": "Kullan?c?, sohbet, g?rev, proje ara",
