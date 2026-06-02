@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
@@ -139,19 +139,6 @@ export function MessageBubble({
       window.removeEventListener("click", close);
     };
   }, [picker]);
-
-  const calcFixedPos = (event: ReactMouseEvent, menuW = 196, menuH = 236) => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const x = event.clientX;
-    const y = event.clientY;
-    const above = y + menuH + 12 > vh;
-    const alignRight = x + menuW + 8 > vw;
-    const minY = vw < 768 ? 76 : 72;
-    const clampedX = alignRight ? Math.max(10, x - menuW) : Math.min(Math.max(10, x), vw - menuW - 10);
-    const clampedY = above ? Math.max(minY, y - menuH - 8) : Math.max(minY, Math.min(y + 10, vh - menuH - 10));
-    return { fixed: true, x: clampedX, y: clampedY, above, alignRight };
-  };
 
   const openMenuFromContext = (event: ReactMouseEvent) => {
     event.preventDefault();

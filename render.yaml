@@ -5,7 +5,7 @@ services:
     plan: free
     healthCheckPath: /
     autoDeploy: true
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/upz-landing run generate:emojis && pnpm --filter @workspace/upz-landing run build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/upz-landing run build
     startCommand: node artifacts/upz-landing/server.js
     envVars:
       - key: NODE_VERSION

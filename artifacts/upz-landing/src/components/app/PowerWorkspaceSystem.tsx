@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, CheckCircle2, Clock3, GitBranch, GripVertical, Search, Sparkles, X } from "lucide-react";
 import type { AutomationRule, DashboardWidget, SmartField as SmartFieldType, SmartTask, TaskView, WorkspaceZone } from "@/types";
-import { ActionButton, Pill, ProgressBar, cn } from "./DesignSystem";
+import { ActionButton, Pill, cn } from "./DesignSystem";
 
 const viewLabels: Record<TaskView, string> = {
   list: "List",

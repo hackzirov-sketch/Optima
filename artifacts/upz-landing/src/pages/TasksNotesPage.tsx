@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlarmClock, CheckCircle2, FileText, FormInput, Plus, Repeat2, StickyNote, Timer, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AppLayout } from "@/components/app/AppLayout";
-import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
+import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer } from "@/components/app/PowerWorkspaceSystem";
 import { DOC_PAGES, FORM_FIELDS, SMART_TASKS, TIME_ENTRIES } from "@/data/ecosystemData";
 import { INITIAL_TASKS } from "@/data/mockData";

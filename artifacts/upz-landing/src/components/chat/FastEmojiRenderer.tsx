@@ -108,6 +108,8 @@ function useEmojiPlayback({
     setPlaying(false);
     setAnimationData(null);
   };
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
 
   const play = () => {
     if (!emoji?.animationSrc || !canAnimate || !visible || reducedMotion || document.visibilityState === "hidden") return;
@@ -116,6 +118,8 @@ function useEmojiPlayback({
     setPlayKey((current) => current + 1);
     setPlaying(true);
   };
+  const playRef = useRef(play);
+  playRef.current = play;
 
   useEffect(() => {
     if (!playing || !emoji?.animationSrc || !JSON_ANIMATION_PATTERN.test(emoji.animationSrc)) return;
@@ -142,8 +146,8 @@ function useEmojiPlayback({
   }, [emoji?.animationSrc, playing]);
 
   useEffect(() => {
-    if (playOnMount) play();
-    return stop;
+    if (playOnMount) playRef.current();
+    return () => stopRef.current();
   }, [emoji?.id, playOnMount, visible]);
 
   useEffect(() => {

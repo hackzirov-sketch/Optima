@@ -1,0 +1,9 @@
+node_modules/
+.git/
+.github/
+.vscode/
+.gitignore
+README.md
+*.md
+**/dist/
+**/node_modules/

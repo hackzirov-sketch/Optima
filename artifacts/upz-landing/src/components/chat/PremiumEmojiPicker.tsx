@@ -84,6 +84,8 @@ function saveRecent(items: string[]) {
   safeLocalStorageSet(RECENT_KEY, JSON.stringify(items.slice(0, 18)));
 }
 
+const FAVORITE_NATIVE = ["??", "??", "??", "??", "??", "??", "?", "??"];
+
 export function PremiumEmojiPicker({
   mode = "reaction",
   compact = false,
@@ -103,9 +105,8 @@ export function PremiumEmojiPicker({
     void initEmojiMart({ data: emojiMartData }, { caller: "Optima-premium-emoji-picker" }).catch(() => undefined);
   }, []);
 
-  const activeIds = activeEmojis.map(String);
-  const selectedCategory = CATEGORY_META.find((category) => category.id === activeCategory) ?? CATEGORY_META[0];
-  const favoriteNative = ["??", "??", "??", "??", "??", "??", "?", "??"];
+  const selectedCategory = CATEGORY_META.find((c) => c.id === activeCategory)!;
+  const activeIds = useMemo(() => new Set<string>(activeEmojis), [activeEmojis]);
 
   const nativeItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -115,7 +116,7 @@ export function PremiumEmojiPicker({
     }
 
     if (activeCategory === "favorites" && !normalized) {
-      return favoriteNative.map((native, index) => ({ id: `favorite-${index}`, label: "Favorite emoji", native, keywords: [] }));
+      return FAVORITE_NATIVE.map((native, index) => ({ id: `favorite-${index}`, label: "Favorite emoji", native, keywords: [] }));
     }
 
     const category = emojiMartData.categories.find((item) => item.id === selectedCategory.martId);
@@ -132,7 +133,7 @@ export function PremiumEmojiPicker({
       })
       .slice(categoryOffset)
       .slice(0, 56);
-  }, [activeCategory, query, recent, selectedCategory.martId]);
+  }, [activeCategory, query, recent]);
 
   const premiumItems = useMemo(() => {
     if (activeCategory === "all" || activeCategory === "recent" || activeCategory === "favorites") return [];
@@ -200,7 +201,7 @@ export function PremiumEmojiPicker({
             <ReactionButton
               key={reaction.id}
               asset={reaction}
-              active={activeIds.includes(reaction.id)}
+              active={activeIds.has(reaction.id)}
               compact
               onClick={() => onSelectReaction?.(reaction.id)}
             />
