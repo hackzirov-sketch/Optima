@@ -1,3 +1,7 @@
+ 'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/landing/Header';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { ProblemSection } from '@/components/landing/ProblemSection';
@@ -9,8 +13,18 @@ import { AIAssistantSection } from '@/components/landing/AIAssistantSection';
 import { FreelancerEcosystemSection } from '@/components/landing/FreelancerEcosystemSection';
 import { FinalCTASection } from '@/components/landing/FinalCTASection';
 import { Footer } from '@/components/landing/Footer';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LandingPage() {
+  const router = useRouter();
+  const { isAuthenticated, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      router.replace('/app/home');
+    }
+  }, [isAuthenticated, loading, router]);
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background font-sans selection:bg-indigo-100 selection:text-indigo-900">
       <Header />
