@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first'); // Render has no IPv6 outbound — force IPv4 for all DNS
 import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';

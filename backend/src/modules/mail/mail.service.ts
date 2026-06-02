@@ -15,7 +15,6 @@ export class MailService {
       port,
       secure,
       requireTLS: !secure,
-      family: 4, // force IPv4 — Render does not have IPv6 outbound
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
@@ -23,7 +22,7 @@ export class MailService {
         user: this.configService.get<string>('SMTP_USER'),
         pass: this.configService.get<string>('SMTP_PASS'),
       },
-    } as any);
+    });
   }
 
   async sendVerificationEmail(email: string, code: string) {
