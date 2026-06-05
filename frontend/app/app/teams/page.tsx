@@ -53,6 +53,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useGroups } from "@/hooks/useGroups";
 import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
+import { getUserDisplayName } from "@/lib/displayUser";
 
 
 
@@ -255,7 +256,7 @@ export default function Page() {
     priority: "Medium" as OptimaTaskPriority,
     deadline: "Today 18:00",
     label: "Sprint",
-    reviewer: user?.name ?? "",
+    reviewer: getUserDisplayName(user),
   });
 
 

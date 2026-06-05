@@ -73,8 +73,8 @@ export class InvitationsService {
       where: {
         workspaceId,
         email: dto.email,
-        acceptedAt: IsNull(),
-        declinedAt: IsNull(),
+        acceptedAt: IsNull() as unknown as Date,
+        declinedAt: IsNull() as unknown as Date,
       },
     });
 
@@ -85,7 +85,7 @@ export class InvitationsService {
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    expiresAt.setDate(expiresAt.getDate() + 5); // 5 days
 
     const invitation = this.invitationRepo.create({
       workspaceId,
@@ -114,7 +114,7 @@ export class InvitationsService {
       });
     }
     return this.invitationRepo.find({
-      where: { workspaceId, acceptedAt: IsNull(), declinedAt: IsNull() },
+      where: { workspaceId },
       order: { createdAt: 'DESC' },
     });
   }

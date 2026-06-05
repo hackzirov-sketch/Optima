@@ -11,6 +11,8 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useNotifications } from "@/hooks/useNotifications";
 import { tasksApi } from "@/lib/api";
+import { getUserDisplayName } from "@/lib/displayUser";
+import { computeFocusScore, sortPendingTasks } from "@/lib/taskCharts";
 
 const QUICK_ACTIONS = [
   { labelKey: "newTask", icon: ListTodo, href: "/app/tasks", color: "#6366F1" },
@@ -39,13 +41,14 @@ export default function HomePage() {
 
   const getStatus = (taskId: string, original: string) => localStatus[taskId] ?? original;
 
-  const pendingTasks = apiTasks
-    .filter((task) => getStatus(task.id, task.status) !== 'done')
-    .slice(0, 5);
+  const pendingTasks = sortPendingTasks(
+    apiTasks.filter((task) => getStatus(task.id, task.status) !== 'done'),
+    5,
+  );
 
   const completedCount = apiTasks.filter((task) => getStatus(task.id, task.status) === 'done').length;
   const totalCount = apiTasks.length;
-  const focusScore = totalCount === 0 ? 100 : Math.round((completedCount / totalCount) * 100);
+  const focusScore = computeFocusScore(apiTasks, getStatus);
 
   const dateStr = time.toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
   const timeStr = time.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
@@ -67,7 +70,7 @@ export default function HomePage() {
     <PageShell>
       <PageHeader
         eyebrow={dateStr}
-        title={t("app.home.welcome", { name: user?.name })}
+        title={t("app.home.welcome", { name: getUserDisplayName(user, t("app.home.guest", "there")) })}
         description={t("app.home.description", { goal: goalLabel })}
       >
         <div className="rounded-2xl bg-muted px-4 py-3 text-right">
@@ -85,7 +88,7 @@ export default function HomePage() {
       <div className="grid gap-4 md:grid-cols-3">
         <MetricTile
           label={t("app.home.metrics.focusScore")}
-          value={tasksLoading ? '…' : `${focusScore}%`}
+          value={tasksLoading ? '…' : focusScore === null ? '—' : `${focusScore}%`}
           icon={Zap}
           trend={t("app.home.metrics.focusTrend")}
         />

@@ -8,7 +8,6 @@ import {
   BookOpen,
   Briefcase,
   Calendar,
-  Loader2,
   CheckCircle2,
   ClipboardList,
   Code2,
@@ -40,24 +39,23 @@ import {
   Target,
   Timer,
   UploadCloud,
-  UserPlus,
   Users,
   Video,
   Workflow,
 } from "lucide-react";
-import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
+import { ActionButton, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, cn } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, ViewSwitcher, WidgetCard, WorkspaceHierarchy } from "@/components/app/PowerWorkspaceSystem";
 import { CLIP_ITEMS, DASHBOARD_WIDGETS, DOC_PAGES, FORM_FIELDS, POWER_VIEWS, SMART_TASKS, WHITEBOARD_NODES, WORKSPACE_ZONE } from "@/data/ecosystemData";
 import type { Profession, TaskView } from "@/types";
 import type { ApiMember, ApiProject, ApiTask } from "@/lib/api";
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
-import { WorkspaceBackendPanel } from "@/components/app/workspace/WorkspaceBackendPanel";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useMembers } from "@/hooks/useMembers";
 import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
+import { getUserDisplayName, getUserFirstName } from "@/lib/displayUser";
 
 type WorkspaceItemType = "Board" | "Doc" | "Automation" | "Dashboard";
 
@@ -395,110 +393,12 @@ function taskMatchesPreset(taskText: string, filters: string[]) {
 
 export default function Page() {
   const { user } = useAuth();
-  const { activeWorkspace, updateWorkspace, deleteWorkspace, refreshWorkspaces } = useWorkspace();
-  const {
-    projects: realProjects,
-    loading: projectsLoading,
-    createProject,
-    refresh: refreshProjects,
-  } = useProjects(activeWorkspace?.id);
+  const { activeWorkspace } = useWorkspace();
+  const { projects: realProjects } = useProjects(activeWorkspace?.id);
   const projectIds = useMemo(() => realProjects.map((p) => p.id), [realProjects]);
-  const { tasks: realTasks, loading: tasksLoading, refresh: refreshTasks } = useAllWorkspaceTasks(
-    activeWorkspace?.id,
-    projectIds,
-  );
-  const {
-    members: realMembers,
-    loading: membersLoading,
-    refresh: refreshMembers,
-    invite: inviteMember,
-    updateRole,
-    removeMember,
-  } = useMembers(activeWorkspace?.id);
-  const {
-    analytics,
-    loading: analyticsLoading,
-    refresh: refreshAnalytics,
-  } = useWorkspaceAnalytics(activeWorkspace?.id);
-
-  // ── Workspace settings state ─────────────────────────────────────────────
-  const [wsName, setWsName] = useState(activeWorkspace?.name ?? '');
-  const [wsDesc, setWsDesc] = useState(activeWorkspace?.description ?? '');
-  const [wsSaving, setWsSaving] = useState(false);
-  const [wsDeleteOpen, setWsDeleteOpen] = useState(false);
-  const [wsDeleting, setWsDeleting] = useState(false);
-  const [wsSaved, setWsSaved] = useState(false);
-
-  // Keep form in sync when activeWorkspace changes
-  useEffect(() => {
-    setWsName(activeWorkspace?.name ?? '');
-    setWsDesc(activeWorkspace?.description ?? '');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspace?.id]);
-
-  // ── Invitations state ────────────────────────────────────────────────────
-  const [invitations, setInvitations] = useState<import('@/lib/api').ApiInvitation[]>([]);
-  const [invLoading, setInvLoading] = useState(false);
-  const [invEmail, setInvEmail] = useState('');
-  const [invRole, setInvRole] = useState('junior');
-  const [invSending, setInvSending] = useState(false);
-
-  useEffect(() => {
-    if (!activeWorkspace?.id) return;
-    setInvLoading(true);
-    import('@/lib/api').then(({ workspacesApi }) =>
-      workspacesApi.listInvitations(activeWorkspace.id)
-        .then((res) => setInvitations(res?.data ?? []))
-        .catch(() => {})
-        .finally(() => setInvLoading(false))
-    );
-  }, [activeWorkspace?.id]);
-
-  const handleSendInvite = async () => {
-    if (!invEmail.trim() || !activeWorkspace) return;
-    setInvSending(true);
-    try {
-      const { workspacesApi } = await import('@/lib/api');
-      await workspacesApi.invite(activeWorkspace.id, invEmail.trim(), invRole);
-      const res = await workspacesApi.listInvitations(activeWorkspace.id);
-      setInvitations(res?.data ?? []);
-      setInvEmail('');
-      setNotice('Invitation sent');
-    } catch {
-      setNotice('Could not send invitation — check email and role');
-    } finally { setInvSending(false); }
-  };
-
-  const handleCancelInvite = async (id: string) => {
-    if (!activeWorkspace) return;
-    const { workspacesApi } = await import('@/lib/api');
-    await workspacesApi.cancelInvitation(activeWorkspace.id, id).catch(() => {});
-    setInvitations((prev) => prev.filter((inv) => inv.id !== id));
-  };
-
-  const handleSaveWs = async () => {
-    if (!activeWorkspace || !wsName.trim()) return;
-    setWsSaving(true);
-    try {
-      await updateWorkspace(activeWorkspace.id, { name: wsName.trim(), description: wsDesc.trim() || undefined });
-      setWsSaved(true);
-      setTimeout(() => setWsSaved(false), 2000);
-      setNotice('Workspace saved');
-    } catch {
-      setNotice('Could not save workspace');
-    } finally { setWsSaving(false); }
-  };
-
-  const handleDeleteWs = async () => {
-    if (!activeWorkspace) return;
-    setWsDeleting(true);
-    try {
-      await deleteWorkspace(activeWorkspace.id);
-      await refreshWorkspaces();
-      setWsDeleteOpen(false);
-    } catch { /* ignore */ }
-    finally { setWsDeleting(false); }
-  };
+  const { tasks: realTasks } = useAllWorkspaceTasks(activeWorkspace?.id, projectIds);
+  const { members: realMembers } = useMembers(activeWorkspace?.id);
+  const { analytics } = useWorkspaceAnalytics(activeWorkspace?.id);
 
   const [activeView, setActiveView] = useState<TaskView>(() => storage.getActiveView() ?? "board");
   const [activeBoard, setActiveBoard] = useState(() => storage.getActiveBoard() ?? "Roadmap");
@@ -769,7 +669,7 @@ export default function Page() {
     const milestone: WorkspaceMilestone = {
       id: `ms-${Date.now()}`,
       title: `${activePreset.label} operating milestone`,
-      owner: user?.name.split(" ")[0] ?? "Owner",
+      owner: getUserFirstName(user, "Owner"),
       target: `Improve ${activePreset.template}`,
       progress: 18,
       due: "Next 14 days",
@@ -836,7 +736,7 @@ export default function Page() {
       <PageShell>
         <PageHeader
           eyebrow={activeWorkspace?.name ?? "Power Workspace"}
-          title={`${activePreset.template} for ${user?.name}`}
+          title={`${activePreset.template} for ${getUserDisplayName(user, "you")}`}
           description={
             activeWorkspace
               ? `${analytics?.projectCount ?? realProjects.length} projects · ${analytics?.totalTasks ?? realTasks.length} tasks · ${analytics?.memberCount ?? realMembers.length} members`
@@ -846,149 +746,6 @@ export default function Page() {
           <ActionButton onClick={handleCreateItem}><Plus className="h-4 w-4" /> Create</ActionButton>
           <ActionButton variant="secondary" onClick={handleSaveSnapshot}><Save className="h-4 w-4" /> Save view</ActionButton>
         </PageHeader>
-
-        {/* ── Real workspace management ───────────────────────────────── */}
-        {activeWorkspace && (
-          <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-            {/* Settings */}
-            <SurfaceCard>
-              <SectionTitle icon={Settings} title="Workspace settings" description="Edit name and description." />
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Name</label>
-                  <input
-                    value={wsName}
-                    onChange={(e) => setWsName(e.target.value)}
-                    className="w-full rounded-2xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-muted-foreground">Description</label>
-                  <textarea
-                    value={wsDesc}
-                    onChange={(e) => setWsDesc(e.target.value)}
-                    rows={2}
-                    className="w-full resize-none rounded-2xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-                  />
-                </div>
-                <div className="flex items-center gap-3">
-                  <ActionButton onClick={handleSaveWs} disabled={wsSaving || !wsName.trim()}>
-                    {wsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save changes'}
-                  </ActionButton>
-                  {wsSaved && <span className="text-sm font-semibold text-emerald-600">Saved ✓</span>}
-                </div>
-                {/* Danger zone */}
-                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50/70 p-4 dark:border-rose-900/40 dark:bg-rose-950/20">
-                  <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">Delete workspace</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Permanently removes all projects, tasks and members.</p>
-                  <button
-                    onClick={() => setWsDeleteOpen(true)}
-                    className="mt-3 rounded-xl border border-rose-300 bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-400"
-                  >
-                    Delete workspace
-                  </button>
-                </div>
-              </div>
-            </SurfaceCard>
-
-            {/* Invitations */}
-            <SurfaceCard>
-              <SectionTitle icon={UserPlus} title="Invitations" description="Invite team members by email." />
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <input
-                    value={invEmail}
-                    onChange={(e) => setInvEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendInvite()}
-                    placeholder="colleague@email.com"
-                    className="min-w-0 flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-                  />
-                  <select
-                    value={invRole}
-                    onChange={(e) => setInvRole(e.target.value)}
-                    className="rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground outline-none"
-                  >
-                    <option value="guest">Guest</option>
-                    <option value="junior">Junior</option>
-                    <option value="middle">Middle</option>
-                    <option value="senior">Senior</option>
-                    <option value="lead">Lead</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <ActionButton onClick={handleSendInvite} disabled={invSending || !invEmail.trim()} className="py-2">
-                    {invSending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
-                  </ActionButton>
-                </div>
-
-                {invLoading ? (
-                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                  </div>
-                ) : invitations.length === 0 ? (
-                  <p className="py-2 text-sm text-muted-foreground">No pending invitations.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {invitations.map((inv) => (
-                      <div key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-foreground">{inv.email}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{inv.role} · Expires {new Date(inv.expiresAt).toLocaleDateString()}</p>
-                        </div>
-                        <button
-                          onClick={() => handleCancelInvite(inv.id)}
-                          className="flex-shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </SurfaceCard>
-          </div>
-        )}
-
-        {activeWorkspace && (
-          <WorkspaceBackendPanel
-            workspace={activeWorkspace}
-            analytics={analytics}
-            analyticsLoading={analyticsLoading}
-            members={realMembers}
-            membersLoading={membersLoading}
-            projects={realProjects}
-            projectsLoading={projectsLoading}
-            onRefreshMembers={refreshMembers}
-            onRefreshProjects={refreshProjects}
-            onRefreshAnalytics={refreshAnalytics}
-            onRefreshTasks={refreshTasks}
-            onCreateProject={createProject}
-            onInvite={inviteMember}
-            onUpdateRole={updateRole}
-            onRemoveMember={removeMember}
-            onNotice={setNotice}
-          />
-        )}
-
-        {/* Delete workspace confirmation modal */}
-        <Modal
-          open={wsDeleteOpen}
-          title="Delete workspace"
-          description={`Delete "${activeWorkspace?.name}"? This cannot be undone.`}
-          onClose={() => setWsDeleteOpen(false)}
-        >
-          <div className="space-y-4">
-            <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-500/10 dark:text-rose-400">
-              All projects, tasks, and members will be permanently deleted.
-            </p>
-            <div className="flex justify-end gap-3">
-              <ActionButton variant="secondary" onClick={() => setWsDeleteOpen(false)}>Cancel</ActionButton>
-              <ActionButton variant="danger" onClick={handleDeleteWs} disabled={wsDeleting}>
-                {wsDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete forever'}
-              </ActionButton>
-            </div>
-          </div>
-        </Modal>
 
         <SurfaceCard className="overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
@@ -1346,7 +1103,6 @@ export default function Page() {
                 onClick={() => document.getElementById('workspace-team')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-black text-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
               >
-                <UserPlus className="h-4 w-4" />
                 Invite member
               </button>
             </div>
@@ -1640,9 +1396,7 @@ export default function Page() {
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {activeWorkspace
-                    ? tasksLoading
-                      ? 'Loading tasks from the server…'
-                      : 'Create a project and add tasks in the panel above, or open Projects.'
+                    ? 'Create a project and add tasks, or open Projects.'
                     : 'Try another profession preset or clear search.'}
                 </p>
               </SurfaceCard>
@@ -1815,7 +1569,11 @@ export default function Page() {
           </div>
         </SurfaceCard>
       </PageShell>
-      <Toast message={notice} />
+      {notice && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-foreground px-5 py-3 text-sm font-semibold text-background shadow-lg">
+          {notice}
+        </div>
+      )}
     </>
   );
 }

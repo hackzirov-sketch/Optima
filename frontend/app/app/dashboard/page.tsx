@@ -30,15 +30,11 @@ import { useProjects } from "@/hooks/useProjects";
 import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useMembers } from "@/hooks/useMembers";
 import { useNotifications } from "@/hooks/useNotifications";
-import { analyticsApi, type ApiTask } from "@/lib/api";
+import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
+import { getUserDisplayName } from "@/lib/displayUser";
+import { buildProductivityData, buildWeeklyActivity } from "@/lib/taskCharts";
 import { storage } from "@/utils/storage";
 
-interface WorkspaceAnalytics {
-  projectCount: number;
-  taskByStatus: { status: string; count: string }[];
-}
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const PROJECT_COLORS = ["#6366F1", "#3B82F6", "#10B981", "#F59E0B"];
 
 const tooltipStyle = {
@@ -51,38 +47,6 @@ const tooltipStyle = {
   },
   cursor: { fill: "rgba(99,102,241,0.08)" },
 };
-
-// Weekly task activity from real createdAt dates
-function buildWeeklyActivity(tasks: ApiTask[]) {
-  const counts = [0, 0, 0, 0, 0, 0, 0];
-  const doneCounts = [0, 0, 0, 0, 0, 0, 0];
-  tasks.forEach((task) => {
-    if (!task.createdAt) return;
-    const day = (new Date(task.createdAt).getDay() + 6) % 7; // 0=Mon…6=Sun
-    counts[day]++;
-    if (task.status === 'done') doneCounts[day]++;
-  });
-  return DAYS.map((day, i) => ({ day, created: counts[i], done: doneCounts[i] }));
-}
-
-// 5-week productivity score from task completion
-function buildProductivityData(tasks: ApiTask[]) {
-  const now = new Date();
-  return Array.from({ length: 5 }, (_, i) => {
-    const weekEnd = new Date(now);
-    weekEnd.setDate(now.getDate() - i * 7);
-    const weekStart = new Date(weekEnd);
-    weekStart.setDate(weekEnd.getDate() - 7);
-
-    const weekTasks = tasks.filter((t) => {
-      const d = new Date(t.createdAt);
-      return d >= weekStart && d <= weekEnd;
-    });
-    const done = weekTasks.filter((t) => t.status === 'done').length;
-    const score = weekTasks.length === 0 ? 0 : Math.round((done / weekTasks.length) * 100);
-    return { week: `W${5 - i}`, score };
-  }).reverse();
-}
 
 function MetricSkeleton() {
   return (
@@ -105,15 +69,7 @@ export default function Page() {
   );
   const { members } = useMembers(activeWorkspace?.id);
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
-
-  // Workspace analytics from API
-  const [analytics, setAnalytics] = useState<WorkspaceAnalytics | null>(null);
-  useEffect(() => {
-    if (!activeWorkspace?.id) return;
-    analyticsApi.getWorkspaceOverview(activeWorkspace.id)
-      .then((res) => setAnalytics(res?.data as unknown as WorkspaceAnalytics))
-      .catch(() => {});
-  }, [activeWorkspace?.id]);
+  const { analytics } = useWorkspaceAnalytics(activeWorkspace?.id);
 
   // Draggable widgets
   const [preset, setPreset] = useState("Launch");
@@ -204,7 +160,7 @@ export default function Page() {
     <PageShell>
       <PageHeader
         eyebrow={activeWorkspace?.name ?? t("app.dashboard.eyebrow")}
-        title={t("app.dashboard.welcome", { name: user?.name })}
+        title={t("app.dashboard.welcome", { name: getUserDisplayName(user, t("app.dashboard.guest", "there")) })}
         description={t("app.dashboard.description")}
       >
         <Link href="/app/assistant">
@@ -264,12 +220,18 @@ export default function Page() {
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 {analytics ? (
                   <>
-                    <Pill tone="indigo">{analytics.projectCount} projects</Pill>
+                    <Pill tone="indigo">{analytics.projectCount ?? analytics.totalProjects ?? projects.length} projects</Pill>
                     <Pill tone="green">
-                      {analytics.taskByStatus.find((s) => s.status === 'done')?.count ?? 0} done
+                      {analytics.completedTasks ??
+                        analytics.taskByStatus?.find((s) => s.status === 'done')?.count ??
+                        0}{' '}
+                      done
                     </Pill>
                     <Pill tone="blue">
-                      {analytics.taskByStatus.find((s) => s.status === 'in_progress')?.count ?? 0} in progress
+                      {analytics.openTasks ??
+                        analytics.taskByStatus?.find((s) => s.status === 'in_progress')?.count ??
+                        activeTasks}{' '}
+                      in progress
                     </Pill>
                   </>
                 ) : (
@@ -420,7 +382,7 @@ export default function Page() {
           <SectionTitle
             icon={BarChart3}
             title={t("app.dashboard.weeklyActivity")}
-            description="Tasks created and completed per day of the week"
+            description="Tasks created and completed this week (Mon–Sun)"
           />
           {tasksLoading ? (
             <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">

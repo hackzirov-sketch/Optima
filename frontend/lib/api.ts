@@ -22,10 +22,10 @@ export function getAccessToken(): string | null {
 }
 
 export function setTokens(accessToken: string, refreshToken: string) {
-  // Access token: 1 day cookie (auto-refreshed before expiry by tryRefresh)
+  // Access token: 1 day cookie (auto-refreshed every 25m by tryRefresh)
   cookie.set('upz_access_token', accessToken, { ...COOKIE_OPTS, expires: 1 });
-  // Refresh token: 7 day cookie
-  cookie.set('upz_refresh_token', refreshToken, { ...COOKIE_OPTS, expires: 7 });
+  // Refresh token: 30 day cookie — matches backend JWT_REFRESH_EXPIRES
+  cookie.set('upz_refresh_token', refreshToken, { ...COOKIE_OPTS, expires: 30 });
 }
 
 export function clearTokens() {
@@ -331,6 +331,8 @@ export interface ApiInvitation {
   workspaceId: string;
   createdAt: string;
   expiresAt: string;
+  acceptedAt?: string | null;
+  declinedAt?: string | null;
 }
 
 export const invitationsApi = {

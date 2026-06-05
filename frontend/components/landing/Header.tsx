@@ -3,14 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { LayoutDashboard, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
   const { t } = useTranslation();
+  const { isAuthenticated } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
@@ -52,21 +54,33 @@ export function Header() {
         <div className="hidden items-center gap-2 md:flex">
           <ThemeToggle compact />
           <LanguageSwitcher />
-          <Button
-            variant="outline"
-            className="rounded-2xl font-semibold"
-            data-testid="button-login"
-            onClick={() => navigate("/auth/login")}
-          >
-            {t("header.login")}
-          </Button>
-          <Button
-            className="rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md shadow-indigo-200 hover:from-indigo-600 hover:to-blue-600"
-            data-testid="button-get-started"
-            onClick={() => navigate("/auth/register")}
-          >
-            {t("header.getStarted")}
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              className="rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md shadow-indigo-200 hover:from-indigo-600 hover:to-blue-600"
+              onClick={() => navigate("/app/home")}
+            >
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Dashboard
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                className="rounded-2xl font-semibold"
+                data-testid="button-login"
+                onClick={() => navigate("/auth/login")}
+              >
+                {t("header.login")}
+              </Button>
+              <Button
+                className="rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-md shadow-indigo-200 hover:from-indigo-600 hover:to-blue-600"
+                data-testid="button-get-started"
+                onClick={() => navigate("/auth/register")}
+              >
+                {t("header.getStarted")}
+              </Button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
@@ -99,15 +113,27 @@ export function Header() {
             ))}
           </nav>
           <div className="mt-4 grid gap-2">
-            <Button variant="outline" className="w-full justify-center rounded-2xl" onClick={() => navigate("/auth/login")}>
-              {t("header.login")}
-            </Button>
-            <Button
-              className="w-full justify-center rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
-              onClick={() => navigate("/auth/register")}
-            >
-              {t("header.getStarted")}
-            </Button>
+            {isAuthenticated ? (
+              <Button
+                className="w-full justify-center rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
+                onClick={() => { navigate("/app/home"); setMobileMenuOpen(false); }}
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Dashboard
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" className="w-full justify-center rounded-2xl" onClick={() => navigate("/auth/login")}>
+                  {t("header.login")}
+                </Button>
+                <Button
+                  className="w-full justify-center rounded-2xl border-0 bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
+                  onClick={() => navigate("/auth/register")}
+                >
+                  {t("header.getStarted")}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

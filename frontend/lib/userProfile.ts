@@ -28,3 +28,5 @@ export function mapApiUserToProfile(
     role: apiUser.role ?? existing?.role,
   };
 }
+
+export { getUserDisplayName, getUserFirstName } from './displayUser';
