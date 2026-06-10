@@ -10,7 +10,6 @@ import {
   ChevronUp,
   CreditCard,
   Crown,
-  Home,
   LayoutDashboard,
   Layers,
   Plus,
@@ -41,7 +40,6 @@ const NAV_GROUPS = [
   {
     titleKey: "core",
     items: [
-      { path: "/app/home", labelKey: "home", icon: Home },
       { path: "/app/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
       { path: "/app/workspace", labelKey: "workspace", icon: Layers },
       { path: "/app/chat", labelKey: "chat", icon: MessageCircle, badgeKey: "live" },
