@@ -6,8 +6,20 @@ import type {
   ApiWorkspaceAnalytics,
   ApiInvitation,
 } from '@/lib/api';
+import type { UserProfile } from '@/types';
 
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
+export const DEMO_USER_PROFILE: UserProfile = {
+  name: 'Demo User',
+  email: 'demo@upz.app',
+  profession: 'developer',
+  goal: 'manage_team',
+  experience: 'intermediate',
+  joinedAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+  authProvider: 'demo',
+  role: 'admin',
+};
 
 export const DEMO_WORKSPACE: ApiWorkspace = {
   id: 'demo-workspace-001',

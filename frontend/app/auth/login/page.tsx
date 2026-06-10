@@ -17,12 +17,13 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { storage } from "@/utils/storage";
 import { AuthField, EyeToggle, ProviderButton, TabButton, PrimaryButton } from "../shared";
+import { IS_DEMO, DEMO_USER_PROFILE } from "@/lib/demoData";
 
 type LoginMethod = "email" | "phone";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginWithBackend } = useAuth();
+  const { loginWithBackend, login } = useAuth();
   
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("email");
   const [showPassword, setShowPassword] = useState(false);
@@ -88,6 +89,29 @@ export default function LoginPage() {
             Back
           </button>
         </div>
+
+        {/* Demo mode bypass */}
+        {IS_DEMO && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-6 rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 p-px shadow-xl shadow-indigo-500/20"
+          >
+            <div className="rounded-3xl bg-gradient-to-br from-indigo-950/90 to-violet-950/90 px-6 py-5 text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-black uppercase tracking-widest text-indigo-300 ring-1 ring-indigo-500/30">
+                <Zap className="h-3.5 w-3.5" /> Demo Mode
+              </span>
+              <p className="mt-3 text-base font-bold text-white">Backend kerak emas</p>
+              <p className="mt-1 text-sm text-indigo-200/70">Barcha ma&apos;lumotlar sinov rejimida ishlaydi</p>
+              <button
+                onClick={() => { login(DEMO_USER_PROFILE); router.push('/app/home'); }}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-500/30 transition-all hover:bg-indigo-400 hover:shadow-indigo-400/30 active:scale-95"
+              >
+                Appga kirish <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Heading */}
         <div className="mb-7 text-center sm:text-left">
