@@ -45,7 +45,7 @@ export default function InvitePage() {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md rounded-[28px] border border-border bg-card p-8 text-center shadow-2xl"
+        className="w-full max-w-md rounded-[28px] border border-border bg-card p-8 text-center shadow-modal"
       >
         {status === 'idle' || status === 'loading' ? (
           <>

@@ -38,7 +38,7 @@ export function PageHeader({ eyebrow, title, description, children }: PageHeader
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative flex flex-col gap-4 overflow-hidden rounded-[28px] border border-border bg-card p-6 shadow-sm md:flex-row md:items-center md:justify-between"
+      className="relative flex flex-col gap-4 overflow-hidden rounded-[28px] border border-border bg-card p-6 shadow-card md:flex-row md:items-center md:justify-between"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-400" />
       <div className="max-w-3xl">
@@ -63,7 +63,7 @@ export function SurfaceCard({ children, className, delay = 0 }: SurfaceCardProps
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, delay }}
-      className={cn("rounded-[24px] border border-border bg-card p-5 shadow-sm", className)}
+      className={cn("rounded-[24px] border border-border bg-card p-5 shadow-card", className)}
     >
       {children}
     </motion.section>
@@ -108,7 +108,7 @@ export function MetricTile({ label, value, icon: Icon, accent = "#6366F1", trend
   return (
     <motion.div
       whileHover={{ y: -3 }}
-      className="rounded-[24px] border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-[24px] border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover"
     >
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
@@ -183,7 +183,7 @@ interface SimpleTabsProps<T extends string> {
 
 export function SimpleTabs<T extends string>({ tabs, value, onChange, labels }: SimpleTabsProps<T>) {
   return (
-    <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-1 shadow-sm">
+    <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-1 shadow-card">
       {tabs.map((tab) => (
         <button
           key={tab}
@@ -225,7 +225,7 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
 
 export function LoadingSkeleton() {
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-card">
       <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
       <div className="h-3 w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
       <div className="h-3 w-4/5 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
@@ -278,7 +278,7 @@ export function CommandCard({ icon: Icon, title, description, meta, accent = DES
       onClick={onClick}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.99 }}
-      className="group flex w-full items-start gap-4 rounded-[24px] border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:hover:border-indigo-500/40"
+      className="group flex w-full items-start gap-4 rounded-[24px] border border-border bg-card p-4 text-left shadow-card transition-all hover:border-indigo-200 hover:shadow-card-hover dark:hover:border-indigo-500/40"
     >
       <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl" style={{ background: `${accent}14`, color: accent }}>
         <Icon className="h-5 w-5" />
@@ -308,7 +308,7 @@ export function Toast({ message }: ToastProps) {
       initial={{ opacity: 0, y: 14, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.99 }}
-      className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-2xl"
+      className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-modal"
     >
       {message}
     </motion.div>
@@ -331,7 +331,7 @@ export function Modal({ open, title, description, children, onClose }: ModalProp
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-modal"
       >
         <div className="flex items-start justify-between gap-4">
           <div>

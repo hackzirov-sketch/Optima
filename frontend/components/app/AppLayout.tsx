@@ -73,7 +73,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar user={user} onToggleSidebar={handleToggleSidebar} />
 
-        <main className="flex-1 overflow-y-auto bg-[#EEF5FF] p-4 md:p-6 dark:bg-[var(--upz-bg)]">
+        <main className="flex-1 overflow-y-auto bg-[var(--upz-content-bg)] p-4 md:p-6">
           {children}
         </main>
 

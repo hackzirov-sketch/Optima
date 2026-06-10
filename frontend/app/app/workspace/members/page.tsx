@@ -115,7 +115,7 @@ export default function WorkspaceMembersPage() {
               <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda…
             </div>
           ) : members.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">Hali a'zolar yo'q.</p>
+            <p className="py-4 text-sm text-muted-foreground">{"Hali a'zolar yo'q."}</p>
           ) : (
             <div className="mt-3 space-y-2">
               {members.map((member) => (

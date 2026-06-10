@@ -105,13 +105,13 @@ export default function WorkspaceSettingsPage() {
         <SurfaceCard>
           <SectionTitle icon={Trash2} title="Xavfli zona" description="Bu amalni qaytarib bo'lmaydi." />
           <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 dark:border-rose-900/40 dark:bg-rose-950/20">
-            <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">Workspaceni o'chirish</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Barcha loyihalar, vazifalar va a'zolar butunlay o'chib ketadi.</p>
+            <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{"Workspaceni o'chirish"}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{"Barcha loyihalar, vazifalar va a'zolar butunlay o'chib ketadi."}</p>
             <button
               onClick={() => setDeleteOpen(true)}
               className="mt-3 rounded-xl border border-rose-300 bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-400"
             >
-              O'chirish
+              {"O'chirish"}
             </button>
           </div>
         </SurfaceCard>
@@ -125,7 +125,7 @@ export default function WorkspaceSettingsPage() {
       >
         <div className="space-y-4">
           <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-500/10 dark:text-rose-400">
-            Barcha loyihalar, vazifalar va a'zolar butunlay o'chib ketadi.
+            {"Barcha loyihalar, vazifalar va a'zolar butunlay o'chib ketadi."}
           </p>
           <div className="flex justify-end gap-3">
             <ActionButton variant="secondary" onClick={() => setDeleteOpen(false)}>Bekor</ActionButton>

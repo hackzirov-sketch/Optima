@@ -364,7 +364,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             side="top"
             align="start"
             sideOffset={8}
-            className="w-52 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-xl"
+            className="w-52 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-overlay"
           >
             <div className="p-1.5">
               {menuItems.map(({ href, label, icon: Icon }) => (

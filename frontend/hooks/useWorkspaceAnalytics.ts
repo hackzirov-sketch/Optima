@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { analyticsApi, type ApiWorkspaceAnalytics } from '@/lib/api';
+import { IS_DEMO, DEMO_ANALYTICS } from '@/lib/demoData';
 
 export function useWorkspaceAnalytics(workspaceId: string | undefined) {
   const [analytics, setAnalytics] = useState<ApiWorkspaceAnalytics | null>(null);
@@ -11,6 +12,10 @@ export function useWorkspaceAnalytics(workspaceId: string | undefined) {
   const load = useCallback(async () => {
     if (!workspaceId) {
       setAnalytics(null);
+      return;
+    }
+    if (IS_DEMO) {
+      setAnalytics(DEMO_ANALYTICS);
       return;
     }
     setLoading(true);

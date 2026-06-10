@@ -50,7 +50,7 @@ export function ViewSwitcher({
   onChange: (view: TaskView) => void;
 }) {
   return (
-    <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 shadow-sm">
+    <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 shadow-card">
       {views.map((view) => (
         <button
           key={view}
@@ -80,7 +80,7 @@ export function FilterBar({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[24px] border border-border bg-card p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-3 rounded-[24px] border border-border bg-card p-3 shadow-card lg:flex-row lg:items-center lg:justify-between">
       <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-muted px-3 ring-1 ring-border focus-within:ring-indigo-400 dark:focus-within:ring-indigo-500">
         <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         <input
@@ -173,7 +173,7 @@ export function WidgetCard({
       }}
       onDragEnd={onDragEnd}
       whileHover={{ y: -3 }}
-      className="rounded-[24px] border border-border bg-card p-4 shadow-sm transition-all hover:shadow-md"
+      className="rounded-[24px] border border-border bg-card p-4 shadow-card transition-shadow hover:shadow-card-hover"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -202,7 +202,7 @@ export function WorkspaceHierarchy({
   onSelectBoard: (board: string) => void;
 }) {
   return (
-    <aside className="rounded-[24px] border border-border bg-card p-4 shadow-sm">
+    <aside className="rounded-[24px] border border-border bg-card p-4 shadow-card">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500">Zone</p>
@@ -253,7 +253,7 @@ export function ActivityTimeline({ items }: { items: string[] }) {
       {items.map((item, index) => (
         <div key={`${item}-${index}`} className="flex gap-3">
           <span className="mt-1 grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-black text-indigo-600 ring-1 ring-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/25">{index + 1}</span>
-          <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm">
+          <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-card">
             {item}
             <p className="mt-1 text-xs font-medium text-muted-foreground">Recorded in local activity stream</p>
           </div>
@@ -265,7 +265,7 @@ export function ActivityTimeline({ items }: { items: string[] }) {
 
 export function AutomationRuleCard({ rule, onToggle }: { rule: AutomationRule; onToggle?: () => void }) {
   return (
-    <div className="rounded-[24px] border border-border bg-card p-4 shadow-sm">
+    <div className="rounded-[24px] border border-border bg-card p-4 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-black text-foreground">{rule.name}</h3>
@@ -304,7 +304,7 @@ export function CommandMenu({
           key={command.id}
           type="button"
           onClick={() => onRun?.(command.id)}
-          className="rounded-[24px] border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+          className="rounded-[24px] border border-border bg-card p-4 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-card-hover"
         >
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
             <Bot className="h-5 w-5" />
@@ -392,7 +392,7 @@ export function TaskDrawer({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 420, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 34 }}
-            className="flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl"
+            className="flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-modal"
           >
             <div className="border-b border-border p-5">
               <div className="flex items-start justify-between gap-4">
@@ -481,7 +481,7 @@ export function TaskDrawer({
                   <h3 className="mb-3 font-black text-foreground">Comments</h3>
                   <div className="space-y-3">
                     {task.comments.map((comment) => (
-                      <div key={comment.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+                      <div key={comment.id} className="rounded-2xl border border-border bg-card p-3 shadow-card">
                         <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
                           <span>{comment.author}</span>
                           <span>{comment.time}</span>

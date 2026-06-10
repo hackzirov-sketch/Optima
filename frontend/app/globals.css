@@ -67,6 +67,12 @@
   --upz-nav-accent: #E8F2FC;
   --upz-nav-header-from: #FFFFFF;
   --upz-nav-header-to: #EEF5FF;
+  --upz-content-bg: #EEF5FF;
+
+  --shadow-card: 0 1px 3px rgba(17, 24, 39, 0.05), 0 2px 8px rgba(17, 24, 39, 0.07);
+  --shadow-card-hover: 0 4px 16px rgba(17, 24, 39, 0.10), 0 1px 4px rgba(17, 24, 39, 0.06);
+  --shadow-overlay: 0 8px 28px rgba(17, 24, 39, 0.12), 0 2px 6px rgba(17, 24, 39, 0.07);
+  --shadow-modal: 0 16px 48px rgba(17, 24, 39, 0.16), 0 4px 12px rgba(17, 24, 39, 0.08);
 }
 
 .dark {
@@ -129,6 +135,12 @@
   --upz-nav-accent: rgba(59, 130, 246, 0.15);
   --upz-nav-header-from: #0F172A;
   --upz-nav-header-to: #111827;
+  --upz-content-bg: #0B1120;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-card-hover: 0 4px 20px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 16px 56px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.40);
 }
 
 html {

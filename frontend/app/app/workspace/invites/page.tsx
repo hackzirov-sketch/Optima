@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, UserPlus } from 'lucide-react';
 import { ActionButton, PageHeader, PageShell, SectionTitle, SurfaceCard } from '@/components/app/DesignSystem';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import type { ApiInvitation } from '@/lib/api';
+import { useInvitations } from '@/hooks/useInvitations';
 
 type InvitationStatus = 'pending' | 'expired' | 'accepted' | 'declined';
 
-function getInvitationStatus(inv: ApiInvitation): InvitationStatus {
+function getStatus(inv: { acceptedAt?: string | null; declinedAt?: string | null; expiresAt: string }): InvitationStatus {
   if (inv.acceptedAt) return 'accepted';
   if (inv.declinedAt) return 'declined';
   if (new Date(inv.expiresAt) < new Date()) return 'expired';
@@ -26,9 +26,8 @@ const ROLES = ['guest', 'junior', 'middle', 'senior', 'lead', 'admin'] as const;
 
 export default function WorkspaceInvitesPage() {
   const { activeWorkspace } = useWorkspace();
+  const { invitations, loading, send, cancel } = useInvitations(activeWorkspace?.id);
 
-  const [invitations, setInvitations] = useState<ApiInvitation[]>([]);
-  const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('junior');
   const [sending, setSending] = useState(false);
@@ -39,39 +38,18 @@ export default function WorkspaceInvitesPage() {
     setTimeout(() => setNotice(null), 2400);
   };
 
-  const loadInvitations = async () => {
-    if (!activeWorkspace?.id) return;
-    setLoading(true);
-    const { workspacesApi } = await import('@/lib/api');
-    workspacesApi.listInvitations(activeWorkspace.id)
-      .then((res) => setInvitations(res?.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { loadInvitations(); }, [activeWorkspace?.id]);
-
   const handleSend = async () => {
-    if (!email.trim() || !activeWorkspace) return;
+    if (!email.trim()) return;
     setSending(true);
     try {
-      const { workspacesApi } = await import('@/lib/api');
-      await workspacesApi.invite(activeWorkspace.id, email.trim(), role);
-      await loadInvitations();
+      await send(email.trim(), role);
       setEmail('');
       showNotice('Taklif yuborildi');
     } catch {
-      showNotice('Taklif yuborishda xatolik yuz berdi');
+      showNotice('Taklif yuborishda xatolik');
     } finally {
       setSending(false);
     }
-  };
-
-  const handleCancel = async (id: string) => {
-    if (!activeWorkspace) return;
-    const { workspacesApi } = await import('@/lib/api');
-    await workspacesApi.cancelInvitation(activeWorkspace.id, id).catch(() => {});
-    setInvitations((prev) => prev.filter((inv) => inv.id !== id));
   };
 
   if (!activeWorkspace) {
@@ -82,8 +60,8 @@ export default function WorkspaceInvitesPage() {
     );
   }
 
-  const pending = invitations.filter((inv) => getInvitationStatus(inv) === 'pending');
-  const others = invitations.filter((inv) => getInvitationStatus(inv) !== 'pending');
+  const pending = invitations.filter((i) => getStatus(i) === 'pending');
+  const others  = invitations.filter((i) => getStatus(i) !== 'pending');
 
   return (
     <PageShell>
@@ -100,7 +78,6 @@ export default function WorkspaceInvitesPage() {
       )}
 
       <div className="grid gap-5 max-w-2xl">
-        {/* Invite form */}
         <SurfaceCard>
           <SectionTitle icon={UserPlus} title="Yangi taklif" description="Email orqali jamoa a'zosini qo'shing." />
           <div className="flex gap-2">
@@ -116,7 +93,7 @@ export default function WorkspaceInvitesPage() {
               onChange={(e) => setRole(e.target.value)}
               className="rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-semibold text-foreground outline-none"
             >
-              {ROLES.map((r) => <option key={r} value={r} className="capitalize">{r}</option>)}
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <ActionButton onClick={handleSend} disabled={sending || !email.trim()}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yuborish'}
@@ -124,7 +101,6 @@ export default function WorkspaceInvitesPage() {
           </div>
         </SurfaceCard>
 
-        {/* Pending invitations */}
         {loading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda…
@@ -136,8 +112,7 @@ export default function WorkspaceInvitesPage() {
                 <SectionTitle icon={UserPlus} title="Kutilayotgan takliflar" description="Hali qabul qilinmagan." />
                 <div className="space-y-2">
                   {pending.map((inv) => {
-                    const status = getInvitationStatus(inv);
-                    const style = STATUS_STYLE[status];
+                    const style = STATUS_STYLE[getStatus(inv)];
                     return (
                       <div key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3">
                         <div className="min-w-0 flex-1">
@@ -150,7 +125,7 @@ export default function WorkspaceInvitesPage() {
                           </p>
                         </div>
                         <button
-                          onClick={() => handleCancel(inv.id)}
+                          onClick={() => cancel(inv.id)}
                           className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600"
                         >
                           Bekor
@@ -167,8 +142,7 @@ export default function WorkspaceInvitesPage() {
                 <SectionTitle icon={UserPlus} title="Tarix" description="Qabul qilingan, rad etilgan yoki muddati o'tgan." />
                 <div className="space-y-2">
                   {others.map((inv) => {
-                    const status = getInvitationStatus(inv);
-                    const style = STATUS_STYLE[status];
+                    const style = STATUS_STYLE[getStatus(inv)];
                     return (
                       <div key={inv.id} className="flex items-center gap-3 rounded-2xl bg-muted px-4 py-3">
                         <div className="min-w-0 flex-1">
@@ -188,7 +162,7 @@ export default function WorkspaceInvitesPage() {
             )}
 
             {invitations.length === 0 && (
-              <p className="py-4 text-center text-sm text-muted-foreground">Hech qanday taklif yo'q.</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">{"Hech qanday taklif yo'q."}</p>
             )}
           </>
         )}

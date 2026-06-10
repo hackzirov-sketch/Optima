@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { tasksApi, type ApiTask, type CreateTaskDto } from '@/lib/api';
+import { IS_DEMO, DEMO_TASKS } from '@/lib/demoData';
 
 export function useTasks(projectId: string | undefined) {
   const [tasks, setTasks] = useState<ApiTask[]>([]);
@@ -10,6 +11,10 @@ export function useTasks(projectId: string | undefined) {
 
   const load = useCallback(async () => {
     if (!projectId) return;
+    if (IS_DEMO) {
+      setTasks(DEMO_TASKS.filter((t) => t.projectId === projectId));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -26,24 +31,64 @@ export function useTasks(projectId: string | undefined) {
   useEffect(() => { load(); }, [load]);
 
   const createTask = useCallback(async (dto: CreateTaskDto) => {
+    if (IS_DEMO) {
+      const task: ApiTask = {
+        id: `demo-task-${Date.now()}`,
+        title: dto.title,
+        description: dto.description,
+        status: dto.status ?? 'todo',
+        priority: dto.priority ?? 'medium',
+        projectId: dto.projectId,
+        workspaceId: dto.workspaceId,
+        assigneeId: dto.assigneeId,
+        columnId: dto.columnId,
+        estimatedHours: dto.estimatedHours,
+        dueDate: dto.dueDate,
+        createdAt: new Date().toISOString(),
+      };
+      setTasks((prev) => [task, ...prev]);
+      return task;
+    }
     const res = await tasksApi.create(dto);
     setTasks((prev) => [res.data, ...prev]);
     return res.data;
   }, []);
 
   const updateTask = useCallback(async (taskId: string, data: Partial<CreateTaskDto>) => {
+    if (IS_DEMO) {
+      let updated!: ApiTask;
+      setTasks((prev) => prev.map((t) => {
+        if (t.id !== taskId) return t;
+        updated = { ...t, ...data };
+        return updated;
+      }));
+      return updated;
+    }
     const res = await tasksApi.update(taskId, data);
     setTasks((prev) => prev.map((t) => t.id === taskId ? res.data : t));
     return res.data;
   }, []);
 
   const moveTask = useCallback(async (taskId: string, data: { columnId?: string; status?: string }) => {
+    if (IS_DEMO) {
+      let updated!: ApiTask;
+      setTasks((prev) => prev.map((t) => {
+        if (t.id !== taskId) return t;
+        updated = { ...t, ...data };
+        return updated;
+      }));
+      return updated;
+    }
     const res = await tasksApi.move(taskId, data);
     setTasks((prev) => prev.map((t) => t.id === taskId ? res.data : t));
     return res.data;
   }, []);
 
   const deleteTask = useCallback(async (taskId: string) => {
+    if (IS_DEMO) {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      return;
+    }
     await tasksApi.delete(taskId);
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
   }, []);
@@ -66,6 +111,10 @@ export function useAllWorkspaceTasks(
 
   const load = useCallback(async () => {
     if (workspaceId) {
+      if (IS_DEMO) {
+        setTasks(DEMO_TASKS.filter((t) => t.workspaceId === workspaceId));
+        return;
+      }
       setLoading(true);
       try {
         const res = await tasksApi.listByWorkspace(workspaceId, { limit: 500 });

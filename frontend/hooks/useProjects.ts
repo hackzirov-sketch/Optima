@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { projectsApi, type ApiProject, type ApiColumn } from '@/lib/api';
+import { IS_DEMO, DEMO_PROJECTS } from '@/lib/demoData';
 
 type ApiErrorLike = {
   status?: number;
@@ -15,6 +16,10 @@ export function useProjects(workspaceId: string | undefined) {
 
   const load = useCallback(async () => {
     if (!workspaceId) return;
+    if (IS_DEMO) {
+      setProjects(DEMO_PROJECTS.filter((p) => p.workspaceId === workspaceId));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -41,6 +46,21 @@ export function useProjects(workspaceId: string | undefined) {
 
   const createProject = useCallback(async (name: string, description?: string) => {
     if (!workspaceId) throw new Error('No active workspace');
+    if (IS_DEMO) {
+      const project: ApiProject = {
+        id: `demo-project-${Date.now()}`,
+        name,
+        slug: name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now().toString(36),
+        description,
+        workspaceId,
+        status: 'active',
+        priority: 'medium',
+        ownerId: 'demo-user-001',
+        createdAt: new Date().toISOString(),
+      };
+      setProjects((prev) => [...prev, project]);
+      return project;
+    }
     const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now().toString(36);
     const res = await projectsApi.create({ workspaceId, name, slug, description });
     setProjects((prev) => [...prev, res.data]);
@@ -48,6 +68,10 @@ export function useProjects(workspaceId: string | undefined) {
   }, [workspaceId]);
 
   const deleteProject = useCallback(async (id: string) => {
+    if (IS_DEMO) {
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      return;
+    }
     await projectsApi.delete(id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
   }, []);
