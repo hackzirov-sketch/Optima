@@ -36,10 +36,12 @@ export function initializeTheme() {
 }
 
 export function useTheme() {
-  const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
+  const [theme, setTheme] = useState<ThemeMode>("light");
 
   useEffect(() => {
-    applyTheme(theme);
+    const stored = getStoredTheme();
+    setTheme(stored);
+    applyTheme(stored);
 
     const handleThemeChange = (event: Event) => {
       const nextTheme = (event as CustomEvent<ThemeMode>).detail;
@@ -50,7 +52,7 @@ export function useTheme() {
 
     window.addEventListener("upz-theme-change", handleThemeChange);
     return () => window.removeEventListener("upz-theme-change", handleThemeChange);
-  }, [theme]);
+  }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";

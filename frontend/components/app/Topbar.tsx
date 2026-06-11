@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle2, PanelLeftClose } from "lucide-react";
+import { Bell, CheckCircle2, PanelLeft, PanelLeftClose } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
@@ -15,6 +15,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 interface TopbarProps {
   user: UserProfile;
   onToggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
 }
 
 const PATH_TITLE_KEY: [string, string][] = [
@@ -35,7 +36,7 @@ const PATH_TITLE_KEY: [string, string][] = [
   ["/app/settings", "settings"],
 ];
 
-export function Topbar({ onToggleSidebar }: TopbarProps) {
+export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
   const { status: wsStatus } = useWebSocket({ disabled: false });
@@ -68,7 +69,10 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
             className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-[var(--upz-nav-accent)] text-[var(--upz-nav-navy)] transition-colors hover:bg-blue-100/80 dark:text-slate-100 dark:hover:bg-slate-800"
             aria-label={t("app.topbar.toggleSidebar")}
           >
-            <PanelLeftClose className="h-5 w-5" strokeWidth={2} />
+            {sidebarCollapsed
+              ? <PanelLeft className="h-5 w-5" strokeWidth={2} />
+              : <PanelLeftClose className="h-5 w-5" strokeWidth={2} />
+            }
           </button>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold leading-tight tracking-tight text-[var(--upz-nav-navy)] sm:text-2xl dark:text-slate-100">

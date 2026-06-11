@@ -59,7 +59,7 @@ export function LanguageSwitcher({ variant = "default" }: LanguageSwitcherProps)
         collisionPadding={16}
         avoidCollisions
         className={cn(
-          "z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900",
+          "z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white px-[5px] py-[5px] shadow-lg dark:border-slate-700 dark:bg-slate-900",
           isToolbar && "w-[11.5rem]",
         )}
       >

@@ -42,7 +42,7 @@ function AuthCallbackContent() {
             authProvider: 'social',
           });
           if (storage.isOnboarded()) {
-            router.push('/app/dashboard');
+            router.push('/app/home');
           } else {
             router.push('/onboarding');
           }

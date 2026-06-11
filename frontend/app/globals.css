@@ -22,15 +22,15 @@
   --sidebar: 210 40% 96%;
   --sidebar-foreground: 222 47% 11%;
   --sidebar-border: 214 32% 91%;
-  --sidebar-primary: 161 94% 30%;
+  --sidebar-primary: 239 84% 67%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 214 32% 91%;
   --sidebar-accent-foreground: 222 47% 11%;
-  --sidebar-ring: 161 94% 30%;
+  --sidebar-ring: 239 84% 67%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
   --popover-border: 214 32% 91%;
-  --primary: 161 94% 30%;          /* emerald-600 #059669 */
+  --primary: 239 84% 67%;
   --primary-foreground: 0 0% 100%;
   --secondary: 214 32% 91%;
   --secondary-foreground: 222 47% 11%;
@@ -41,33 +41,33 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --input: 214 32% 91%;
-  --ring: 161 94% 30%;
-  --chart-1: 161 94% 30%;
-  --chart-2: 173 80% 40%;
-  --chart-3: 38 92% 50%;
-  --chart-4: 217 91% 60%;
+  --ring: 239 84% 67%;
+  --chart-1: 239 84% 67%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 142 76% 36%;
+  --chart-4: 38 92% 50%;
   --chart-5: 0 84% 60%;
 
   --radius: .5rem;
   --upz-bg: #F7FAFC;
   --upz-surface: #FFFFFF;
   --upz-surface-soft: #F7FAFC;
-  --upz-border: #D1FAE5;
+  --upz-border: #E5E7EB;
   --upz-text: #111827;
   --upz-muted: #6B7280;
-  --upz-shell-glow-a: rgba(5, 150, 105, 0.08);
-  --upz-shell-glow-b: rgba(16, 185, 129, 0.07);
+  --upz-shell-glow-a: rgba(99, 102, 241, 0.08);
+  --upz-shell-glow-b: rgba(59, 130, 246, 0.07);
   --upz-chat-bg-a: #F7FAFC;
   --upz-chat-bg-b: #FFFFFF;
-  --upz-chat-glow-a: rgba(5, 150, 105, 0.10);
-  --upz-chat-glow-b: rgba(16, 185, 129, 0.08);
+  --upz-chat-glow-a: rgba(99, 102, 241, 0.10);
+  --upz-chat-glow-b: rgba(59, 130, 246, 0.08);
   --upz-surface-raised: #FFFFFF;
-  --upz-nav-navy: #064E3B;
-  --upz-nav-brand: #059669;
-  --upz-nav-accent: #ECFDF5;
+  --upz-nav-navy: #0A2D5C;
+  --upz-nav-brand: #1D6FD4;
+  --upz-nav-accent: #E8F2FC;
   --upz-nav-header-from: #FFFFFF;
-  --upz-nav-header-to: #ECFDF5;
-  --upz-content-bg: #ECFDF5;
+  --upz-nav-header-to: #EEF5FF;
+  --upz-content-bg: #EEF5FF;
 
   --shadow-card: 0 1px 3px rgba(17, 24, 39, 0.05), 0 2px 8px rgba(17, 24, 39, 0.07);
   --shadow-card-hover: 0 4px 16px rgba(17, 24, 39, 0.10), 0 1px 4px rgba(17, 24, 39, 0.06);
@@ -76,73 +76,71 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .08);
-  --badge-outline: rgba(52, 211, 153, .08);
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .03);
-  --elevate-2: rgba(255,255,255, .07);
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
 
-  /* Emerald-tinted dark backgrounds */
-  --background: 165 18% 6%;          /* #0B1110 */
-  --foreground: 160 10% 92%;         /* #E8EDEB */
-  --border: 165 13% 16%;             /* #243430 */
-  --card: 162 16% 9%;                /* #131C19 */
-  --card-foreground: 160 10% 92%;
-  --card-border: 165 13% 16%;
-  --sidebar: 165 18% 6%;
-  --sidebar-foreground: 160 10% 92%;
-  --sidebar-border: 165 13% 16%;
-  --sidebar-primary: 160 84% 39%;    /* emerald-500 */
-  --sidebar-primary-foreground: 162 96% 9%; /* emerald-950 */
-  --sidebar-accent: 162 15% 13%;
-  --sidebar-accent-foreground: 160 10% 92%;
-  --sidebar-ring: 160 84% 51%;       /* emerald-400 */
-  --popover: 162 16% 9%;
-  --popover-foreground: 160 10% 92%;
-  --popover-border: 165 13% 16%;
-  --primary: 160 84% 39%;            /* emerald-500 #10B981 */
-  --primary-foreground: 162 96% 9%;  /* emerald-950 #022C22 — to'q matn, kontrast yaxshi */
-  --secondary: 162 15% 13%;
-  --secondary-foreground: 160 10% 92%;
-  --muted: 162 15% 13%;              /* #1C2622 */
-  --muted-foreground: 162 12% 58%;   /* #8BA39B */
-  --accent: 162 15% 13%;
-  --accent-foreground: 160 10% 92%;
-  --destructive: 0 91% 71%;          /* red-400 #F87171 — to'q fonda yaxshi ko'rinadi */
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --border: 215 27.9% 16.9%;
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 215 27.9% 16.9%;
+  --sidebar: 222 47% 11%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 215 27.9% 16.9%;
+  --sidebar-primary: 239 84% 67%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 215 27.9% 16.9%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-ring: 239 84% 67%;
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 215 27.9% 16.9%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 27.9% 16.9%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 215 27.9% 16.9%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 215 27.9% 16.9%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --input: 162 15% 13%;
-  --ring: 160 84% 51%;               /* emerald-400 — focus halqalari uchun */
-  --chart-1: 160 84% 39%;            /* emerald-500 */
-  --chart-2: 173 80% 40%;            /* teal-500 */
-  --chart-3: 38 92% 50%;             /* amber */
-  --chart-4: 217 91% 60%;            /* blue */
-  --chart-5: 0 91% 71%;              /* red-400 */
+  --input: 215 27.9% 16.9%;
+  --ring: 239 84% 67%;
+  --chart-1: 239 84% 67%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 142 76% 36%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 0 84% 60%;
 
-  /* UPZ custom tokens — yashil tintga o'tkazildi */
-  --upz-bg: #0B1110;
-  --upz-surface: #131C19;
-  --upz-surface-soft: #0E1814;
-  --upz-surface-raised: #1C2622;
-  --upz-border: rgba(52, 211, 153, 0.10);
-  --upz-text: #E8EDEB;
-  --upz-muted: #8BA39B;
-  --upz-shell-glow-a: rgba(16, 185, 129, 0.15);
-  --upz-shell-glow-b: rgba(52, 211, 153, 0.10);
-  --upz-chat-bg-a: #0B1110;
-  --upz-chat-bg-b: #131C19;
-  --upz-chat-glow-a: rgba(16, 185, 129, 0.15);
-  --upz-chat-glow-b: rgba(52, 211, 153, 0.10);
-  --upz-nav-navy: #E8EDEB;
-  --upz-nav-brand: #34D399;          /* emerald-400 */
-  --upz-nav-accent: rgba(52, 211, 153, 0.12);
-  --upz-nav-header-from: #0E1814;
-  --upz-nav-header-to: #131C19;
-  --upz-content-bg: #0B1110;
+  --upz-bg: #0B1120;
+  --upz-surface: #111827;
+  --upz-surface-soft: #0F172A;
+  --upz-surface-raised: #1E293B;
+  --upz-border: rgba(148, 163, 184, 0.22);
+  --upz-text: #F8FAFC;
+  --upz-muted: #94A3B8;
+  --upz-shell-glow-a: rgba(99, 102, 241, 0.18);
+  --upz-shell-glow-b: rgba(59, 130, 246, 0.14);
+  --upz-chat-bg-a: #0B1120;
+  --upz-chat-bg-b: #111827;
+  --upz-chat-glow-a: rgba(99, 102, 241, 0.18);
+  --upz-chat-glow-b: rgba(14, 165, 233, 0.12);
+  --upz-nav-navy: #E2E8F0;
+  --upz-nav-brand: #3B82F6;
+  --upz-nav-accent: rgba(59, 130, 246, 0.15);
+  --upz-nav-header-from: #0F172A;
+  --upz-nav-header-to: #111827;
+  --upz-content-bg: #0B1120;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-card-hover: 0 4px 20px rgba(0, 0, 0, 0.60), 0 2px 6px rgba(0, 0, 0, 0.35);
-  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.70), 0 2px 8px rgba(0, 0, 0, 0.40);
-  --shadow-modal: 0 16px 56px rgba(0, 0, 0, 0.80), 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-card-hover: 0 4px 20px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 16px 56px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.40);
 }
 
 html {

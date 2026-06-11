@@ -135,7 +135,7 @@ export default function OnboardingPage() {
     const user = storage.getUser() || { name: "User", joinedAt: Date.now() } as UserProfile;
     storage.saveUser({ ...user, profession: profession!, goal: goal!, experience: experience! });
     storage.setOnboarded();
-    router.push("/app/dashboard");
+    router.push("/app/home");
   };
 
   const goBack = () => {

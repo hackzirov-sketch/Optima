@@ -10,6 +10,7 @@ import {
   ChevronUp,
   CreditCard,
   Crown,
+  Home,
   LayoutDashboard,
   Layers,
   Plus,
@@ -40,6 +41,7 @@ const NAV_GROUPS = [
   {
     titleKey: "core",
     items: [
+      { path: "/app/home", labelKey: "home", icon: Home },
       { path: "/app/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
       { path: "/app/workspace", labelKey: "workspace", icon: Layers },
       { path: "/app/chat", labelKey: "chat", icon: MessageCircle, badgeKey: "live" },
@@ -281,7 +283,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             className={cn(groupIndex > 0 && "mt-6 border-t border-border/80 pt-5")}
           >
             {!collapsed && (
-              <div className="sticky top-0 z-10 -mx-1 mb-2.5 bg-white/95 px-1 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.26em] text-slate-400 backdrop-blur-sm dark:bg-slate-950/95">
+              <div className="mb-2.5 px-1 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-[0.26em] text-slate-400">
                 {t(`app.nav.${group.titleKey}`)}
               </div>
             )}

@@ -71,17 +71,12 @@ export function HowItWorksSection() {
               return (
                 <motion.div
                   key={i}
-                  className={`group relative flex flex-col items-center text-center rounded-3xl border border-border/60 bg-card p-8 pt-12 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl ${g.border}`}
+                  className={`group relative flex flex-col items-center text-center rounded-3xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl ${g.border}`}
                   initial={{ opacity: 0, y: 32 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: i * 0.15 }}
                 >
-                  {/* Step number badge */}
-                  <div className={`absolute -top-5 h-10 w-10 rounded-2xl bg-gradient-to-br ${g.num} flex items-center justify-center font-black text-white text-base shadow-lg ${g.glow}`}>
-                    {i + 1}
-                  </div>
-
                   {/* Icon container */}
                   <div className={`relative mb-6 h-20 w-20 rounded-2xl bg-gradient-to-br ${g.icon} flex items-center justify-center shadow-lg ${g.glow} transition-transform duration-300 group-hover:scale-105`}>
                     <Icon className="h-9 w-9 text-white" />

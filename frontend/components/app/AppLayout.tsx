@@ -71,7 +71,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar user={user} onToggleSidebar={handleToggleSidebar} />
+        <Topbar user={user} onToggleSidebar={handleToggleSidebar} sidebarCollapsed={collapsed} />
 
         <main className="flex-1 overflow-y-auto bg-[var(--upz-content-bg)] p-4 md:p-6">
           {children}
