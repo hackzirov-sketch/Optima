@@ -75,6 +75,8 @@
   --shadow-modal: 0 16px 48px rgba(17, 24, 39, 0.16), 0 4px 12px rgba(17, 24, 39, 0.08);
 }
 
+/* DARK MODE — light mode bilan bir xil ko'kish-indigo palitra, faqat qorong'i versiyasi.
+   Hue light mode'dagidek 222 (fonlar) va 234–239 (aksent) atrofida ushlab turildi. */
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
@@ -82,65 +84,66 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --border: 215 27.9% 16.9%;
-  --card: 222 47% 11%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 215 27.9% 16.9%;
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 215 27.9% 16.9%;
-  --sidebar-primary: 239 84% 67%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 215 27.9% 16.9%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 239 84% 67%;
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 215 27.9% 16.9%;
-  --primary: 239 84% 67%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 215 27.9% 16.9%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 215 27.9% 16.9%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 215 27.9% 16.9%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 84% 60%;
+  --background: 222 22% 7%;         /* #0E1320 — ko'kish-qora asosiy fon */
+  --foreground: 220 20% 93%;        /* #E7EAF0 — asosiy matn */
+  --border: 220 14% 21%;            /* #2E333D — chegaralar */
+  --card: 222 19% 11%;              /* #171C27 — kartalar */
+  --card-foreground: 220 20% 93%;
+  --card-border: 220 14% 21%;
+  --sidebar: 222 20% 9%;            /* #12161F */
+  --sidebar-foreground: 220 20% 93%;
+  --sidebar-border: 220 14% 18%;
+  --sidebar-primary: 234 89% 74%;   /* #818CF8 — indigo-400 */
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 234 89% 74% / 0.14;
+  --sidebar-accent-foreground: 220 20% 93%;
+  --sidebar-ring: 234 89% 74%;
+  --popover: 222 17% 14%;           /* #1E2330 — popover/menu */
+  --popover-foreground: 220 20% 93%;
+  --popover-border: 220 14% 23%;
+  --primary: 234 89% 74%;           /* #818CF8 — light'dagi indigo'ning ochiq versiyasi */
+  --primary-foreground: 222 47% 11%;/* indigo-400 ustida och fon o'rniga to'q matn — kontrast yaxshiroq */
+  --secondary: 222 15% 17%;         /* #252A36 — ikkilamchi fon */
+  --secondary-foreground: 220 20% 93%;
+  --muted: 222 16% 13%;             /* #1C2230 */
+  --muted-foreground: 220 12% 68%;  /* #A4ABB8 — xira matn, lekin o'qiladigan */
+  --accent: 222 15% 18%;            /* hover fon */
+  --accent-foreground: 220 22% 95%;
+  --destructive: 0 72% 63%;         /* #ED5E5E — light'dagi qizilning ochiq tusi */
   --destructive-foreground: 0 0% 100%;
-  --input: 215 27.9% 16.9%;
-  --ring: 239 84% 67%;
-  --chart-1: 239 84% 67%;
-  --chart-2: 217 91% 60%;
-  --chart-3: 142 76% 36%;
-  --chart-4: 38 92% 50%;
-  --chart-5: 0 84% 60%;
+  --input: 220 14% 21%;
+  --ring: 234 89% 74%;
+  --chart-1: 234 89% 74%;           /* indigo — light'dagi chart-1 bilan bir xil hue */
+  --chart-2: 217 91% 65%;           /* ko'k — light'dagi chart-2 ochiqroq */
+  --chart-3: 142 60% 50%;           /* yashil */
+  --chart-4: 38 92% 58%;            /* amber */
+  --chart-5: 0 84% 66%;             /* qizil */
 
-  --upz-bg: #0B1120;
-  --upz-surface: #111827;
-  --upz-surface-soft: #0F172A;
-  --upz-surface-raised: #1E293B;
-  --upz-border: rgba(148, 163, 184, 0.22);
-  --upz-text: #F8FAFC;
-  --upz-muted: #94A3B8;
-  --upz-shell-glow-a: rgba(99, 102, 241, 0.18);
-  --upz-shell-glow-b: rgba(59, 130, 246, 0.14);
-  --upz-chat-bg-a: #0B1120;
-  --upz-chat-bg-b: #111827;
-  --upz-chat-glow-a: rgba(99, 102, 241, 0.18);
-  --upz-chat-glow-b: rgba(14, 165, 233, 0.12);
-  --upz-nav-navy: #E2E8F0;
-  --upz-nav-brand: #3B82F6;
-  --upz-nav-accent: rgba(59, 130, 246, 0.15);
-  --upz-nav-header-from: #0F172A;
-  --upz-nav-header-to: #111827;
-  --upz-content-bg: #0B1120;
+  --upz-bg: #0E1320;
+  --upz-surface: #171C27;
+  --upz-surface-soft: #12161F;
+  --upz-surface-raised: #1E2330;
+  --upz-border: rgba(255, 255, 255, 0.08);
+  --upz-text: #E7EAF0;
+  --upz-muted: #A4ABB8;
+  /* Glow'lar light mode'dagi bilan bir xil indigo/ko'k juftligi — nozik chuqurlik */
+  --upz-shell-glow-a: rgba(129, 140, 248, 0.07);
+  --upz-shell-glow-b: rgba(96, 165, 250, 0.05);
+  --upz-chat-bg-a: #0E1320;
+  --upz-chat-bg-b: #171C27;
+  --upz-chat-glow-a: rgba(129, 140, 248, 0.09);
+  --upz-chat-glow-b: rgba(96, 165, 250, 0.06);
+  --upz-nav-navy: #E7EAF0;
+  --upz-nav-brand: #6FA8EF;         /* light'dagi #1D6FD4 ning qorong'i fonga moslangan ochiq tusi */
+  --upz-nav-accent: rgba(99, 102, 241, 0.16);
+  --upz-nav-header-from: #12161F;
+  --upz-nav-header-to: #12161F;
+  --upz-content-bg: #0E1320;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.30);
-  --shadow-card-hover: 0 4px 20px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.30);
-  --shadow-overlay: 0 8px 32px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-modal: 0 16px 56px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.40), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 4px 18px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-overlay: 0 8px 30px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-modal: 0 16px 50px rgba(0, 0, 0, 0.65), 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 html {
@@ -161,12 +164,77 @@ html {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Glass — normal sahifa fonidagi floating elementlar uchun (toast, dropdown, popover) */
+  .glass {
+    background: rgba(255, 255, 255, 0.80);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  /* Glass on color — gradient yoki rangli fon ustidagi elementlar uchun */
+  .glass-on-color {
+    background: rgba(255, 255, 255, 0.12);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+}
+
+.dark .glass {
+  background: rgba(30, 35, 48, 0.88);
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: var(--shadow-overlay);
 }
 
 /* ─── Dark mode overrides for remaining hardcoded colors ─── */
 .dark header,
 .dark nav {
   --tw-bg-opacity: 1;
+}
+
+/* Hardcoded slate ranglarni yangi palitraga moslash */
+.dark [class*="bg-slate-900"],
+.dark [class*="bg-slate-950"] {
+  background-color: var(--upz-surface);
+}
+.dark [class*="bg-slate-800"] {
+  background-color: var(--upz-surface-raised);
+}
+.dark [class*="border-slate-800"],
+.dark [class*="border-slate-700"] {
+  border-color: var(--upz-border);
+}
+.dark [class*="text-slate-100"],
+.dark [class*="text-slate-200"] {
+  color: var(--upz-text);
+}
+.dark [class*="text-slate-300"],
+.dark [class*="text-slate-400"],
+.dark [class*="text-slate-500"] {
+  color: var(--upz-muted);
+}
+
+/* Dark mode scrollbar — fonga mos ko'kish-kulrang */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #323948;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3E4658;
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Topbar & cards in dark mode */

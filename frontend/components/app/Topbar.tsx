@@ -122,7 +122,7 @@ export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
               initial={{ opacity: 0, y: 8, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 6, scale: 0.99 }}
-              className="absolute right-4 top-[76px] z-50 w-[min(430px,calc(100vw-2rem))] rounded-[24px] border border-border bg-card p-3 shadow-overlay"
+              className="absolute right-4 top-[76px] z-50 w-[min(430px,calc(100vw-2rem))] rounded-[24px] glass p-3"
             >
               <div className="mb-2 flex items-center justify-between px-1">
                 <div>

@@ -57,11 +57,18 @@ export function ViewSwitcher({
           type="button"
           onClick={() => onChange(view)}
           className={cn(
-            "h-9 flex-shrink-0 rounded-xl px-3 text-xs font-black transition-colors",
-            value === view ? "bg-indigo-600 text-white shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            "relative h-9 flex-shrink-0 rounded-xl px-3 text-xs font-black transition-colors",
+            value === view ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {viewLabels[view]}
+          {value === view && (
+            <motion.span
+              layoutId="view-switcher-pill"
+              className="absolute inset-0 rounded-xl bg-secondary shadow-sm"
+              transition={{ type: "spring", bounce: 0.18, duration: 0.38 }}
+            />
+          )}
+          <span className="relative z-10">{viewLabels[view]}</span>
         </button>
       ))}
     </div>

@@ -72,7 +72,7 @@ export default function WorkspaceInvitesPage() {
       />
 
       {notice && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-foreground px-5 py-3 text-sm font-semibold text-background shadow-lg">
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl glass px-5 py-3 text-sm font-semibold text-foreground">
           {notice}
         </div>
       )}

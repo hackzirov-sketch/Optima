@@ -6,10 +6,13 @@ import {
   Bell,
   Bot,
   CalendarDays,
+  CheckCircle2,
   CheckSquare,
+  Circle,
   Clock,
   FolderOpen,
   LayoutDashboard,
+  ListTodo,
   Loader2,
   MessageCircle,
   Target,
@@ -31,8 +34,9 @@ import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useMembers } from "@/hooks/useMembers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
+import { tasksApi } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/displayUser";
-import { buildProductivityData, buildWeeklyActivity } from "@/lib/taskCharts";
+import { buildProductivityData, buildWeeklyActivity, computeFocusScore, sortPendingTasks } from "@/lib/taskCharts";
 import { storage } from "@/utils/storage";
 
 const PROJECT_COLORS = ["#6366F1", "#3B82F6", "#10B981", "#F59E0B"];
@@ -60,7 +64,7 @@ function MetricSkeleton() {
 
 export default function Page() {
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { activeWorkspace, loading: wsLoading } = useWorkspace();
   const { projects, loading: projectsLoading } = useProjects(activeWorkspace?.id);
   const { tasks, loading: tasksLoading } = useAllWorkspaceTasks(
@@ -70,6 +74,32 @@ export default function Page() {
   const { members } = useMembers(activeWorkspace?.id);
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
   const { analytics } = useWorkspaceAnalytics(activeWorkspace?.id);
+
+  // Real-time clock
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Pending task local toggle state
+  const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+  const getStatus = (taskId: string, original: string) => localStatus[taskId] ?? original;
+
+  const toggleTask = async (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'done' ? 'backlog' : 'done';
+    setLocalStatus((prev) => ({ ...prev, [taskId]: newStatus }));
+    try {
+      await tasksApi.move(taskId, { status: newStatus });
+    } catch {
+      setLocalStatus((prev) => ({ ...prev, [taskId]: currentStatus }));
+    }
+  };
+
+  const pendingTasks = sortPendingTasks(
+    tasks.filter((task) => getStatus(task.id, task.status) !== 'done'),
+    5,
+  );
 
   // Draggable widgets
   const [preset, setPreset] = useState("Launch");
@@ -98,15 +128,16 @@ export default function Page() {
   };
 
   // Computed metrics
-  const completedTasks = tasks.filter((t) => t.status === 'done').length;
-  const activeTasks = tasks.filter((t) => t.status !== 'done').length;
-  const inReview = tasks.filter((t) => t.status === 'review').length;
+  const completedTasks = tasks.filter((task) => task.status === 'done').length;
+  const activeTasks = tasks.filter((task) => task.status !== 'done').length;
+  const inReview = tasks.filter((task) => task.status === 'review').length;
+  const focusScore = computeFocusScore(tasks, getStatus);
 
   // Project progress bars (top 4)
   const projectProgress = useMemo(() => {
     return projects.slice(0, 4).map((proj, i) => {
-      const projTasks = tasks.filter((t) => t.projectId === proj.id);
-      const done = projTasks.filter((t) => t.status === 'done').length;
+      const projTasks = tasks.filter((task) => task.projectId === proj.id);
+      const done = projTasks.filter((task) => task.status === 'done').length;
       const pct = projTasks.length === 0 ? 0 : Math.round((done / projTasks.length) * 100);
       return { name: proj.name, progress: pct, color: PROJECT_COLORS[i % PROJECT_COLORS.length] };
     });
@@ -116,10 +147,15 @@ export default function Page() {
   const weeklyActivity = useMemo(() => buildWeeklyActivity(tasks), [tasks]);
   const productivityData = useMemo(() => buildProductivityData(tasks), [tasks]);
 
-  // Recent activity from notifications
-  const recentActivity = notifications.slice(0, 4);
+  // Recent activity
+  const recentActivity = notifications.slice(0, 5);
 
   const isLoading = wsLoading || projectsLoading;
+
+  // Date/time strings
+  const dateStr = time.toLocaleDateString(i18n.language, { weekday: "long", month: "long", day: "numeric" });
+  const timeStr = time.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
+  const goalLabel = user ? t(`app.goals.${user?.goal}`, user?.goal ?? "") : '';
 
   const COMMANDS = [
     {
@@ -158,21 +194,32 @@ export default function Page() {
 
   return (
     <PageShell>
+      {/* ── Header with clock ─────────────────────────────────────────────── */}
       <PageHeader
-        eyebrow={activeWorkspace?.name ?? t("app.dashboard.eyebrow")}
+        eyebrow={dateStr}
         title={t("app.dashboard.welcome", { name: getUserDisplayName(user, t("app.dashboard.guest", "there")) })}
-        description={t("app.dashboard.description")}
+        description={goalLabel ? t("app.home.description", { goal: goalLabel }) : t("app.dashboard.description")}
       >
-        <Link href="/app/assistant">
-          <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-500 active:scale-[0.98]">
-            <Bot className="h-4 w-4" /> {t("app.dashboard.askAI")}
-          </span>
-        </Link>
-        <Link href="/app/chat">
-          <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
-            <MessageCircle className="h-4 w-4" /> {t("app.dashboard.openChat")}
-          </span>
-        </Link>
+        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+          <div className="rounded-2xl bg-muted px-4 py-3 text-right">
+            <div className="font-mono text-2xl font-bold tabular-nums text-foreground">{timeStr}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {tasksLoading ? 'Loading…' : `${completedTasks} / ${tasks.length} done`}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/app/assistant">
+              <span className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-500 active:scale-[0.98]">
+                <Bot className="h-4 w-4" /> {t("app.dashboard.askAI")}
+              </span>
+            </Link>
+            <Link href="/app/chat">
+              <span className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
+                <MessageCircle className="h-4 w-4" /> {t("app.dashboard.openChat")}
+              </span>
+            </Link>
+          </div>
+        </div>
       </PageHeader>
 
       {/* ── Metric tiles ───────────────────────────────────────────────────── */}
@@ -203,118 +250,181 @@ export default function Page() {
             trend={`${inReview} in review`}
           />
           <MetricTile
-            label={t("app.dashboard.unreadAlerts")}
-            value={String(unreadCount)}
-            icon={Bell}
-            accent="#F59E0B"
-            trend={`${notifications.length} total`}
+            label={t("app.home.metrics.focusScore")}
+            value={tasksLoading ? '…' : focusScore === null ? '—' : `${focusScore}%`}
+            icon={Zap}
+            accent="#6366F1"
+            trend={t("app.home.metrics.focusTrend")}
           />
         </div>
       )}
 
       {/* ── Hero + Project progress ────────────────────────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.8fr]">
-        <SurfaceCard className="overflow-hidden bg-gradient-to-br from-card via-card to-indigo-50/40 dark:to-indigo-950/20">
-          <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr] lg:items-center">
-            <div>
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                {analytics ? (
-                  <>
-                    <Pill tone="indigo">{analytics.projectCount ?? analytics.totalProjects ?? projects.length} projects</Pill>
-                    <Pill tone="green">
-                      {analytics.completedTasks ??
-                        analytics.taskByStatus?.find((s) => s.status === 'done')?.count ??
-                        0}{' '}
-                      done
-                    </Pill>
-                    <Pill tone="blue">
-                      {analytics.openTasks ??
-                        analytics.taskByStatus?.find((s) => s.status === 'in_progress')?.count ??
-                        activeTasks}{' '}
-                      in progress
-                    </Pill>
-                  </>
-                ) : (
-                  <>
-                    <Pill tone="indigo">{t("app.dashboard.focusScore")}</Pill>
-                    <Pill tone="blue">{projects.length} {t("app.dashboard.activeProjectsPill")}</Pill>
-                    <Pill tone="green">{members.length} {t("app.dashboard.teammatesOnlinePill")}</Pill>
-                  </>
-                )}
-              </div>
-              <h2 className="text-2xl font-black tracking-tight text-foreground md:text-4xl">
-                {t("app.dashboard.heroTitle")}
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                {t("app.dashboard.heroDesc")}
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <Link href="/app/projects">
-                  <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 active:scale-[0.98]">
-                    <ArrowUpRight className="h-4 w-4" /> {t("app.dashboard.continueProjects")}
-                  </span>
-                </Link>
-                <Link href="/app/workspace">
-                  <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
-                    <FolderOpen className="h-4 w-4" /> {t("app.dashboard.openWorkspace")}
-                  </span>
-                </Link>
-              </div>
-            </div>
-
-            {/* Real project completion */}
-            <div className="rounded-[24px] border border-border bg-card p-4 shadow-sm">
-              <SectionTitle
-                icon={Target}
-                title={t("app.dashboard.launchReadiness")}
-                description={t("app.dashboard.trackerDesc")}
-              />
-              {tasksLoading ? (
-                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
-              ) : projectProgress.length === 0 ? (
-                <p className="py-4 text-sm text-muted-foreground">
-                  No projects yet. <Link href="/app/projects" className="text-indigo-600 hover:underline">Create one →</Link>
-                </p>
+      <SurfaceCard className="overflow-hidden bg-gradient-to-br from-card via-card to-indigo-50/40 dark:to-indigo-950/20">
+        <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr] lg:items-center">
+          <div>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {analytics ? (
+                <>
+                  <Pill tone="indigo">{analytics.projectCount ?? analytics.totalProjects ?? projects.length} projects</Pill>
+                  <Pill tone="green">
+                    {analytics.completedTasks ??
+                      analytics.taskByStatus?.find((s: { status: string }) => s.status === 'done')?.count ??
+                      0}{' '}
+                    done
+                  </Pill>
+                  <Pill tone="blue">
+                    {analytics.openTasks ??
+                      analytics.taskByStatus?.find((s: { status: string }) => s.status === 'in_progress')?.count ??
+                      activeTasks}{' '}
+                    in progress
+                  </Pill>
+                </>
               ) : (
-                <div className="space-y-4">
-                  {projectProgress.map((proj) => (
-                    <ProgressBar key={proj.name} value={proj.progress} accent={proj.color} label={proj.name} />
-                  ))}
-                </div>
+                <>
+                  <Pill tone="indigo">{t("app.dashboard.focusScore")}</Pill>
+                  <Pill tone="blue">{projects.length} {t("app.dashboard.activeProjectsPill")}</Pill>
+                  <Pill tone="green">{members.length} {t("app.dashboard.teammatesOnlinePill")}</Pill>
+                </>
               )}
             </div>
+            <h2 className="text-2xl font-black tracking-tight text-foreground md:text-4xl">
+              {t("app.dashboard.heroTitle")}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t("app.dashboard.heroDesc")}
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <Link href="/app/projects">
+                <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-500 active:scale-[0.98]">
+                  <ArrowUpRight className="h-4 w-4" /> {t("app.dashboard.continueProjects")}
+                </span>
+              </Link>
+              <Link href="/app/workspace">
+                <span className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-all hover:bg-muted active:scale-[0.98]">
+                  <FolderOpen className="h-4 w-4" /> {t("app.dashboard.openWorkspace")}
+                </span>
+              </Link>
+            </div>
           </div>
+
+          {/* Project launch readiness */}
+          <div className="rounded-[24px] border border-border bg-card p-4 shadow-sm">
+            <SectionTitle
+              icon={Target}
+              title={t("app.dashboard.launchReadiness")}
+              description={t("app.dashboard.trackerDesc")}
+            />
+            {tasksLoading ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </div>
+            ) : projectProgress.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                No projects yet.{' '}
+                <Link href="/app/projects" className="text-indigo-600 hover:underline">Create one →</Link>
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {projectProgress.map((proj) => (
+                  <ProgressBar key={proj.name} value={proj.progress} accent={proj.color} label={proj.name} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </SurfaceCard>
+
+      {/* ── Pending tasks + Recent activity ───────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <SurfaceCard>
+          <SectionTitle
+            icon={ListTodo}
+            title={t("app.home.todaysTasks")}
+            description={t("app.home.todaysTasksDesc")}
+            action={
+              <Link href="/app/tasks" className="rounded-2xl px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
+                {t("app.home.viewAll")}
+              </Link>
+            }
+          />
+
+          {wsLoading || tasksLoading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…
+            </div>
+          ) : !activeWorkspace ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Select or create a workspace to see tasks.
+            </p>
+          ) : pendingTasks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {tasks.length === 0 ? 'No tasks yet — create one in Projects.' : 'All tasks completed! 🎉'}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pendingTasks.map((task) => {
+                const status = getStatus(task.id, task.status);
+                const isDone = status === 'done';
+                return (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => toggleTask(task.id, status)}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm"
+                  >
+                    {isDone
+                      ? <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+                      : <Circle className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                    }
+                    <span className={`min-w-0 flex-1 truncate text-sm font-semibold text-foreground ${isDone ? 'line-through opacity-50' : ''}`}>
+                      {task.title}
+                    </span>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      task.priority === 'high'
+                        ? 'bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400'
+                        : task.priority === 'medium'
+                          ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'
+                          : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'
+                    }`}>
+                      {task.priority}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </SurfaceCard>
 
-        {/* Recent notifications as activity feed */}
         <SurfaceCard>
           <SectionTitle
             icon={Clock}
-            title={t("app.dashboard.agenda")}
-            description="Recent activity from your workspace"
+            title={t("app.home.recentActivity")}
+            description={t("app.home.recentActivityDesc")}
           />
           {notifsLoading ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : recentActivity.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">No recent activity yet.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">No recent activity yet.</p>
           ) : (
             <div className="space-y-3">
               {recentActivity.map((notif) => (
-                <div key={notif.id} className="flex gap-3 rounded-2xl bg-muted p-3 ring-1 ring-border">
+                <div key={notif.id} className="flex items-start gap-3 rounded-2xl bg-muted p-4">
                   <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${notif.isRead ? 'bg-slate-300' : 'bg-indigo-500'}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-foreground">{notif.title}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">{notif.title}</p>
                     {notif.body && (
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notif.body}</span>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{notif.body}</p>
                     )}
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {new Date(notif.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(notif.createdAt).toLocaleTimeString(i18n.language, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -322,7 +432,7 @@ export default function Page() {
         </SurfaceCard>
       </div>
 
-      {/* ── Quick actions (real data) ──────────────────────────────────────── */}
+      {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <SurfaceCard>
         <SectionTitle
           icon={Zap}
@@ -377,7 +487,6 @@ export default function Page() {
 
       {/* ── Charts ────────────────────────────────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* Weekly task activity — from real createdAt dates */}
         <SurfaceCard>
           <SectionTitle
             icon={BarChart3}
@@ -401,7 +510,6 @@ export default function Page() {
           )}
         </SurfaceCard>
 
-        {/* Productivity score — from weekly task completion % */}
         <SurfaceCard>
           <SectionTitle
             icon={TrendingUp}

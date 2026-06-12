@@ -308,7 +308,7 @@ export function Toast({ message }: ToastProps) {
       initial={{ opacity: 0, y: 14, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.99 }}
-      className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-modal"
+      className="fixed bottom-6 left-1/2 z-[70] -translate-x-1/2 rounded-2xl glass px-4 py-3 text-sm font-semibold text-foreground"
     >
       {message}
     </motion.div>
