@@ -7,6 +7,7 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,6 +19,7 @@ import {
   ApiProperty,
   ApiPropertyOptional,
 } from '@nestjs/swagger';
+import { IsString, IsIn, IsOptional, IsMimeType } from 'class-validator';
 import { StorageService, UploadFolder } from './storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -31,12 +33,16 @@ class SignUploadDto {
     enum: ['avatars', 'attachments', 'workspace'],
     example: 'avatars',
   })
+  @IsString()
+  @IsIn(ALLOWED_FOLDERS, { message: `folder must be one of: ${ALLOWED_FOLDERS.join(', ')}` })
   folder!: string;
 
   @ApiPropertyOptional({
     description: 'MIME type of the file — used for server-side type validation',
     example: 'image/jpeg',
   })
+  @IsOptional()
+  @IsMimeType()
   mimeType?: string;
 }
 
@@ -141,18 +147,11 @@ without exposing the API secret on the client.
     @CurrentUser('id') userId: string,
     @Body() dto: SignUploadDto,
   ) {
-    const folder = dto.folder as UploadFolder;
-    if (!ALLOWED_FOLDERS.includes(folder)) {
-      throw new BadRequestException(
-        `folder must be one of: ${ALLOWED_FOLDERS.join(', ')}`,
-      );
-    }
-
-    const result = this.storageService.signUpload(folder, userId, dto.mimeType);
+    const result = this.storageService.signUpload(dto.folder as UploadFolder, userId, dto.mimeType);
 
     return {
       ...result,
-      maxBytes: this.storageService.getMaxBytes(folder),
+      maxBytes: this.storageService.getMaxBytes(dto.folder as UploadFolder),
     };
   }
 

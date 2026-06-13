@@ -32,16 +32,16 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | string[]>("");
   const [isLoading, setIsLoading] = useState(false);
 
   const passwordMismatch = confirmPw.length > 0 && password !== confirmPw;
-  const usernameInvalid = username.length > 0 && !username.match(/^[a-zA-Z0-9_]+$/);
+  const usernameInvalid = username.length > 0 && !username.match(/^[a-zA-Z0-9_-]+$/);
   const signupReady =
     fullName.trim().length > 1 &&
     email.includes("@") &&
     username.trim().length >= 3 &&
-    username.match(/^[a-zA-Z0-9_]+$/) &&
+    !!username.match(/^[a-zA-Z0-9_-]+$/) &&
     password.length >= 8 &&
     password.length <= 32 &&
     password === confirmPw &&
@@ -73,8 +73,13 @@ export default function RegisterPage() {
       router.push("/auth/verify");
     } catch (err: unknown) {
       const e = err as Record<string, unknown>;
-      const message = (e?.message as string) || (e?.error as string) || "Registration failed";
-      setError(message);
+      const errorObj = (e?.error && typeof e.error === 'object') ? e.error as Record<string, unknown> : null;
+      const details = errorObj?.details ?? e?.details;
+      if (Array.isArray(details) && details.length > 0) {
+        setError(details.map(String));
+      } else {
+        setError((e?.message as string) || "Registration failed");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -135,10 +140,10 @@ export default function RegisterPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <AuthField icon={<Mail className="h-4 w-4" />}  label="Email" value={email}    onChange={setEmail}    placeholder="your@email.com"       type="email" autoComplete="email" />
-            <AuthField icon={<Phone className="h-4 w-4" />} label="Phone" value={phone}    onChange={setPhone}    placeholder="+998 90 123 45 67"    type="tel"   autoComplete="tel" />
+            <AuthField icon={<Phone className="h-4 w-4" />} label="Phone" value={phone} onChange={v => setPhone(v.replace(/[^0-9+ ]/g, ''))} placeholder="+998 90 123 45 67" type="tel" autoComplete="tel" />
           </div>
 
-          <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={v => setUsername(v.replace(/^@+/, ''))} placeholder="jasur_karimov" autoComplete="username" />
+          <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={v => setUsername(v.replace(/^@+/, '').toLowerCase())} placeholder="jasur-karimov" autoComplete="username" />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <AuthField
@@ -164,8 +169,8 @@ export default function RegisterPage() {
           </div>
 
           {usernameInvalid && (
-            <p className="text-sm font-bold text-rose-500 dark:text-rose-400">
-              Username can only contain letters, numbers, and underscores.
+            <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+              <span>⚠</span> Username faqat harf, raqam, <code className="font-mono">_</code> va <code className="font-mono">-</code> dan iborat bo'lishi kerak.
             </p>
           )}
 
@@ -197,10 +202,21 @@ export default function RegisterPage() {
             </span>
           </label>
 
-          {error && (
-            <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
-              {error}
-            </p>
+          {error && (Array.isArray(error) ? error.length > 0 : error) && (
+            <div className="rounded-2xl bg-rose-50 px-4 py-3 ring-1 ring-rose-200 dark:bg-rose-500/10 dark:ring-rose-500/20">
+              {Array.isArray(error) ? (
+                <ul className="space-y-1">
+                  {error.map((msg, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm font-semibold text-rose-600 dark:text-rose-400">
+                      <span className="mt-0.5 shrink-0">•</span>
+                      <span>{msg}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{error}</p>
+              )}
+            </div>
           )}
 
           <PrimaryButton onClick={handleCreateAccount} disabled={!signupReady || isLoading}>

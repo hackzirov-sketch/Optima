@@ -3,7 +3,6 @@ import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 
 import { UserSettings } from '../../../database/entities/user-settings.entity';
 import { UserVerification } from '../../../database/entities/user-verification.entity';
@@ -18,7 +17,6 @@ export class AuthProcessor extends WorkerHost {
 
   constructor(
     private mailService: MailService,
-    private configService: ConfigService,
     @InjectRepository(UserSettings)
     private userSettingsRepository: Repository<UserSettings>,
     @InjectRepository(UserVerification)
@@ -40,7 +38,6 @@ export class AuthProcessor extends WorkerHost {
     }
   }
 
-  /** Idempotent: default settings only; verification email only for unverified users. */
   private async handleOnRegister(data: { userId: string; email: string }) {
     const { userId, email } = data;
     this.logger.log(`on-register: settings for user ${userId}`);
@@ -60,7 +57,6 @@ export class AuthProcessor extends WorkerHost {
     }
   }
 
-  /** Resend verification with cooldown — safe to call from login retries. */
   private async handleResendVerification(data: { userId: string; email: string }) {
     const { userId, email } = data;
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -73,12 +69,6 @@ export class AuthProcessor extends WorkerHost {
   }
 
   private async issueVerificationCode(userId: string, email: string) {
-    const isDev = this.configService.get<string>('NODE_ENV') === 'development';
-    if (isDev) {
-      this.logger.debug(`Skipping verification email in development for ${userId}`);
-      return;
-    }
-
     const recent = await this.userVerificationsRepository.findOne({
       where: {
         userId,
@@ -100,6 +90,6 @@ export class AuthProcessor extends WorkerHost {
     );
 
     await this.mailService.sendVerificationEmail(email, code);
-    this.logger.log(`Verification email queued for ${email}`);
+    this.logger.log(`Verification email sent to ${email}`);
   }
 }

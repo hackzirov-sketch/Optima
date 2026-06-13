@@ -644,7 +644,7 @@ export class AuthService {
         'on-register',
         { userId, email },
         {
-          jobId: `on-register:${userId}`,
+          jobId: `on-register_${userId}`,
           removeOnComplete: true,
           attempts: 3,
         },
@@ -666,7 +666,7 @@ export class AuthService {
         'resend-verification',
         { userId, email },
         {
-          jobId: `resend-verification:${userId}`,
+          jobId: `resend-verification_${userId}`,
           removeOnComplete: true,
           attempts: 2,
         },
