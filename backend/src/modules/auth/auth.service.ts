@@ -143,15 +143,13 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, bcryptRounds);
 
     // 3. Save core user only
-    // Dev mode da email verification skip qilinadi — test osonroq bo'lsin
-    const isDev = this.configService.get<string>('NODE_ENV') === 'development';
     const user = await this.usersService.create({
       firstName: dto.firstName,
       lastName: dto.lastName,
       username: dto.username,
       email: dto.email,
       passwordHash,
-      isVerified: isDev, // dev: true (auto-verify), prod: false (email required)
+      isVerified: false,
       providers: ['local'],
       needsPasswordSetup: false,
     });
