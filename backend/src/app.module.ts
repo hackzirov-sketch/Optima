@@ -15,6 +15,7 @@ import jwtConfig from './config/jwt.config';
 import githubConfig from './config/github.config';
 import r2Config from './config/r2.config';
 import googleConfig from './config/google.config';
+import cloudinaryConfig from './config/cloudinary.config';
 
 import { RedisModule } from './redis/redis.module';
 
@@ -22,6 +23,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { GithubModule } from './modules/github/github.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -49,6 +51,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         githubConfig,
         r2Config,
         googleConfig,
+        cloudinaryConfig,
       ],
       envFilePath: '.env',
     }),
@@ -101,6 +104,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AuthModule,
     UsersModule,
     GithubModule,
+    StorageModule,
     WorkspacesModule,
     GroupsModule,
     ProjectsModule,

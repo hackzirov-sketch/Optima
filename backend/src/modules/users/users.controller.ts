@@ -4,10 +4,11 @@ import {
   Patch,
   Delete,
   Body,
+  Param,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../../database/entities/user.entity';
@@ -43,6 +44,13 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user avatar URL' })
   updateAvatar(@CurrentUser() user: User, @Body() dto: UpdateAvatarDto) {
     return this.usersService.updateAvatar(user.id, dto.avatarUrl);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get user profile by id' })
+  @ApiParam({ name: 'id' })
+  getById(@Param('id') id: string) {
+    return this.usersService.findById(id);
   }
 
   @Delete('me')

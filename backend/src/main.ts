@@ -101,6 +101,7 @@ async function bootstrap() {
       .addTag('Chat')
       .addTag('Notifications')
       .addTag('Analytics')
+      .addTag('Storage', 'Cloudinary file upload (sign → upload → save URL)')
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);

@@ -11,6 +11,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { WorkspacesService } from './workspaces.service';
 import { MembersService } from './members.service';
 import { InvitationsService } from './invitations.service';
+import { TagsService, CreateTagDto, UpdateTagDto } from './tags.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
@@ -25,6 +26,7 @@ export class WorkspacesController {
     private readonly workspacesService: WorkspacesService,
     private readonly membersService: MembersService,
     private readonly invitationsService: InvitationsService,
+    private readonly tagsService: TagsService,
   ) {}
 
   // ── Workspaces ──────────────────────────────────
@@ -139,5 +141,47 @@ export class WorkspacesController {
     @CurrentUser('id') requesterId: string,
   ) {
     return this.invitationsService.remove(wsId, invitationId, requesterId);
+  }
+
+  // ── Tags ────────────────────────────────────────
+
+  @Get(':wsId/tags')
+  @ApiOperation({ summary: 'List all tags in workspace' })
+  listTags(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tagsService.listByWorkspace(wsId, userId);
+  }
+
+  @Post(':wsId/tags')
+  @ApiOperation({ summary: 'Create a tag in workspace' })
+  createTag(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateTagDto,
+  ) {
+    return this.tagsService.create(wsId, userId, dto);
+  }
+
+  @Patch(':wsId/tags/:tagId')
+  @ApiOperation({ summary: 'Update a workspace tag' })
+  updateTag(
+    @Param('wsId') wsId: string,
+    @Param('tagId') tagId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateTagDto,
+  ) {
+    return this.tagsService.update(wsId, tagId, userId, dto);
+  }
+
+  @Delete(':wsId/tags/:tagId')
+  @ApiOperation({ summary: 'Delete a workspace tag' })
+  deleteTag(
+    @Param('wsId') wsId: string,
+    @Param('tagId') tagId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tagsService.remove(wsId, tagId, userId);
   }
 }

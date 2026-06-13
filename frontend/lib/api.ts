@@ -816,6 +816,97 @@ export const pushesApi = {
     request('PATCH', `/pushes/${pushId}/comments/${commentId}/resolve`),
 };
 
+// ─── Workspace Tags ───────────────────────────────────────────────────────
+
+export interface ApiTag {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
+  createdById?: string;
+  createdAt: string;
+}
+
+export const tagsApi = {
+  list: (workspaceId: string) =>
+    request<{ data: ApiTag[] }>('GET', `/workspaces/${workspaceId}/tags`),
+
+  create: (workspaceId: string, data: { name: string; color?: string }) =>
+    request<{ data: ApiTag }>('POST', `/workspaces/${workspaceId}/tags`, { body: data }),
+
+  update: (workspaceId: string, tagId: string, data: { name?: string; color?: string }) =>
+    request<{ data: ApiTag }>('PATCH', `/workspaces/${workspaceId}/tags/${tagId}`, { body: data }),
+
+  delete: (workspaceId: string, tagId: string) =>
+    request('DELETE', `/workspaces/${workspaceId}/tags/${tagId}`),
+};
+
+// ─── Storage / Cloudinary upload ─────────────────────────────────────────
+
+export type UploadFolder = 'avatars' | 'attachments' | 'workspace';
+
+export interface CloudinarySignResult {
+  signature: string;
+  timestamp: number;
+  apiKey: string;
+  cloudName: string;
+  folder: string;
+  publicId: string;
+  maxBytes: number;
+}
+
+export const storageApi = {
+  /** Step 1: get signed params from backend */
+  sign: (folder: UploadFolder, mimeType?: string) =>
+    request<{ data: CloudinarySignResult }>('POST', '/storage/sign', {
+      body: { folder, mimeType },
+    }),
+
+  /**
+   * Step 2: upload directly to Cloudinary using the signed params.
+   * Returns the Cloudinary response which includes `secure_url`.
+   */
+  uploadToCloudinary: async (
+    file: File,
+    sign: CloudinarySignResult,
+  ): Promise<{ secure_url: string; public_id: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('api_key', sign.apiKey);
+    form.append('timestamp', String(sign.timestamp));
+    form.append('signature', sign.signature);
+    form.append('folder', sign.folder);
+    form.append('public_id', sign.publicId);
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${sign.cloudName}/auto/upload`,
+      { method: 'POST', body: form },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw { status: res.status, message: err?.error?.message ?? 'Upload failed' };
+    }
+    return res.json();
+  },
+
+  /**
+   * Full helper: sign → upload → return secure_url.
+   * Usage: const url = await storageApi.upload(file, 'avatars')
+   */
+  upload: async (file: File, folder: UploadFolder): Promise<string> => {
+    const { data: sign } = await storageApi.sign(folder, file.type);
+    if (file.size > sign.maxBytes) {
+      throw { status: 400, message: `File too large (max ${sign.maxBytes / 1024 / 1024} MB)` };
+    }
+    const result = await storageApi.uploadToCloudinary(file, sign);
+    return result.secure_url;
+  },
+
+  /** Delete a Cloudinary file (pass public_id). */
+  deleteFile: (publicId: string) =>
+    request('DELETE', `/storage/file?publicId=${encodeURIComponent(publicId)}`),
+};
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -828,4 +919,6 @@ export default {
   notifications: notificationsApi,
   analytics: analyticsApi,
   pushes: pushesApi,
+  tags: tagsApi,
+  storage: storageApi,
 };
