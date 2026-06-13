@@ -1,10 +1,12 @@
 import { Module, OnModuleInit, Logger } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventsGateway } from './events.gateway';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { ChatModule } from '../chat/chat.module';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 
 @Module({
   imports: [
@@ -16,6 +18,7 @@ import { ChatModule } from '../chat/chat.module';
       inject: [ConfigService],
     }),
     ChatModule,
+    TypeOrmModule.forFeature([WorkspaceMember]),
   ],
   providers: [EventsGateway],
   exports: [EventsGateway],

@@ -11,9 +11,12 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from '../chat/chat.service';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 
 export interface WsUser {
   id: string;
@@ -71,6 +74,8 @@ export class EventsGateway
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly chatService: ChatService,
+    @InjectRepository(WorkspaceMember)
+    private readonly wsMemberRepo: Repository<WorkspaceMember>,
   ) {}
 
   afterInit(server: Server) {
@@ -148,6 +153,36 @@ export class EventsGateway
     this.logger.log(
       `Client disconnected: ${client.id} → userId=${userId} (${this.onlineUsers.size} online)`,
     );
+  }
+
+  // ─── Workspace join/leave ────────────────────────────
+  @SubscribeMessage('join_workspace')
+  async handleJoinWorkspace(
+    @MessageBody() data: { workspaceId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) throw new WsException('Not authenticated');
+
+    const member = await this.wsMemberRepo.findOne({
+      where: { workspaceId: data.workspaceId, userId },
+    });
+    if (!member) throw new WsException('Not a workspace member');
+
+    client.join(`workspace:${data.workspaceId}`);
+    return { event: 'workspace_joined', workspaceId: data.workspaceId };
+  }
+
+  @SubscribeMessage('leave_workspace')
+  handleLeaveWorkspace(
+    @MessageBody() data: { workspaceId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) throw new WsException('Not authenticated');
+
+    client.leave(`workspace:${data.workspaceId}`);
+    return { event: 'workspace_left', workspaceId: data.workspaceId };
   }
 
   // ─── Room join/leave ──────────────────────────────────
@@ -295,6 +330,11 @@ export class EventsGateway
   /** Broadcast a message to all members of a chat room */
   broadcastToRoom(roomId: string, event: string, payload: unknown) {
     this.server.to(`room:${roomId}`).emit(event, payload);
+  }
+
+  /** Broadcast an event to all sockets in a workspace room */
+  broadcastToWorkspace(workspaceId: string, event: string, payload: unknown) {
+    this.server.to(`workspace:${workspaceId}`).emit(event, payload);
   }
 
   /** Check whether a user has at least one active socket */

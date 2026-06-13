@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike } from 'typeorm';
+import { EventsGateway } from '../gateway/events.gateway';
 
 import { Task } from '../../database/entities/task.entity';
 import { Project } from '../../database/entities/project.entity';
@@ -46,6 +47,7 @@ export class TasksService {
     @InjectRepository(TaskPush)
     private readonly taskPushRepo: Repository<TaskPush>,
     private readonly dataSource: DataSource,
+    private readonly gateway: EventsGateway,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -170,7 +172,9 @@ export class TasksService {
         'task_created',
         `Task UPZ-${saved.taskNumber} created`,
       );
-      return this.findById(saved.id, userId);
+      const full = await this.findById(saved.id, userId);
+      this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
+      return full;
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw err;
@@ -334,6 +338,7 @@ export class TasksService {
       });
     }
 
+    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', { task: saved });
     return saved;
   }
 
@@ -352,8 +357,10 @@ export class TasksService {
         'Only task creator, lead, admin or owner can delete tasks',
       );
 
+    const { workspaceId } = task;
     applySoftDelete(task, userId);
     await this.taskRepo.save(task);
+    this.gateway.broadcastToWorkspace(workspaceId, 'task:deleted', { taskId, workspaceId });
   }
 
   // ─────────────────────────────────────────────
@@ -413,6 +420,11 @@ export class TasksService {
       );
     }
 
+    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:moved', {
+      task: saved,
+      oldColumnId,
+      oldStatus,
+    });
     return saved;
   }
 

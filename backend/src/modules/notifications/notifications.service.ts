@@ -2,13 +2,47 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from '../../database/entities/notification.entity';
+import { NotificationType } from '../../common/enums';
+import { EventsGateway } from '../gateway/events.gateway';
+
+export interface CreateNotificationDto {
+  userId: string;
+  actorId?: string;
+  type: NotificationType;
+  title: string;
+  message?: string;
+  entityType?: string;
+  entityId?: string;
+  actionUrl?: string;
+  metadata?: Record<string, unknown>;
+}
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notifRepo: Repository<Notification>,
+    private readonly gateway: EventsGateway,
   ) {}
+
+  async create(dto: CreateNotificationDto): Promise<Notification> {
+    const saved = await this.notifRepo.save(
+      this.notifRepo.create({ ...dto, isRead: false }),
+    );
+    this.gateway.sendNotification(dto.userId, {
+      id: saved.id,
+      type: saved.type,
+      title: saved.title,
+      message: saved.message,
+      actorId: saved.actorId,
+      entityType: saved.entityType,
+      entityId: saved.entityId,
+      actionUrl: saved.actionUrl,
+      isRead: false,
+      createdAt: saved.createdAt.toISOString(),
+    });
+    return saved;
+  }
 
   async list(userId: string, page = 1, limit = 30) {
     const [data, total] = await this.notifRepo.findAndCount({

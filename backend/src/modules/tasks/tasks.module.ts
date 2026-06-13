@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { GatewayModule } from '../gateway/gateway.module';
 
 import { Task } from '../../database/entities/task.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
@@ -27,6 +28,7 @@ import { TasksController } from './tasks.controller';
       WorkspaceMember,
       TaskPush,
     ]),
+    GatewayModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],
