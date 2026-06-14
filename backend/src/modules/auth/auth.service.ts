@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -332,7 +333,7 @@ export class AuthService {
       await this.usersService.updateLastSeen(user.id);
       return this.generateTokens(user, { ip, userAgent, provider: 'github' });
     } else {
-      throw new UnauthorizedException('Failed to link or create user');
+      throw new UnauthorizedException({ code: ErrorCode.OAUTH_LINK_FAILED, message: 'Failed to link or create user' });
     }
   }
 
@@ -439,7 +440,7 @@ export class AuthService {
       where: { id: sessionId, userId, isDeleted: false },
     });
     if (!session) {
-      throw new BadRequestException('Session not found or already revoked');
+      throw new NotFoundException({ code: ErrorCode.SESSION_NOT_FOUND, message: 'Session not found or already revoked' });
     }
 
     session.revokedAt = new Date();

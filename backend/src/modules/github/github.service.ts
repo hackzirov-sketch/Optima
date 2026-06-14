@@ -1,4 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
@@ -32,7 +33,7 @@ export class GithubService {
     }
 
     if (!signatureHeader) {
-      throw new UnauthorizedException('Missing X-Hub-Signature-256');
+      throw new UnauthorizedException({ code: ErrorCode.GITHUB_SIGNATURE_MISSING, message: 'Missing X-Hub-Signature-256 header' });
     }
 
     const body = rawBody ?? Buffer.alloc(0);
@@ -42,7 +43,7 @@ export class GithubService {
     const a = Buffer.from(signatureHeader, 'utf8');
     const b = Buffer.from(digest, 'utf8');
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      throw new UnauthorizedException('Invalid GitHub signature');
+      throw new UnauthorizedException({ code: ErrorCode.GITHUB_SIGNATURE_INVALID, message: 'Invalid GitHub signature' });
     }
   }
 

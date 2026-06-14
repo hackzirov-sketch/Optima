@@ -19,6 +19,7 @@ import {
   applySoftDelete,
   isActiveEntity,
 } from '../../common/utils/soft-delete';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 
 @Injectable()
 export class ProjectsService {
@@ -45,7 +46,7 @@ export class ProjectsService {
     });
 
     if (!isActiveEntity(project)) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     }
 
     const wsMember = await this.workspaceMemberRepo.findOne({
@@ -53,7 +54,7 @@ export class ProjectsService {
     });
 
     if (!wsMember) {
-      throw new ForbiddenException('You do not have access to this workspace');
+      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'You do not have access to this workspace' });
     }
 
     const isAdminOrOwner =
@@ -61,9 +62,10 @@ export class ProjectsService {
       wsMember.role === WorkspaceRole.ADMIN;
 
     if (requireAdmin && !isAdminOrOwner && project.createdById !== userId) {
-      throw new ForbiddenException(
-        'Only workspace admins, owners, or the project creator can perform this action',
-      );
+      throw new ForbiddenException({
+        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
+        message: 'Only workspace admins, owners, or the project creator can perform this action',
+      });
     }
 
     if (project.groupId && !isAdminOrOwner) {
@@ -71,9 +73,10 @@ export class ProjectsService {
         where: { groupId: project.groupId, userId },
       });
       if (!groupMember) {
-        throw new ForbiddenException(
-          'You do not have access to this group project',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.PROJECT_ACCESS_DENIED,
+          message: 'You do not have access to this group project',
+        });
       }
     }
 
@@ -86,7 +89,7 @@ export class ProjectsService {
     });
 
     if (!wsMember) {
-      throw new ForbiddenException('You do not have access to this workspace');
+      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'You do not have access to this workspace' });
     }
 
     if (dto.groupId) {
@@ -98,7 +101,7 @@ export class ProjectsService {
           where: { groupId: dto.groupId, userId },
         });
         if (!groupMember) {
-          throw new ForbiddenException('You do not have access to this group');
+          throw new ForbiddenException({ code: ErrorCode.GROUP_ACCESS_DENIED, message: 'You do not have access to this group' });
         }
       }
     }
@@ -180,7 +183,7 @@ export class ProjectsService {
     });
 
     if (!wsMember)
-      throw new ForbiddenException('Not a member of this workspace');
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
 
     const qb = this.projectRepo
       .createQueryBuilder('project')
@@ -214,7 +217,7 @@ export class ProjectsService {
       },
     });
 
-    if (!project) throw new NotFoundException('Project not found');
+    if (!project) throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     return project;
   }
 
@@ -285,7 +288,7 @@ export class ProjectsService {
     const column = await this.columnRepo.findOne({
       where: { id: columnId, projectId },
     });
-    if (!column) throw new NotFoundException('Column not found');
+    if (!column) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found' });
 
     Object.assign(column, dto);
     return this.columnRepo.save(column);
@@ -301,10 +304,10 @@ export class ProjectsService {
     const column = await this.columnRepo.findOne({
       where: { id: columnId, projectId },
     });
-    if (!column) throw new NotFoundException('Column not found');
+    if (!column) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found' });
 
     if (column.isDefault) {
-      throw new ConflictException('Cannot delete a default column');
+      throw new ConflictException({ code: ErrorCode.COLUMN_DEFAULT_DELETE, message: 'Cannot delete a default column' });
     }
 
     await this.columnRepo.remove(column);

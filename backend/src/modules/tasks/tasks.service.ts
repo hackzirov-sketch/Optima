@@ -24,6 +24,7 @@ import {
   applySoftDelete,
   isActiveEntity,
 } from '../../common/utils/soft-delete';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 
 @Injectable()
 export class TasksService {

@@ -56,7 +56,7 @@ export class MembersService {
 
     if (!member) {
       throw new NotFoundException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        code: ErrorCode.MEMBER_NOT_FOUND,
         message: 'Member not found in this workspace',
       });
     }
@@ -73,7 +73,7 @@ export class MembersService {
     const workspace = await this.workspaceRepo.findOne({
       where: { id: workspaceId },
     });
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
     const requester = await this.memberRepo.findOne({
       where: { workspaceId, userId: requesterId },
@@ -109,13 +109,13 @@ export class MembersService {
     const workspace = await this.workspaceRepo.findOne({
       where: { id: workspaceId },
     });
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
     const requester = await this.memberRepo.findOne({
       where: { workspaceId, userId: requesterId },
     });
     if (!requester) {
-      throw new NotFoundException('Requester not found in workspace');
+      throw new NotFoundException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Requester not found in workspace' });
     }
 
     // A user can remove themselves (leave), or an owner/admin can remove them
@@ -133,7 +133,7 @@ export class MembersService {
 
     if (workspace.ownerId === targetUserId) {
       throw new ConflictException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        code: ErrorCode.CANNOT_REMOVE_OWNER,
         message: 'The workspace owner cannot be removed',
       });
     }

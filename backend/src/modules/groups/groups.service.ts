@@ -89,7 +89,7 @@ export class GroupsService {
     });
 
     if (!wsMember) {
-      throw new ForbiddenException('Not a member of this workspace');
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
     }
 
     const qb = this.groupRepo
@@ -110,7 +110,7 @@ export class GroupsService {
     });
 
     if (!isActiveEntity(group)) {
-      throw new NotFoundException('Group not found');
+      throw new NotFoundException({ code: ErrorCode.GROUP_NOT_FOUND, message: 'Group not found' });
     }
 
     return group;
@@ -132,9 +132,10 @@ export class GroupsService {
         (wsMember.role !== WorkspaceRole.OWNER &&
           wsMember.role !== WorkspaceRole.ADMIN)
       ) {
-        throw new ForbiddenException(
-          'Only the group owner or workspace admin can update the group',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.GROUP_ACCESS_DENIED,
+          message: 'Only the group owner or workspace admin can update the group',
+        });
       }
     }
 
@@ -154,9 +155,10 @@ export class GroupsService {
         (wsMember.role !== WorkspaceRole.OWNER &&
           wsMember.role !== WorkspaceRole.ADMIN)
       ) {
-        throw new ForbiddenException(
-          'Only the group owner or workspace admin can delete the group',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.GROUP_ACCESS_DENIED,
+          message: 'Only the group owner or workspace admin can delete the group',
+        });
       }
     }
 
@@ -182,9 +184,10 @@ export class GroupsService {
         (wsMember.role !== WorkspaceRole.OWNER &&
           wsMember.role !== WorkspaceRole.ADMIN)
       ) {
-        throw new ForbiddenException(
-          'Not authorized to add members to this group',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.GROUP_ACCESS_DENIED,
+          message: 'Not authorized to add members to this group',
+        });
       }
     }
 
@@ -194,9 +197,10 @@ export class GroupsService {
     });
 
     if (!targetWsMember) {
-      throw new NotFoundException(
-        'Target user is not a member of the workspace',
-      );
+      throw new NotFoundException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Target user is not a member of the workspace',
+      });
     }
 
     const existingMember = await this.groupMemberRepo.findOne({
@@ -204,7 +208,7 @@ export class GroupsService {
     });
 
     if (existingMember) {
-      throw new ConflictException('User is already a member of this group');
+      throw new ConflictException({ code: ErrorCode.GROUP_ALREADY_MEMBER, message: 'User is already a member of this group' });
     }
 
     const member = this.groupMemberRepo.create({
@@ -233,14 +237,15 @@ export class GroupsService {
         (wsMember.role !== WorkspaceRole.OWNER &&
           wsMember.role !== WorkspaceRole.ADMIN)
       ) {
-        throw new ForbiddenException(
-          'Not authorized to remove members from this group',
-        );
+        throw new ForbiddenException({
+          code: ErrorCode.GROUP_ACCESS_DENIED,
+          message: 'Not authorized to remove members from this group',
+        });
       }
     }
 
     if (userIdToRemove === group.createdById) {
-      throw new ConflictException('Cannot remove the group owner');
+      throw new ConflictException({ code: ErrorCode.GROUP_OWNER_REMOVE, message: 'Cannot remove the group owner' });
     }
 
     const member = await this.groupMemberRepo.findOne({
@@ -248,7 +253,7 @@ export class GroupsService {
     });
 
     if (!member) {
-      throw new NotFoundException('User is not a member of this group');
+      throw new NotFoundException({ code: ErrorCode.GROUP_MEMBER_NOT_FOUND, message: 'User is not a member of this group' });
     }
 
     await this.groupMemberRepo.remove(member);

@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -20,6 +21,8 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class InvitationsService {
+  private readonly logger = new Logger(InvitationsService.name);
+
   constructor(
     @InjectRepository(WorkspaceInvitation)
     private readonly invitationRepo: Repository<WorkspaceInvitation>,
@@ -44,7 +47,7 @@ export class InvitationsService {
     const workspace = await this.workspaceRepo.findOne({
       where: { id: workspaceId },
     });
-    if (!workspace) throw new NotFoundException('Workspace not found');
+    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
     const inviter = await this.memberRepo.findOne({
       where: { workspaceId, userId: inviterId },
@@ -154,7 +157,7 @@ export class InvitationsService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user || user.email !== invitation.email) {
       throw new ConflictException({
-        code: ErrorCode.INVALID_CREDENTIALS,
+        code: ErrorCode.INVITATION_EMAIL_MISMATCH,
         message: 'Invitation email does not match user email',
       });
     }
@@ -204,7 +207,8 @@ export class InvitationsService {
       return savedMember;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw new InternalServerErrorException('Failed to accept invitation');
+      this.logger.error('Failed to accept invitation', (error as Error)?.stack);
+      throw new InternalServerErrorException({ code: ErrorCode.INTERNAL_ERROR, message: 'Failed to accept invitation' });
     } finally {
       await queryRunner.release();
     }
@@ -223,7 +227,7 @@ export class InvitationsService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user || user.email !== invitation.email) {
       throw new ConflictException({
-        code: ErrorCode.INVALID_CREDENTIALS,
+        code: ErrorCode.INVITATION_EMAIL_MISMATCH,
         message: 'Invitation email does not match user email',
       });
     }
@@ -254,7 +258,7 @@ export class InvitationsService {
     const invitation = await this.invitationRepo.findOne({
       where: { id, workspaceId },
     });
-    if (!invitation) throw new NotFoundException('Invitation not found');
+    if (!invitation) throw new NotFoundException({ code: ErrorCode.INVITATION_NOT_FOUND, message: 'Invitation not found' });
 
     await this.invitationRepo.remove(invitation);
   }
