@@ -50,10 +50,18 @@ export class RedisService implements OnModuleDestroy {
   async isAccessTokenBlacklisted(jti: string): Promise<boolean> {
     try {
       const client = this.getClient();
-      if (!client) return false;
+      if (!client) {
+        this.logger.error(
+          'Redis unavailable — JWT blacklist check SKIPPED. Logged-out tokens may still be accepted.',
+        );
+        return false;
+      }
       const v = await client.get(`upz:blacklist:${jti}`);
       return v !== null;
-    } catch {
+    } catch (e) {
+      this.logger.error(
+        `JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Token accepted by default.`,
+      );
       return false;
     }
   }

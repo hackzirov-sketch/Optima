@@ -17,6 +17,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from '../chat/chat.service';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { ChatMember } from '../../database/entities/chat-member.entity';
 
 export interface WsUser {
   id: string;
@@ -69,6 +70,8 @@ export class EventsGateway
   private readonly userSockets = new Map<string, Set<string>>();
   // userId → online status
   private readonly onlineUsers = new Set<string>();
+  // userId → Set<workspaceId> — for scoped online/offline broadcasts
+  private readonly userWorkspaces = new Map<string, Set<string>>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -76,6 +79,8 @@ export class EventsGateway
     private readonly chatService: ChatService,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
+    @InjectRepository(ChatMember)
+    private readonly chatMemberRepo: Repository<ChatMember>,
   ) {}
 
   afterInit(server: Server) {
@@ -124,11 +129,26 @@ export class EventsGateway
     // Auto-join personal room for direct notifications
     client.join(`user:${user.id}`);
 
-    // Send current online users list to the newly connected client
-    client.emit('online_users', { userIds: Array.from(this.onlineUsers) });
+    // Load workspace memberships → join scoped rooms + broadcast user_online
+    const memberships = await this.wsMemberRepo.find({ where: { userId: user.id } });
+    const wsIds = memberships.map((m) => m.workspaceId);
+    this.userWorkspaces.set(user.id, new Set(wsIds));
 
-    // Broadcast this user coming online to everyone
-    this.server.emit('user_online', { userId: user.id });
+    const onlineInMyWorkspaces = new Set<string>();
+    for (const wsId of wsIds) {
+      client.join(`workspace:${wsId}`);
+      // Notify existing members in this workspace that user came online
+      client.to(`workspace:${wsId}`).emit('user_online', { userId: user.id });
+      // Collect already-online users who share this workspace
+      for (const [uid, theirWsIds] of this.userWorkspaces) {
+        if (uid !== user.id && theirWsIds.has(wsId)) {
+          onlineInMyWorkspaces.add(uid);
+        }
+      }
+    }
+
+    // Send filtered online list only (workspace-scoped, not global)
+    client.emit('online_users', { userIds: Array.from(onlineInMyWorkspaces) });
 
     this.logger.log(
       `Client connected: ${client.id} → userId=${user.id} (${this.onlineUsers.size} online)`,
@@ -146,8 +166,12 @@ export class EventsGateway
     if (!sockets || sockets.size === 0) {
       this.userSockets.delete(userId);
       this.onlineUsers.delete(userId);
-      // Broadcast offline only when ALL sockets for this user are gone
-      this.server.emit('user_offline', { userId });
+      // Broadcast offline only to workspace-scoped rooms (not globally)
+      const wsIds = this.userWorkspaces.get(userId) ?? new Set<string>();
+      for (const wsId of wsIds) {
+        this.server.to(`workspace:${wsId}`).emit('user_offline', { userId });
+      }
+      this.userWorkspaces.delete(userId);
     }
 
     this.logger.log(
@@ -187,12 +211,17 @@ export class EventsGateway
 
   // ─── Room join/leave ──────────────────────────────────
   @SubscribeMessage('join_room')
-  handleJoinRoom(
+  async handleJoinRoom(
     @MessageBody() data: JoinRoomDto,
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException('Not authenticated');
+
+    const member = await this.chatMemberRepo.findOne({
+      where: { roomId: data.roomId, userId },
+    });
+    if (!member) throw new WsException('Not a room member');
 
     client.join(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_joined_room', {

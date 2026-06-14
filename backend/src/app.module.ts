@@ -66,7 +66,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         logging: config.get('NODE_ENV') === 'development',
         ssl:
           config.get('NODE_ENV') === 'production'
-            ? { rejectUnauthorized: false }
+            ? {
+                rejectUnauthorized: true,
+                ...(config.get('DB_SSL_CA') && { ca: config.get('DB_SSL_CA') }),
+              }
             : false,
         extra: {
           max: parseInt(config.get('DATABASE_POOL_SIZE') || '20', 10),

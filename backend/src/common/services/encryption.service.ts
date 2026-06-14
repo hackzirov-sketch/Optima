@@ -14,8 +14,10 @@ export class EncryptionService {
         'ENCRYPTION_KEY env variable is required. Set it in your .env file.',
       );
     }
-    // Derive exactly 32 bytes for AES-256
-    this.key = crypto.scryptSync(secret, 'salt', 32);
+    // Domain-specific static salt — prevents rainbow table attacks across
+    // different apps using the same ENCRYPTION_KEY value
+    const SALT = Buffer.from('upz-github-token-kdf-v1');
+    this.key = crypto.scryptSync(secret, SALT, 32);
   }
 
   encrypt(text: string): string {

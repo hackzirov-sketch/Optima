@@ -15,7 +15,19 @@ export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes';
 const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[] | null }> = {
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
   workspace:   { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
-  attachments: { maxBytes: 20 * 1024 * 1024, mimeTypes: null }, // any type
+  attachments: {
+    maxBytes: 20 * 1024 * 1024,
+    mimeTypes: [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf',
+      'text/plain', 'text/csv',
+      'application/zip', 'application/x-zip-compressed',
+      'video/mp4', 'video/webm',
+      'audio/mpeg', 'audio/wav', 'audio/ogg',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ],
+  },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
 };
 

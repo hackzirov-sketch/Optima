@@ -7,6 +7,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { ChatModule } from '../chat/chat.module';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { ChatMember } from '../../database/entities/chat-member.entity';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
       inject: [ConfigService],
     }),
     ChatModule,
-    TypeOrmModule.forFeature([WorkspaceMember]),
+    TypeOrmModule.forFeature([WorkspaceMember, ChatMember]),
   ],
   providers: [EventsGateway],
   exports: [EventsGateway],
