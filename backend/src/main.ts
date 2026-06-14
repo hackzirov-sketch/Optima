@@ -99,6 +99,7 @@ async function bootstrap() {
       .addTag('Pushes')
       .addTag('GitHub')
       .addTag('Chat')
+      .addTag('Meetings')
       .addTag('Notifications')
       .addTag('Analytics')
       .addTag('Storage', 'Cloudinary file upload (sign → upload → save URL)')
