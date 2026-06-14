@@ -9,9 +9,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { ChatRoom } from '../../database/entities/chat-room.entity';
+import { ChatMember } from '../../database/entities/chat-member.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
-import { WorkspaceRole } from '../../common/enums';
+import { WorkspaceRole, ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import {
   applySoftDelete,
@@ -30,6 +32,10 @@ export class WorkspacesService {
     private readonly workspaceRepo: Repository<Workspace>,
     @InjectRepository(WorkspaceMember)
     private readonly memberRepo: Repository<WorkspaceMember>,
+    @InjectRepository(ChatRoom)
+    private readonly chatRoomRepo: Repository<ChatRoom>,
+    @InjectRepository(ChatMember)
+    private readonly chatMemberRepo: Repository<ChatMember>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -63,6 +69,22 @@ export class WorkspacesService {
         role: WorkspaceRole.OWNER,
       });
       await queryRunner.manager.save(member);
+
+      // Create default #general workspace channel
+      const generalRoom = this.chatRoomRepo.create({
+        workspaceId: savedWorkspace.id,
+        type: ChatRoomType.WORKSPACE,
+        name: 'general',
+        createdById: userId,
+      });
+      const savedRoom = await queryRunner.manager.save(generalRoom);
+
+      // Add owner to the channel
+      const chatMember = this.chatMemberRepo.create({
+        roomId: savedRoom.id,
+        userId: userId,
+      });
+      await queryRunner.manager.save(chatMember);
 
       await queryRunner.commitTransaction();
       return savedWorkspace;

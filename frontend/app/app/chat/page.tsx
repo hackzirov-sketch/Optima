@@ -232,11 +232,24 @@ export default function ChatPage() {
     });
   }, [activeRoom, normalizedChatSearch, t]);
 
-  // Load real chat rooms when connected
+  // Load real chat rooms when connected; auto-seed #general if none exist
   useEffect(() => {
     if (!hasBackendSession || !activeWorkspace) return;
-    chatApi.listRooms(activeWorkspace.id).then((res) => {
-      const apiRooms: ChatRoom[] = (res?.data ?? []).map((r) => ({
+
+    const mergeRooms = (apiRooms: ChatRoom[]) => {
+      setRooms((prev) => {
+        const demoRooms = prev.filter((r) => ["r-ai", "r-saved"].includes(r.id));
+        const realIds = new Set(apiRooms.map((r) => r.id));
+        const filtered = demoRooms.filter((r) => !realIds.has(r.id));
+        return [...apiRooms, ...filtered];
+      });
+      setActiveId((cur) =>
+        cur === (MOCK_CHAT_ROOMS[0]?.id ?? "") ? (apiRooms[0]?.id ?? cur) : cur,
+      );
+    };
+
+    chatApi.listRooms(activeWorkspace.id).then(async (res) => {
+      let apiRooms: ChatRoom[] = (res?.data ?? []).map((r) => ({
         id: r.id,
         name: r.name,
         type: mapApiChatRoomType(r.type) as ChatRoom["type"],
@@ -245,16 +258,31 @@ export default function ChatPage() {
         unread: r.unreadCount ?? 0,
         pinned: false,
       }));
-      if (apiRooms.length > 0) {
-        // Merge: keep AI/saved demo rooms, prepend real rooms
-        setRooms((prev) => {
-          const demoRooms = prev.filter((r) => ["r-ai", "r-saved"].includes(r.id));
-          const realIds = new Set(apiRooms.map((r) => r.id));
-          const filtered = demoRooms.filter((r) => !realIds.has(r.id));
-          return [...apiRooms, ...filtered];
-        });
-        setActiveId((cur) => cur === (MOCK_CHAT_ROOMS[0]?.id ?? "") ? (apiRooms[0]?.id ?? cur) : cur);
+
+      // First visit: auto-create #general workspace channel
+      if (apiRooms.length === 0) {
+        try {
+          const created = await chatApi.createRoom(activeWorkspace.id, {
+            type: "workspace",
+            name: "general",
+          });
+          apiRooms = [
+            {
+              id: created.data.id,
+              name: created.data.name,
+              type: mapApiChatRoomType(created.data.type) as ChatRoom["type"],
+              memberIds: created.data.memberIds ?? [],
+              messages: [],
+              unread: 0,
+              pinned: false,
+            },
+          ];
+        } catch {
+          // Seed failed silently — user can create manually via "+"
+        }
       }
+
+      if (apiRooms.length > 0) mergeRooms(apiRooms);
     }).catch(console.error);
   }, [hasBackendSession, activeWorkspace]);
 

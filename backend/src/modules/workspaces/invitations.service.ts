@@ -10,9 +10,11 @@ import { Repository, DataSource, IsNull } from 'typeorm';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { ChatRoom } from '../../database/entities/chat-room.entity';
+import { ChatMember } from '../../database/entities/chat-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { InviteMemberDto } from './dto/invite-member.dto';
-import { WorkspaceRole } from '../../common/enums';
+import { WorkspaceRole, ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import * as crypto from 'crypto';
 
@@ -25,6 +27,10 @@ export class InvitationsService {
     private readonly workspaceRepo: Repository<Workspace>,
     @InjectRepository(WorkspaceMember)
     private readonly memberRepo: Repository<WorkspaceMember>,
+    @InjectRepository(ChatRoom)
+    private readonly chatRoomRepo: Repository<ChatRoom>,
+    @InjectRepository(ChatMember)
+    private readonly chatMemberRepo: Repository<ChatMember>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
@@ -178,6 +184,22 @@ export class InvitationsService {
         role: invitation.role,
       });
       const savedMember = await queryRunner.manager.save(newMember);
+
+      // Auto-join all workspace-scoped channels (e.g. #general)
+      const wsRooms = await this.chatRoomRepo.find({
+        where: { workspaceId: invitation.workspaceId, type: ChatRoomType.WORKSPACE },
+        select: ['id'],
+      });
+      for (const room of wsRooms) {
+        const alreadyIn = await this.chatMemberRepo.findOne({
+          where: { roomId: room.id, userId },
+        });
+        if (!alreadyIn) {
+          await queryRunner.manager.save(
+            this.chatMemberRepo.create({ roomId: room.id, userId }),
+          );
+        }
+      }
 
       await queryRunner.commitTransaction();
       return savedMember;

@@ -9,6 +9,8 @@ import { TagsService } from './tags.service';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
+import { ChatRoom } from '../../database/entities/chat-room.entity';
+import { ChatMember } from '../../database/entities/chat-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { Tag } from '../../database/entities/tag.entity';
 import { UsersModule } from '../users/users.module';
@@ -19,6 +21,8 @@ import { UsersModule } from '../users/users.module';
       Workspace,
       WorkspaceMember,
       WorkspaceInvitation,
+      ChatRoom,
+      ChatMember,
       User,
       Tag,
     ]),
