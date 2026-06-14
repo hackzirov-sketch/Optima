@@ -6,6 +6,7 @@ import { Project } from '../../database/entities/project.entity';
 import { Task } from '../../database/entities/task.entity';
 import { DeveloperProjectStats } from '../../database/entities/developer-project-stats.entity';
 import { DeveloperDailyStats } from '../../database/entities/developer-daily-stats.entity';
+import { WorkspacesModule } from '../workspaces/workspaces.module';
 
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
@@ -19,6 +20,7 @@ import { AnalyticsController } from './analytics.controller';
       DeveloperProjectStats,
       DeveloperDailyStats,
     ]),
+    WorkspacesModule,
   ],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],

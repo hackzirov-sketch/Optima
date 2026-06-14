@@ -12,9 +12,9 @@ import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 import { ChatMessage } from '../../database/entities/chat-message.entity';
 import { ChatReaction } from '../../database/entities/chat-reaction.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { Group } from '../../database/entities/group.entity';
 import { Project } from '../../database/entities/project.entity';
+import { MembersService } from '../workspaces/members.service';
 
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -34,21 +34,12 @@ export class ChatService {
     private readonly messageRepo: Repository<ChatMessage>,
     @InjectRepository(ChatReaction)
     private readonly reactionRepo: Repository<ChatReaction>,
-    @InjectRepository(WorkspaceMember)
-    private readonly wsMemberRepo: Repository<WorkspaceMember>,
     @InjectRepository(Group)
     private readonly groupRepo: Repository<Group>,
     @InjectRepository(Project)
     private readonly projectRepo: Repository<Project>,
+    private readonly membersService: MembersService,
   ) {}
-
-  private async assertWsMember(workspaceId: string, userId: string) {
-    const m = await this.wsMemberRepo.findOne({
-      where: { workspaceId, userId },
-    });
-    if (!m) throw new ForbiddenException('Not a workspace member');
-    return m;
-  }
 
   private async assertRoomMember(
     roomId: string,
@@ -135,7 +126,7 @@ export class ChatService {
   }
 
   async listRooms(workspaceId: string, userId: string) {
-    await this.assertWsMember(workspaceId, userId);
+    await this.membersService.assertMember(workspaceId, userId);
 
     const memberships = await this.memberRepo.find({
       where: { userId, leftAt: IsNull() },
@@ -228,7 +219,7 @@ export class ChatService {
     userId: string,
     dto: CreateChatRoomDto,
   ) {
-    await this.assertWsMember(workspaceId, userId);
+    await this.membersService.assertMember(workspaceId, userId);
 
     // DM: prevent duplicates and ensure targetUserId is provided
     if (dto.type === ChatRoomType.DIRECT) {
@@ -240,7 +231,7 @@ export class ChatService {
       if (dto.targetUserId === userId) {
         throw new BadRequestException('Cannot create a DM with yourself');
       }
-      await this.assertWsMember(workspaceId, dto.targetUserId);
+      await this.membersService.assertMember(workspaceId, dto.targetUserId);
 
       // Check if DM room already exists between these two users
       const existing = await this.roomRepo
@@ -297,7 +288,7 @@ export class ChatService {
   async getRoom(roomId: string, userId: string) {
     const room = await this.roomRepo.findOne({ where: { id: roomId } });
     if (!room) throw new NotFoundException('Room not found');
-    await this.assertWsMember(room.workspaceId, userId);
+    await this.membersService.assertMember(room.workspaceId, userId);
     await this.assertRoomMember(roomId, userId);
     return this.enrichRoom(room, userId);
   }

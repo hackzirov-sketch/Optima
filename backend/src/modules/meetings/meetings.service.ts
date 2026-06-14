@@ -9,10 +9,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
 import { Meeting } from '../../database/entities/meeting.entity';
 import { MeetingParticipant } from '../../database/entities/meeting-participant.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meeting.enum';
+import { MembersService } from '../workspaces/members.service';
 import * as crypto from 'crypto';
 
 function generateMeetingCode(): string {
@@ -29,15 +29,8 @@ export class MeetingsService {
     private readonly meetingRepo: Repository<Meeting>,
     @InjectRepository(MeetingParticipant)
     private readonly participantRepo: Repository<MeetingParticipant>,
-    @InjectRepository(WorkspaceMember)
-    private readonly wsMemberRepo: Repository<WorkspaceMember>,
+    private readonly membersService: MembersService,
   ) {}
-
-  private async assertWsMember(workspaceId: string, userId: string) {
-    const m = await this.wsMemberRepo.findOne({ where: { workspaceId, userId } });
-    if (!m) throw new ForbiddenException('Not a workspace member');
-    return m;
-  }
 
   private async assertHost(meetingId: string, userId: string) {
     const m = await this.meetingRepo.findOne({ where: { id: meetingId } });
@@ -55,9 +48,9 @@ export class MeetingsService {
       host: meeting.host
         ? {
             id: meeting.host.id,
-            firstName: (meeting.host as any).firstName,
-            lastName: (meeting.host as any).lastName,
-            avatarUrl: (meeting.host as any).avatarUrl,
+            firstName: meeting.host.firstName,
+            lastName: meeting.host.lastName,
+            avatarUrl: meeting.host.avatarUrl,
           }
         : null,
       title: meeting.title,
@@ -86,7 +79,7 @@ export class MeetingsService {
   }
 
   async listForWorkspace(workspaceId: string, userId: string) {
-    await this.assertWsMember(workspaceId, userId);
+    await this.membersService.assertMember(workspaceId, userId);
 
     const meetings = await this.meetingRepo.find({
       where: { workspaceId },
@@ -112,7 +105,7 @@ export class MeetingsService {
   }
 
   async create(workspaceId: string, userId: string, dto: CreateMeetingDto) {
-    await this.assertWsMember(workspaceId, userId);
+    await this.membersService.assertMember(workspaceId, userId);
 
     let code: string;
     let attempts = 0;
@@ -166,7 +159,7 @@ export class MeetingsService {
       relations: ['host'],
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
-    await this.assertWsMember(meeting.workspaceId, userId);
+    await this.membersService.assertMember(meeting.workspaceId, userId);
 
     const participants = await this.participantRepo.find({ where: { meetingId } });
     return this.enrichMeeting(meeting, participants);
@@ -205,7 +198,7 @@ export class MeetingsService {
     if (meeting.status === MeetingStatus.ENDED || meeting.status === MeetingStatus.CANCELLED) {
       throw new ForbiddenException('Meeting is no longer active');
     }
-    await this.assertWsMember(meeting.workspaceId, userId);
+    await this.membersService.assertMember(meeting.workspaceId, userId);
 
     const existing = await this.participantRepo.findOne({
       where: { meetingId, userId },

@@ -1,6 +1,5 @@
 import {
   Injectable,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,6 +10,7 @@ import { Project } from '../../database/entities/project.entity';
 import { Task } from '../../database/entities/task.entity';
 import { DeveloperProjectStats } from '../../database/entities/developer-project-stats.entity';
 import { DeveloperDailyStats } from '../../database/entities/developer-daily-stats.entity';
+import { MembersService } from '../workspaces/members.service';
 
 @Injectable()
 export class AnalyticsService {
@@ -25,18 +25,11 @@ export class AnalyticsService {
     private readonly projStatsRepo: Repository<DeveloperProjectStats>,
     @InjectRepository(DeveloperDailyStats)
     private readonly dailyRepo: Repository<DeveloperDailyStats>,
+    private readonly membersService: MembersService,
   ) {}
 
-  private async assertWsMember(workspaceId: string, userId: string) {
-    const m = await this.wsMemberRepo.findOne({
-      where: { workspaceId, userId },
-    });
-    if (!m) throw new ForbiddenException('Not a workspace member');
-    return m;
-  }
-
   async workspaceOverview(workspaceId: string, userId: string) {
-    await this.assertWsMember(workspaceId, userId);
+    await this.membersService.assertMember(workspaceId, userId);
 
     const projectCount = await this.projectRepo.count({
       where: { workspaceId, deletedAt: IsNull() },
@@ -80,7 +73,7 @@ export class AnalyticsService {
     });
     if (!project || project.deletedAt)
       throw new NotFoundException('Project not found');
-    await this.assertWsMember(project.workspaceId, userId);
+    await this.membersService.assertMember(project.workspaceId, userId);
 
     const totals = await this.projStatsRepo
       .createQueryBuilder('s')
@@ -101,7 +94,7 @@ export class AnalyticsService {
     });
     if (!project || project.deletedAt)
       throw new NotFoundException('Project not found');
-    await this.assertWsMember(project.workspaceId, userId);
+    await this.membersService.assertMember(project.workspaceId, userId);
 
     return this.projStatsRepo.find({
       where: { projectId },

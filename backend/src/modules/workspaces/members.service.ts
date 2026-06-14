@@ -21,6 +21,17 @@ export class MembersService {
     private readonly workspaceRepo: Repository<Workspace>,
   ) {}
 
+  async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
+    const member = await this.memberRepo.findOne({ where: { workspaceId, userId } });
+    if (!member) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
+    }
+    return member;
+  }
+
   async findAll(workspaceId: string, requesterId: string): Promise<WorkspaceMember[]> {
     const requester = await this.memberRepo.findOne({
       where: { workspaceId, userId: requesterId },
