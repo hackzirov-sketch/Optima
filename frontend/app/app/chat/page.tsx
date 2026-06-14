@@ -87,8 +87,15 @@ export default function ChatPage() {
   const { activeWorkspace } = useWorkspace();
   const { members } = useMembers(activeWorkspace?.id);
 
+  // WS is initialized below; onlineUsers updated via onUserOnline/Offline callbacks
+  const [wsOnlineUsers, setWsOnlineUsers] = useState<string[]>([]);
+  // roomId → userId[] currently typing
+  const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({});
+
   // Build real users list: current user + workspace members + AI
+  // Status comes from WS online presence
   const chatUsers: ChatUser[] = useMemo(() => {
+    const onlineSet = new Set(wsOnlineUsers);
     const currentUser: ChatUser = {
       id: 'me',
       name: user?.name ?? 'Me',
@@ -101,11 +108,11 @@ export default function ChatPage() {
       name: `${m.user.firstName} ${m.user.lastName}`.trim(),
       initials: `${m.user.firstName?.[0] ?? ''}${m.user.lastName?.[0] ?? ''}`.toUpperCase(),
       color: USER_COLORS[i % USER_COLORS.length],
-      status: 'online' as const,
+      status: onlineSet.has(m.userId) ? ('online' as const) : ('offline' as const),
       role: m.role,
     }));
     return [AI_USER, currentUser, ...memberUsers];
-  }, [user, members]);
+  }, [user, members, wsOnlineUsers]);
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
@@ -125,27 +132,50 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── WebSocket integration ────────────────────────────────────────────────
-  const roomIds = useMemo(() => rooms.map((r) => r.id), [rooms]);
+  // Only join real backend rooms (never mock r-* IDs — backend validates membership)
+  const realRoomIds = useMemo(
+    () => rooms.filter((r) => !r.id.startsWith("r-")).map((r) => r.id),
+    [rooms],
+  );
 
-  const { isConnected, onlineUsers, sendMessage: wsSend, sendTyping, addReaction: wsReaction } = useWebSocket({
+  const { isConnected, sendMessage: wsSend, sendTyping, addReaction: wsReaction } = useWebSocket({
     disabled: !hasBackendSession,
-    rooms: roomIds,
+    rooms: realRoomIds,
     onNewMessage: (msg) => {
       setRooms((current) =>
         current.map((room) => {
           if (room.id !== msg.roomId) return room;
-          // Deduplicate
           if (room.messages.some((m) => m.id === msg.id)) return room;
-          const senderId =
-            backendUser?.id && msg.userId === backendUser.id ? "me" : msg.userId;
+
+          const isMyMsg = !!(backendUser?.id && msg.userId === backendUser.id);
+          const senderId = isMyMsg ? "me" : msg.userId;
           const newMsg: ChatMessage = {
             id: msg.id,
             userId: senderId,
             text: msg.text,
             timestamp: msg.timestamp,
             replyToId: msg.replyToId ?? undefined,
-            reactions: msg.reactions,
+            reactions: (msg.reactions ?? []) as ChatMessage["reactions"],
           };
+
+          // Replace optimistic placeholder sent by this user
+          if (isMyMsg) {
+            const optIdx = room.messages.findIndex(
+              (m) => m.id.startsWith("opt-") && m.userId === "me" && m.text === msg.text,
+            );
+            if (optIdx !== -1) {
+              const msgs = [...room.messages];
+              msgs[optIdx] = newMsg;
+              return { ...room, messages: msgs };
+            }
+          }
+
+          // Clear typing for this sender
+          setTypingByRoom((prev) => ({
+            ...prev,
+            [msg.roomId]: (prev[msg.roomId] ?? []).filter((id) => id !== msg.userId),
+          }));
+
           return {
             ...room,
             messages: [...room.messages, newMsg],
@@ -153,6 +183,16 @@ export default function ChatPage() {
           };
         }),
       );
+    },
+    onTyping: ({ userId, roomId, typing }) => {
+      if (userId === backendUser?.id) return;
+      setTypingByRoom((prev) => {
+        const current = prev[roomId] ?? [];
+        if (typing) {
+          return { ...prev, [roomId]: [...new Set([...current, userId])] };
+        }
+        return { ...prev, [roomId]: current.filter((id) => id !== userId) };
+      });
     },
     onReactionUpdated: (evt) => {
       setRooms((current) =>
@@ -168,6 +208,8 @@ export default function ChatPage() {
         }),
       );
     },
+    onUserOnline: (userId) => setWsOnlineUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId])),
+    onUserOffline: (userId) => setWsOnlineUsers((prev) => prev.filter((id) => id !== userId)),
   });
   // ────────────────────────────────────────────────────────────────────────
 
@@ -310,8 +352,21 @@ export default function ChatPage() {
 
     if (persisted) {
       if (isConnected) {
+        // Optimistic: show immediately, replaced on WS echo via dedup in onNewMessage
+        const optimistic: ChatMessage = {
+          id: `opt-${Date.now()}`,
+          userId: "me",
+          text,
+          timestamp: Date.now(),
+          replyToId: replyTo?.id,
+          reactions: [],
+        };
+        updateActiveRoom((room) => ({
+          ...room,
+          unread: 0,
+          messages: [...room.messages, optimistic],
+        }));
         wsSend(activeRoom.id, text, replyTo?.id);
-        updateActiveRoom((room) => ({ ...room, unread: 0 }));
       } else {
         chatApi
           .sendMessage(activeRoom.id, text, replyTo?.id, backendUser?.id)
@@ -712,6 +767,27 @@ export default function ChatPage() {
                 <div ref={messagesEndRef} />
               </div>
             </div>
+
+            {/* Typing indicator */}
+            {activeRoom && (typingByRoom[activeRoom.id]?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-2 border-t border-gray-100 bg-card px-4 py-1.5 dark:border-gray-800 dark:bg-gray-900">
+                <span className="flex gap-0.5">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400"
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    />
+                  ))}
+                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {typingByRoom[activeRoom.id]
+                    .map((id) => chatUsers.find((u) => u.id === id)?.name ?? id)
+                    .join(", ")}{" "}
+                  yozmoqda…
+                </span>
+              </div>
+            )}
 
             <MessageInput
               room={activeRoom}
