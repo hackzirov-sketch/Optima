@@ -33,6 +33,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
+import { MeetingsModule } from './modules/meetings/meetings.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -117,6 +118,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     NotificationsModule,
     AnalyticsModule,
     GatewayModule,
+    MeetingsModule,
   ],
   providers: [
     {
