@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
 
 import { UserSettings } from '../../../database/entities/user-settings.entity';
 import { UserVerification } from '../../../database/entities/user-verification.entity';
@@ -82,7 +83,7 @@ export class AuthProcessor extends WorkerHost {
     }
 
     await this.userVerificationsRepository.delete({ userId });
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await this.userVerificationsRepository.save(

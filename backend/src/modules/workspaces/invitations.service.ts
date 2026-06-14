@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, IsNull } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
@@ -75,14 +75,13 @@ export class InvitationsService {
       }
     }
 
-    const existingInvite = await this.invitationRepo.findOne({
-      where: {
-        workspaceId,
-        email: dto.email,
-        acceptedAt: IsNull() as unknown as Date,
-        declinedAt: IsNull() as unknown as Date,
-      },
-    });
+    const existingInvite = await this.invitationRepo
+      .createQueryBuilder('i')
+      .where('i.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('i.email = :email', { email: dto.email })
+      .andWhere('i.acceptedAt IS NULL')
+      .andWhere('i.declinedAt IS NULL')
+      .getOne();
 
     if (existingInvite && existingInvite.expiresAt > new Date()) {
       // Already invited

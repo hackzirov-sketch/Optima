@@ -7,10 +7,12 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { ChatRoom } from './chat-room.entity';
 import { User } from './user.entity';
 
+@Index(['roomId', 'isDeleted', 'createdAt'])
 @Entity('chat_messages')
 export class ChatMessage {
   @PrimaryGeneratedColumn('uuid')

@@ -5,10 +5,12 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { NotificationType } from '../../common/enums';
 import { User } from './user.entity';
 
+@Index(['userId', 'isRead'])
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn('uuid')

@@ -237,7 +237,7 @@ export class AuthService {
 
     if (!user) {
       const username =
-        googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
+        googleUser.email.split('@')[0] + crypto.randomInt(1000);
       user = await this.usersService.create({
         email: googleUser.email,
         firstName: googleUser.firstName || googleUser.email.split('@')[0],

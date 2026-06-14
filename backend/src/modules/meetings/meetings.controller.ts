@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   Query,
   HttpCode,
   HttpStatus,
@@ -33,9 +34,9 @@ export class MeetingsController {
 
   @Get('workspaces/:workspaceId/meetings')
   @ApiOperation({ summary: 'List meetings in a workspace' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
   list(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.meetingsService.listForWorkspace(workspaceId, userId);
@@ -43,9 +44,9 @@ export class MeetingsController {
 
   @Post('workspaces/:workspaceId/meetings')
   @ApiOperation({ summary: 'Create a meeting' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'workspaceId', format: 'uuid' })
   create(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateMeetingDto,
   ) {
@@ -67,9 +68,9 @@ export class MeetingsController {
 
   @Get('meetings/:meetingId')
   @ApiOperation({ summary: 'Get meeting details' })
-  @ApiParam({ name: 'meetingId' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
   getOne(
-    @Param('meetingId') meetingId: string,
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.meetingsService.getOne(meetingId, userId);
@@ -77,9 +78,9 @@ export class MeetingsController {
 
   @Patch('meetings/:meetingId')
   @ApiOperation({ summary: 'Update meeting (host only)' })
-  @ApiParam({ name: 'meetingId' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
   update(
-    @Param('meetingId') meetingId: string,
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateMeetingDto,
   ) {
@@ -89,9 +90,9 @@ export class MeetingsController {
   @Delete('meetings/:meetingId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Cancel / delete meeting (host only)' })
-  @ApiParam({ name: 'meetingId' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
   async remove(
-    @Param('meetingId') meetingId: string,
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.meetingsService.remove(meetingId, userId);
@@ -99,9 +100,9 @@ export class MeetingsController {
 
   @Post('meetings/:meetingId/join')
   @ApiOperation({ summary: 'Join meeting as participant' })
-  @ApiParam({ name: 'meetingId' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
   join(
-    @Param('meetingId') meetingId: string,
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.meetingsService.join(meetingId, userId);
@@ -109,9 +110,9 @@ export class MeetingsController {
 
   @Post('meetings/:meetingId/leave')
   @ApiOperation({ summary: 'Leave an active meeting' })
-  @ApiParam({ name: 'meetingId' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
   leave(
-    @Param('meetingId') meetingId: string,
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.meetingsService.leave(meetingId, userId);

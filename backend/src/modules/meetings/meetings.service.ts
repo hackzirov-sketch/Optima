@@ -13,11 +13,12 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meeting.enum';
+import * as crypto from 'crypto';
 
 function generateMeetingCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const segment = (n: number) =>
-    Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    Array.from({ length: n }, () => chars[crypto.randomInt(chars.length)]).join('');
   return `UPZ-${segment(3)}-${segment(4)}`;
 }
 
@@ -117,8 +118,7 @@ export class MeetingsService {
     let attempts = 0;
     do {
       code = generateMeetingCode();
-      attempts++;
-      if (attempts > 10) throw new BadRequestException('Could not generate unique meeting code');
+      if (++attempts > 10) throw new BadRequestException('Could not generate unique meeting code');
     } while (await this.meetingRepo.findOne({ where: { meetingCode: code } }));
 
     const meeting = this.meetingRepo.create({
@@ -126,14 +126,22 @@ export class MeetingsService {
       hostId: userId,
       title: dto.title,
       description: dto.description,
-      meetingCode: code,
+      meetingCode: code!,
       startTime: new Date(dto.startTime),
       endTime: dto.endTime ? new Date(dto.endTime) : undefined,
       maxParticipants: dto.maxParticipants ?? 100,
       isRecurring: dto.isRecurring ?? false,
       agenda: dto.agenda,
     });
-    const saved = await this.meetingRepo.save(meeting);
+    let saved: Meeting;
+    try {
+      saved = await this.meetingRepo.save(meeting);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException('Meeting code collision — please retry');
+      }
+      throw err;
+    }
 
     // Host auto-joins as host
     const participant = this.participantRepo.create({

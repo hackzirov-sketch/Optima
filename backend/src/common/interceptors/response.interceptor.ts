@@ -20,21 +20,10 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, Response<T>> {
     next: CallHandler,
   ): Observable<Response<T>> {
     return next.handle().pipe(
-      map((data) => {
-        // If the data already has a specific structure (like pagination), handle it
-        if (data && data.results && data.meta) {
-          return {
-            success: true,
-            data: data.results,
-            meta: data.meta,
-          };
-        }
-
-        return {
-          success: true,
-          data: data || {},
-        };
-      }),
+      map((data) => ({
+        success: true,
+        data: data ?? {},
+      })),
     );
   }
 }

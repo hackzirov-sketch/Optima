@@ -1,12 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { User } from '../../database/entities/user.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
+import { PublicUserDto } from './dto/public-user.dto';
+import { RedisService } from '../../redis/redis.service';
+
+function parseExpiry(s: string): number {
+  const n = parseInt(s, 10);
+  if (s.endsWith('d')) return n * 86400;
+  if (s.endsWith('h')) return n * 3600;
+  if (s.endsWith('m')) return n * 60;
+  return n;
+}
 
 @Injectable()
 export class UsersService {
@@ -17,6 +28,8 @@ export class UsersService {
     private settingsRepository: Repository<UserSettings>,
     @InjectRepository(RefreshToken)
     private refreshTokensRepository: Repository<RefreshToken>,
+    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -30,7 +43,28 @@ export class UsersService {
     return user;
   }
 
-  async findByIdWithRelations(id: string): Promise<User> {
+  async findPublicById(id: string): Promise<PublicUserDto> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      select: ['id', 'firstName', 'lastName', 'username', 'avatarUrl', 'lastSeen'],
+    });
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found',
+      });
+    }
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+      lastSeen: user.lastSeen,
+    };
+  }
+
+  async findByIdWithRelations(id: string) {
     const user = await this.usersRepository.findOne({
       where: { id },
       relations: [
@@ -46,18 +80,13 @@ export class UsersService {
       });
     }
 
-    // Formatting workspace memberships so it's cleaner in the response
     const workspaces = user.workspaceMemberships.map((m) => ({
       role: m.role,
       joinedAt: m.joinedAt,
       ...m.workspace,
     }));
 
-    // Remove the verbose array and attach the clean workspaces array
-    user.workspaceMemberships = undefined as any;
-    (user as any).workspaces = workspaces;
-
-    return user;
+    return { ...user, workspaceMemberships: undefined, workspaces };
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -110,6 +139,11 @@ export class UsersService {
 
   async softDeleteAccount(userId: string): Promise<void> {
     await this.findById(userId);
+    // Block all active access tokens before revoking refresh tokens.
+    // TTL covers the max access-token lifetime so no valid token can slip through.
+    const accessExpires = this.configService.get<string>('jwt.accessExpires') || '25m';
+    const ttlSeconds = parseExpiry(accessExpires);
+    await this.redisService.blockUserSessions(userId, ttlSeconds);
     await this.refreshTokensRepository.delete({ userId });
     await this.usersRepository.update(userId, {
       deletedBy: userId,

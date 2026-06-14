@@ -255,6 +255,7 @@ export class EventsGateway
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) return;
+    if (!client.rooms.has(`room:${data.roomId}`)) return;
 
     client.to(`room:${data.roomId}`).emit('typing', {
       userId,
@@ -341,6 +342,7 @@ export class EventsGateway
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) return;
+    if (!client.rooms.has(`room:${data.roomId}`)) return;
 
     client.to(`room:${data.roomId}`).emit('message_read', {
       userId,

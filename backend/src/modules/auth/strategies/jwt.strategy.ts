@@ -31,6 +31,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
+    if (await this.redisService.isUserSessionBlocked(payload.sub)) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_REVOKED,
+        message: 'All sessions for this account have been revoked',
+      });
+    }
+
     const user = await this.usersService.findById(payload.sub);
     if (!user || !user.isActive) {
       throw new UnauthorizedException({

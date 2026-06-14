@@ -45,14 +45,15 @@ export class NotificationsService {
   }
 
   async list(userId: string, page = 1, limit = 30) {
+    const safeLimit = Math.min(limit, 100);
     const [data, total] = await this.notifRepo.findAndCount({
       where: { userId },
       relations: ['actor'],
       order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (page - 1) * safeLimit,
+      take: safeLimit,
     });
-    return { data, total, page, limit };
+    return { data, total, page, limit: safeLimit };
   }
 
   async markRead(userId: string, id: string) {

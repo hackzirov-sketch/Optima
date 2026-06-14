@@ -79,6 +79,33 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Block all tokens for a user (e.g. on account deletion). TTL should cover the max access-token lifetime. */
+  async blockUserSessions(userId: string, ttlSeconds: number): Promise<void> {
+    try {
+      const client = this.getClient();
+      if (!client) return;
+      await client.set(`upz:user_blocked:${userId}`, '1', 'EX', ttlSeconds);
+    } catch (e) {
+      this.logger.warn(
+        `Redis user-block set failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  async isUserSessionBlocked(userId: string): Promise<boolean> {
+    try {
+      const client = this.getClient();
+      if (!client) return false;
+      const v = await client.get(`upz:user_blocked:${userId}`);
+      return v !== null;
+    } catch (e) {
+      this.logger.warn(
+        `Redis user-block check failed: ${e instanceof Error ? e.message : e}`,
+      );
+      return false;
+    }
+  }
+
   private memSet(key: string, value: string, ttlSeconds: number): void {
     this.memStore.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   }

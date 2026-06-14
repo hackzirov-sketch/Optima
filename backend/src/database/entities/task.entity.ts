@@ -8,6 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { TaskType, PriorityLevel, TaskStatus } from '../../common/enums';
 import { Workspace } from './workspace.entity';
@@ -16,6 +17,7 @@ import { Group } from './group.entity';
 import { ProjectColumn } from './project-column.entity';
 import { User } from './user.entity';
 
+@Index(['workspaceId', 'projectId', 'deletedAt'])
 @Entity('tasks')
 export class Task {
   @PrimaryGeneratedColumn('uuid')

@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -47,10 +48,10 @@ export class UsersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user profile by id' })
-  @ApiParam({ name: 'id' })
-  getById(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  @ApiOperation({ summary: 'Get user public profile by id' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  getById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.findPublicById(id);
   }
 
   @Delete('me')

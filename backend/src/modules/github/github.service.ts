@@ -26,10 +26,9 @@ export class GithubService {
   ): void {
     const secret = this.configService.get<string>('github.webhookSecret');
     if (!secret) {
-      this.logger.warn(
-        'GITHUB_APP_WEBHOOK_SECRET not set — skipping signature verification',
+      throw new UnauthorizedException(
+        'GITHUB_APP_WEBHOOK_SECRET is not configured — webhook rejected',
       );
-      return;
     }
 
     if (!signatureHeader) {
