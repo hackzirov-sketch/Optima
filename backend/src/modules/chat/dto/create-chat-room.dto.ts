@@ -28,4 +28,9 @@ export class CreateChatRoomDto {
   @IsOptional()
   @IsUUID()
   projectId?: string;
+
+  @ApiPropertyOptional({ description: 'Required for direct (DM) rooms — the other participant' })
+  @IsOptional()
+  @IsUUID()
+  targetUserId?: string;
 }

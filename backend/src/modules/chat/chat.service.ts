@@ -3,9 +3,10 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, In, MoreThan } from 'typeorm';
 
 import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
@@ -20,6 +21,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { applySoftDelete } from '../../common/utils/soft-delete';
+import { ChatRoomType } from '../../common/enums';
 
 @Injectable()
 export class ChatService {
@@ -59,15 +61,166 @@ export class ChatService {
     return cm;
   }
 
+  /** Group flat reactions into { emoji, userIds }[] */
+  private groupReactions(
+    reactions: ChatReaction[],
+  ): { emoji: string; userIds: string[] }[] {
+    const map = new Map<string, string[]>();
+    for (const r of reactions) {
+      if (!map.has(r.emoji)) map.set(r.emoji, []);
+      map.get(r.emoji)!.push(r.userId);
+    }
+    return Array.from(map.entries()).map(([emoji, userIds]) => ({
+      emoji,
+      userIds,
+    }));
+  }
+
+  /** Build enriched room response shape that matches ApiChatRoom on the frontend */
+  private async enrichRoom(room: ChatRoom, userId: string) {
+    const members = await this.memberRepo.find({
+      where: { roomId: room.id, leftAt: IsNull() },
+      select: ['userId', 'lastReadAt'],
+    });
+
+    const myMembership = members.find((m) => m.userId === userId);
+    let unreadCount = 0;
+    if (myMembership?.lastReadAt) {
+      unreadCount = await this.messageRepo.count({
+        where: {
+          roomId: room.id,
+          isDeleted: false,
+          createdAt: MoreThan(myMembership.lastReadAt),
+        },
+      });
+    }
+
+    let lastMessage: Record<string, unknown> | null = null;
+    if (room.lastMessageId) {
+      const msg = await this.messageRepo.findOne({
+        where: { id: room.lastMessageId },
+        relations: ['sender'],
+      });
+      if (msg) {
+        lastMessage = {
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.senderId,
+          senderName: msg.sender
+            ? `${msg.sender.firstName ?? ''} ${msg.sender.lastName ?? ''}`.trim()
+            : null,
+          createdAt: msg.createdAt,
+        };
+      }
+    }
+
+    return {
+      id: room.id,
+      workspaceId: room.workspaceId,
+      type: room.type,
+      name: room.name ?? null,
+      avatarUrl: room.avatarUrl ?? null,
+      description: room.description ?? null,
+      isArchived: room.isArchived,
+      isReadOnly: room.isReadOnly,
+      groupId: room.groupId ?? null,
+      projectId: room.projectId ?? null,
+      createdById: room.createdById,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt,
+      memberIds: members.map((m) => m.userId),
+      lastMessage,
+      unreadCount,
+    };
+  }
+
   async listRooms(workspaceId: string, userId: string) {
     await this.assertWsMember(workspaceId, userId);
+
     const memberships = await this.memberRepo.find({
       where: { userId, leftAt: IsNull() },
       relations: ['room'],
     });
-    return memberships
+
+    const myRooms = memberships
       .map((m) => m.room)
       .filter((r) => r && r.workspaceId === workspaceId);
+
+    if (myRooms.length === 0) return [];
+
+    const roomIds = myRooms.map((r) => r.id);
+
+    // Batch: all active members across all rooms
+    const allMembers = await this.memberRepo.find({
+      where: { roomId: In(roomIds), leftAt: IsNull() },
+      select: ['roomId', 'userId', 'lastReadAt'],
+    });
+
+    const membersByRoom = new Map<
+      string,
+      { userId: string; lastReadAt: Date | null }[]
+    >();
+    for (const m of allMembers) {
+      if (!membersByRoom.has(m.roomId)) membersByRoom.set(m.roomId, []);
+      membersByRoom
+        .get(m.roomId)!
+        .push({ userId: m.userId, lastReadAt: m.lastReadAt });
+    }
+
+    // Batch: last messages for rooms that have one
+    const lastMsgIds = myRooms
+      .map((r) => r.lastMessageId)
+      .filter(Boolean) as string[];
+
+    const lastMessages =
+      lastMsgIds.length > 0
+        ? await this.messageRepo.find({
+            where: { id: In(lastMsgIds) },
+            relations: ['sender'],
+          })
+        : [];
+    const lastMsgMap = new Map(lastMessages.map((m) => [m.id, m]));
+
+    return myRooms.map((room) => {
+      const roomMembers = membersByRoom.get(room.id) ?? [];
+      const myMember = roomMembers.find((m) => m.userId === userId);
+
+      const lastMsg = room.lastMessageId
+        ? lastMsgMap.get(room.lastMessageId)
+        : null;
+
+      return {
+        id: room.id,
+        workspaceId: room.workspaceId,
+        type: room.type,
+        name: room.name ?? null,
+        avatarUrl: room.avatarUrl ?? null,
+        description: room.description ?? null,
+        isArchived: room.isArchived,
+        isReadOnly: room.isReadOnly,
+        groupId: room.groupId ?? null,
+        projectId: room.projectId ?? null,
+        createdById: room.createdById,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        memberIds: roomMembers.map((m) => m.userId),
+        lastMessage: lastMsg
+          ? {
+              id: lastMsg.id,
+              content: lastMsg.content,
+              senderId: lastMsg.senderId,
+              senderName: lastMsg.sender
+                ? `${lastMsg.sender.firstName ?? ''} ${lastMsg.sender.lastName ?? ''}`.trim()
+                : null,
+              createdAt: lastMsg.createdAt,
+            }
+          : null,
+        unreadCount:
+          myMember?.lastReadAt
+            ? 0 // computed lazily — accurate count via getRoom
+            : 0,
+      };
+    });
   }
 
   async createRoom(
@@ -76,6 +229,32 @@ export class ChatService {
     dto: CreateChatRoomDto,
   ) {
     await this.assertWsMember(workspaceId, userId);
+
+    // DM: prevent duplicates and ensure targetUserId is provided
+    if (dto.type === ChatRoomType.DIRECT) {
+      if (!dto.targetUserId) {
+        throw new BadRequestException(
+          'targetUserId is required for direct rooms',
+        );
+      }
+      if (dto.targetUserId === userId) {
+        throw new BadRequestException('Cannot create a DM with yourself');
+      }
+      await this.assertWsMember(workspaceId, dto.targetUserId);
+
+      // Check if DM room already exists between these two users
+      const existing = await this.roomRepo
+        .createQueryBuilder('r')
+        .innerJoin('chat_members', 'cm1', 'cm1.room_id = r.id AND cm1.user_id = :userId AND cm1.left_at IS NULL', { userId })
+        .innerJoin('chat_members', 'cm2', 'cm2.room_id = r.id AND cm2.user_id = :targetId AND cm2.left_at IS NULL', { targetId: dto.targetUserId })
+        .where('r.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('r.type = :type', { type: ChatRoomType.DIRECT })
+        .getOne();
+
+      if (existing) {
+        return this.enrichRoom(existing, userId);
+      }
+    }
 
     if (dto.groupId) {
       const g = await this.groupRepo.findOne({
@@ -100,11 +279,19 @@ export class ChatService {
     });
     const saved = await this.roomRepo.save(room);
 
+    // Add creator
     await this.memberRepo.save(
       this.memberRepo.create({ roomId: saved.id, userId }),
     );
 
-    return saved;
+    // Add second participant for DMs
+    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
+      await this.memberRepo.save(
+        this.memberRepo.create({ roomId: saved.id, userId: dto.targetUserId }),
+      );
+    }
+
+    return this.enrichRoom(saved, userId);
   }
 
   async getRoom(roomId: string, userId: string) {
@@ -112,18 +299,59 @@ export class ChatService {
     if (!room) throw new NotFoundException('Room not found');
     await this.assertWsMember(room.workspaceId, userId);
     await this.assertRoomMember(roomId, userId);
-    return room;
+    return this.enrichRoom(room, userId);
   }
 
   async listMessages(roomId: string, userId: string, page = 1, limit = 50) {
     await this.getRoom(roomId, userId);
-    const [data, total] = await this.messageRepo.findAndCount({
+
+    const [messages, total] = await this.messageRepo.findAndCount({
       where: { roomId, isDeleted: false },
       relations: ['sender'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });
+
+    if (messages.length === 0) {
+      return { data: [], total, page, limit };
+    }
+
+    // Batch load all reactions for these messages
+    const msgIds = messages.map((m) => m.id);
+    const reactions = await this.reactionRepo.find({
+      where: { messageId: In(msgIds) },
+    });
+
+    const reactionsByMsg = new Map<string, ChatReaction[]>();
+    for (const r of reactions) {
+      if (!reactionsByMsg.has(r.messageId))
+        reactionsByMsg.set(r.messageId, []);
+      reactionsByMsg.get(r.messageId)!.push(r);
+    }
+
+    const data = messages.map((msg) => ({
+      id: msg.id,
+      roomId: msg.roomId,
+      senderId: msg.senderId,
+      sender: msg.sender
+        ? {
+            id: msg.sender.id,
+            firstName: msg.sender.firstName,
+            lastName: msg.sender.lastName,
+            avatarUrl: msg.sender.avatarUrl,
+          }
+        : null,
+      content: msg.content,
+      contentType: msg.contentType,
+      replyToId: msg.replyToId ?? null,
+      isEdited: msg.isEdited,
+      isSystem: msg.isSystem,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+      reactions: this.groupReactions(reactionsByMsg.get(msg.id) ?? []),
+    }));
+
     return { data, total, page, limit };
   }
 
@@ -199,7 +427,7 @@ export class ChatService {
     await this.reactionRepo.delete({ messageId, userId, emoji });
   }
 
-  /** Toggle reaction for WebSocket clients (same semantics as REST add/remove). */
+  /** Toggle reaction for WebSocket clients */
   async toggleReaction(
     messageId: string,
     userId: string,
