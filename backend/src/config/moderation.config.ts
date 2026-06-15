@@ -1,8 +1,6 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('moderation', () => ({
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
-  googleVisionApiKey: process.env.GOOGLE_VISION_API_KEY || '',
   // Block durations in minutes per violation count (index = count-1)
   // count=1 → 15 min, count=2 → 30 min, count≥3 → permanent
   blockDurationsMinutes: [15, 30],
