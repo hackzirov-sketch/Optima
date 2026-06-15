@@ -186,12 +186,12 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     const member = await this.wsMemberRepo.findOne({
       where: { workspaceId: data.workspaceId, userId },
     });
-    if (!member) throw new WsException('Not a workspace member');
+    if (!member) throw new WsException({ code: 'WS_NOT_WORKSPACE_MEMBER', message: 'Not a workspace member' });
 
     client.join(`workspace:${data.workspaceId}`);
     return { event: 'workspace_joined', workspaceId: data.workspaceId };
@@ -203,7 +203,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     client.leave(`workspace:${data.workspaceId}`);
     return { event: 'workspace_left', workspaceId: data.workspaceId };
@@ -216,12 +216,12 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     const member = await this.chatMemberRepo.findOne({
       where: { roomId: data.roomId, userId },
     });
-    if (!member) throw new WsException('Not a room member');
+    if (!member) throw new WsException({ code: 'WS_NOT_ROOM_MEMBER', message: 'Not a room member' });
 
     client.join(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_joined_room', {
@@ -237,7 +237,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     client.leave(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_left_room', {
@@ -271,7 +271,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     // Persist to DB — ChatService checks room membership internally
     let saved: any;
@@ -310,7 +310,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = this.socketUser.get(client.id);
-    if (!userId) throw new WsException('Not authenticated');
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     try {
       const action = await this.chatService.toggleReaction(

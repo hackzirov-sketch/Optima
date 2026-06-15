@@ -112,7 +112,7 @@ export class ProjectsService {
 
     if (existingProject) {
       throw new ConflictException(
-        'Project with this slug already exists in the workspace',
+        { code: ErrorCode.PROJECT_SLUG_TAKEN, message: 'Project with this slug already exists in the workspace' },
       );
     }
 
@@ -234,7 +234,7 @@ export class ProjectsService {
       });
       if (existingProject) {
         throw new ConflictException(
-          'Project with this slug already exists in the workspace',
+          { code: ErrorCode.PROJECT_SLUG_TAKEN, message: 'Project with this slug already exists in the workspace' },
         );
       }
     }

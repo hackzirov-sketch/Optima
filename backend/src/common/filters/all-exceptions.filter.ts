@@ -7,6 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { EntityNotFoundError, QueryFailedError } from 'typeorm';
+import { TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
 import { ErrorCode } from '../enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
 
@@ -48,6 +50,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code = ErrorCode.VALIDATION_ERROR;
         details = exceptionResponse.message;
       }
+    } else if (exception instanceof EntityNotFoundError) {
+      status = HttpStatus.NOT_FOUND;
+      code = ErrorCode.NOT_FOUND;
+      message = 'Resource not found';
+    } else if (exception instanceof QueryFailedError && (exception as any).code === '23505') {
+      status = HttpStatus.CONFLICT;
+      code = ErrorCode.VALIDATION_ERROR;
+      message = 'Duplicate entry — this resource already exists';
+    } else if (exception instanceof TokenExpiredError) {
+      status = HttpStatus.UNAUTHORIZED;
+      code = ErrorCode.TOKEN_EXPIRED;
+      message = 'Token has expired';
+    } else if (exception instanceof JsonWebTokenError) {
+      status = HttpStatus.UNAUTHORIZED;
+      code = ErrorCode.TOKEN_INVALID;
+      message = 'Invalid token';
     } else if (
       exception?.name === 'TokenError' ||
       exception?.name === 'AuthorizationError' ||

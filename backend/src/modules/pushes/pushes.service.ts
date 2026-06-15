@@ -23,6 +23,7 @@ import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
 import { PushStatus, WorkspaceRole } from '../../common/enums';
 import { isActiveEntity } from '../../common/utils/soft-delete';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 
 const REVIEW_ROLES = new Set([
   WorkspaceRole.OWNER,
@@ -57,13 +58,13 @@ export class PushesService {
       where: { workspaceId, userId },
     });
     if (!m)
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'You are not a member of this workspace' });
     return m;
   }
 
   private assertReviewer(member: WorkspaceMember) {
     if (!REVIEW_ROLES.has(member.role)) {
-      throw new ForbiddenException('Insufficient permissions to review pushes');
+      throw new ForbiddenException({ code: ErrorCode.PUSH_REVIEW_FORBIDDEN, message: 'Insufficient permissions to review pushes' });
     }
   }
 
@@ -72,13 +73,13 @@ export class PushesService {
       where: { id: pushId },
       relations: ['task', 'repository'],
     });
-    if (!isActiveEntity(push)) throw new NotFoundException('Push not found');
+    if (!isActiveEntity(push)) throw new NotFoundException({ code: ErrorCode.PUSH_NOT_FOUND, message: 'Push not found' });
     return push;
   }
 
   private async assertPushVisible(push: TaskPush, userId: string) {
     const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
-    if (!task) throw new NotFoundException('Task not found');
+    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     await this.assertMember(task.workspaceId, userId);
   }
 
@@ -112,7 +113,7 @@ export class PushesService {
 
   async submit(userId: string, dto: SubmitPushDto) {
     const task = await this.taskRepo.findOne({ where: { id: dto.taskId } });
-    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
 
     await this.assertMember(task.workspaceId, userId);
 
@@ -120,9 +121,7 @@ export class PushesService {
       where: { id: dto.repositoryId },
     });
     if (!repo || repo.workspaceId !== task.workspaceId) {
-      throw new BadRequestException(
-        'Repository does not belong to this task workspace',
-      );
+      throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
     }
 
     const push = this.pushRepo.create({
@@ -154,7 +153,7 @@ export class PushesService {
     } catch {
       saved.status = PushStatus.PENDING;
       await this.pushRepo.save(saved);
-      throw new BadRequestException('Failed to upload diff bundle to storage');
+      throw new BadRequestException({ code: ErrorCode.PUSH_UPLOAD_FAILED, message: 'Failed to upload diff bundle to storage' });
     }
 
     const act = this.activityRepo.create({
@@ -182,7 +181,7 @@ export class PushesService {
     const push = await this.loadPush(pushId);
     await this.assertPushVisible(push, userId);
     if (!push.storageKey)
-      throw new BadRequestException('No artifact for this push');
+      throw new BadRequestException({ code: ErrorCode.PUSH_NO_ARTIFACT, message: 'No artifact for this push' });
     const expiresIn = 3600;
     const url = await this.storage.getPresignedDownloadUrl(
       push.storageKey,
@@ -194,14 +193,12 @@ export class PushesService {
   async approve(pushId: string, userId: string) {
     const push = await this.loadPush(pushId);
     const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
-    if (!task) throw new NotFoundException('Task not found');
+    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
-      throw new BadRequestException(
-        'Push cannot be approved in its current state',
-      );
+      throw new BadRequestException({ code: ErrorCode.PUSH_ALREADY_REVIEWED, message: 'Push cannot be approved in its current state' });
     }
 
     push.status = PushStatus.APPROVED;
@@ -225,14 +222,12 @@ export class PushesService {
   async reject(pushId: string, userId: string, dto: ReviewPushDto) {
     const push = await this.loadPush(pushId);
     const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
-    if (!task) throw new NotFoundException('Task not found');
+    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
-      throw new BadRequestException(
-        'Push cannot be rejected in its current state',
-      );
+      throw new BadRequestException({ code: ErrorCode.PUSH_ALREADY_REVIEWED, message: 'Push cannot be rejected in its current state' });
     }
 
     push.status = PushStatus.REJECTED;
@@ -287,9 +282,9 @@ export class PushesService {
     const c = await this.commentRepo.findOne({
       where: { id: commentId, pushId },
     });
-    if (!c) throw new NotFoundException('Comment not found');
+    if (!c) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
     if (c.authorId !== userId)
-      throw new ForbiddenException('You can only edit your own comments');
+      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only edit your own comments' });
 
     if (dto.content !== undefined) c.content = dto.content;
     if (dto.isResolved !== undefined) {
@@ -305,23 +300,23 @@ export class PushesService {
     const c = await this.commentRepo.findOne({
       where: { id: commentId, pushId },
     });
-    if (!c) throw new NotFoundException('Comment not found');
+    if (!c) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
     if (c.authorId !== userId)
-      throw new ForbiddenException('You can only delete your own comments');
+      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only delete your own comments' });
     await this.commentRepo.delete({ id: commentId });
   }
 
   async resolveComment(pushId: string, commentId: string, userId: string) {
     const push = await this.loadPush(pushId);
     const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
-    if (!task) throw new NotFoundException('Task not found');
+    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
     const c = await this.commentRepo.findOne({
       where: { id: commentId, pushId },
     });
-    if (!c) throw new NotFoundException('Comment not found');
+    if (!c) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
     c.isResolved = true;
     c.resolvedById = userId;
     c.resolvedAt = new Date();

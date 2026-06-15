@@ -13,6 +13,7 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meeting.enum';
 import { MembersService } from '../workspaces/members.service';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import * as crypto from 'crypto';
 
 function generateMeetingCode(): string {
@@ -34,9 +35,9 @@ export class MeetingsService {
 
   private async assertHost(meetingId: string, userId: string) {
     const m = await this.meetingRepo.findOne({ where: { id: meetingId } });
-    if (!m) throw new NotFoundException('Meeting not found');
+    if (!m) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
     if (m.hostId !== userId)
-      throw new ForbiddenException('Only the host can perform this action');
+      throw new ForbiddenException({ code: ErrorCode.MEETING_HOST_ONLY, message: 'Only the host can perform this action' });
     return m;
   }
 
@@ -111,7 +112,7 @@ export class MeetingsService {
     let attempts = 0;
     do {
       code = generateMeetingCode();
-      if (++attempts > 10) throw new BadRequestException('Could not generate unique meeting code');
+      if (++attempts > 10) throw new BadRequestException({ code: ErrorCode.MEETING_CODE_GENERATION_FAILED, message: 'Could not generate unique meeting code' });
     } while (await this.meetingRepo.findOne({ where: { meetingCode: code } }));
 
     const meeting = this.meetingRepo.create({
@@ -131,7 +132,7 @@ export class MeetingsService {
       saved = await this.meetingRepo.save(meeting);
     } catch (err: any) {
       if (err?.code === '23505') {
-        throw new ConflictException('Meeting code collision — please retry');
+        throw new ConflictException({ code: ErrorCode.MEETING_CODE_GENERATION_FAILED, message: 'Meeting code collision — please retry' });
       }
       throw err;
     }
@@ -158,7 +159,7 @@ export class MeetingsService {
       where: { id: meetingId },
       relations: ['host'],
     });
-    if (!meeting) throw new NotFoundException('Meeting not found');
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
     await this.membersService.assertMember(meeting.workspaceId, userId);
 
     const participants = await this.participantRepo.find({ where: { meetingId } });
@@ -168,7 +169,7 @@ export class MeetingsService {
   async update(meetingId: string, userId: string, dto: UpdateMeetingDto) {
     const meeting = await this.assertHost(meetingId, userId);
     if (meeting.status === MeetingStatus.ENDED || meeting.status === MeetingStatus.CANCELLED) {
-      throw new ForbiddenException('Cannot update a finished meeting');
+      throw new ForbiddenException({ code: ErrorCode.MEETING_ALREADY_FINISHED, message: 'Cannot update a finished meeting' });
     }
 
     if (dto.title !== undefined) meeting.title = dto.title;
@@ -194,9 +195,9 @@ export class MeetingsService {
 
   async join(meetingId: string, userId: string) {
     const meeting = await this.meetingRepo.findOne({ where: { id: meetingId } });
-    if (!meeting) throw new NotFoundException('Meeting not found');
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
     if (meeting.status === MeetingStatus.ENDED || meeting.status === MeetingStatus.CANCELLED) {
-      throw new ForbiddenException('Meeting is no longer active');
+      throw new ForbiddenException({ code: ErrorCode.MEETING_ENDED, message: 'Meeting is no longer active' });
     }
     await this.membersService.assertMember(meeting.workspaceId, userId);
 
@@ -215,7 +216,7 @@ export class MeetingsService {
       where: { meetingId, leftAt: IsNull() },
     });
     if (activeCount >= meeting.maxParticipants) {
-      throw new ConflictException('Meeting is at full capacity');
+      throw new ConflictException({ code: ErrorCode.MEETING_FULL, message: 'Meeting is at full capacity' });
     }
 
     // Auto-start meeting when first non-host joins
@@ -238,7 +239,7 @@ export class MeetingsService {
     const participant = await this.participantRepo.findOne({
       where: { meetingId, userId, leftAt: IsNull() },
     });
-    if (!participant) throw new NotFoundException('You are not in this meeting');
+    if (!participant) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_PARTICIPANT, message: 'You are not in this meeting' });
 
     participant.leftAt = new Date();
     await this.participantRepo.save(participant);
@@ -258,7 +259,7 @@ export class MeetingsService {
     const meeting = await this.meetingRepo.findOne({
       where: { meetingCode: code.toUpperCase() },
     });
-    if (!meeting) throw new NotFoundException('Meeting not found with this code');
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_CODE_INVALID, message: 'Invalid meeting code' });
     return this.join(meeting.id, userId);
   }
 }

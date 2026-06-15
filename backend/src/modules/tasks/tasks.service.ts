@@ -63,13 +63,13 @@ export class TasksService {
       where: { workspaceId, userId },
     });
     if (!member)
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'You are not a member of this workspace' });
     return member;
   }
 
   private async getTask(taskId: string): Promise<Task> {
     const task = await this.taskRepo.findOne({ where: { id: taskId } });
-    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     return task;
   }
 
@@ -125,7 +125,7 @@ export class TasksService {
       const col = await this.columnRepo.findOne({
         where: { id: dto.columnId, projectId: dto.projectId },
       });
-      if (!col) throw new NotFoundException('Column not found in this project');
+      if (!col) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found in this project' });
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -193,7 +193,7 @@ export class TasksService {
     const project = await this.columnRepo.manager.findOne(Project, {
       where: { id: projectId },
     });
-    if (!project) throw new NotFoundException('Project not found');
+    if (!project) throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     await this.assertMember(project.workspaceId, userId);
 
     const qb = this.taskRepo
@@ -284,7 +284,7 @@ export class TasksService {
       where: { id: taskId },
       relations: ['assignee', 'creator', 'reviewer', 'column', 'subtasks'],
     });
-    if (!isActiveEntity(task)) throw new NotFoundException('Task not found');
+    if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     await this.assertMember(task.workspaceId, userId);
     return task;
   }
@@ -308,7 +308,7 @@ export class TasksService {
       const col = await this.columnRepo.findOne({
         where: { id: dto.columnId, projectId: task.projectId },
       });
-      if (!col) throw new NotFoundException('Column not found in this project');
+      if (!col) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found in this project' });
     }
 
     Object.assign(task, dto);
@@ -354,9 +354,7 @@ export class TasksService {
       member.role === WorkspaceRole.LEAD;
 
     if (!canDelete)
-      throw new ForbiddenException(
-        'Only task creator, lead, admin or owner can delete tasks',
-      );
+      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Only task creator, lead, admin or owner can delete tasks' });
 
     const { workspaceId } = task;
     applySoftDelete(task, userId);
@@ -381,9 +379,7 @@ export class TasksService {
           where: { id: dto.columnId, projectId: task.projectId },
         });
         if (!col)
-          throw new NotFoundException(
-            'Target column not found in this project',
-          );
+          throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Target column not found in this project' });
         task.columnId = dto.columnId;
 
         // Auto-sync status from column mapping if no explicit status given
@@ -483,7 +479,7 @@ export class TasksService {
   async getPushesForTask(projectId: string, taskId: string, userId: string) {
     const task = await this.getTask(taskId);
     if (task.projectId !== projectId) {
-      throw new NotFoundException('Task not found in this project');
+      throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found in this project' });
     }
     await this.assertMember(task.workspaceId, userId);
 
@@ -506,28 +502,24 @@ export class TasksService {
     await this.assertMember(task.workspaceId, userId);
 
     if (taskId === dto.dependsOnId) {
-      throw new BadRequestException('A task cannot depend on itself');
+      throw new BadRequestException({ code: ErrorCode.TASK_SELF_DEPENDENCY, message: 'A task cannot depend on itself' });
     }
 
     // Ensure target task exists and is in the same workspace
     const target = await this.getTask(dto.dependsOnId);
     if (target.workspaceId !== task.workspaceId) {
-      throw new BadRequestException(
-        'Dependencies must be within the same workspace',
-      );
+      throw new BadRequestException({ code: ErrorCode.TASK_CROSS_WORKSPACE, message: 'Dependencies must be within the same workspace' });
     }
 
     // Cycle detection
     if (await this.hasCycle(taskId, dto.dependsOnId)) {
-      throw new ConflictException(
-        'Adding this dependency would create a cycle',
-      );
+      throw new ConflictException({ code: ErrorCode.TASK_DEPENDENCY_CYCLE, message: 'Adding this dependency would create a cycle' });
     }
 
     const existing = await this.dependencyRepo.findOne({
       where: { taskId, dependsOnId: dto.dependsOnId },
     });
-    if (existing) throw new ConflictException('This dependency already exists');
+    if (existing) throw new ConflictException({ code: ErrorCode.DEPENDENCY_ALREADY_EXISTS, message: 'This dependency already exists' });
 
     const dep = this.dependencyRepo.create({
       taskId,
@@ -560,7 +552,7 @@ export class TasksService {
     const dep = await this.dependencyRepo.findOne({
       where: { id: dependencyId, taskId },
     });
-    if (!dep) throw new NotFoundException('Dependency not found');
+    if (!dep) throw new NotFoundException({ code: ErrorCode.DEPENDENCY_NOT_FOUND, message: 'Dependency not found' });
 
     await this.dependencyRepo.remove(dep);
   }
@@ -580,13 +572,13 @@ export class TasksService {
     const tag = await this.tagRepo.findOne({
       where: { id: tagId, workspaceId: task.workspaceId },
     });
-    if (!tag) throw new NotFoundException('Tag not found in this workspace');
+    if (!tag) throw new NotFoundException({ code: ErrorCode.TAG_NOT_FOUND, message: 'Tag not found in this workspace' });
 
     const existing = await this.taskTagRepo.findOne({
       where: { taskId, tagId },
     });
     if (existing)
-      throw new ConflictException('Tag already attached to this task');
+      throw new ConflictException({ code: ErrorCode.TAG_ALREADY_ATTACHED, message: 'Tag already attached to this task' });
 
     const taskTag = this.taskTagRepo.create({ taskId, tagId });
     return this.taskTagRepo.save(taskTag);

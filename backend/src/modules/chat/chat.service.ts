@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In, MoreThan } from 'typeorm';
@@ -22,6 +21,7 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { applySoftDelete } from '../../common/utils/soft-delete';
 import { ChatRoomType } from '../../common/enums';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 
 @Injectable()
 export class ChatService {
@@ -48,7 +48,7 @@ export class ChatService {
     const cm = await this.memberRepo.findOne({
       where: { roomId, userId, leftAt: IsNull() },
     });
-    if (!cm) throw new ForbiddenException('Not a member of this chat room');
+    if (!cm) throw new ForbiddenException({ code: ErrorCode.NOT_ROOM_MEMBER, message: 'Not a member of this chat room' });
     return cm;
   }
 
@@ -224,12 +224,10 @@ export class ChatService {
     // DM: prevent duplicates and ensure targetUserId is provided
     if (dto.type === ChatRoomType.DIRECT) {
       if (!dto.targetUserId) {
-        throw new BadRequestException(
-          'targetUserId is required for direct rooms',
-        );
+        throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'targetUserId is required for direct rooms' });
       }
       if (dto.targetUserId === userId) {
-        throw new BadRequestException('Cannot create a DM with yourself');
+        throw new BadRequestException({ code: ErrorCode.DM_WITH_SELF, message: 'Cannot create a DM with yourself' });
       }
       await this.membersService.assertMember(workspaceId, dto.targetUserId);
 
@@ -251,13 +249,13 @@ export class ChatService {
       const g = await this.groupRepo.findOne({
         where: { id: dto.groupId, workspaceId },
       });
-      if (!g) throw new BadRequestException('Group not in this workspace');
+      if (!g) throw new BadRequestException({ code: ErrorCode.GROUP_NOT_FOUND, message: 'Group not in this workspace' });
     }
     if (dto.projectId) {
       const p = await this.projectRepo.findOne({
         where: { id: dto.projectId, workspaceId },
       });
-      if (!p) throw new BadRequestException('Project not in this workspace');
+      if (!p) throw new BadRequestException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not in this workspace' });
     }
 
     const room = this.roomRepo.create({
@@ -287,7 +285,7 @@ export class ChatService {
 
   async getRoom(roomId: string, userId: string) {
     const room = await this.roomRepo.findOne({ where: { id: roomId } });
-    if (!room) throw new NotFoundException('Room not found');
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
     await this.membersService.assertMember(room.workspaceId, userId);
     await this.assertRoomMember(roomId, userId);
     return this.enrichRoom(room, userId);
@@ -348,12 +346,12 @@ export class ChatService {
 
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
     const room = await this.roomRepo.findOne({ where: { id: roomId } });
-    if (!room) throw new NotFoundException('Room not found');
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
     await this.assertRoomMember(roomId, userId);
-    if (room.isReadOnly) throw new ForbiddenException('Room is read-only');
+    if (room.isReadOnly) throw new ForbiddenException({ code: ErrorCode.ROOM_READ_ONLY, message: 'Room is read-only' });
 
     if (!dto.content?.trim()) {
-      throw new BadRequestException('Message content is required');
+      throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
     }
 
     const msg = this.messageRepo.create({
@@ -374,10 +372,10 @@ export class ChatService {
 
   async deleteMessage(messageId: string, userId: string) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg) throw new NotFoundException('Message not found');
+    if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.assertRoomMember(msg.roomId, userId);
     if (msg.senderId !== userId)
-      throw new ForbiddenException('You can only delete your own messages');
+      throw new ForbiddenException({ code: ErrorCode.CANNOT_DELETE_MESSAGE, message: 'You can only delete your own messages' });
     applySoftDelete(msg);
     await this.messageRepo.save(msg);
   }
@@ -388,10 +386,10 @@ export class ChatService {
     dto: UpdateMessageDto,
   ) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) throw new NotFoundException('Message not found');
+    if (!msg || msg.isDeleted) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.assertRoomMember(msg.roomId, userId);
     if (msg.senderId !== userId)
-      throw new ForbiddenException('You can only edit your own messages');
+      throw new ForbiddenException({ code: ErrorCode.CANNOT_EDIT_MESSAGE, message: 'You can only edit your own messages' });
     msg.content = dto.content;
     msg.isEdited = true;
     return this.messageRepo.save(msg);
@@ -399,7 +397,7 @@ export class ChatService {
 
   async addReaction(messageId: string, userId: string, dto: AddReactionDto) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) throw new NotFoundException('Message not found');
+    if (!msg || msg.isDeleted) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.assertRoomMember(msg.roomId, userId);
 
     const existing = await this.reactionRepo.findOne({
@@ -414,7 +412,7 @@ export class ChatService {
 
   async removeReaction(messageId: string, userId: string, emoji: string) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg) throw new NotFoundException('Message not found');
+    if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.reactionRepo.delete({ messageId, userId, emoji });
   }
 
@@ -425,7 +423,7 @@ export class ChatService {
     emoji: string,
   ): Promise<'added' | 'removed'> {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) throw new NotFoundException('Message not found');
+    if (!msg || msg.isDeleted) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.assertRoomMember(msg.roomId, userId);
 
     const existing = await this.reactionRepo.findOne({

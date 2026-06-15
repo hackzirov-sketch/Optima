@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -99,12 +100,10 @@ export class StorageService {
     mimeType?: string,
   ): CloudinarySignResult {
     const limits = FOLDER_LIMITS[folder];
-    if (!limits) throw new BadRequestException(`Unknown folder: ${folder}`);
+    if (!limits) throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_FOLDER, message: `Unknown folder: ${folder}` });
 
     if (mimeType && limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
-      throw new BadRequestException(
-        `Allowed types for ${folder}: ${limits.mimeTypes.join(', ')}`,
-      );
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for ${folder}: ${limits.mimeTypes.join(', ')}` });
     }
 
     const timestamp  = Math.round(Date.now() / 1000);
