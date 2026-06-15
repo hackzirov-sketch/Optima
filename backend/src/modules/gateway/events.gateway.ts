@@ -48,6 +48,14 @@ export interface AddReactionWsDto {
   emoji: string;
 }
 
+// ─── Meeting DTOs ──────────────────────────────────────
+export interface MeetingJoinDto    { meetingId: string; }
+export interface MeetingLeaveDto   { meetingId: string; }
+export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
+export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
+export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
+export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
+
 @Injectable()
 @WebSocketGateway({
   cors: {
@@ -73,6 +81,12 @@ export class EventsGateway
   private readonly onlineUsers = new Set<string>();
   // userId → Set<workspaceId> — for scoped online/offline broadcasts
   private readonly userWorkspaces = new Map<string, Set<string>>();
+
+  // ─── Meeting presence ─────────────────────────────────
+  // meetingId → Map<userId, socketId>  (one socket per user per meeting)
+  private readonly meetingUsers = new Map<string, Map<string, string>>();
+  // socketId → meetingId  (for cleanup on disconnect)
+  private readonly socketMeeting = new Map<string, string>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -174,6 +188,12 @@ export class EventsGateway
         this.server.to(`workspace:${wsId}`).emit('user_offline', { userId });
       }
       this.userWorkspaces.delete(userId);
+    }
+
+    // Clean up meeting presence if this socket was in a meeting
+    const meetingId = this.socketMeeting.get(client.id);
+    if (meetingId && userId) {
+      await this.leaveMeeting(client, userId, meetingId);
     }
 
     this.logger.log(
@@ -365,6 +385,146 @@ export class EventsGateway
       roomId: data.roomId,
       messageId: data.messageId,
     });
+  }
+
+  // ─── Meeting: join ───────────────────────────────────
+  @SubscribeMessage('meeting:join')
+  async handleMeetingJoin(
+    @MessageBody() data: MeetingJoinDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) {
+      client.emit('error', { code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+      return;
+    }
+
+    const { meetingId } = data;
+
+    // Leave any previous meeting this socket was in
+    const prevMeeting = this.socketMeeting.get(client.id);
+    if (prevMeeting && prevMeeting !== meetingId) {
+      await this.leaveMeeting(client, userId, prevMeeting);
+    }
+
+    // Register in meeting presence map
+    if (!this.meetingUsers.has(meetingId)) {
+      this.meetingUsers.set(meetingId, new Map());
+    }
+    this.meetingUsers.get(meetingId)!.set(userId, client.id);
+    this.socketMeeting.set(client.id, meetingId);
+
+    await client.join(`meeting:${meetingId}`);
+
+    // Tell the joiner who else is already in the meeting
+    const participants = Array.from(this.meetingUsers.get(meetingId)!.entries())
+      .filter(([uid]) => uid !== userId)
+      .map(([uid]) => uid);
+
+    client.emit('meeting:participants', { meetingId, userIds: participants });
+
+    // Notify everyone else that this user joined
+    client.to(`meeting:${meetingId}`).emit('meeting:user-joined', { meetingId, userId });
+
+    this.logger.log(`User ${userId} joined meeting ${meetingId}`);
+  }
+
+  // ─── Meeting: leave ──────────────────────────────────
+  @SubscribeMessage('meeting:leave')
+  async handleMeetingLeave(
+    @MessageBody() data: MeetingLeaveDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) return;
+    await this.leaveMeeting(client, userId, data.meetingId);
+  }
+
+  // ─── Meeting: WebRTC offer ────────────────────────────
+  @SubscribeMessage('meeting:offer')
+  handleMeetingOffer(
+    @MessageBody() data: MeetingOfferDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) return;
+
+    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
+    if (!targetSocketId) return;
+
+    this.server.to(targetSocketId).emit('meeting:offer', {
+      meetingId: data.meetingId,
+      fromUserId: userId,
+      sdp: data.sdp,
+    });
+  }
+
+  // ─── Meeting: WebRTC answer ───────────────────────────
+  @SubscribeMessage('meeting:answer')
+  handleMeetingAnswer(
+    @MessageBody() data: MeetingAnswerDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) return;
+
+    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
+    if (!targetSocketId) return;
+
+    this.server.to(targetSocketId).emit('meeting:answer', {
+      meetingId: data.meetingId,
+      fromUserId: userId,
+      sdp: data.sdp,
+    });
+  }
+
+  // ─── Meeting: ICE candidate ───────────────────────────
+  @SubscribeMessage('meeting:ice-candidate')
+  handleMeetingIce(
+    @MessageBody() data: MeetingIceDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) return;
+
+    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
+    if (!targetSocketId) return;
+
+    this.server.to(targetSocketId).emit('meeting:ice-candidate', {
+      meetingId: data.meetingId,
+      fromUserId: userId,
+      candidate: data.candidate,
+    });
+  }
+
+  // ─── Meeting: toggle audio / video / screen ───────────
+  @SubscribeMessage('meeting:toggle')
+  handleMeetingToggle(
+    @MessageBody() data: MeetingToggleDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = this.socketUser.get(client.id);
+    if (!userId) return;
+
+    client.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
+      meetingId: data.meetingId,
+      userId,
+      kind: data.kind,
+      enabled: data.enabled,
+    });
+  }
+
+  // ─── Internal: clean up meeting state ────────────────
+  private async leaveMeeting(client: Socket, userId: string, meetingId: string) {
+    this.meetingUsers.get(meetingId)?.delete(userId);
+    if (this.meetingUsers.get(meetingId)?.size === 0) {
+      this.meetingUsers.delete(meetingId);
+    }
+    this.socketMeeting.delete(client.id);
+
+    await client.leave(`meeting:${meetingId}`);
+    client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
+    this.logger.log(`User ${userId} left meeting ${meetingId}`);
   }
 
   // ─── Public helpers for other services ───────────────
