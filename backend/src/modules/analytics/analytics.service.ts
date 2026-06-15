@@ -1,7 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 
@@ -72,7 +70,7 @@ export class AnalyticsService {
       where: { id: projectId },
     });
     if (!project || project.deletedAt)
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     await this.membersService.assertMember(project.workspaceId, userId);
 
     const totals = await this.projStatsRepo
@@ -93,7 +91,7 @@ export class AnalyticsService {
       where: { id: projectId },
     });
     if (!project || project.deletedAt)
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     await this.membersService.assertMember(project.workspaceId, userId);
 
     return this.projStatsRepo.find({

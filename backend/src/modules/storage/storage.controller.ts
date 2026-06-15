@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { IsString, IsIn, IsOptional, IsMimeType } from 'class-validator';
 import { StorageService, UploadFolder } from './storage.service';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 const ALLOWED_FOLDERS: UploadFolder[] = ['avatars', 'attachments', 'workspace'];
@@ -187,7 +188,7 @@ without exposing the API secret on the client.
     @Query('publicId') publicId: string,
     @CurrentUser('id') _userId: string,
   ) {
-    if (!publicId) throw new BadRequestException('publicId is required');
+    if (!publicId) throw new BadRequestException({ code: ErrorCode.STORAGE_PUBLIC_ID_REQUIRED, message: 'publicId is required' });
     await this.storageService.deleteCloudinaryFile(publicId);
     return { deleted: true };
   }

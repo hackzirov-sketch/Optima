@@ -90,7 +90,7 @@ export class WorkspacesService {
       return savedWorkspace;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw new InternalServerErrorException('Failed to create workspace');
+      throw new InternalServerErrorException({ code: ErrorCode.INTERNAL_ERROR, message: 'Failed to create workspace' });
     } finally {
       await queryRunner.release();
     }
@@ -131,7 +131,7 @@ export class WorkspacesService {
       where: { workspaceId: workspace.id, userId },
     });
     if (!member) {
-      throw new ForbiddenException('Access denied to this workspace');
+      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'Access denied to this workspace' });
     }
     return workspace;
   }

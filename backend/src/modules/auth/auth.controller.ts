@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { ErrorCode } from '../../common/enums/error-code.enum';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
@@ -141,7 +142,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })
   async exchangeOAuthCode(@Body() body: { code: string }) {
-    if (!body?.code) throw new BadRequestException('code is required');
+    if (!body?.code) throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'code is required' });
     return this.authService.exchangeOAuthSessionCode(body.code);
   }
 

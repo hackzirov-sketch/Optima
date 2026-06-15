@@ -56,7 +56,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = 'Resource not found';
     } else if (exception instanceof QueryFailedError && (exception as any).code === '23505') {
       status = HttpStatus.CONFLICT;
-      code = ErrorCode.VALIDATION_ERROR;
+      code = ErrorCode.DUPLICATE_ENTRY;
       message = 'Duplicate entry — this resource already exists';
     } else if (exception instanceof TokenExpiredError) {
       status = HttpStatus.UNAUTHORIZED;
