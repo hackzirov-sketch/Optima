@@ -106,8 +106,13 @@ export class ProjectsService {
       }
     }
 
+    const slug = dto.slug
+      ? dto.slug
+      : dto.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') +
+        '-' + Date.now().toString(36);
+
     const existingProject = await this.projectRepo.findOne({
-      where: { workspaceId: dto.workspaceId, slug: dto.slug },
+      where: { workspaceId: dto.workspaceId, slug },
     });
 
     if (existingProject) {
@@ -123,6 +128,7 @@ export class ProjectsService {
     try {
       const project = this.projectRepo.create({
         ...dto,
+        slug,
         createdById: userId,
       });
 

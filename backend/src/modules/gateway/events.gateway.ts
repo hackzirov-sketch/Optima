@@ -371,17 +371,17 @@ export class EventsGateway
 
   /** Send a notification to a specific user across all their sockets */
   sendNotification(userId: string, payload: Record<string, unknown>) {
-    this.server.to(`user:${userId}`).emit('notification', payload);
+    this.server?.to(`user:${userId}`)?.emit('notification', payload);
   }
 
   /** Broadcast a message to all members of a chat room */
   broadcastToRoom(roomId: string, event: string, payload: unknown) {
-    this.server.to(`room:${roomId}`).emit(event, payload);
+    this.server?.to(`room:${roomId}`)?.emit(event, payload);
   }
 
   /** Broadcast an event to all sockets in a workspace room */
   broadcastToWorkspace(workspaceId: string, event: string, payload: unknown) {
-    this.server.to(`workspace:${workspaceId}`).emit(event, payload);
+    this.server?.to(`workspace:${workspaceId}`)?.emit(event, payload);
   }
 
   /** Check whether a user has at least one active socket */

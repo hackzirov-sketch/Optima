@@ -28,10 +28,10 @@ export class CreateProjectDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'upz-backend-refactoring' })
+  @ApiProperty({ example: 'upz-backend-refactoring', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  slug: string;
+  slug?: string;
 
   @ApiProperty({
     required: false,
