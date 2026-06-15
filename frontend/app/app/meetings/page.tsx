@@ -26,6 +26,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ActionButton, Modal, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { CLIP_ITEMS, MEETING_PARTICIPANTS, MEETING_ROOMS, SMART_TASKS } from "@/data/ecosystemData";
+import { MeetingCallView } from "@/components/meeting/MeetingCallView";
 
 type MeetingRoom = (typeof MEETING_ROOMS)[number];
 
@@ -150,6 +151,27 @@ export default function Page() {
     setInCall(true);
     showToast(code.trim() ? t("app.meetings.toasts.joinedCode") : t("app.meetings.toasts.joined"));
   };
+
+  const callParticipants = MEETING_PARTICIPANTS.slice(0, 4).map((p, i) => ({
+    id: p.id,
+    name: i === 1 ? (t("app.meetings.selfLabel", "Siz") === "Siz" ? "Ali Karimov" : p.name) : p.name,
+    initials: p.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+    color: p.color,
+    isHost: p.role === "Host",
+    isSelf: i === 0,
+    isMuted: p.status === "Muted",
+    cameraOff: p.status === "Camera off",
+  }));
+
+  if (inCall) {
+    return (
+      <MeetingCallView
+        title={`${activeMeeting.title} — haftalik`}
+        participants={callParticipants}
+        onLeave={() => setInCall(false)}
+      />
+    );
+  }
 
   return (
     <>

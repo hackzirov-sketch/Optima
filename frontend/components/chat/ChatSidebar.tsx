@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Bot, Bookmark, FolderOpen, Hash, MessageCircle, Pin, Plus, Search, User, Users } from "lucide-react";
+import { ArrowLeft, Bot, Bookmark, Hash, MessageCircle, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatRoom, ChatUser } from "@/types";
 import { ChatListItem } from "./ChatListItem";
@@ -25,162 +25,270 @@ function sortRooms(rooms: ChatRoom[]) {
   });
 }
 
-type ChatCategory = "all" | "direct" | "groups" | "teams" | "projects" | "ai" | "saved";
+const CHANNEL_TYPES: ChatRoom["type"][] = ["team", "group", "project", "workspace" as ChatRoom["type"]];
+const DM_TYPES: ChatRoom["type"][] = ["1on1"];
+const OTHER_TYPES: ChatRoom["type"][] = ["ai", "saved"];
 
-const CHAT_CATEGORIES: Array<{
-  id: ChatCategory;
-  label: string;
-  icon: typeof MessageCircle;
-  match: (room: ChatRoom) => boolean;
-}> = [
-  { id: "all", label: "Hammasi", icon: MessageCircle, match: () => true },
-  { id: "direct", label: "Shaxsiy", icon: User, match: (room) => room.type === "1on1" },
-  { id: "groups", label: "Guruhlar", icon: Users, match: (room) => room.type === "group" },
-  { id: "teams", label: "Jamoa", icon: Hash, match: (room) => room.type === "team" },
-  { id: "projects", label: "Loyihalar", icon: FolderOpen, match: (room) => room.type === "project" },
-  { id: "ai", label: "AI", icon: Bot, match: (room) => room.type === "ai" },
-  { id: "saved", label: "Saved", icon: Bookmark, match: (room) => room.type === "saved" },
-];
+function isChannel(room: ChatRoom) {
+  return CHANNEL_TYPES.includes(room.type) || (!DM_TYPES.includes(room.type) && !OTHER_TYPES.includes(room.type));
+}
+function isDm(room: ChatRoom) { return room.type === "1on1"; }
+function isOther(room: ChatRoom) { return OTHER_TYPES.includes(room.type); }
 
-export function ChatSidebar({ rooms, users, activeId, query, onQueryChange, onSelectRoom, onBackToApp, onCreateRoom, className }: ChatSidebarProps) {
-  const { t } = useTranslation();
-  const [activeCategory, setActiveCategory] = useState<ChatCategory>("all");
-  const normalizedQuery = query.trim().toLowerCase();
-  const categoryCounts = useMemo(
-    () =>
-      CHAT_CATEGORIES.reduce(
-        (counts, category) => ({
-          ...counts,
-          [category.id]: rooms.filter((room) => !room.archived && category.match(room)).length,
-        }),
-        {} as Record<ChatCategory, number>,
-      ),
-    [rooms],
+function SectionHeader({ label, onAdd }: { label: string; onAdd?: () => void }) {
+  return (
+    <div className="flex items-center justify-between px-3 pb-1 pt-3">
+      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-500">
+        {label}
+      </span>
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="grid h-5 w-5 place-items-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+          aria-label="Yangi"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
-  const activeCategoryConfig = CHAT_CATEGORIES.find((category) => category.id === activeCategory) ?? CHAT_CATEGORIES[0];
-  const visibleRooms = sortRooms(
-    rooms.filter((room) => {
-      if (room.archived) return false;
-      if (!activeCategoryConfig.match(room)) return false;
-      if (!normalizedQuery) return true;
-      const last = getMessageText(getLastMessage(room), t).toLowerCase();
-      return getRoomName(room, t).toLowerCase().includes(normalizedQuery) || last.includes(normalizedQuery);
-    }),
+}
+
+function ChannelItem({ room, active, onSelect }: { room: ChatRoom; active: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors",
+        active
+          ? "bg-indigo-600/15 text-white dark:bg-indigo-600/20"
+          : "text-gray-400 hover:bg-gray-100/60 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200",
+      )}
+    >
+      <Hash className="h-4 w-4 flex-shrink-0 opacity-70" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {room.name ?? getRoomName(room, {} as ReturnType<typeof useTranslation>["t"])}
+      </span>
+      {(room.unread ?? 0) > 0 && (
+        <span className="flex-shrink-0 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          {room.unread}
+        </span>
+      )}
+    </button>
   );
-  const pinnedRooms = visibleRooms.filter((room) => room.pinned);
-  const regularRooms = visibleRooms.filter((room) => !room.pinned);
+}
+
+function DmItem({ room, users, active, onSelect }: { room: ChatRoom; users: ChatUser[]; active: boolean; onSelect: () => void }) {
+  const other = users.find((u) => u.id !== "me" && room.memberIds?.includes(u.id));
+  const isOnline = other?.status === "online";
+  const name = other?.name ?? room.name ?? "Noma'lum";
+  const initials = name.slice(0, 2).toUpperCase();
+  const color = other?.color ?? "#6366F1";
 
   return (
-    <aside className={cn("flex min-h-0 flex-col border-r border-gray-200 bg-card dark:border-gray-700 dark:bg-gray-900", className)}>
-      <div className="border-b border-gray-200 p-2.5 dark:border-gray-700 sm:p-3">
-        <div className="flex items-center gap-2">
-          {onBackToApp && (
-            <button
-              type="button"
-              onClick={onBackToApp}
-              className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border border-gray-200 bg-card text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/40"
-              aria-label="Asosiy menyuga qaytish"
-              title="Orqaga"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          )}
-          <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 text-gray-500 transition-colors focus-within:border-indigo-300 focus-within:bg-card dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:focus-within:bg-gray-700">
-            <Search className="h-4 w-4 flex-shrink-0" />
-            <input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={t("app.chat.searchChats")}
-              className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500"
-              type="search"
-            />
-          </div>
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 transition-colors",
+        active
+          ? "bg-indigo-600/15 text-white dark:bg-indigo-600/20"
+          : "text-gray-400 hover:bg-gray-100/60 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200",
+      )}
+    >
+      <div className="relative flex-shrink-0">
+        <div
+          className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold text-white"
+          style={{ background: color }}
+        >
+          {initials}
         </div>
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {CHAT_CATEGORIES.map(({ id, label, icon: Icon }) => {
-            const active = activeCategory === id;
-            const count = categoryCounts[id] ?? 0;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveCategory(id)}
-                className={cn(
-                  "inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
-                  active
-                    ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200"
-                    : "border-gray-200 bg-card text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800",
-                )}
-                aria-pressed={active}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{t(`app.chat.categories.${id}`, label)}</span>
-                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", active ? "bg-card/80 dark:bg-gray-900/70" : "bg-gray-100 dark:bg-gray-800")}>{count}</span>
-              </button>
-            );
-          })}
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1a1d2b]",
+            isOnline ? "bg-green-400" : "bg-gray-500",
+          )}
+        />
+      </div>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+      {(room.unread ?? 0) > 0 && (
+        <span className="flex-shrink-0 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          {room.unread}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function ChatSidebar({
+  rooms,
+  users,
+  activeId,
+  query,
+  onQueryChange,
+  onSelectRoom,
+  onBackToApp,
+  onCreateRoom,
+  className,
+}: ChatSidebarProps) {
+  const { t } = useTranslation();
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const filtered = useMemo(() => {
+    if (!normalizedQuery) return rooms.filter((r) => !r.archived);
+    return rooms.filter((r) => {
+      if (r.archived) return false;
+      const name = (r.name ?? getRoomName(r, t)).toLowerCase();
+      return name.includes(normalizedQuery);
+    });
+  }, [rooms, normalizedQuery, t]);
+
+  const channels = useMemo(() => sortRooms(filtered.filter(isChannel)), [filtered]);
+  const dms = useMemo(() => sortRooms(filtered.filter(isDm)), [filtered]);
+  const others = useMemo(() => sortRooms(filtered.filter(isOther)), [filtered]);
+
+  const onlineCount = users.filter((u) => u.status === "online" && u.id !== "me").length;
+  const totalMembers = users.filter((u) => u.id !== "me" && u.id !== "ai").length;
+
+  return (
+    <aside
+      className={cn(
+        "flex min-h-0 flex-col border-r border-white/8 bg-[#1A1C2B] dark:bg-[#1A1C2B]",
+        className,
+      )}
+    >
+      {/* Workspace header */}
+      <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
+        {onBackToApp && (
+          <button
+            type="button"
+            onClick={onBackToApp}
+            className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Orqaga"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-green-400" />
+            <span className="truncate text-sm font-bold text-white">UPZ Workspace</span>
+          </div>
+          <p className="text-[11px] text-gray-500">
+            {totalMembers} a'zo · {onlineCount} online
+          </p>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {pinnedRooms.length > 0 && (
-          <section className="mb-3">
-            <div className="mb-1 flex items-center gap-2 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
-              <Pin className="h-3.5 w-3.5" />
-              {t("app.chat.pinned")}
-            </div>
-            <div className="space-y-1">
+      {/* Search */}
+      <div className="border-b border-white/8 px-3 py-2">
+        <div className="flex h-8 items-center gap-2 rounded-lg bg-white/8 px-2.5 text-gray-400 focus-within:bg-white/12 focus-within:text-white">
+          <Search className="h-3.5 w-3.5 flex-shrink-0" />
+          <input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Qidirish..."
+            className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
+            type="search"
+          />
+        </div>
+      </div>
+
+      {/* Room lists */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-3 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]">
+        {/* Channels */}
+        {channels.length > 0 && (
+          <section>
+            <SectionHeader label="Kanallar" onAdd={onCreateRoom} />
+            <div className="space-y-0.5 px-1">
               <AnimatePresence initial={false}>
-                {pinnedRooms.map((room) => (
-                  <ChatListItem key={room.id} room={room} users={users} active={room.id === activeId} onSelect={onSelectRoom} />
+                {channels.map((room) => (
+                  <motion.div key={room.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <ChannelItem
+                      room={room}
+                      active={room.id === activeId}
+                      onSelect={() => onSelectRoom(room.id)}
+                    />
+                  </motion.div>
                 ))}
               </AnimatePresence>
             </div>
           </section>
         )}
 
-        <section>
-          <div className="mb-1 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
-            {activeCategory === "all" ? t("app.chat.allConversations") : t(`app.chat.categories.${activeCategory}`, activeCategoryConfig.label)}
-          </div>
-          <div className="space-y-1">
-            <AnimatePresence initial={false}>
-              {regularRooms.map((room) => (
-                <ChatListItem key={room.id} room={room} users={users} active={room.id === activeId} onSelect={onSelectRoom} />
-              ))}
-            </AnimatePresence>
-          </div>
-        </section>
+        {/* DMs */}
+        {dms.length > 0 && (
+          <section>
+            <SectionHeader label="To'g'ridan-to'g'ri" />
+            <div className="space-y-0.5 px-1">
+              <AnimatePresence initial={false}>
+                {dms.map((room) => (
+                  <motion.div key={room.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <DmItem
+                      room={room}
+                      users={users}
+                      active={room.id === activeId}
+                      onSelect={() => onSelectRoom(room.id)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </section>
+        )}
 
-        {visibleRooms.length === 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-            {t("app.chat.noChatsMatch")}
+        {/* AI / Saved */}
+        {others.length > 0 && (
+          <section>
+            <SectionHeader label="Boshqa" />
+            <div className="space-y-0.5 px-1">
+              {others.map((room) => (
+                <button
+                  key={room.id}
+                  type="button"
+                  onClick={() => onSelectRoom(room.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors",
+                    room.id === activeId
+                      ? "bg-indigo-600/15 text-white"
+                      : "text-gray-400 hover:bg-white/8 hover:text-gray-200",
+                  )}
+                >
+                  {room.type === "ai" ? <Bot className="h-4 w-4 flex-shrink-0" /> : <Bookmark className="h-4 w-4 flex-shrink-0" />}
+                  <span className="truncate text-sm font-medium">{room.name ?? getRoomName(room, t)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {filtered.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="px-4 py-8 text-center text-sm text-gray-500"
+          >
+            <MessageCircle className="mx-auto mb-2 h-8 w-8 opacity-30" />
+            Hech narsa topilmadi
           </motion.div>
         )}
       </div>
 
-      <div className="space-y-2 border-t border-gray-200 p-3 dark:border-gray-700">
-        {onCreateRoom && (
+      {/* Add channel button */}
+      {onCreateRoom && (
+        <div className="border-t border-white/8 p-3">
           <button
             type="button"
             onClick={onCreateRoom}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200 dark:hover:bg-indigo-950"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/6 py-2.5 text-sm font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
           >
             <Plus className="h-4 w-4" />
-            {t("app.chat.newChat", "Yangi guruh")}
+            Yangi kanal
           </button>
-        )}
-        <button
-          type="button"
-          className="flex w-full items-center justify-between rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-left transition-colors hover:border-indigo-400/25 hover:bg-indigo-500/10 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10"
-        >
-          <span>
-            <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">{t("app.chat.archived")}</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">{t("app.chat.archivedDesc")}</span>
-          </span>
-          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-400 dark:bg-gray-700 dark:text-gray-500">0</span>
-        </button>
-      </div>
+        </div>
+      )}
     </aside>
   );
 }
