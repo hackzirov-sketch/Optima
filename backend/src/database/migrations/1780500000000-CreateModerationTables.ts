@@ -24,7 +24,7 @@ export class CreateModerationTables1780500000000 implements MigrationInterface {
     await queryRunner.query(`
       CREATE TABLE "user_violations" (
         "id"           UUID        NOT NULL DEFAULT gen_random_uuid(),
-        "user_id"      UUID        NOT NULL,
+        "user_id"      UUID        NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
         "type"         VARCHAR(100) NOT NULL,
         "count"        INTEGER     NOT NULL DEFAULT 1,
         "blocked_until" TIMESTAMPTZ,

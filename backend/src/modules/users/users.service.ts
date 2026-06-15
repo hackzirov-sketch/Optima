@@ -10,6 +10,8 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { PublicUserDto } from './dto/public-user.dto';
 import { RedisService } from '../../redis/redis.service';
+import { ContentFilterService } from '../moderation/services/content-filter.service';
+import { ImageModerationService } from '../moderation/services/image-moderation.service';
 
 function parseExpiry(s: string): number {
   const n = parseInt(s, 10);
@@ -30,6 +32,8 @@ export class UsersService {
     private refreshTokensRepository: Repository<RefreshToken>,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly contentFilter: ContentFilterService,
+    private readonly imageModeration: ImageModerationService,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -111,6 +115,10 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
+    const texts = [dto.firstName, dto.lastName].filter(Boolean) as string[];
+    for (const t of texts) {
+      await this.contentFilter.filterText(t, userId, 'profile');
+    }
     await this.usersRepository.update(userId, dto);
     return this.findById(userId);
   }
@@ -133,6 +141,7 @@ export class UsersService {
   }
 
   async updateAvatar(userId: string, avatarUrl: string): Promise<User> {
+    await this.imageModeration.filterImageUrl(avatarUrl, userId);
     await this.usersRepository.update(userId, { avatarUrl });
     return this.findById(userId);
   }

@@ -6,6 +6,7 @@ import { EventsGateway } from './events.gateway';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { ChatModule } from '../chat/chat.module';
+import { ModerationModule } from '../moderation/moderation.module';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 
@@ -19,6 +20,7 @@ import { ChatMember } from '../../database/entities/chat-member.entity';
       inject: [ConfigService],
     }),
     ChatModule,
+    ModerationModule,
     TypeOrmModule.forFeature([WorkspaceMember, ChatMember]),
   ],
   providers: [EventsGateway],

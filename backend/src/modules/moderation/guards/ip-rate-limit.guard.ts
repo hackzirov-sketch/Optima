@@ -80,10 +80,18 @@ export class IpRateLimitGuard implements CanActivate {
   }
 
   private extractIp(request: Request): string {
-    const forwarded = request.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string') {
-      return forwarded.split(',')[0].trim();
+    // Only trust X-Forwarded-For when explicitly behind a reverse proxy (TRUST_PROXY=true).
+    // Without this guard, any client can spoof their IP by sending a fake header.
+    const trustProxy = process.env.TRUST_PROXY === 'true';
+    if (trustProxy) {
+      const cf = request.headers['cf-connecting-ip'];
+      if (typeof cf === 'string' && cf.trim()) return cf.trim();
+
+      const forwarded = request.headers['x-forwarded-for'];
+      if (typeof forwarded === 'string') {
+        return forwarded.split(',')[0].trim();
+      }
     }
-    return request.ip ?? '0.0.0.0';
+    return (request as any).socket?.remoteAddress ?? request.ip ?? '0.0.0.0';
   }
 }

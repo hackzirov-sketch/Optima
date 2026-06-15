@@ -99,7 +99,7 @@ export class ViolationService {
 
     if (status.isPermanent) {
       throw new ForbiddenException({
-        code: ErrorCode.ACCOUNT_INACTIVE,
+        code: ErrorCode.ACCOUNT_SUSPENDED,
         message: 'Your account has been permanently suspended due to repeated violations.',
       });
     }
@@ -109,7 +109,7 @@ export class ViolationService {
       : 0;
 
     throw new ForbiddenException({
-      code: ErrorCode.ACCOUNT_INACTIVE,
+      code: ErrorCode.ACCOUNT_SUSPENDED,
       message: `Your account is temporarily suspended. Try again in ${Math.ceil(retryAfter / 60)} minute(s).`,
       retryAfter,
     });

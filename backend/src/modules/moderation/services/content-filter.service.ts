@@ -37,7 +37,7 @@ export class ContentFilterService {
     }
 
     throw new BadRequestException({
-      code: ErrorCode.VALIDATION_ERROR,
+      code: ErrorCode.CONTENT_FLAGGED,
       message: `Content violates community guidelines: ${result.reason ?? 'inappropriate content'}`,
     });
   }
@@ -119,8 +119,9 @@ export class ContentFilterService {
     const now = Date.now();
     if (now < this.cacheExpiry) return this.patternCache;
 
-    this.patternCache = await this.bannedRepo.find({ where: { active: true } });
+    // Set expiry optimistically before await to prevent parallel DB queries
     this.cacheExpiry = now + 5 * 60 * 1000;
+    this.patternCache = await this.bannedRepo.find({ where: { active: true } });
     return this.patternCache;
   }
 

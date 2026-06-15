@@ -16,6 +16,7 @@ import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from '../chat/chat.service';
+import { ViolationService } from '../moderation/services/violation.service';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 
@@ -77,6 +78,7 @@ export class EventsGateway
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly chatService: ChatService,
+    private readonly violationService: ViolationService,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
     @InjectRepository(ChatMember)
@@ -273,6 +275,13 @@ export class EventsGateway
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
+    try {
+      await this.violationService.assertNotBlocked(userId);
+    } catch (err: any) {
+      client.emit('error', { code: err?.response?.code || 'ACCOUNT_SUSPENDED', message: err?.response?.message || 'Account suspended' });
+      return;
+    }
+
     // Persist to DB — ChatService checks room membership internally
     let saved: any;
     try {
@@ -311,6 +320,13 @@ export class EventsGateway
   ) {
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+
+    try {
+      await this.violationService.assertNotBlocked(userId);
+    } catch (err: any) {
+      client.emit('error', { code: err?.response?.code || 'ACCOUNT_SUSPENDED', message: err?.response?.message || 'Account suspended' });
+      return;
+    }
 
     try {
       const action = await this.chatService.toggleReaction(
