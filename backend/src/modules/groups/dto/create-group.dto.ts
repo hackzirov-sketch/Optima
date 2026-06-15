@@ -3,7 +3,6 @@ import {
   IsNotEmpty,
   IsString,
   IsOptional,
-  IsBoolean,
   IsUUID,
   IsEnum,
 } from 'class-validator';
@@ -25,10 +24,10 @@ export class CreateGroupDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 'backend-team' })
+  @ApiProperty({ example: 'backend-team', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  slug: string;
+  slug?: string;
 
   @ApiProperty({ enum: GroupType, default: GroupType.GENERAL, required: false })
   @IsOptional()

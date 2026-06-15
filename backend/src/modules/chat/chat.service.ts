@@ -282,6 +282,16 @@ export class ChatService {
       );
     }
 
+    // Add extra members for group/project/workspace rooms
+    if (dto.type !== ChatRoomType.DIRECT && dto.memberIds?.length) {
+      const others = dto.memberIds.filter((id) => id !== userId);
+      if (others.length) {
+        await this.memberRepo.save(
+          others.map((id) => this.memberRepo.create({ roomId: saved.id, userId: id })),
+        );
+      }
+    }
+
     return this.enrichRoom(saved, userId);
   }
 

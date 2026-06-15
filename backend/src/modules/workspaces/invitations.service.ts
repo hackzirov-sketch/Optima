@@ -17,6 +17,7 @@ import { User } from '../../database/entities/user.entity';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { WorkspaceRole, ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { MailService } from '../mail/mail.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -37,6 +38,7 @@ export class InvitationsService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly mailService: MailService,
   ) {}
 
   async create(
@@ -104,8 +106,9 @@ export class InvitationsService {
       expiresAt,
     });
 
-    return this.invitationRepo.save(invitation);
-    // TODO: Send email
+    const saved = await this.invitationRepo.save(invitation);
+    await this.mailService.sendInvitationEmail(dto.email, token, workspace.name);
+    return saved;
   }
 
   async findAllForWorkspace(

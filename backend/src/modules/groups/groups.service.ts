@@ -51,10 +51,15 @@ export class GroupsService {
     await queryRunner.startTransaction();
 
     try {
+      const slug = dto.slug
+        ? dto.slug
+        : dto.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') +
+          '-' + Date.now().toString(36);
+
       const group = this.groupRepo.create({
         workspaceId: dto.workspaceId,
         name: dto.name,
-        slug: dto.slug,
+        slug,
         type: dto.type,
         description: dto.description,
         createdById: userId,

@@ -14,6 +14,7 @@ import { ChatMember } from '../../database/entities/chat-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { Tag } from '../../database/entities/tag.entity';
 import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { UsersModule } from '../users/users.module';
       Tag,
     ]),
     UsersModule,
+    MailModule,
   ],
   controllers: [WorkspacesController, InvitationsController],
   providers: [WorkspacesService, MembersService, InvitationsService, TagsService],

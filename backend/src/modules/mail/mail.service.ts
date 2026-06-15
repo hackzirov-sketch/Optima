@@ -52,6 +52,30 @@ export class MailService {
     }
   }
 
+  async sendInvitationEmail(email: string, token: string, workspaceName: string) {
+    try {
+      await this.transporter.sendMail({
+        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `You're invited to join ${workspaceName} on UPZ`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>You've been invited to ${workspaceName}!</h2>
+            <p>Someone invited you to collaborate on UPZ. Use the link below to accept:</p>
+            <a href="${this.configService.get('APP_URL') ?? 'http://localhost:3000'}/invite?token=${token}"
+               style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">
+              Accept Invitation
+            </a>
+            <p>This invitation expires in 5 days. If you didn't expect this, you can ignore it.</p>
+          </div>
+        `,
+      });
+      this.logger.log(`Invitation email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send invitation email to ${email}`, (error as Error).stack);
+    }
+  }
+
   async sendPasswordResetEmail(email: string, resetUrl: string) {
     try {
       await this.transporter.sendMail({

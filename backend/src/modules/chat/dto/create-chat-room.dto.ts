@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsEnum,
   IsOptional,
   IsString,
@@ -33,4 +34,10 @@ export class CreateChatRoomDto {
   @IsOptional()
   @IsUUID()
   targetUserId?: string;
+
+  @ApiPropertyOptional({ description: 'Initial member IDs for group/project rooms (excluding creator)' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  memberIds?: string[];
 }

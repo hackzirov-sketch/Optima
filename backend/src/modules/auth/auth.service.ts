@@ -20,6 +20,7 @@ import { UAParser } from 'ua-parser-js';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { RedisService } from '../../redis/redis.service';
+import { ContentFilterService } from '../moderation/services/content-filter.service';
 import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { UserSettings } from '../../database/entities/user-settings.entity';
 import { UserIpLog } from '../../database/entities/user-ip-log.entity';
@@ -58,6 +59,7 @@ export class AuthService {
     private configService: ConfigService,
     private redisService: RedisService,
     private encryptionService: EncryptionService,
+    private contentFilter: ContentFilterService,
     @InjectQueue('auth') private authQueue: Queue,
     @InjectRepository(RefreshToken)
     private refreshTokensRepository: Repository<RefreshToken>,
@@ -148,6 +150,13 @@ export class AuthService {
         message: 'Username already taken',
       });
     }
+
+    await this.contentFilter.filterText(dto.username, undefined, 'username');
+    await this.contentFilter.filterText(
+      [dto.firstName, dto.lastName].filter(Boolean).join(' '),
+      undefined,
+      'profile',
+    );
 
     const passwordHash = await this.hashPassword(dto.password);
 
