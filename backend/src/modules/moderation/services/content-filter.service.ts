@@ -32,8 +32,8 @@ export class ContentFilterService {
     );
 
     if (userId) {
-      await this.violationService.recordViolation(userId, 'text', result.reason ?? 'content violation');
       await this.violationService.assertNotBlocked(userId);
+      await this.violationService.recordViolation(userId, 'text', result.reason ?? 'content violation');
     }
 
     throw new BadRequestException({

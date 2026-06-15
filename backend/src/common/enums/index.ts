@@ -100,7 +100,7 @@ export enum ChatRoomType {
   WORKSPACE = 'workspace',
   GROUP = 'group',
   PROJECT = 'project',
-  DIRECT = 'direct',
+  DIRECT = 'dm',
   MEETING = 'meeting',
 }
 

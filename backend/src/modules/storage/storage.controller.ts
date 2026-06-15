@@ -5,9 +5,9 @@ import {
   Body,
   Query,
   BadRequestException,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
-
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -186,9 +186,13 @@ without exposing the API secret on the client.
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async deleteFile(
     @Query('publicId') publicId: string,
-    @CurrentUser('id') _userId: string,
+    @CurrentUser('id') userId: string,
   ) {
     if (!publicId) throw new BadRequestException({ code: ErrorCode.STORAGE_PUBLIC_ID_REQUIRED, message: 'publicId is required' });
+    const segments = publicId.split('/');
+    if (!segments.includes(userId)) {
+      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only delete your own files' });
+    }
     await this.storageService.deleteCloudinaryFile(publicId);
     return { deleted: true };
   }

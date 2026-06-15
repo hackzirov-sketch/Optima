@@ -296,16 +296,18 @@ export class ChatService {
   async listMessages(roomId: string, userId: string, page = 1, limit = 50) {
     await this.getRoom(roomId, userId);
 
+    const p = Number(page) || 1;
+    const l = Number(limit) || 50;
     const [messages, total] = await this.messageRepo.findAndCount({
       where: { roomId, isDeleted: false },
       relations: ['sender'],
       order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
+      skip: (p - 1) * l,
+      take: l,
     });
 
     if (messages.length === 0) {
-      return { data: [], total, page, limit };
+      return { data: [], total, page: p, limit: l };
     }
 
     // Batch load all reactions for these messages
@@ -343,7 +345,7 @@ export class ChatService {
       reactions: this.groupReactions(reactionsByMsg.get(msg.id) ?? []),
     }));
 
-    return { data, total, page, limit };
+    return { data, total, page: p, limit: l };
   }
 
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {

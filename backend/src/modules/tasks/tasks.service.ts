@@ -282,7 +282,7 @@ export class TasksService {
   async findById(taskId: string, userId: string): Promise<Task> {
     const task = await this.taskRepo.findOne({
       where: { id: taskId },
-      relations: ['assignee', 'creator', 'reviewer', 'column', 'subtasks'],
+      relations: ['assignee', 'creator', 'reviewer', 'column', 'subtasks', 'taskTags', 'taskTags.tag', 'watchers', 'watchers.user'],
     });
     if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     await this.assertMember(task.workspaceId, userId);

@@ -16,6 +16,8 @@ import { Project } from './project.entity';
 import { Group } from './group.entity';
 import { ProjectColumn } from './project-column.entity';
 import { User } from './user.entity';
+import { TaskTag } from './task-tag.entity';
+import { TaskWatcher } from './task-watcher.entity';
 
 @Index(['workspaceId', 'projectId', 'deletedAt'])
 @Entity('tasks')
@@ -63,6 +65,12 @@ export class Task {
 
   @OneToMany(() => Task, (task) => task.parentTask)
   subtasks: Task[];
+
+  @OneToMany(() => TaskTag, (tt) => tt.task)
+  taskTags!: TaskTag[];
+
+  @OneToMany(() => TaskWatcher, (tw) => tw.task)
+  watchers!: TaskWatcher[];
 
   @Column({ name: 'task_number' })
   taskNumber: number;
