@@ -21,11 +21,13 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { GithubStrategy } from './strategies/github.strategy';
 import { EncryptionService } from '../../common/services/encryption.service';
 import { AuthProcessor } from './processors/auth.processor';
+import { ModerationModule } from '../moderation/moderation.module';
 
 @Module({
   imports: [
     UsersModule,
     MailModule,
+    ModerationModule,
     PassportModule,
     // ── Register Auth Queue ────────────────────────
     BullModule.registerQueue({

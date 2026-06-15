@@ -14,6 +14,7 @@ import { ChatReaction } from '../../database/entities/chat-reaction.entity';
 import { Group } from '../../database/entities/group.entity';
 import { Project } from '../../database/entities/project.entity';
 import { MembersService } from '../workspaces/members.service';
+import { ContentFilterService } from '../moderation/services/content-filter.service';
 
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -39,6 +40,7 @@ export class ChatService {
     @InjectRepository(Project)
     private readonly projectRepo: Repository<Project>,
     private readonly membersService: MembersService,
+    private readonly contentFilter: ContentFilterService,
   ) {}
 
   private async assertRoomMember(
@@ -353,6 +355,8 @@ export class ChatService {
     if (!dto.content?.trim()) {
       throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
     }
+
+    await this.contentFilter.filterText(dto.content, userId, 'chat');
 
     const msg = this.messageRepo.create({
       roomId,

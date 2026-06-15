@@ -17,6 +17,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
@@ -44,6 +45,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @UseGuards(IpRateLimitGuard)
   @Throttle({ default: { ttl: 3600000, limit: 10 } }) // 10 per hour
   @ApiOperation({ summary: 'Register a new user and send verification email' })
   async register(@Body() dto: RegisterDto) {

@@ -16,6 +16,7 @@ import githubConfig from './config/github.config';
 import r2Config from './config/r2.config';
 import googleConfig from './config/google.config';
 import cloudinaryConfig from './config/cloudinary.config';
+import moderationConfig from './config/moderation.config';
 
 import { RedisModule } from './redis/redis.module';
 
@@ -34,6 +35,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
+import { ModerationModule } from './modules/moderation/moderation.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -53,6 +55,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         r2Config,
         googleConfig,
         cloudinaryConfig,
+        moderationConfig,
       ],
       envFilePath: '.env',
     }),
@@ -119,6 +122,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AnalyticsModule,
     GatewayModule,
     MeetingsModule,
+    ModerationModule,
   ],
   providers: [
     {

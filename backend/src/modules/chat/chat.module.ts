@@ -8,6 +8,7 @@ import { ChatReaction } from '../../database/entities/chat-reaction.entity';
 import { Group } from '../../database/entities/group.entity';
 import { Project } from '../../database/entities/project.entity';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { ModerationModule } from '../moderation/moderation.module';
 
 import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
@@ -16,6 +17,7 @@ import { ChatController } from './chat.controller';
   imports: [
     TypeOrmModule.forFeature([ChatRoom, ChatMember, ChatMessage, ChatReaction, Group, Project]),
     WorkspacesModule,
+    ModerationModule,
   ],
   controllers: [ChatController],
   providers: [ChatService],
