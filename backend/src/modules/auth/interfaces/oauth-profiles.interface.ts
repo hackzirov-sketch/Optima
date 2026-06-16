@@ -1,3 +1,18 @@
+export interface PassportGoogleProfile {
+  id: string;
+  emails: { value: string }[];
+  name: { givenName: string; familyName: string };
+  photos: { value: string }[];
+}
+
+export interface PassportGithubProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  emails?: { value: string }[];
+  photos?: { value: string }[];
+}
+
 export interface GoogleOAuthProfile {
   email: string;
   firstName: string;

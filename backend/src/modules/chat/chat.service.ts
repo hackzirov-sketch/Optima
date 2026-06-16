@@ -24,6 +24,32 @@ import { applySoftDelete } from '../../common/utils/soft-delete';
 import { ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 
+export interface ChatRoomDto {
+  id: string;
+  workspaceId: string;
+  type: ChatRoomType;
+  name: string | null;
+  avatarUrl: string | null;
+  description: string | null;
+  isArchived: boolean;
+  isReadOnly: boolean;
+  groupId: string | null;
+  projectId: string | null;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+  memberIds: string[];
+  memberCount: number;
+  lastMessage: {
+    id: string;
+    content: string;
+    senderId: string;
+    senderName: string | null;
+    createdAt: Date;
+  } | null;
+  unreadCount: number;
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -70,7 +96,7 @@ export class ChatService {
   }
 
   /** Build enriched room response shape that matches ApiChatRoom on the frontend */
-  private async enrichRoom(room: ChatRoom, userId: string) {
+  private async enrichRoom(room: ChatRoom, userId: string): Promise<ChatRoomDto> {
     const members = await this.memberRepo.find({
       where: { roomId: room.id, leftAt: IsNull() },
       select: ['userId', 'lastReadAt'],
@@ -88,7 +114,7 @@ export class ChatService {
       });
     }
 
-    let lastMessage: Record<string, unknown> | null = null;
+    let lastMessage: ChatRoomDto['lastMessage'] = null;
     if (room.lastMessageId) {
       const msg = await this.messageRepo.findOne({
         where: { id: room.lastMessageId },

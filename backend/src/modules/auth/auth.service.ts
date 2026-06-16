@@ -466,15 +466,13 @@ export class AuthService {
     return { message: 'All sessions revoked successfully' };
   }
 
-  private async generateTokens(user: User, ctx: TokenContext = {}) {
-    const { ip, userAgent, deviceName, provider } = ctx;
-
+  private async enforceSessionLimit(userId: string): Promise<void> {
     const activeCount = await this.refreshTokensRepository.count({
-      where: { userId: user.id, revokedAt: IsNull(), isDeleted: false },
+      where: { userId, revokedAt: IsNull(), isDeleted: false },
     });
     if (activeCount >= 5) {
       const oldest = await this.refreshTokensRepository.find({
-        where: { userId: user.id, revokedAt: IsNull(), isDeleted: false },
+        where: { userId, revokedAt: IsNull(), isDeleted: false },
         order: { createdAt: 'ASC' },
         take: 1,
       });
@@ -483,71 +481,72 @@ export class AuthService {
         await this.refreshTokensRepository.save(oldest[0]);
       }
     }
+  }
 
+  private async buildJwtPair(user: User): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     const jti = crypto.randomUUID();
     const payload = { sub: user.id, email: user.email, jti };
-
     const accessToken = await this.jwtService.signAsync(payload);
-
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('jwt.refreshSecret'),
       expiresIn: this.configService.get<string>('jwt.refreshExpires'),
     } as any);
+    return { accessToken, refreshToken, jti };
+  }
 
-    const refreshExpires =
-      this.configService.get<string>('jwt.refreshExpires') || '7d';
-    const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
+  private parseDeviceInfo(userAgent?: string, deviceName?: string): {
+    browser?: string; os?: string; deviceName?: string;
+  } {
+    if (!userAgent) return { deviceName };
+    const res = new UAParser(userAgent).getResult();
+    const browser = res.browser.name
+      ? `${res.browser.name} ${res.browser.version || ''}`.trim()
+      : undefined;
+    const os = res.os.name
+      ? `${res.os.name} ${res.os.version || ''}`.trim()
+      : undefined;
+    const derived = deviceName
+      ?? (res.device.vendor && res.device.model
+        ? `${res.device.vendor} ${res.device.model}`
+        : res.os.name ?? 'Unknown Device');
+    return { browser, os, deviceName: derived };
+  }
 
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
-
-    let browser: string | undefined;
-    let os: string | undefined;
-    let deviceNameDerived = deviceName;
-
-    if (userAgent) {
-      const parser = new UAParser(userAgent);
-      const res = parser.getResult();
-      browser = res.browser.name
-        ? `${res.browser.name} ${res.browser.version || ''}`.trim()
-        : undefined;
-      os = res.os.name
-        ? `${res.os.name} ${res.os.version || ''}`.trim()
-        : undefined;
-
-      if (!deviceNameDerived) {
-        if (res.device.vendor && res.device.model) {
-          deviceNameDerived = `${res.device.vendor} ${res.device.model}`;
-        } else if (res.os.name) {
-          deviceNameDerived = res.os.name;
-        } else {
-          deviceNameDerived = 'Unknown Device';
-        }
-      }
-    }
-
-    const refreshTokenEntity = this.refreshTokensRepository.create({
-      userId: user.id,
+  private async persistRefreshToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    ctx: TokenContext,
+    deviceInfo: { browser?: string; os?: string; deviceName?: string },
+  ): Promise<void> {
+    const entity = this.refreshTokensRepository.create({
+      userId,
       tokenHash,
       expiresAt,
-      ipAddress: ip ?? null,
-      userAgent: userAgent ?? null,
-      deviceName: deviceNameDerived ?? null,
-      deviceInfo: { browser, os },
-      provider: provider ?? null,
+      ipAddress: ctx.ip ?? null,
+      userAgent: ctx.userAgent ?? null,
+      deviceName: deviceInfo.deviceName ?? null,
+      deviceInfo: { browser: deviceInfo.browser, os: deviceInfo.os },
+      provider: ctx.provider ?? null,
       lastUsedAt: new Date(),
       isDeleted: false,
     });
-    await this.refreshTokensRepository.save(refreshTokenEntity);
+    await this.refreshTokensRepository.save(entity);
+  }
 
-    return {
-      requiresPasswordSetup: user.needsPasswordSetup,
-      accessToken,
-      refreshToken,
-      user,
-    };
+  private async generateTokens(user: User, ctx: TokenContext = {}) {
+    await this.enforceSessionLimit(user.id);
+
+    const { accessToken, refreshToken } = await this.buildJwtPair(user);
+
+    const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
+    const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    const deviceInfo = this.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
+    await this.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
+
+    return { requiresPasswordSetup: user.needsPasswordSetup, accessToken, refreshToken, user };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
