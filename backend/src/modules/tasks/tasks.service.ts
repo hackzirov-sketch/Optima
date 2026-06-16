@@ -317,7 +317,7 @@ export class TasksService {
     if (dto.status === TaskStatus.DONE && !task.completedAt) {
       task.completedAt = new Date();
     } else if (dto.status && dto.status !== TaskStatus.DONE) {
-      task.completedAt = null as any;
+      task.completedAt = null;
     }
 
     const saved = await this.taskRepo.save(task);
@@ -387,7 +387,7 @@ export class TasksService {
           task.status = col.mapsToStatus;
         }
       } else {
-        task.columnId = null as any;
+        task.columnId = null;
       }
     }
 
@@ -397,7 +397,7 @@ export class TasksService {
     if (task.status === TaskStatus.DONE && !task.completedAt) {
       task.completedAt = new Date();
     } else if (task.status !== TaskStatus.DONE) {
-      task.completedAt = null as any;
+      task.completedAt = null;
     }
 
     const saved = await this.taskRepo.save(task);

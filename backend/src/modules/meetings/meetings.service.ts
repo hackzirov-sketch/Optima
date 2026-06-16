@@ -207,7 +207,7 @@ export class MeetingsService {
     if (existing) {
       // Re-joining after leaving
       existing.joinedAt = new Date();
-      existing.leftAt = null as any;
+      existing.leftAt = null;
       await this.participantRepo.save(existing);
       return { joined: true, participantId: existing.id };
     }

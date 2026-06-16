@@ -286,6 +286,22 @@ export class EventsGateway
     });
   }
 
+  private async assertActiveUser(userId: string, client: Socket): Promise<boolean> {
+    try {
+      await this.violationService.assertNotBlocked(userId);
+      return true;
+    } catch (err: unknown) {
+      const res = err instanceof Error && 'getResponse' in err
+        ? (err as any).getResponse()
+        : {};
+      client.emit('error', {
+        code: res?.code ?? 'ACCOUNT_SUSPENDED',
+        message: res?.message ?? 'Account suspended',
+      });
+      return false;
+    }
+  }
+
   // ─── Send message ────────────────────────────────────
   @SubscribeMessage('send_message')
   async handleSendMessage(
@@ -295,12 +311,7 @@ export class EventsGateway
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
-    try {
-      await this.violationService.assertNotBlocked(userId);
-    } catch (err: any) {
-      client.emit('error', { code: err?.response?.code || 'ACCOUNT_SUSPENDED', message: err?.response?.message || 'Account suspended' });
-      return;
-    }
+    if (!await this.assertActiveUser(userId, client)) return;
 
     // Persist to DB — ChatService checks room membership internally
     let saved: any;
@@ -341,12 +352,7 @@ export class EventsGateway
     const userId = this.socketUser.get(client.id);
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
-    try {
-      await this.violationService.assertNotBlocked(userId);
-    } catch (err: any) {
-      client.emit('error', { code: err?.response?.code || 'ACCOUNT_SUSPENDED', message: err?.response?.message || 'Account suspended' });
-      return;
-    }
+    if (!await this.assertActiveUser(userId, client)) return;
 
     try {
       const action = await this.chatService.toggleReaction(

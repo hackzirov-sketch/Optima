@@ -39,10 +39,10 @@ export class MeetingParticipant {
   role: MeetingParticipantRole;
 
   @Column({ name: 'joined_at', type: 'timestamptz', nullable: true })
-  joinedAt: Date;
+  joinedAt: Date | null;
 
   @Column({ name: 'left_at', type: 'timestamptz', nullable: true })
-  leftAt: Date;
+  leftAt: Date | null;
 
   @Column({ name: 'is_muted', default: false })
   isMuted: boolean;

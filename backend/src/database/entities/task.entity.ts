@@ -46,8 +46,8 @@ export class Task {
   @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @Column({ name: 'column_id', nullable: true })
-  columnId: string;
+  @Column({ name: 'column_id', type: 'uuid', nullable: true })
+  columnId: string | null;
 
   @ManyToOne(() => ProjectColumn, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'column_id' })
@@ -151,7 +151,7 @@ export class Task {
   dueDate: string;
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
-  completedAt: Date;
+  completedAt: Date | null;
 
   @Column({ name: 'github_pr_number', nullable: true })
   githubPrNumber: number;

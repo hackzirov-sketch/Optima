@@ -122,6 +122,7 @@ export class ChatService {
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       memberIds: members.map((m) => m.userId),
+      memberCount: members.length,
       lastMessage,
       unreadCount,
     };
@@ -174,9 +175,24 @@ export class ChatService {
         : [];
     const lastMsgMap = new Map(lastMessages.map((m) => [m.id, m]));
 
+    // Batch: unread counts — one JOIN query for all rooms
+    const unreadRows: { room_id: string; cnt: string }[] = await this.messageRepo.manager.query(
+      `SELECT cm.room_id, COUNT(m.id)::int AS cnt
+       FROM chat_members cm
+       JOIN chat_messages m ON m.room_id = cm.room_id
+         AND m.created_at > cm.last_read_at
+         AND m.is_deleted = false
+       WHERE cm.user_id = $1
+         AND cm.room_id = ANY($2)
+         AND cm.last_read_at IS NOT NULL
+         AND cm.left_at IS NULL
+       GROUP BY cm.room_id`,
+      [userId, roomIds],
+    );
+    const unreadMap = new Map(unreadRows.map((r) => [r.room_id, Number(r.cnt)]));
+
     return myRooms.map((room) => {
       const roomMembers = membersByRoom.get(room.id) ?? [];
-      const myMember = roomMembers.find((m) => m.userId === userId);
 
       const lastMsg = room.lastMessageId
         ? lastMsgMap.get(room.lastMessageId)
@@ -197,6 +213,7 @@ export class ChatService {
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
         memberIds: roomMembers.map((m) => m.userId),
+        memberCount: roomMembers.length,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -208,10 +225,7 @@ export class ChatService {
               createdAt: lastMsg.createdAt,
             }
           : null,
-        unreadCount:
-          myMember?.lastReadAt
-            ? 0 // computed lazily — accurate count via getRoom
-            : 0,
+        unreadCount: unreadMap.get(room.id) ?? 0,
       };
     });
   }
@@ -298,13 +312,12 @@ export class ChatService {
   async getRoom(roomId: string, userId: string) {
     const room = await this.roomRepo.findOne({ where: { id: roomId } });
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
-    await this.membersService.assertMember(room.workspaceId, userId);
     await this.assertRoomMember(roomId, userId);
     return this.enrichRoom(room, userId);
   }
 
   async listMessages(roomId: string, userId: string, page = 1, limit = 50) {
-    await this.getRoom(roomId, userId);
+    await this.assertRoomMember(roomId, userId);
 
     const p = Number(page) || 1;
     const l = Number(limit) || 50;
