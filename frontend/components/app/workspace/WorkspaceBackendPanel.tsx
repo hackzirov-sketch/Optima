@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Briefcase, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { Briefcase, CheckCircle2, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import {
   ActionButton,
   Pill,
@@ -10,7 +10,8 @@ import {
   SurfaceCard,
 } from '@/components/app/DesignSystem';
 import type { ApiMember, ApiProject, ApiWorkspace, ApiWorkspaceAnalytics } from '@/lib/api';
-import { tasksApi } from '@/lib/api';
+import { CreateProjectModal } from '@/components/app/CreateProjectModal';
+import { CreateTaskModal } from '@/components/app/CreateTaskModal';
 
 const MEMBER_ROLES = ['guest', 'junior', 'middle', 'senior', 'lead', 'admin'] as const;
 const INVITE_ROLES = ['guest', 'junior', 'middle', 'senior', 'lead', 'admin'] as const;
@@ -52,17 +53,13 @@ export function WorkspaceBackendPanel({
   onRefreshProjects,
   onRefreshAnalytics,
   onRefreshTasks,
-  onCreateProject,
   onInvite,
   onUpdateRole,
   onRemoveMember,
   onNotice,
 }: WorkspaceBackendPanelProps) {
-  const [projectName, setProjectName] = useState('');
-  const [projectCreating, setProjectCreating] = useState(false);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskProjectId, setTaskProjectId] = useState('');
-  const [taskCreating, setTaskCreating] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showCreateTask, setShowCreateTask] = useState(false);
   const [invEmail, setInvEmail] = useState('');
   const [invRole, setInvRole] = useState<(typeof INVITE_ROLES)[number]>('junior');
   const [invSending, setInvSending] = useState(false);
@@ -72,41 +69,16 @@ export function WorkspaceBackendPanel({
   const totalTasks = analytics?.totalTasks ?? 0;
   const openTasks = analytics?.openTasks ?? 0;
 
-  const handleCreateProject = async () => {
-    if (!projectName.trim()) return;
-    setProjectCreating(true);
-    try {
-      await onCreateProject(projectName.trim());
-      setProjectName('');
-      await onRefreshProjects();
-      await onRefreshAnalytics();
-      onNotice('Project created');
-    } catch {
-      onNotice('Could not create project');
-    } finally {
-      setProjectCreating(false);
-    }
+  const handleProjectCreated = async (project: ApiProject) => {
+    setShowCreateProject(false);
+    await onRefreshProjects();
+    await onRefreshAnalytics();
+    onNotice(`"${project.name}" loyihasi yaratildi`);
   };
 
-  const handleCreateTask = async () => {
-    if (!taskTitle.trim() || !taskProjectId) return;
-    setTaskCreating(true);
-    try {
-      await tasksApi.create({
-        projectId: taskProjectId,
-        workspaceId: workspace.id,
-        title: taskTitle.trim(),
-        status: 'todo',
-        priority: 'medium',
-      });
-      setTaskTitle('');
-      await Promise.all([onRefreshAnalytics(), onRefreshTasks()]);
-      onNotice('Task created');
-    } catch {
-      onNotice('Could not create task');
-    } finally {
-      setTaskCreating(false);
-    }
+  const handleTaskCreated = async () => {
+    await Promise.all([onRefreshAnalytics(), onRefreshTasks()]);
+    onNotice('Task yaratildi va tayinlandi');
   };
 
   const handleInvite = async () => {
@@ -116,9 +88,9 @@ export function WorkspaceBackendPanel({
       await onInvite(invEmail.trim(), invRole);
       setInvEmail('');
       await onRefreshMembers();
-      onNotice('Invitation sent');
+      onNotice('Taklif yuborildi');
     } catch {
-      onNotice('Could not send invitation');
+      onNotice('Taklif yuborib bo\'lmadi');
     } finally {
       setInvSending(false);
     }
@@ -127,9 +99,9 @@ export function WorkspaceBackendPanel({
   const handleRoleChange = async (userId: string, role: string) => {
     try {
       await onUpdateRole(userId, role);
-      onNotice('Member role updated');
+      onNotice('A\'zo roli yangilandi');
     } catch {
-      onNotice('Could not update role');
+      onNotice('Rolni yangilab bo\'lmadi');
     }
   };
 
@@ -138,184 +110,196 @@ export function WorkspaceBackendPanel({
       await onRemoveMember(userId);
       await onRefreshMembers();
       await onRefreshAnalytics();
-      onNotice('Member removed');
+      onNotice('A\'zo o\'chirildi');
     } catch {
-      onNotice('Could not remove member');
+      onNotice('A\'zoni o\'chirib bo\'lmadi');
     }
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-3">
-      <SurfaceCard className="xl:col-span-3">
-        <SectionTitle
-          icon={Briefcase}
-          title="Workspace overview"
-          description="Live stats from the backend for this workspace."
+    <>
+      {showCreateProject && (
+        <CreateProjectModal
+          workspaceId={workspace.id}
+          members={members}
+          onCreated={handleProjectCreated}
+          onClose={() => setShowCreateProject(false)}
         />
-        {analyticsLoading ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading analytics…
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: 'Projects', value: totalProjects },
-              { label: 'Members', value: totalMembers },
-              { label: 'Tasks', value: totalTasks },
-              { label: 'Open tasks', value: openTasks },
-            ].map(({ label, value }) => (
-              <div key={label} className="rounded-2xl border border-border bg-muted px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </SurfaceCard>
+      )}
+      {showCreateTask && (
+        <CreateTaskModal
+          workspaceId={workspace.id}
+          projects={projects}
+          members={members}
+          onCreated={handleTaskCreated}
+          onClose={() => setShowCreateTask(false)}
+        />
+      )}
 
-      <SurfaceCard>
-        <SectionTitle icon={Briefcase} title="Projects" description="Create and open workspace projects." />
-        <div className="mt-4 flex gap-2">
-          <input
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
-            placeholder="New project name"
-            className="min-w-0 flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-[var(--upz-nav-brand)] focus:bg-card"
+      <div className="grid gap-5 xl:grid-cols-3">
+        <SurfaceCard className="xl:col-span-3">
+          <SectionTitle
+            icon={Briefcase}
+            title="Workspace overview"
+            description="Live stats from the backend for this workspace."
           />
-          <ActionButton onClick={handleCreateProject} disabled={projectCreating || !projectName.trim()} className="py-2">
-            {projectCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </ActionButton>
-        </div>
-        <div className="mt-4 space-y-2">
-          {projectsLoading && (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-              Loading projects…
-            </p>
+          {analyticsLoading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading analytics…
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: 'Loyihalar', value: totalProjects },
+                { label: 'A\'zolar', value: totalMembers },
+                { label: 'Tasklar', value: totalTasks },
+                { label: 'Ochiq tasklar', value: openTasks },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-2xl border border-border bg-muted px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
           )}
-          {!projectsLoading && projects.length === 0 && (
-            <p className="text-sm text-muted-foreground">No projects yet. Create one above.</p>
-          )}
-          {projects.map((project) => (
-            <Link
-              key={project.id}
-              href={`/app/projects`}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted px-4 py-3 transition-colors hover:bg-card"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-foreground">{project.name}</p>
-                <p className="text-xs capitalize text-muted-foreground">{project.status}</p>
-              </div>
-              <Pill tone="blue">Open</Pill>
-            </Link>
-          ))}
-        </div>
-      </SurfaceCard>
+        </SurfaceCard>
 
-      <SurfaceCard>
-        <SectionTitle icon={Plus} title="Quick task" description="Add a task to an existing project." />
-        <div className="mt-4 space-y-2">
-          <select
-            value={taskProjectId}
-            onChange={(e) => setTaskProjectId(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-[var(--upz-nav-brand)]"
-          >
-            <option value="">Select project</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <input
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateTask()}
-              placeholder="Task title"
-              disabled={!projects.length}
-              className="min-w-0 flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-[var(--upz-nav-brand)] focus:bg-card disabled:opacity-50"
-            />
-            <ActionButton
-              onClick={handleCreateTask}
-              disabled={taskCreating || !taskTitle.trim() || !taskProjectId}
-              className="py-2"
-            >
-              {taskCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+        <SurfaceCard>
+          <div className="flex items-center justify-between">
+            <SectionTitle icon={Briefcase} title="Loyihalar" description="Workspace loyihalarini boshqarish." />
+            <ActionButton onClick={() => setShowCreateProject(true)} className="h-9 px-4 text-xs">
+              <Plus className="h-3.5 w-3.5" /> Yangi
             </ActionButton>
           </div>
-        </div>
-      </SurfaceCard>
-
-      <div id="workspace-team">
-      <SurfaceCard>
-        <SectionTitle icon={Users} title="Team" description="Members and invitations backed by the API." />
-        <div className="mt-4 flex flex-wrap gap-2">
-          <input
-            value={invEmail}
-            onChange={(e) => setInvEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-            placeholder="colleague@email.com"
-            className="min-w-[12rem] flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-[var(--upz-nav-brand)]"
-          />
-          <select
-            value={invRole}
-            onChange={(e) => setInvRole(e.target.value as (typeof INVITE_ROLES)[number])}
-            className="rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-semibold outline-none"
-          >
-            {INVITE_ROLES.map((role) => (
-              <option key={role} value={role}>{role}</option>
-            ))}
-          </select>
-          <ActionButton onClick={handleInvite} disabled={invSending || !invEmail.trim()} className="py-2">
-            {invSending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
-          </ActionButton>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          {membersLoading && (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-              Loading members…
-            </p>
-          )}
-          {!membersLoading && members.map((member) => (
-            <div
-              key={member.id}
-              className="flex flex-col gap-2 rounded-2xl border border-border bg-muted p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-foreground">{memberDisplayName(member)}</p>
-                <p className="truncate text-xs text-muted-foreground">{member.user?.email}</p>
-              </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
-                <select
-                  value={member.role}
-                  onChange={(e) => handleRoleChange(member.userId, e.target.value)}
-                  disabled={member.role === 'owner'}
-                  className="rounded-xl border border-border bg-card px-2 py-1.5 text-xs font-semibold capitalize outline-none disabled:opacity-60"
+          <div className="mt-4 space-y-2">
+            {projectsLoading && (
+              <p className="text-sm text-muted-foreground">
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                Yuklanmoqda…
+              </p>
+            )}
+            {!projectsLoading && projects.length === 0 && (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <p className="text-sm text-muted-foreground">Loyiha yo'q</p>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateProject(true)}
+                  className="text-xs font-semibold text-indigo-600 hover:underline"
                 >
-                  {MEMBER_ROLES.map((role) => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                  {member.role === 'owner' && <option value="owner">owner</option>}
-                </select>
-                {member.role !== 'owner' && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(member.userId)}
-                    className="grid h-8 w-8 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600"
-                    aria-label="Remove member"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
+                  Birinchi loyihani yarating →
+                </button>
               </div>
+            )}
+            {projects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/app/projects`}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted px-4 py-3 transition-colors hover:bg-card"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-foreground">{project.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xs capitalize text-muted-foreground">{project.status}</p>
+                    {project.deadline && (
+                      <span className="text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded-md font-semibold">
+                        {new Date(project.deadline).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Pill tone="blue">Ochish</Pill>
+              </Link>
+            ))}
+          </div>
+        </SurfaceCard>
+
+        <SurfaceCard>
+          <div className="flex items-center justify-between">
+            <SectionTitle icon={CheckCircle2} title="Tasklar" description="Task yaratish va tayinlash." />
+            <ActionButton
+              onClick={() => setShowCreateTask(true)}
+              disabled={!projects.length}
+              className="h-9 px-4 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" /> Yangi
+            </ActionButton>
+          </div>
+          {!projects.length && (
+            <p className="mt-4 text-sm text-muted-foreground">Task qo'shish uchun avval loyiha yarating.</p>
+          )}
+        </SurfaceCard>
+
+        <div id="workspace-team">
+          <SurfaceCard>
+            <SectionTitle icon={Users} title="Jamoa" description="A'zolar va takliflar." />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <input
+                value={invEmail}
+                onChange={(e) => setInvEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                placeholder="colleague@email.com"
+                className="min-w-[12rem] flex-1 rounded-2xl border border-border bg-muted px-3 py-2 text-sm outline-none focus:border-[var(--upz-nav-brand)]"
+              />
+              <select
+                value={invRole}
+                onChange={(e) => setInvRole(e.target.value as (typeof INVITE_ROLES)[number])}
+                className="rounded-2xl border border-border bg-muted px-3 py-2 text-xs font-semibold outline-none"
+              >
+                {INVITE_ROLES.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+              <ActionButton onClick={handleInvite} disabled={invSending || !invEmail.trim()} className="py-2">
+                {invSending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Taklif'}
+              </ActionButton>
             </div>
-          ))}
+
+            <div className="mt-4 space-y-2">
+              {membersLoading && (
+                <p className="text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                  Yuklanmoqda…
+                </p>
+              )}
+              {!membersLoading && members.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex flex-col gap-2 rounded-2xl border border-border bg-muted p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{memberDisplayName(member)}</p>
+                    <p className="truncate text-xs text-muted-foreground">{member.user?.email}</p>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleRoleChange(member.userId, e.target.value)}
+                      disabled={member.role === 'owner'}
+                      className="rounded-xl border border-border bg-card px-2 py-1.5 text-xs font-semibold capitalize outline-none disabled:opacity-60"
+                    >
+                      {MEMBER_ROLES.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                      {member.role === 'owner' && <option value="owner">owner</option>}
+                    </select>
+                    {member.role !== 'owner' && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(member.userId)}
+                        className="grid h-8 w-8 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600"
+                        aria-label="Remove member"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SurfaceCard>
         </div>
-      </SurfaceCard>
       </div>
-    </div>
+    </>
   );
 }

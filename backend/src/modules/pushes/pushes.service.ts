@@ -21,15 +21,10 @@ import { ReviewPushDto } from './dto/review-push.dto';
 import { AddReviewCommentDto } from './dto/add-review-comment.dto';
 import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
-import { PushStatus, WorkspaceRole } from '../../common/enums';
+import { PushStatus } from '../../common/enums';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
-
-const REVIEW_ROLES = new Set([
-  WorkspaceRole.OWNER,
-  WorkspaceRole.ADMIN,
-  WorkspaceRole.LEAD,
-]);
+import { PermissionService } from '../../common/services/permission.service';
 
 @Injectable()
 export class PushesService {
@@ -48,6 +43,7 @@ export class PushesService {
     private readonly activityRepo: Repository<TaskActivity>,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly permission: PermissionService,
   ) {}
 
   private async assertMember(
@@ -63,9 +59,11 @@ export class PushesService {
   }
 
   private assertReviewer(member: WorkspaceMember) {
-    if (!REVIEW_ROLES.has(member.role)) {
-      throw new ForbiddenException({ code: ErrorCode.PUSH_REVIEW_FORBIDDEN, message: 'Insufficient permissions to review pushes' });
-    }
+    this.permission.assertCanReviewPush(member);
+  }
+
+  private assertApprover(member: WorkspaceMember) {
+    this.permission.assertCanApprovePush(member);
   }
 
   private async loadPush(pushId: string): Promise<TaskPush> {
@@ -195,7 +193,7 @@ export class PushesService {
     const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
     if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
     const member = await this.assertMember(task.workspaceId, userId);
-    this.assertReviewer(member);
+    this.assertApprover(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
       throw new BadRequestException({ code: ErrorCode.PUSH_ALREADY_REVIEWED, message: 'Push cannot be approved in its current state' });

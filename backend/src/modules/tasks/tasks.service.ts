@@ -2,9 +2,12 @@ import { Injectable, NotFoundException, ForbiddenException, ConflictException, B
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike } from 'typeorm';
 import { EventsGateway } from '../gateway/events.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import { Task } from '../../database/entities/task.entity';
 import { Project } from '../../database/entities/project.entity';
+import { ProjectMember } from '../../database/entities/project-member.entity';
+import { User } from '../../database/entities/user.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
 import { TaskWatcher } from '../../database/entities/task-watcher.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
@@ -19,12 +22,13 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { AddDependencyDto } from './dto/add-dependency.dto';
-import { WorkspaceRole, TaskStatus } from '../../common/enums';
+import { NotificationType, TaskStatus } from '../../common/enums';
 import {
   applySoftDelete,
   isActiveEntity,
 } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { PermissionService } from '../../common/services/permission.service';
 
 @Injectable()
 export class TasksService {
@@ -47,8 +51,16 @@ export class TasksService {
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
     @InjectRepository(TaskPush)
     private readonly taskPushRepo: Repository<TaskPush>,
+    @InjectRepository(Project)
+    private readonly projectRepo: Repository<Project>,
+    @InjectRepository(ProjectMember)
+    private readonly projectMemberRepo: Repository<ProjectMember>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly gateway: EventsGateway,
+    private readonly permission: PermissionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -175,6 +187,24 @@ export class TasksService {
       );
       const full = await this.findById(saved.id, userId);
       this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
+
+      // Notify assignee (if assigned and not self)
+      if (dto.assigneeId && dto.assigneeId !== userId) {
+        const actor = await this.userRepo.findOne({ where: { id: userId } });
+        const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
+        await this.notifications.create({
+          userId: dto.assigneeId,
+          actorId: userId,
+          type: NotificationType.TASK_ASSIGNED,
+          title: `Sizga yangi task berildi`,
+          message: `${actorName}: "${full.title}"${full.dueDate ? ` · Muddat: ${full.dueDate}` : ''}`,
+          entityType: 'task',
+          entityId: full.id,
+          actionUrl: `/app/tasks/${full.id}`,
+          metadata: { taskId: full.id, taskTitle: full.title, dueDate: full.dueDate ?? null },
+        });
+      }
+
       return full;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -313,7 +343,10 @@ export class TasksService {
 
     Object.assign(task, dto);
 
-    // Auto-set completedAt
+    // Auto-set startedAt / completedAt
+    if (dto.status === TaskStatus.IN_PROGRESS && !task.startedAt) {
+      task.startedAt = new Date();
+    }
     if (dto.status === TaskStatus.DONE && !task.completedAt) {
       task.completedAt = new Date();
     } else if (dto.status && dto.status !== TaskStatus.DONE) {
@@ -339,22 +372,86 @@ export class TasksService {
       });
     }
 
+    // Send notifications when status changes
+    if (dto.status && dto.status !== old.status) {
+      await this.sendStatusChangeNotifications(saved, userId, old.status, dto.status);
+    }
+
     this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', { task: saved });
     return saved;
+  }
+
+  private async sendStatusChangeNotifications(
+    task: Task,
+    actorId: string,
+    oldStatus: TaskStatus,
+    newStatus: TaskStatus,
+  ): Promise<void> {
+    const isDone = newStatus === TaskStatus.DONE;
+    const type = isDone ? NotificationType.TASK_COMPLETED : NotificationType.TASK_STATUS_CHANGED;
+    const taskUrl = `/app/tasks/${task.id}`;
+
+    // Collect unique recipients: creator + assignee + project managers
+    const recipientIds = new Set<string>();
+
+    if (task.creatorId && task.creatorId !== actorId) recipientIds.add(task.creatorId);
+    if (task.assigneeId && task.assigneeId !== actorId) recipientIds.add(task.assigneeId);
+
+    // Project managers from project_members table
+    const projectManagers = await this.projectMemberRepo.find({
+      where: { projectId: task.projectId, role: 'manager', status: 'accepted' },
+    });
+    for (const pm of projectManagers) {
+      if (pm.userId !== actorId) recipientIds.add(pm.userId);
+    }
+
+    // Also notify the project creator (stored in projects.created_by)
+    const project = await this.projectRepo.findOne({ where: { id: task.projectId } });
+    if (project?.createdById && project.createdById !== actorId) {
+      recipientIds.add(project.createdById);
+    }
+
+    const actor = await this.userRepo.findOne({ where: { id: actorId } });
+    const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
+
+    const title = isDone
+      ? `"${task.title}" bajarildi`
+      : `Task holati o'zgardi: ${oldStatus} → ${newStatus}`;
+
+    const message = isDone && task.completionNote
+      ? `${actorName}: ${task.completionNote}`
+      : `${actorName} "${task.title}" ni ${newStatus} ga o'zgartirdi`;
+
+    await Promise.all(
+      Array.from(recipientIds).map((userId) =>
+        this.notifications.create({
+          userId,
+          actorId,
+          type,
+          title,
+          message,
+          entityType: 'task',
+          entityId: task.id,
+          actionUrl: taskUrl,
+          metadata: {
+            taskId: task.id,
+            taskTitle: task.title,
+            oldStatus,
+            newStatus,
+            completionNote: task.completionNote ?? null,
+          },
+        }),
+      ),
+    );
   }
 
   async remove(taskId: string, userId: string): Promise<void> {
     const task = await this.getTask(taskId);
     const member = await this.assertMember(task.workspaceId, userId);
 
-    const canDelete =
-      task.creatorId === userId ||
-      member.role === WorkspaceRole.OWNER ||
-      member.role === WorkspaceRole.ADMIN ||
-      member.role === WorkspaceRole.LEAD;
-
-    if (!canDelete)
-      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Only task creator, lead, admin or owner can delete tasks' });
+    if (task.creatorId !== userId) {
+      this.permission.assertCanDeleteTask(member);
+    }
 
     const { workspaceId } = task;
     applySoftDelete(task, userId);

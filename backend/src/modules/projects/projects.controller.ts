@@ -8,18 +8,36 @@ import {
   Param,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { IsString, IsIn, IsOptional } from 'class-validator';
 import { ProjectsService } from './projects.service';
+import { ProjectMembersService } from './project-members.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateColumnDto } from './dto/create-column.dto';
 import { UpdateColumnDto } from './dto/update-column.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
+class InviteProjectMemberDto {
+  @IsString()
+  userId!: string;
+
+  @IsOptional()
+  @IsIn(['manager', 'member'])
+  role?: 'manager' | 'member';
+}
+
+class RespondInviteDto {
+  accept!: boolean;
+}
+
 @ApiTags('Projects')
 @ApiBearerAuth('access-token')
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly projectMembersService: ProjectMembersService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new project' })
@@ -91,5 +109,52 @@ export class ProjectsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.projectsService.deleteColumn(projectId, columnId, userId);
+  }
+
+  // ── Project Members ────────────────────────────
+
+  @Get(':projectId/members')
+  @ApiOperation({ summary: 'List project members' })
+  listProjectMembers(
+    @Param('projectId') projectId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.projectMembersService.listMembers(projectId, userId);
+  }
+
+  @Post(':projectId/members')
+  @ApiOperation({ summary: 'Invite a member to project' })
+  inviteProjectMember(
+    @Param('projectId') projectId: string,
+    @Body() dto: InviteProjectMemberDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.projectMembersService.inviteMember(projectId, dto.userId, dto.role ?? 'member', userId);
+  }
+
+  @Delete(':projectId/members/:targetUserId')
+  @ApiOperation({ summary: 'Remove a member from project' })
+  removeProjectMember(
+    @Param('projectId') projectId: string,
+    @Param('targetUserId') targetUserId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.projectMembersService.removeMember(projectId, targetUserId, userId);
+  }
+
+  @Patch('member-invites/:memberId/respond')
+  @ApiOperation({ summary: 'Accept or decline a project invite' })
+  respondToInvite(
+    @Param('memberId') memberId: string,
+    @Body() dto: RespondInviteDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.projectMembersService.respondToInvite(memberId, userId, dto.accept);
+  }
+
+  @Get('my-invites')
+  @ApiOperation({ summary: 'Get my pending project invites' })
+  getMyInvites(@CurrentUser('id') userId: string) {
+    return this.projectMembersService.getMyInvites(userId);
   }
 }

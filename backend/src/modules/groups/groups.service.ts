@@ -13,6 +13,7 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { WorkspaceRole } from '../../common/enums';
+import { PermissionService } from '../../common/services/permission.service';
 import {
   applySoftDelete,
   isActiveEntity,
@@ -28,6 +29,7 @@ export class GroupsService {
     @InjectRepository(WorkspaceMember)
     private readonly workspaceMemberRepo: Repository<WorkspaceMember>,
     private readonly dataSource: DataSource,
+    private readonly permission: PermissionService,
   ) {}
 
   async create(userId: string, dto: CreateGroupDto): Promise<Group> {
@@ -35,16 +37,8 @@ export class GroupsService {
       where: { workspaceId: dto.workspaceId, userId },
     });
 
-    if (
-      !wsMember ||
-      (wsMember.role !== WorkspaceRole.OWNER &&
-        wsMember.role !== WorkspaceRole.ADMIN)
-    ) {
-      throw new ForbiddenException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Only workspace admins or owners can create groups',
-      });
-    }
+    if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    this.permission.assertCanManageWorkspace(wsMember);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -132,16 +126,8 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId },
       });
-      if (
-        !wsMember ||
-        (wsMember.role !== WorkspaceRole.OWNER &&
-          wsMember.role !== WorkspaceRole.ADMIN)
-      ) {
-        throw new ForbiddenException({
-          code: ErrorCode.GROUP_ACCESS_DENIED,
-          message: 'Only the group owner or workspace admin can update the group',
-        });
-      }
+      if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      this.permission.assertCanManageWorkspace(wsMember);
     }
 
     Object.assign(group, dto);
@@ -155,16 +141,8 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId },
       });
-      if (
-        !wsMember ||
-        (wsMember.role !== WorkspaceRole.OWNER &&
-          wsMember.role !== WorkspaceRole.ADMIN)
-      ) {
-        throw new ForbiddenException({
-          code: ErrorCode.GROUP_ACCESS_DENIED,
-          message: 'Only the group owner or workspace admin can delete the group',
-        });
-      }
+      if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      this.permission.assertCanManageWorkspace(wsMember);
     }
 
     applySoftDelete(group, userId);
@@ -184,16 +162,8 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId: requesterId },
       });
-      if (
-        !wsMember ||
-        (wsMember.role !== WorkspaceRole.OWNER &&
-          wsMember.role !== WorkspaceRole.ADMIN)
-      ) {
-        throw new ForbiddenException({
-          code: ErrorCode.GROUP_ACCESS_DENIED,
-          message: 'Not authorized to add members to this group',
-        });
-      }
+      if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      this.permission.assertCanManageWorkspace(wsMember);
     }
 
     // Must be a workspace member to be added
@@ -237,16 +207,8 @@ export class GroupsService {
       const wsMember = await this.workspaceMemberRepo.findOne({
         where: { workspaceId: group.workspaceId, userId: requesterId },
       });
-      if (
-        !wsMember ||
-        (wsMember.role !== WorkspaceRole.OWNER &&
-          wsMember.role !== WorkspaceRole.ADMIN)
-      ) {
-        throw new ForbiddenException({
-          code: ErrorCode.GROUP_ACCESS_DENIED,
-          message: 'Not authorized to remove members from this group',
-        });
-      }
+      if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      this.permission.assertCanManageWorkspace(wsMember);
     }
 
     if (userIdToRemove === group.createdById) {

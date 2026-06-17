@@ -120,4 +120,9 @@ export enum NotificationType {
   MEMBER_ROLE_CHANGED = 'member_role_changed',
   MENTION = 'mention',
   WORKSPACE_INVITE = 'workspace_invite',
+  TASK_COMPLETED = 'task_completed',
+  TASK_STATUS_CHANGED = 'task_status_changed',
+  PROJECT_MEMBER_INVITE = 'project_member_invite',
+  PROJECT_MEMBER_ACCEPTED = 'project_member_accepted',
+  PROJECT_MEMBER_DECLINED = 'project_member_declined',
 }

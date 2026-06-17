@@ -19,6 +19,7 @@ import cloudinaryConfig from './config/cloudinary.config';
 import moderationConfig from './config/moderation.config';
 
 import { RedisModule } from './redis/redis.module';
+import { CommonModule } from './common/common.module';
 
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -106,6 +107,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     EventEmitterModule.forRoot({ wildcard: true }),
 
     RedisModule,
+    CommonModule,
 
     // ── Feature Modules ────────────────────────────
     AuthModule,

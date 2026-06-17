@@ -8,8 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tag } from '../../database/entities/tag.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
-import { WorkspaceRole } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { PermissionService } from '../../common/services/permission.service';
 
 export class CreateTagDto {
   name!: string;
@@ -28,6 +28,7 @@ export class TagsService {
     private readonly tagRepo: Repository<Tag>,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
+    private readonly permission: PermissionService,
   ) {}
 
   private async assertMember(workspaceId: string, userId: string) {
@@ -38,9 +39,7 @@ export class TagsService {
 
   private async assertAdminOrOwner(workspaceId: string, userId: string) {
     const m = await this.assertMember(workspaceId, userId);
-    if (m.role !== WorkspaceRole.OWNER && m.role !== WorkspaceRole.ADMIN && m.role !== WorkspaceRole.LEAD) {
-      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Only workspace admins/leads can manage tags' });
-    }
+    this.permission.assertCanManageProject(m); // LEAD+
     return m;
   }
 

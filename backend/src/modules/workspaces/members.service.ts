@@ -11,6 +11,8 @@ import { Workspace } from '../../database/entities/workspace.entity';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { WorkspaceRole } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { PermissionService } from '../../common/services/permission.service';
+import { ROLE_LEVEL } from '../../common/constants/role-levels';
 
 @Injectable()
 export class MembersService {
@@ -19,6 +21,7 @@ export class MembersService {
     private readonly memberRepo: Repository<WorkspaceMember>,
     @InjectRepository(Workspace)
     private readonly workspaceRepo: Repository<Workspace>,
+    private readonly permission: PermissionService,
   ) {}
 
   async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
@@ -70,30 +73,30 @@ export class MembersService {
     dto: UpdateMemberRoleDto,
     requesterId: string,
   ): Promise<WorkspaceMember> {
-    const workspace = await this.workspaceRepo.findOne({
-      where: { id: workspaceId },
-    });
+    const workspace = await this.workspaceRepo.findOne({ where: { id: workspaceId } });
     if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
-    const requester = await this.memberRepo.findOne({
-      where: { workspaceId, userId: requesterId },
-    });
-    if (
-      !requester ||
-      (requester.role !== WorkspaceRole.OWNER &&
-        requester.role !== WorkspaceRole.ADMIN)
-    ) {
-      throw new ConflictException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Not authorized to change roles',
-      });
+    const requester = await this.memberRepo.findOne({ where: { workspaceId, userId: requesterId } });
+    if (!requester) {
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Requester not found in workspace' });
     }
 
+    // Must be ADMIN or OWNER; ADMIN can only assign ≤ LEAD
+    this.permission.assertCanChangeRoleTo(requester, dto.role);
+
+    // Workspace billing owner's role cannot be changed by anyone else
     if (workspace.ownerId === targetUserId && requesterId !== targetUserId) {
       throw new ConflictException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
         message: 'Cannot change the role of the workspace owner',
       });
+    }
+
+    // Prevent self-promotion: cannot assign yourself a role higher than your own
+    if (requesterId === targetUserId && requester.role !== WorkspaceRole.OWNER) {
+      if (ROLE_LEVEL[dto.role] > ROLE_LEVEL[requester.role]) {
+        throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Cannot promote yourself' });
+      }
     }
 
     const member = await this.findOne(workspaceId, targetUserId);
@@ -106,29 +109,17 @@ export class MembersService {
     targetUserId: string,
     requesterId: string,
   ): Promise<void> {
-    const workspace = await this.workspaceRepo.findOne({
-      where: { id: workspaceId },
-    });
+    const workspace = await this.workspaceRepo.findOne({ where: { id: workspaceId } });
     if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
-    const requester = await this.memberRepo.findOne({
-      where: { workspaceId, userId: requesterId },
-    });
+    const requester = await this.memberRepo.findOne({ where: { workspaceId, userId: requesterId } });
     if (!requester) {
       throw new NotFoundException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Requester not found in workspace' });
     }
 
-    // A user can remove themselves (leave), or an owner/admin can remove them
+    // User can remove themselves (leave); otherwise must be ADMIN or OWNER
     if (requesterId !== targetUserId) {
-      if (
-        requester.role !== WorkspaceRole.OWNER &&
-        requester.role !== WorkspaceRole.ADMIN
-      ) {
-        throw new ConflictException({
-          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-          message: 'Not authorized to remove members',
-        });
-      }
+      this.permission.assertCanManageWorkspace(requester);
     }
 
     if (workspace.ownerId === targetUserId) {

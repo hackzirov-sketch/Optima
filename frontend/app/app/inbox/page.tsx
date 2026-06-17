@@ -14,7 +14,7 @@ import {
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { invitationsApi, type ApiNotification } from "@/lib/api";
+import { invitationsApi, projectsApi, type ApiNotification } from "@/lib/api";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 
 function extractToken(actionUrl?: string): string | null {
@@ -104,6 +104,56 @@ function InviteActions({
       >
         {busy === 'decline' ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
         Decline
+      </ActionButton>
+    </div>
+  );
+}
+
+function ProjectInviteActions({
+  notification,
+  onDone,
+}: {
+  notification: ApiNotification;
+  onDone: (id: string, action: 'accepted' | 'declined') => void;
+}) {
+  const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
+  const [result, setResult] = useState<'accepted' | 'declined' | null>(null);
+
+  const memberId = (notification.metadata as Record<string, string> | null)?.memberId;
+  if (!memberId) return null;
+  if (result) {
+    return (
+      <span className={cn("text-xs font-semibold", result === 'accepted' ? 'text-green-600' : 'text-rose-500')}>
+        {result === 'accepted' ? '✓ Qabul qilindi' : '✗ Rad etildi'}
+      </span>
+    );
+  }
+
+  const handle = async (accept: boolean) => {
+    setBusy(accept ? 'accept' : 'decline');
+    try {
+      await projectsApi.respondToInvite(memberId, accept);
+      setResult(accept ? 'accepted' : 'declined');
+      onDone(notification.id, accept ? 'accepted' : 'declined');
+    } catch {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex gap-2">
+      <ActionButton onClick={() => handle(true)} disabled={!!busy} className="h-8 px-4 text-xs">
+        {busy === 'accept' ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+        Qabul qilish
+      </ActionButton>
+      <ActionButton
+        variant="secondary"
+        onClick={() => handle(false)}
+        disabled={!!busy}
+        className="h-8 px-4 text-xs text-rose-600 hover:border-rose-200 hover:bg-rose-50 dark:hover:border-rose-800 dark:hover:bg-rose-950/30"
+      >
+        {busy === 'decline' ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+        Rad etish
       </ActionButton>
     </div>
   );
@@ -229,6 +279,9 @@ export default function InboxPage() {
                       {/* Invite actions */}
                       {n.type === 'workspace_invite' && !n.isRead && (
                         <InviteActions notification={n} onDone={handleInviteDone} />
+                      )}
+                      {n.type === 'project_member_invite' && !n.isRead && (
+                        <ProjectInviteActions notification={n} onDone={handleInviteDone} />
                       )}
 
                       <div className="mt-2 flex items-center gap-2">

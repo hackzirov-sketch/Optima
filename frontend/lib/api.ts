@@ -434,6 +434,22 @@ export const projectsApi = {
 
   deleteColumn: (projectId: string, columnId: string) =>
     request('DELETE', `/projects/${projectId}/columns/${columnId}`),
+
+  // Project members
+  listMembers: (projectId: string) =>
+    request<{ id: string; userId: string; role: string; status: string; invitedBy: string | null; invitedAt: string; joinedAt: string | null; user: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null; email: string } | null }[]>('GET', `/projects/${projectId}/members`),
+
+  inviteMember: (projectId: string, userId: string, role: 'manager' | 'member' = 'member') =>
+    request('POST', `/projects/${projectId}/members`, { body: { userId, role } }),
+
+  removeMember: (projectId: string, targetUserId: string) =>
+    request('DELETE', `/projects/${projectId}/members/${targetUserId}`),
+
+  respondToInvite: (memberId: string, accept: boolean) =>
+    request('PATCH', `/projects/member-invites/${memberId}/respond`, { body: { accept } }),
+
+  getMyProjectInvites: () =>
+    request<{ id: string; projectId: string; projectName: string; role: string; invitedBy: string | null; invitedAt: string }[]>('GET', '/projects/my-invites'),
 };
 
 // ─── Tasks ────────────────────────────────────────────────────────────────
@@ -460,6 +476,7 @@ export interface ApiTask {
   priority: string;
   assigneeId?: string;
   reviewerId?: string;
+  creatorId?: string;
   columnId?: string;
   projectId: string;
   workspaceId: string;
@@ -468,7 +485,13 @@ export interface ApiTask {
   estimatedHours?: number;
   startDate?: string;
   dueDate?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  completionNote?: string | null;
   createdAt: string;
+  updatedAt?: string;
+  assignee?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null;
+  creator?: { id: string; firstName: string | null; lastName: string | null } | null;
 }
 
 export interface CreateTaskDto {
@@ -516,7 +539,7 @@ export const tasksApi = {
   create: (data: CreateTaskDto) =>
     request<{ data: ApiTask }>('POST', '/tasks', { body: data }),
 
-  update: (taskId: string, data: Partial<CreateTaskDto>) =>
+  update: (taskId: string, data: Partial<CreateTaskDto> & { completionNote?: string | null }) =>
     request<{ data: ApiTask }>('PATCH', `/tasks/${taskId}`, { body: data }),
 
   move: (taskId: string, data: { columnId?: string; status?: string; order?: number; position?: number }) =>
@@ -689,11 +712,15 @@ export const chatApi = {
     request('DELETE', `/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`),
 
   listPublicRooms: async (workspaceId: string) => {
-    const res = await request<{ data: ApiChatRoom[] | ApiNestedList<ApiChatRoom> }>(
-      'GET',
-      `/workspaces/${workspaceId}/chat/public-rooms`,
-    );
-    return { data: unwrapApiList(res) };
+    try {
+      const res = await request<{ data: ApiChatRoom[] | ApiNestedList<ApiChatRoom> }>(
+        'GET',
+        `/workspaces/${workspaceId}/chat/public-rooms`,
+      );
+      return { data: unwrapApiList(res) };
+    } catch {
+      return { data: [] as ApiChatRoom[] };
+    }
   },
 
   joinPublicRoom: (roomId: string) =>
@@ -728,6 +755,7 @@ export interface ApiNotification {
   actionUrl?: string;
   resourceType?: string;
   resourceId?: string;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
 

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer, type TaskDrawerSavePayload } from "@/components/app/PowerWorkspaceSystem";
+import { TaskCompletionModal } from "@/components/tasks/TaskCompletionModal";
 import type { Priority, SmartTask } from "@/types";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -60,6 +61,7 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<SmartTask | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [completionTarget, setCompletionTarget] = useState<{ id: string; title: string } | null>(null);
 
   const showNotice = (message: string) => {
     setNotice(message);
@@ -116,13 +118,31 @@ export default function TasksPage() {
   };
 
   const toggleTask = async (id: string, currentStatus: string) => {
+    if (currentStatus === 'done') {
+      // Reopen
+      try {
+        await tasksApi.move(id, { status: 'backlog' });
+        showNotice("Qayta ochildi");
+        await refreshTasks();
+      } catch {
+        showNotice("Xatolik yuz berdi");
+      }
+      return;
+    }
+    // Ask for completion note before marking done
+    const task = apiTasks.find((t) => t.id === id);
+    setCompletionTarget({ id, title: task?.title ?? '' });
+  };
+
+  const confirmCompletion = async (note: string) => {
+    if (!completionTarget) return;
+    setCompletionTarget(null);
     try {
-      const newStatus = currentStatus === 'done' ? 'backlog' : 'done';
-      await tasksApi.move(id, { status: newStatus });
-      showNotice(newStatus === 'done' ? "Marked done" : "Reopened");
+      await tasksApi.update(completionTarget.id, { status: 'done' as never, completionNote: note || null });
+      showNotice("Bajarildi!");
       await refreshTasks();
     } catch {
-      showNotice("Failed to update task");
+      showNotice("Xatolik yuz berdi");
     }
   };
 
@@ -150,6 +170,13 @@ export default function TasksPage() {
 
   return (
     <>
+      {completionTarget && (
+        <TaskCompletionModal
+          taskTitle={completionTarget.title}
+          onConfirm={confirmCompletion}
+          onCancel={() => setCompletionTarget(null)}
+        />
+      )}
       <PageShell>
         <PageHeader
           eyebrow={activeWorkspace?.name ?? "Workspace"}
@@ -178,6 +205,7 @@ export default function TasksPage() {
             <DataTable
               columns={["Task", "Status", "Assignee", "Priority", "Due"]}
               rows={rows}
+              emptyLabel="Task mavjud emas"
               onRowClick={(id) => {
                 const st = filteredTasks.find((task) => task.id === id);
                 if (st) setSelectedTask(st);

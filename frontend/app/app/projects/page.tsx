@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, FolderOpen, Loader2, Plus, Target, Zap } from "lucide-react";
-import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast } from "@/components/app/DesignSystem";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlarmClock, CalendarDays, CheckCircle2, Circle, ClipboardList, Clock, FolderOpen, Loader2, Play, Plus, Target, Timer, UserCircle, Zap } from "lucide-react";
+import { ActionButton, Modal, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { DataTable, FilterBar, TaskDrawer, type TaskDrawerSavePayload, ViewSwitcher } from "@/components/app/PowerWorkspaceSystem";
 import { POWER_VIEWS } from "@/data/ecosystemData";
 import type { SmartTask, TaskView } from "@/types";
@@ -10,7 +10,186 @@ import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
 import { useMembers } from "@/hooks/useMembers";
 import { useTasks } from "@/hooks/useTasks";
-import { analyticsApi, projectsApi, type ApiMember, type ApiTask, type CreateTaskDto } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { analyticsApi, projectsApi, tasksApi, type ApiMember, type ApiTask, type ApiProject, type CreateTaskDto } from "@/lib/api";
+import { CreateProjectModal } from "@/components/app/CreateProjectModal";
+import { CreateTaskModal } from "@/components/app/CreateTaskModal";
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function daysSince(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const diff = Date.now() - new Date(dateStr).getTime();
+  return Math.floor(diff / 86_400_000);
+}
+
+function daysTil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / 86_400_000);
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode; bg: string }> = {
+  backlog:     { label: 'Navbat',       color: 'text-slate-500',  bg: 'bg-slate-100 dark:bg-slate-800',   icon: <Circle className="h-3 w-3" /> },
+  todo:        { label: 'Bajarilsin',   color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-950/30',   icon: <Circle className="h-3 w-3" /> },
+  in_progress: { label: 'Jarayonda',    color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-950/30', icon: <Play className="h-3 w-3" /> },
+  review:      { label: 'Ko\'rib chiqish', color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/30', icon: <Clock className="h-3 w-3" /> },
+  done:        { label: 'Bajarildi',    color: 'text-green-600',  bg: 'bg-green-50 dark:bg-green-950/30', icon: <CheckCircle2 className="h-3 w-3" /> },
+  blocked:     { label: 'To\'siq',      color: 'text-rose-600',   bg: 'bg-rose-50 dark:bg-rose-950/30',   icon: <AlarmClock className="h-3 w-3" /> },
+};
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
+  low:      { label: 'Past',    color: 'text-green-600' },
+  medium:   { label: "O'rta",   color: 'text-amber-500' },
+  high:     { label: 'Yuqori',  color: 'text-orange-500' },
+  critical: { label: 'Kritik',  color: 'text-rose-600 font-bold' },
+};
+
+function TaskCard({
+  task,
+  memberMap,
+  onStatusChange,
+  onClick,
+}: {
+  task: ApiTask;
+  memberMap: Map<string, string>;
+  onStatusChange: (taskId: string, status: string) => void;
+  onClick: () => void;
+}) {
+  const statusCfg = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.backlog;
+  const priorityCfg = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium;
+  const assigneeName = task.assigneeId ? memberMap.get(task.assigneeId) ?? 'Tayinlangan' : null;
+  const daysRunning = task.status === 'in_progress' ? daysSince(task.startedAt) : null;
+  const daysLeft = daysTil(task.dueDate);
+  const isOverdue = daysLeft !== null && daysLeft < 0 && task.status !== 'done';
+
+  const nextStatus: Record<string, string> = {
+    backlog: 'todo', todo: 'in_progress', in_progress: 'review', review: 'done', done: 'backlog',
+  };
+
+  return (
+    <div
+      className="group relative flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800 cursor-pointer"
+      onClick={onClick}
+    >
+      {/* Priority dot */}
+      <div className={cn(
+        "absolute right-4 top-4 h-2 w-2 rounded-full",
+        task.priority === 'low' ? 'bg-green-500' :
+        task.priority === 'medium' ? 'bg-amber-400' :
+        task.priority === 'high' ? 'bg-orange-500' :
+        'bg-rose-600 animate-pulse',
+      )} title={priorityCfg.label} />
+
+      {/* Status badge */}
+      <div className={cn("inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold", statusCfg.bg, statusCfg.color)}>
+        {statusCfg.icon}
+        {statusCfg.label}
+      </div>
+
+      {/* Title */}
+      <p className="pr-4 text-sm font-semibold leading-5 text-foreground line-clamp-2">{task.title}</p>
+
+      {/* Description */}
+      {task.description && (
+        <p className="text-xs text-muted-foreground line-clamp-1">{task.description}</p>
+      )}
+
+      {/* Meta row */}
+      <div className="mt-1 flex items-center justify-between gap-2 flex-wrap">
+        {/* Assignee */}
+        {assigneeName ? (
+          <div className="flex items-center gap-1.5">
+            <div className="grid h-5 w-5 place-items-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+              {assigneeName[0]?.toUpperCase()}
+            </div>
+            <span className="text-[11px] text-muted-foreground truncate max-w-[90px]">{assigneeName}</span>
+          </div>
+        ) : (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
+            <UserCircle className="h-3.5 w-3.5" /> Tayinlanmagan
+          </span>
+        )}
+
+        <div className="flex items-center gap-2">
+          {/* Day counter (in_progress) */}
+          {daysRunning !== null && (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-md">
+              <Timer className="h-3 w-3" />
+              {daysRunning === 0 ? 'Bugun boshlandi' : `${daysRunning} kun`}
+            </span>
+          )}
+
+          {/* Deadline */}
+          {task.dueDate && (
+            <span className={cn(
+              "flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md",
+              isOverdue
+                ? "text-rose-600 bg-rose-50 dark:bg-rose-900/20"
+                : daysLeft !== null && daysLeft <= 2
+                  ? "text-orange-600 bg-orange-50 dark:bg-orange-900/20"
+                  : "text-muted-foreground bg-muted",
+            )}>
+              <CalendarDays className="h-3 w-3" />
+              {isOverdue ? `${Math.abs(daysLeft!)} kun kechikdi` : daysLeft === 0 ? 'Bugun!' : `${daysLeft} kun qoldi`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Quick status change */}
+      {task.status !== 'done' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, nextStatus[task.status] ?? 'todo'); }}
+          className="mt-1 w-full rounded-xl border border-border py-1.5 text-[11px] font-bold text-muted-foreground transition-colors hover:bg-muted opacity-0 group-hover:opacity-100"
+        >
+          → {STATUS_CONFIG[nextStatus[task.status] ?? 'todo']?.label ?? 'Keyingisi'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Kanban column ─────────────────────────────────────────────────────────
+
+function KanbanColumn({
+  status,
+  tasks,
+  memberMap,
+  onStatusChange,
+  onTaskClick,
+}: {
+  status: string;
+  tasks: ApiTask[];
+  memberMap: Map<string, string>;
+  onStatusChange: (taskId: string, status: string) => void;
+  onTaskClick: (task: ApiTask) => void;
+}) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.backlog;
+  return (
+    <div className="flex flex-col gap-3 min-w-[260px] max-w-[300px] flex-shrink-0">
+      <div className={cn("flex items-center justify-between rounded-xl px-3 py-2", cfg.bg)}>
+        <div className={cn("flex items-center gap-2 text-xs font-black uppercase tracking-wide", cfg.color)}>
+          {cfg.icon} {cfg.label}
+        </div>
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", cfg.bg, cfg.color)}>
+          {tasks.length}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {tasks.map((t) => (
+          <TaskCard key={t.id} task={t} memberMap={memberMap} onStatusChange={onStatusChange} onClick={() => onTaskClick(t)} />
+        ))}
+        {tasks.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground/40">
+            Task yo'q
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function buildMemberMap(members: ApiMember[]): Map<string, string> {
   const m = new Map<string, string>();
@@ -47,29 +226,54 @@ export default function Page() {
 
   const [view, setView] = useState<TaskView>("board");
   const [query, setQuery] = useState("");
-  const [selectedTask, setSelectedTask] = useState<SmartTask | null>(null);
+  const [selectedApiTask, setSelectedApiTask] = useState<ApiTask | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [projectDesc, setProjectDesc] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskPriority, setTaskPriority] = useState("medium");
   const [activeProjectId, setActiveProjectId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectDesc, setEditProjectDesc] = useState("");
 
-  const { projects, loading: projectsLoading, createProject, deleteProject, refresh: refreshProjects } = useProjects(activeWorkspace?.id);
+  // Real-time task list (managed locally, synced via WS)
+  const [rtTasks, setRtTasks] = useState<ApiTask[]>([]);
+
+  const { projects, loading: projectsLoading, deleteProject, refresh: refreshProjects } = useProjects(activeWorkspace?.id);
   const { members } = useMembers(activeWorkspace?.id);
-  const { tasks, loading: tasksLoading, createTask, updateTask, moveTask, deleteTask } = useTasks(
+  const { tasks, loading: tasksLoading, updateTask, moveTask, deleteTask } = useTasks(
     activeProjectId ?? projects[0]?.id,
   );
 
   const currentProjectId = activeProjectId ?? projects[0]?.id;
-
   const memberMap = useMemo(() => buildMemberMap(members), [members]);
+
+  // Sync rtTasks from useTasks
+  useEffect(() => { setRtTasks(tasks); }, [tasks]);
+
+  // ── WebSocket real-time ──────────────────────────────
+  const handleWsTaskCreated = useCallback((raw: Record<string, unknown>) => {
+    const t = raw as unknown as ApiTask;
+    if (t.projectId !== currentProjectId) return;
+    setRtTasks((prev) => prev.some((x) => x.id === t.id) ? prev : [t, ...prev]);
+    showNotice(`Yangi task: "${t.title}"`);
+  }, [currentProjectId]);
+
+  const handleWsTaskUpdated = useCallback((raw: Record<string, unknown>) => {
+    const t = raw as unknown as ApiTask;
+    if (t.projectId !== currentProjectId) return;
+    setRtTasks((prev) => prev.map((x) => x.id === t.id ? { ...x, ...t } : x));
+  }, [currentProjectId]);
+
+  const handleWsTaskDeleted = useCallback(({ taskId }: { taskId: string }) => {
+    setRtTasks((prev) => prev.filter((x) => x.id !== taskId));
+  }, []);
+
+  useWebSocket({
+    onTaskCreated: handleWsTaskCreated,
+    onTaskUpdated: handleWsTaskUpdated,
+    onTaskDeleted: handleWsTaskDeleted,
+  });
 
   // Project analytics from backend
   const [projectAnalytics, setProjectAnalytics] = useState<{
@@ -77,39 +281,56 @@ export default function Page() {
   } | null>(null);
 
   type ProjectAnalyticsResponse = {
-    data?: {
-      aggregates?: {
-        commits: string;
-        pushes: string;
-        approvedPushes: string;
-        tasksCompleted: string;
-      };
-    };
+    data?: { aggregates?: { commits: string; pushes: string; approvedPushes: string; tasksCompleted: string } };
   };
 
   useEffect(() => {
     if (!currentProjectId) return;
     setProjectAnalytics(null);
     analyticsApi.getProjectAnalytics(currentProjectId)
-      .then((res) => {
-        const typed = res as ProjectAnalyticsResponse;
-        setProjectAnalytics(typed?.data?.aggregates ?? null);
-      })
+      .then((res) => { const typed = res as ProjectAnalyticsResponse; setProjectAnalytics(typed?.data?.aggregates ?? null); })
       .catch(() => {});
   }, [currentProjectId]);
 
   const showNotice = (message: string) => {
     setNotice(message);
-    window.setTimeout(() => setNotice(null), 2000);
+    window.setTimeout(() => setNotice(null), 2500);
   };
+
+  // Task status change (real-time optimistic update)
+  const handleStatusChange = useCallback(async (taskId: string, newStatus: string) => {
+    setRtTasks((prev) => prev.map((t) => t.id === taskId ? {
+      ...t, status: newStatus,
+      startedAt: newStatus === 'in_progress' && !t.startedAt ? new Date().toISOString() : t.startedAt,
+      completedAt: newStatus === 'done' ? new Date().toISOString() : newStatus !== 'done' ? null : t.completedAt,
+    } : t));
+    try {
+      await tasksApi.update(taskId, { status: newStatus as never });
+    } catch {
+      // revert on error
+      setRtTasks((prev) => [...prev]);
+    }
+  }, []);
 
   const filteredTasks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return tasks;
-    return tasks.filter((task) =>
-      `${task.title} ${task.description ?? ''} ${task.status} ${task.priority}`.toLowerCase().includes(normalized),
+    if (!normalized) return rtTasks;
+    return rtTasks.filter((t) =>
+      `${t.title} ${t.description ?? ''} ${t.status} ${t.priority}`.toLowerCase().includes(normalized),
     );
-  }, [query, tasks]);
+  }, [query, rtTasks]);
+
+  // Kanban columns
+  const KANBAN_COLS = ['backlog', 'todo', 'in_progress', 'review', 'done', 'blocked'];
+  const kanbanGroups = useMemo(() => {
+    const groups: Record<string, ApiTask[]> = {};
+    KANBAN_COLS.forEach((s) => { groups[s] = []; });
+    filteredTasks.forEach((t) => {
+      const col = KANBAN_COLS.includes(t.status) ? t.status : 'backlog';
+      groups[col].push(t);
+    });
+    return groups;
+  }, [filteredTasks]);
 
   const smartTasks = useMemo(
     () => filteredTasks.map((t) => apiTaskToSmartTask(t, memberMap)),
@@ -127,72 +348,33 @@ export default function Page() {
     ],
   }));
 
-  const handleCreateProject = async () => {
-    if (!projectName.trim() || !activeWorkspace) return;
-    setSaving(true);
-    try {
-      const proj = await createProject(projectName.trim(), projectDesc.trim() || undefined);
-      setActiveProjectId(proj.id);
-      setCreateProjectOpen(false);
-      setProjectName("");
-      setProjectDesc("");
-      showNotice(`Project "${proj.name}" created`);
-    } catch (err: unknown) {
-      const apiErr = err as { message?: string; data?: { message?: string; error?: { message?: string } } };
-      const msg =
-        apiErr?.data?.error?.message ??
-        apiErr?.data?.message ??
-        apiErr?.message ??
-        '';
-      if (msg.toLowerCase().includes('content') || msg.toLowerCase().includes('guideline')) {
-        showNotice(`Blocked: ${msg}`);
-      } else {
-        showNotice("Failed to create project");
-      }
-    } finally {
-      setSaving(false);
-    }
+  const handleProjectCreated = async (proj: ApiProject) => {
+    setCreateProjectOpen(false);
+    setActiveProjectId(proj.id);
+    await refreshProjects();
+    showNotice(`"${proj.name}" loyihasi yaratildi`);
   };
 
-  const handleCreateTask = async () => {
-    if (!taskTitle.trim() || !currentProjectId || !activeWorkspace) return;
-    setSaving(true);
-    try {
-      const dto: CreateTaskDto = {
-        projectId: currentProjectId,
-        workspaceId: activeWorkspace.id,
-        title: taskTitle.trim(),
-        priority: taskPriority,
-        status: 'backlog',
-      };
-      await createTask(dto);
-      setCreateTaskOpen(false);
-      setTaskTitle("");
-      showNotice("Task created");
-    } catch {
-      showNotice("Failed to create task");
-    } finally {
-      setSaving(false);
-    }
+  const handleTaskCreated = async () => {
+    setCreateTaskOpen(false);
+    showNotice("Task yaratildi, xabar yuborildi");
   };
 
-  const handleMoveTask = async (taskId: string, newStatus: string) => {
-    try {
-      await moveTask(taskId, { status: newStatus });
-    } catch {
-      showNotice("Failed to move task");
-    }
-  };
+  const selectedSmartTask = useMemo(
+    () => selectedApiTask ? apiTaskToSmartTask(selectedApiTask, memberMap) : null,
+    [selectedApiTask, memberMap],
+  );
 
   const saveSelectedTask = async (payload: TaskDrawerSavePayload) => {
-    if (!selectedTask) return;
-    await updateTask(selectedTask.id, {
+    if (!selectedApiTask) return;
+    await updateTask(selectedApiTask.id, {
       title: payload.title,
       description: payload.description,
       priority: payload.priority,
       status: payload.status,
     });
-    showNotice("Task saved");
+    showNotice("Task saqlandi");
+    setSelectedApiTask(null);
   };
 
   const activeProject = projects.find((p) => p.id === currentProjectId);
@@ -340,50 +522,27 @@ export default function Page() {
             )}
 
             {!tasksLoading && view === "board" && (
-              <SurfaceCard>
-                <SectionTitle icon={ClipboardList} title="Task board" description="Click the → button to move tasks forward through the workflow." />
-                <div className="grid gap-4 xl:grid-cols-5">
-                  {["backlog", "todo", "in_progress", "review", "done"].map((status) => (
-                    <div key={status} className="rounded-2xl border border-border bg-muted p-3">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-sm font-black capitalize text-foreground">{status.replace("_", " ")}</h3>
-                        <Pill tone="slate">{smartTasks.filter((task) => task.status === status).length}</Pill>
-                      </div>
-                      <div className="space-y-3">
-                        {smartTasks.filter((task) => task.status === status).map((task) => (
-                          <div key={task.id} className="group w-full rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                            <button type="button" onClick={() => setSelectedTask(task)} className="w-full text-left">
-                              <p className="font-black leading-snug text-foreground">{task.title}</p>
-                              {task.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{task.description}</p>}
-                            </button>
-                            <div className="mt-3 flex items-center justify-between">
-                              <Pill tone={task.priority === "high" ? "red" : task.priority === "medium" ? "amber" : "green"}>{task.priority}</Pill>
-                              <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                {status !== "done" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveTask(task.id, status === "backlog" ? "todo" : status === "todo" ? "in_progress" : status === "in_progress" ? "review" : "done")}
-                                    className="rounded-xl px-2 py-1 text-[10px] font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/15"
-                                  >
-                                    →
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => deleteTask(task.id).catch(() => showNotice("Failed to delete"))}
-                                  className="rounded-xl px-2 py-1 text-[10px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <SectionTitle icon={ClipboardList} title="Kanban board" description={`${rtTasks.length} ta task · real-time`} />
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-[11px] text-muted-foreground font-semibold">Real-time</span>
+                  </div>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-4">
+                  {KANBAN_COLS.map((status) => (
+                    <KanbanColumn
+                      key={status}
+                      status={status}
+                      tasks={kanbanGroups[status] ?? []}
+                      memberMap={memberMap}
+                      onStatusChange={handleStatusChange}
+                      onTaskClick={(t) => setSelectedApiTask(t)}
+                    />
                   ))}
                 </div>
-              </SurfaceCard>
+              </div>
             )}
 
             {!tasksLoading && (view === "list" || view === "table") && (
@@ -392,7 +551,7 @@ export default function Page() {
                 rows={tableRows}
                 onRowClick={(id) => {
                   const st = smartTasks.find((task) => task.id === id);
-                  if (st) setSelectedTask(st);
+                  const apiT = filteredTasks.find((t) => t.id === id); if (apiT) setSelectedApiTask(apiT);
                 }}
               />
             )}
@@ -401,19 +560,19 @@ export default function Page() {
               <SurfaceCard>
                 <SectionTitle icon={CalendarDays} title={`${view} view`} description="Tasks ordered by due date." />
                 <div className="space-y-3">
-                  {smartTasks.map((task) => (
+                  {filteredTasks.map((task) => (
                     <button
                       key={task.id}
                       type="button"
-                      onClick={() => setSelectedTask(task)}
+                      onClick={() => setSelectedApiTask(task)}
                       className="grid w-full gap-3 rounded-2xl border border-border bg-muted p-4 text-left md:grid-cols-[1fr_1.4fr_0.6fr] md:items-center"
                     >
                       <div>
                         <p className="font-black text-foreground">{task.title}</p>
                         <p className="text-xs text-muted-foreground">{task.status.replace("_", " ")}</p>
                       </div>
-                      <ProgressBar value={task.progress} />
-                      <Pill tone="indigo">{task.dueDate}</Pill>
+                      <ProgressBar value={task.status === 'done' ? 100 : task.status === 'in_progress' ? 50 : 0} />
+                      <Pill tone="indigo">{task.dueDate ?? '—'}</Pill>
                     </button>
                   ))}
                 </div>
@@ -476,60 +635,25 @@ export default function Page() {
           </>
         )}
 
-        {/* Create Project Modal */}
-        <Modal open={createProjectOpen} title="Create project" description={`In workspace: ${activeWorkspace.name}`} onClose={() => setCreateProjectOpen(false)}>
-          <div className="space-y-3">
-            <input
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
-              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-              placeholder="Project name"
-              autoFocus
-            />
-            <textarea
-              value={projectDesc}
-              onChange={(e) => setProjectDesc(e.target.value)}
-              className="min-h-20 w-full resize-none rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-              placeholder="Description (optional)"
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <ActionButton variant="secondary" onClick={() => setCreateProjectOpen(false)}>Cancel</ActionButton>
-              <ActionButton onClick={handleCreateProject} disabled={saving || !projectName.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create project"}
-              </ActionButton>
-            </div>
-          </div>
-        </Modal>
+        {createProjectOpen && activeWorkspace && (
+          <CreateProjectModal
+            workspaceId={activeWorkspace.id}
+            members={members}
+            onCreated={handleProjectCreated}
+            onClose={() => setCreateProjectOpen(false)}
+          />
+        )}
 
-        {/* Create Task Modal */}
-        <Modal open={createTaskOpen} title="Add task" description={`To: ${projects.find((p) => p.id === currentProjectId)?.name ?? ''}`} onClose={() => setCreateTaskOpen(false)}>
-          <div className="space-y-3">
-            <input
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateTask()}
-              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:bg-card"
-              placeholder="Task title"
-              autoFocus
-            />
-            <select
-              value={taskPriority}
-              onChange={(e) => setTaskPriority(e.target.value)}
-              className="w-full rounded-2xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none focus:border-indigo-400"
-            >
-              <option value="low">Low priority</option>
-              <option value="medium">Medium priority</option>
-              <option value="high">High priority</option>
-            </select>
-            <div className="flex justify-end gap-2 pt-2">
-              <ActionButton variant="secondary" onClick={() => setCreateTaskOpen(false)}>Cancel</ActionButton>
-              <ActionButton onClick={handleCreateTask} disabled={saving || !taskTitle.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add task"}
-              </ActionButton>
-            </div>
-          </div>
-        </Modal>
+        {createTaskOpen && activeWorkspace && (
+          <CreateTaskModal
+            workspaceId={activeWorkspace.id}
+            projects={projects}
+            members={members}
+            defaultProjectId={currentProjectId}
+            onCreated={handleTaskCreated}
+            onClose={() => setCreateTaskOpen(false)}
+          />
+        )}
 
         <Modal open={editProjectOpen} title="Edit project" description={activeProject?.name} onClose={() => setEditProjectOpen(false)}>
           <div className="space-y-3">
@@ -555,7 +679,7 @@ export default function Page() {
           </div>
         </Modal>
 
-        <TaskDrawer task={selectedTask} onClose={() => setSelectedTask(null)} onSave={saveSelectedTask} />
+        <TaskDrawer task={selectedSmartTask} onClose={() => setSelectedApiTask(null)} onSave={saveSelectedTask} />
       </PageShell>
       <Toast message={notice} />
     </>

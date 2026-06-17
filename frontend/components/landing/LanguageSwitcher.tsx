@@ -12,6 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+const LANG_FLAGS: Record<string, string> = {
+  en: "🇬🇧",
+  uz: "🇺🇿",
+  ru: "🇷🇺",
+  ar: "🇸🇦",
+  tr: "🇹🇷",
+};
+
 interface LanguageSwitcherProps {
   variant?: "default" | "toolbar";
 }
@@ -33,12 +41,12 @@ export function LanguageSwitcher({ variant = "default" }: LanguageSwitcherProps)
         {isToolbar ? (
           <button
             type="button"
-            className="inline-flex h-10 max-w-[9.5rem] items-center gap-1.5 rounded-xl bg-[var(--upz-nav-accent)] px-2.5 text-sm font-medium text-[var(--upz-nav-navy)] transition-colors hover:bg-blue-100/80 dark:text-slate-100 dark:hover:bg-slate-800 sm:max-w-none sm:gap-2 sm:px-3"
+            className="inline-flex h-10 max-w-[9.5rem] items-center gap-2 rounded-xl bg-[var(--upz-nav-accent)] px-3 text-sm font-semibold text-[var(--upz-nav-navy)] transition-all hover:bg-blue-100/80 dark:text-slate-100 dark:hover:bg-slate-800 sm:max-w-none"
             data-testid="button-language-switcher"
           >
-            <Globe className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
+            <span className="text-base leading-none">{LANG_FLAGS[currentLang.code]}</span>
             <span className="truncate">{currentLang.label}</span>
-            <ChevronDown className="hidden h-3.5 w-3.5 flex-shrink-0 opacity-60 sm:block" />
+            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
           </button>
         ) : (
           <Button
@@ -55,14 +63,21 @@ export function LanguageSwitcher({ variant = "default" }: LanguageSwitcherProps)
       <DropdownMenuContent
         align="end"
         side="bottom"
-        sideOffset={10}
+        sideOffset={8}
         collisionPadding={16}
         avoidCollisions
         className={cn(
-          "z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white px-[5px] py-[5px] shadow-lg dark:border-slate-700 dark:bg-slate-900",
-          isToolbar && "w-[11.5rem]",
+          "z-[200] min-w-[13rem] overflow-hidden rounded-2xl border border-border/60 bg-popover p-1.5 shadow-xl",
+          isToolbar && "w-[13rem]",
         )}
       >
+        {/* Header */}
+        <div className="px-3 pb-2 pt-1.5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Til tanlash</p>
+        </div>
+
+        <div className="h-px bg-border/50 mx-2 mb-1" />
+
         {LANGUAGES.map((lang) => {
           const isActive = i18n.language === lang.code;
           return (
@@ -70,18 +85,19 @@ export function LanguageSwitcher({ variant = "default" }: LanguageSwitcherProps)
               key={lang.code}
               onClick={() => handleChange(lang.code)}
               className={cn(
-                "flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium outline-none",
+                "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors",
                 isActive
-                  ? "bg-[var(--upz-nav-accent)] text-[var(--upz-nav-navy)] focus:bg-[var(--upz-nav-accent)] dark:bg-slate-800 dark:text-slate-100"
-                  : "text-slate-700 focus:bg-slate-50 dark:text-slate-200 dark:focus:bg-slate-800",
+                  ? "bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-500/15 dark:text-indigo-300"
+                  : "text-foreground font-medium hover:bg-muted",
               )}
               data-testid={`lang-option-${lang.code}`}
             >
+              <span className="text-lg leading-none w-6 text-center">{LANG_FLAGS[lang.code]}</span>
               <span dir={lang.dir === "rtl" ? "rtl" : "ltr"} className="min-w-0 flex-1 truncate">
                 {lang.label}
               </span>
               {isActive && (
-                <Check className="h-4 w-4 flex-shrink-0 text-[var(--upz-nav-brand)] dark:text-blue-400" strokeWidth={2.5} />
+                <Check className="h-3.5 w-3.5 flex-shrink-0 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
               )}
             </DropdownMenuItem>
           );

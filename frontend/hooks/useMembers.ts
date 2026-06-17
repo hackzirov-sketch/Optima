@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { workspacesApi, type ApiMember, type ApiUser } from '@/lib/api';
 import { IS_DEMO, DEMO_MEMBERS } from '@/lib/demoData';
 
@@ -28,7 +28,9 @@ export function useMembers(workspaceId: string | undefined) {
     }
   }, [workspaceId]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; }, [load]);
+  useEffect(() => { loadRef.current(); }, [workspaceId]);
 
   const invite = useCallback(async (email: string, role?: string) => {
     if (!workspaceId) throw new Error('No workspace');

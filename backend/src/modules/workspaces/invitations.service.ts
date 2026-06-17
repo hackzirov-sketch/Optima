@@ -15,11 +15,12 @@ import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { InviteMemberDto } from './dto/invite-member.dto';
-import { WorkspaceRole, ChatRoomType } from '../../common/enums';
+import { ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { MailService } from '../mail/mail.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../../common/enums';
+import { PermissionService } from '../../common/services/permission.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -42,6 +43,7 @@ export class InvitationsService {
     private readonly dataSource: DataSource,
     private readonly mailService: MailService,
     private readonly notificationsService: NotificationsService,
+    private readonly permission: PermissionService,
   ) {}
 
   async create(
@@ -57,16 +59,8 @@ export class InvitationsService {
     const inviter = await this.memberRepo.findOne({
       where: { workspaceId, userId: inviterId },
     });
-    if (
-      !inviter ||
-      (inviter.role !== WorkspaceRole.OWNER &&
-        inviter.role !== WorkspaceRole.ADMIN)
-    ) {
-      throw new ConflictException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Not authorized to invite members',
-      });
-    }
+    if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    this.permission.assertCanManageWorkspace(inviter);
 
     const existingUser = await this.userRepo.findOne({
       where: { email: dto.email },
@@ -281,16 +275,8 @@ export class InvitationsService {
     const inviter = await this.memberRepo.findOne({
       where: { workspaceId, userId: requesterId },
     });
-    if (
-      !inviter ||
-      (inviter.role !== WorkspaceRole.OWNER &&
-        inviter.role !== WorkspaceRole.ADMIN)
-    ) {
-      throw new ConflictException({
-        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Not authorized to delete invitations',
-      });
-    }
+    if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    this.permission.assertCanManageWorkspace(inviter);
 
     const invitation = await this.invitationRepo.findOne({
       where: { id, workspaceId },

@@ -106,6 +106,10 @@ export interface UseWebSocketOptions {
   onReactionUpdated?: (evt: ReactionEvent) => void;
   onUserOnline?: (userId: string) => void;
   onUserOffline?: (userId: string) => void;
+  // ── Task real-time events ──
+  onTaskCreated?: (task: Record<string, unknown>) => void;
+  onTaskUpdated?: (task: Record<string, unknown>) => void;
+  onTaskDeleted?: (data: { taskId: string }) => void;
   // ── Meeting (WebRTC signaling) ──
   onMeetingParticipants?: (evt: MeetingParticipantsEvent) => void;
   onMeetingUserJoined?: (evt: MeetingUserEvent) => void;
@@ -127,6 +131,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     onReactionUpdated,
     onUserOnline,
     onUserOffline,
+    onTaskCreated,
+    onTaskUpdated,
+    onTaskDeleted,
     onMeetingParticipants,
     onMeetingUserJoined,
     onMeetingUserLeft,
@@ -228,12 +235,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   // ── Listener setup ────────────────────────────────────
   const cbRefs = useRef({
     onNewMessage, onTyping, onNotification, onReactionUpdated, onUserOnline, onUserOffline,
+    onTaskCreated, onTaskUpdated, onTaskDeleted,
     onMeetingParticipants, onMeetingUserJoined, onMeetingUserLeft,
     onMeetingOffer, onMeetingAnswer, onMeetingIce, onMeetingToggled,
   });
   useEffect(() => {
     cbRefs.current = {
       onNewMessage, onTyping, onNotification, onReactionUpdated, onUserOnline, onUserOffline,
+      onTaskCreated, onTaskUpdated, onTaskDeleted,
       onMeetingParticipants, onMeetingUserJoined, onMeetingUserLeft,
       onMeetingOffer, onMeetingAnswer, onMeetingIce, onMeetingToggled,
     };
@@ -274,6 +283,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     socket.on('typing', (evt: TypingEvent) => cbRefs.current.onTyping?.(evt));
     socket.on('notification', (n: WsNotification) => cbRefs.current.onNotification?.(n));
     socket.on('reaction_updated', (evt: ReactionEvent) => cbRefs.current.onReactionUpdated?.(evt));
+    socket.on('task:created', (data: { task: Record<string, unknown> }) => cbRefs.current.onTaskCreated?.(data.task));
+    socket.on('task:updated', (data: { task: Record<string, unknown> }) => cbRefs.current.onTaskUpdated?.(data.task));
+    socket.on('task:deleted', (data: { taskId: string }) => cbRefs.current.onTaskDeleted?.(data));
     socket.on('user_online', ({ userId }: { userId: string }) => {
       setOnlineUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
       cbRefs.current.onUserOnline?.(userId);
@@ -303,6 +315,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     socket.off('typing');
     socket.off('notification');
     socket.off('reaction_updated');
+    socket.off('task:created');
+    socket.off('task:updated');
+    socket.off('task:deleted');
     socket.off('user_online');
     socket.off('user_offline');
     socket.off('online_users');

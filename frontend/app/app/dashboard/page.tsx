@@ -35,6 +35,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
 import { tasksApi } from "@/lib/api";
+import { TaskCompletionModal } from "@/components/tasks/TaskCompletionModal";
 import { getUserDisplayName } from "@/lib/displayUser";
 import { buildProductivityData, buildWeeklyActivity, computeFocusScore, sortPendingTasks } from "@/lib/taskCharts";
 import { storage } from "@/utils/storage";
@@ -84,15 +85,32 @@ export default function Page() {
 
   // Pending task local toggle state
   const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
+  const [completionTarget, setCompletionTarget] = useState<{ id: string; title: string } | null>(null);
   const getStatus = (taskId: string, original: string) => localStatus[taskId] ?? original;
 
   const toggleTask = async (taskId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'done' ? 'backlog' : 'done';
-    setLocalStatus((prev) => ({ ...prev, [taskId]: newStatus }));
+    if (currentStatus === 'done') {
+      setLocalStatus((prev) => ({ ...prev, [taskId]: 'backlog' }));
+      try {
+        await tasksApi.move(taskId, { status: 'backlog' });
+      } catch {
+        setLocalStatus((prev) => ({ ...prev, [taskId]: 'done' }));
+      }
+      return;
+    }
+    const task = tasks.find((t) => t.id === taskId);
+    setCompletionTarget({ id: taskId, title: task?.title ?? '' });
+  };
+
+  const confirmCompletion = async (note: string) => {
+    if (!completionTarget) return;
+    const { id } = completionTarget;
+    setCompletionTarget(null);
+    setLocalStatus((prev) => ({ ...prev, [id]: 'done' }));
     try {
-      await tasksApi.move(taskId, { status: newStatus });
+      await tasksApi.update(id, { status: 'done' as never, completionNote: note || null });
     } catch {
-      setLocalStatus((prev) => ({ ...prev, [taskId]: currentStatus }));
+      setLocalStatus((prev) => ({ ...prev, [id]: 'todo' }));
     }
   };
 
@@ -278,6 +296,14 @@ export default function Page() {
   ];
 
   return (
+    <>
+      {completionTarget && (
+        <TaskCompletionModal
+          taskTitle={completionTarget.title}
+          onConfirm={confirmCompletion}
+          onCancel={() => setCompletionTarget(null)}
+        />
+      )}
     <PageShell>
       {/* ── Header with clock ─────────────────────────────────────────────── */}
       <PageHeader
@@ -627,5 +653,6 @@ export default function Page() {
         </SurfaceCard>
       </div>
     </PageShell>
+    </>
   );
 }

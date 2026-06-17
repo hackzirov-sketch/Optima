@@ -82,10 +82,7 @@ export function useMeeting(opts: {
   meetingIce: (id: string, target: string, c: RTCIceCandidateInit) => void;
   meetingToggle: (id: string, kind: 'audio' | 'video' | 'screen', enabled: boolean) => void;
 }): UseMeetingReturn {
-  const {
-    meetingId, mode, enabled, currentUserId,
-    meetingJoin, meetingLeave, meetingOffer, meetingAnswer, meetingIce, meetingToggle,
-  } = opts;
+  const { meetingId, mode, enabled, currentUserId } = opts;
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peerStreams, setPeerStreams] = useState<Map<string, MediaStream>>(new Map());
@@ -175,7 +172,7 @@ export function useMeeting(opts: {
         setLocalStream(stream);
         setLocalMicOn(true);
         setLocalCameraOn(mode === 'video');
-        meetingJoin(meetingId);
+        optsRef.current.meetingJoin(meetingId);
         setIsJoined(true);
       } catch (err) {
         console.error('[Meeting] getUserMedia failed', err);
@@ -191,9 +188,13 @@ export function useMeeting(opts: {
   }, [enabled, meetingId]);
 
   // ── Leave + cleanup ───────────────────────────────────
+  // Stable ref so effects/callbacks don't re-fire when opts change each render
+  const leaveRef = useRef<() => void>(null!);
+
   const leave = useCallback(() => {
     const mid = meetingIdRef.current;
-    if (mid) meetingLeave(mid);
+    // Use optsRef so this callback has no external deps and stays stable
+    if (mid) optsRef.current.meetingLeave(mid);
 
     peerConns.current.forEach((pc) => pc.close());
     peerConns.current.clear();
@@ -208,18 +209,18 @@ export function useMeeting(opts: {
     setPeerStates(new Map());
     setParticipants([]);
     setIsJoined(false);
-  }, [meetingLeave]);
+  }, []); // stable — no external deps, uses refs
 
-  // Cleanup on unmount or disabled
-  useEffect(() => {
-    if (!enabled) {
-      leave();
-    }
-  }, [enabled, leave]);
+  leaveRef.current = leave;
 
+  // Cleanup when disabled
   useEffect(() => {
-    return () => { leave(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!enabled) leaveRef.current();
+  }, [enabled]); // stable — leaveRef always points to latest leave
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { leaveRef.current(); };
   }, []);
 
   // ── Meeting event handlers ────────────────────────────

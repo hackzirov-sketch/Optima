@@ -21,6 +21,7 @@ import {
 } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
+import { PermissionService } from '../../common/services/permission.service';
 
 @Injectable()
 export class ProjectsService {
@@ -35,6 +36,7 @@ export class ProjectsService {
     private readonly groupMemberRepo: Repository<GroupMember>,
     private readonly dataSource: DataSource,
     private readonly contentFilter: ContentFilterService,
+    private readonly permission: PermissionService,
   ) {}
 
   private async checkProjectAccess(
@@ -59,16 +61,11 @@ export class ProjectsService {
       throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'You do not have access to this workspace' });
     }
 
-    const isAdminOrOwner =
-      wsMember.role === WorkspaceRole.OWNER ||
-      wsMember.role === WorkspaceRole.ADMIN;
-
-    if (requireAdmin && !isAdminOrOwner && project.createdById !== userId) {
-      throw new ForbiddenException({
-        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
-        message: 'Only workspace admins, owners, or the project creator can perform this action',
-      });
+    if (requireAdmin && project.createdById !== userId) {
+      this.permission.assertCanManageProject(wsMember);
     }
+
+    const isAdminOrOwner = this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN);
 
     if (project.groupId && !isAdminOrOwner) {
       const groupMember = await this.groupMemberRepo.findOne({
@@ -100,10 +97,7 @@ export class ProjectsService {
     }
 
     if (dto.groupId) {
-      const isAdminOrOwner =
-        wsMember.role === WorkspaceRole.OWNER ||
-        wsMember.role === WorkspaceRole.ADMIN;
-      if (!isAdminOrOwner) {
+      if (!this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN)) {
         const groupMember = await this.groupMemberRepo.findOne({
           where: { groupId: dto.groupId, userId },
         });
@@ -204,10 +198,7 @@ export class ProjectsService {
       .andWhere('project.deletedAt IS NULL');
 
     // If not admin, only show projects with no group OR projects where user is in the group
-    if (
-      wsMember.role !== WorkspaceRole.OWNER &&
-      wsMember.role !== WorkspaceRole.ADMIN
-    ) {
+    if (!this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN)) {
       qb.leftJoin(
         'group_members',
         'gm',

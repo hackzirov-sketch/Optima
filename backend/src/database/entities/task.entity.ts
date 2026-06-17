@@ -23,48 +23,48 @@ import { TaskWatcher } from './task-watcher.entity';
 @Entity('tasks')
 export class Task {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ name: 'workspace_id' })
-  workspaceId: string;
+  workspaceId!: string;
 
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace: Workspace;
+  workspace!: Workspace;
 
   @Column({ name: 'project_id' })
-  projectId: string;
+  projectId!: string;
 
   @ManyToOne(() => Project, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'project_id' })
-  project: Project;
+  project!: Project;
 
   @Column({ name: 'group_id', nullable: true })
-  groupId: string;
+  groupId!: string | null;
 
   @ManyToOne(() => Group, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'group_id' })
-  group: Group;
+  group!: Group | null;
 
   @Column({ name: 'column_id', type: 'uuid', nullable: true })
-  columnId: string | null;
+  columnId!: string | null;
 
   @ManyToOne(() => ProjectColumn, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'column_id' })
-  column: ProjectColumn;
+  column!: ProjectColumn | null;
 
   @Column({ name: 'parent_task_id', nullable: true })
-  parentTaskId: string;
+  parentTaskId!: string | null;
 
   @ManyToOne(() => Task, (task) => task.subtasks, {
     onDelete: 'SET NULL',
     nullable: true,
   })
   @JoinColumn({ name: 'parent_task_id' })
-  parentTask: Task;
+  parentTask!: Task | null;
 
   @OneToMany(() => Task, (task) => task.parentTask)
-  subtasks: Task[];
+  subtasks!: Task[];
 
   @OneToMany(() => TaskTag, (tt) => tt.task)
   taskTags!: TaskTag[];
@@ -73,58 +73,58 @@ export class Task {
   watchers!: TaskWatcher[];
 
   @Column({ name: 'task_number' })
-  taskNumber: number;
+  taskNumber!: number;
 
   @Column({ name: 'creator_id' })
-  creatorId: string;
+  creatorId!: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'creator_id' })
-  creator: User;
+  creator!: User;
 
   @Column({ name: 'assignee_id', nullable: true })
-  assigneeId: string;
+  assigneeId!: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'assignee_id' })
-  assignee: User;
+  assignee!: User | null;
 
   @Column({ name: 'reviewer_id', nullable: true })
-  reviewerId: string;
+  reviewerId!: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'reviewer_id' })
-  reviewer: User;
+  reviewer!: User | null;
 
   @Column({ length: 500 })
-  title: string;
+  title!: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description!: string | null;
 
   @Column({
     type: 'enum',
     enum: TaskType,
     default: TaskType.FEATURE,
   })
-  type: TaskType;
+  type!: TaskType;
 
   @Column({
     type: 'enum',
     enum: PriorityLevel,
     default: PriorityLevel.MEDIUM,
   })
-  priority: PriorityLevel;
+  priority!: PriorityLevel;
 
   @Column({
     type: 'enum',
     enum: TaskStatus,
     default: TaskStatus.BACKLOG,
   })
-  status: TaskStatus;
+  status!: TaskStatus;
 
   @Column({ name: 'story_points', type: 'smallint', nullable: true })
-  storyPoints: number;
+  storyPoints!: number | null;
 
   @Column({
     name: 'estimated_hours',
@@ -133,7 +133,7 @@ export class Task {
     scale: 2,
     nullable: true,
   })
-  estimatedHours: number;
+  estimatedHours!: number | null;
 
   @Column({
     name: 'spent_hours',
@@ -142,38 +142,44 @@ export class Task {
     scale: 2,
     default: 0,
   })
-  spentHours: number;
+  spentHours!: number;
 
   @Column({ name: 'start_date', type: 'date', nullable: true })
-  startDate: string;
+  startDate!: string | null;
 
   @Column({ name: 'due_date', type: 'date', nullable: true })
-  dueDate: string;
+  dueDate!: string | null;
+
+  @Column({ name: 'started_at', type: 'timestamptz', nullable: true })
+  startedAt!: Date | null;
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
-  completedAt: Date | null;
+  completedAt!: Date | null;
+
+  @Column({ name: 'completion_note', type: 'text', nullable: true })
+  completionNote!: string | null;
 
   @Column({ name: 'github_pr_number', nullable: true })
-  githubPrNumber: number;
+  githubPrNumber!: number | null;
 
   @Column({ name: 'github_pr_url', type: 'text', nullable: true })
-  githubPrUrl: string;
+  githubPrUrl!: string | null;
 
   @Column({ default: 0 })
-  position: number;
+  position!: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
-  deletedAt: Date | null;
+  deletedAt!: Date | null;
 
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
-  deletedBy: string | null;
+  deletedBy!: string | null;
 
   @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
+  isDeleted!: boolean;
 }

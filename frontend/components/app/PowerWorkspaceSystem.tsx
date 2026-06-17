@@ -124,10 +124,12 @@ export function DataTable({
   columns,
   rows,
   onRowClick,
+  emptyLabel = "Hech qanday task topilmadi",
 }: {
   columns: string[];
   rows: Array<{ id: string; cells: ReactNode[] }>;
   onRowClick?: (id: string) => void;
+  emptyLabel?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-[24px] border border-border bg-card">
@@ -137,20 +139,31 @@ export function DataTable({
         ))}
       </div>
       <div className="divide-y divide-border">
-        {rows.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            onClick={() => onRowClick?.(row.id)}
-            className="grid w-full gap-2 px-4 py-4 text-left transition-colors hover:bg-muted lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.7fr]"
-          >
-            {row.cells.map((cell, index) => (
-              <span key={`${row.id}-${index}`} className="min-w-0 text-sm text-foreground">
-                {cell}
-              </span>
-            ))}
-          </button>
-        ))}
+        {rows.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-14 text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-muted text-muted-foreground/50">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-muted-foreground">{emptyLabel}</p>
+          </div>
+        ) : (
+          rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onRowClick?.(row.id)}
+              className="grid w-full gap-2 px-4 py-4 text-left transition-colors hover:bg-muted lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.7fr]"
+            >
+              {row.cells.map((cell, index) => (
+                <span key={`${row.id}-${index}`} className="min-w-0 text-sm text-foreground">
+                  {cell}
+                </span>
+              ))}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
