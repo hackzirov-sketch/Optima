@@ -7,6 +7,7 @@ import { CheckCircle2, Loader2, Users, XCircle } from 'lucide-react';
 import { invitationsApi } from '@/lib/api';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAuth } from '@/hooks/useAuth';
+import { ActionButton } from '@/components/app/DesignSystem';
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -14,31 +15,43 @@ export default function InvitePage() {
   const { isAuthenticated } = useAuth();
   const { refreshWorkspaces } = useWorkspace();
 
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'confirm' | 'loading' | 'success' | 'declined' | 'error'>('confirm');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (!token) return;
     if (!isAuthenticated) {
-      // Save the invite token and redirect to login
       sessionStorage.setItem('pending_invite_token', token as string);
       router.push('/auth/login');
-      return;
     }
+  }, [token, isAuthenticated, router]);
 
+  const handleAccept = async () => {
     setStatus('loading');
-    invitationsApi.accept(token as string)
-      .then(async () => {
-        await refreshWorkspaces();
-        setStatus('success');
-        setTimeout(() => router.push('/app/home'), 2000);
-      })
-      .catch((err) => {
-        const msg = err?.message ?? 'Invitation is invalid or has expired.';
-        setErrorMsg(msg);
-        setStatus('error');
-      });
-  }, [token, isAuthenticated]);
+    try {
+      await invitationsApi.accept(token as string);
+      await refreshWorkspaces();
+      setStatus('success');
+      setTimeout(() => router.push('/app/home'), 2000);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? 'Invitation is invalid or has expired.';
+      setErrorMsg(msg);
+      setStatus('error');
+    }
+  };
+
+  const handleDecline = async () => {
+    setStatus('loading');
+    try {
+      await invitationsApi.decline(token as string);
+    } catch {
+      // ignore
+    }
+    setStatus('declined');
+    setTimeout(() => router.push('/app/home'), 2000);
+  };
+
+  if (!isAuthenticated) return null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -47,20 +60,46 @@ export default function InvitePage() {
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-md rounded-[28px] border border-border bg-card p-8 text-center shadow-modal"
       >
-        {status === 'idle' || status === 'loading' ? (
+        {status === 'confirm' && (
+          <>
+            <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-indigo-50 dark:bg-indigo-950/40">
+              <Users className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <h1 className="text-xl font-black text-foreground">Workspace invitation</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You've been invited to join a workspace. Do you want to accept?
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <ActionButton onClick={handleAccept} className="w-full sm:w-auto">
+                <CheckCircle2 className="h-4 w-4" /> Accept invitation
+              </ActionButton>
+              <ActionButton
+                variant="secondary"
+                onClick={handleDecline}
+                className="w-full border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/30 sm:w-auto"
+              >
+                <XCircle className="h-4 w-4" /> Decline
+              </ActionButton>
+            </div>
+          </>
+        )}
+
+        {status === 'loading' && (
           <>
             <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-indigo-50 dark:bg-indigo-950/40">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
             </div>
-            <h1 className="text-xl font-black text-foreground">Accepting invitation…</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Please wait while we process your invite.</p>
+            <h1 className="text-xl font-black text-foreground">Processing…</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Please wait.</p>
           </>
-        ) : status === 'success' ? (
+        )}
+
+        {status === 'success' && (
           <>
             <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-emerald-50 dark:bg-emerald-950/40">
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
-            <h1 className="text-xl font-black text-foreground">You&apos;ve joined the workspace!</h1>
+            <h1 className="text-xl font-black text-foreground">You've joined the workspace!</h1>
             <p className="mt-2 text-sm text-muted-foreground">Redirecting to your workspace…</p>
             <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-muted">
               <motion.div
@@ -71,38 +110,29 @@ export default function InvitePage() {
               />
             </div>
           </>
-        ) : (
+        )}
+
+        {status === 'declined' && (
+          <>
+            <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-slate-50 dark:bg-slate-900">
+              <XCircle className="h-8 w-8 text-slate-400" />
+            </div>
+            <h1 className="text-xl font-black text-foreground">Invitation declined</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Redirecting you home…</p>
+          </>
+        )}
+
+        {status === 'error' && (
           <>
             <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-rose-50 dark:bg-rose-950/40">
               <XCircle className="h-8 w-8 text-rose-600" />
             </div>
             <h1 className="text-xl font-black text-foreground">Invitation failed</h1>
             <p className="mt-2 text-sm text-muted-foreground">{errorMsg}</p>
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-              <button
-                type="button"
-                onClick={() => router.push('/app/home')}
-                className="rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-indigo-500"
-              >
+            <div className="mt-6">
+              <ActionButton onClick={() => router.push('/app/home')} className="w-full">
                 Go to Home
-              </button>
-              {isAuthenticated && token && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStatus('loading');
-                    invitationsApi.decline(token as string)
-                      .then(() => router.push('/app/home'))
-                      .catch(() => {
-                        setErrorMsg('Could not decline invitation.');
-                        setStatus('error');
-                      });
-                  }}
-                  className="rounded-2xl border border-border px-6 py-2.5 text-sm font-bold text-muted-foreground hover:bg-muted"
-                >
-                  Decline invite
-                </button>
-              )}
+              </ActionButton>
             </div>
           </>
         )}

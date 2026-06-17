@@ -10,6 +10,7 @@ import {
   ChevronUp,
   CreditCard,
   Crown,
+  Inbox,
   LayoutDashboard,
   Layers,
   Plus,
@@ -32,6 +33,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "./DesignSystem";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const SIDEBAR_WIDTH_EXPANDED = 272;
 const SIDEBAR_WIDTH_COLLAPSED = 68;
@@ -42,6 +44,7 @@ const NAV_GROUPS = [
     items: [
       { path: "/app/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
       { path: "/app/workspace", labelKey: "workspace", icon: Layers },
+      { path: "/app/inbox", labelKey: "inbox", icon: Inbox, badgeKey: "inbox" },
       { path: "/app/chat", labelKey: "chat", icon: MessageCircle, badgeKey: "live" },
       { path: "/app/meetings", labelKey: "meetings", icon: Video },
     ],
@@ -180,6 +183,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
   const [newWsName, setNewWsName] = useState('');
   const [newWsLoading, setNewWsLoading] = useState(false);
   const { workspaces, activeWorkspace, setActiveWorkspace, createWorkspace } = useWorkspace();
+  const { unreadCount } = useNotifications();
 
   const menuItems = [
     { href: "/app/profile", label: t("app.nav.profile"), icon: User },
@@ -287,19 +291,27 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
             )}
 
             <div className="space-y-2">
-              {group.items.map(({ path, labelKey, icon, badgeKey }) => (
-                <NavItem
-                  key={path}
-                  path={path}
-                  label={t(`app.nav.${labelKey}`)}
-                  icon={icon}
-                  badgeKey={badgeKey}
-                  badgeLabel={badgeKey ? t(`app.nav.${badgeKey}`) : undefined}
-                  active={pathname.startsWith(path)}
-                  collapsed={collapsed}
-                  onNavigate={onNavigate}
-                />
-              ))}
+              {group.items.map(({ path, labelKey, icon, badgeKey }) => {
+                let badgeLabel: string | undefined;
+                if (badgeKey === 'inbox') {
+                  badgeLabel = unreadCount > 0 ? String(unreadCount > 99 ? '99+' : unreadCount) : undefined;
+                } else if (badgeKey) {
+                  badgeLabel = t(`app.nav.${badgeKey}`);
+                }
+                return (
+                  <NavItem
+                    key={path}
+                    path={path}
+                    label={t(`app.nav.${labelKey}`)}
+                    icon={icon}
+                    badgeKey={badgeKey}
+                    badgeLabel={badgeLabel}
+                    active={pathname.startsWith(path)}
+                    collapsed={collapsed}
+                    onNavigate={onNavigate}
+                  />
+                );
+              })}
             </div>
           </div>
         ))}

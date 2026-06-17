@@ -427,8 +427,15 @@ export default function ChatPage() {
       setDraft("");
       setReplyTo(null);
 
-      // Fetch real AI reply from backend
-      const context = activeRoom.messages.slice(-6).map((m) => m.text).join('\n');
+      // Build JSON history for multi-turn Gemini context (last 30 messages)
+      const history = activeRoom.messages
+        .slice(-30)
+        .filter((m) => m.text && m.text !== '…')
+        .map((m) => ({
+          role: m.userId === 'ai' ? ('model' as const) : ('user' as const),
+          text: m.text,
+        }));
+
       const thinkingId = `m-ai-thinking-${Date.now()}`;
       updateActiveRoom((room) => ({
         ...room,
@@ -441,7 +448,7 @@ export default function ChatPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getAccessToken() ?? ''}`,
         },
-        body: JSON.stringify({ message: text, context }),
+        body: JSON.stringify({ message: text, history }),
       })
         .then((r) => r.json())
         .then((res: { data?: { reply?: string } }) => {

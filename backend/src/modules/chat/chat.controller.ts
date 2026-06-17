@@ -130,9 +130,9 @@ export class ChatController {
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(
     @Body('message') message: string,
-    @Body('context') context: string | undefined,
+    @Body('history') history: { role: 'user' | 'model'; text: string }[] | undefined,
     @CurrentUser('id') userId: string,
   ) {
-    return this.chatService.generateAiReply(message, context, userId);
+    return this.chatService.generateAiReply(message, history ?? [], userId);
   }
 }

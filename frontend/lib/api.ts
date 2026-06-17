@@ -686,10 +686,14 @@ export interface ApiNotification {
   id: string;
   type: string;
   title: string;
-  body: string;
+  body?: string;
+  message?: string;
   isRead: boolean;
   actorId?: string;
   actor?: ApiUser;
+  entityType?: string;
+  entityId?: string;
+  actionUrl?: string;
   resourceType?: string;
   resourceId?: string;
   createdAt: string;

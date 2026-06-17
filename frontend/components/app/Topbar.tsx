@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle2, PanelLeft, PanelLeftClose } from "lucide-react";
+import { Bell, CheckCircle2, Inbox, Loader2, PanelLeft, PanelLeftClose, XCircle } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { UserProfile } from "@/types";
@@ -11,6 +12,8 @@ import { LanguageSwitcher } from "@/components/landing/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "./DesignSystem";
 import { useNotifications } from "@/hooks/useNotifications";
+import { invitationsApi, type ApiNotification } from "@/lib/api";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 
 interface TopbarProps {
   user: UserProfile;
@@ -22,6 +25,7 @@ const PATH_TITLE_KEY: [string, string][] = [
   ["/app/home", "home"],
   ["/app/dashboard", "dashboard"],
   ["/app/workspace", "workspace"],
+  ["/app/inbox", "inbox"],
   ["/app/chat", "chat"],
   ["/app/meetings", "meetings"],
   ["/app/premium", "premium"],
@@ -35,6 +39,101 @@ const PATH_TITLE_KEY: [string, string][] = [
   ["/app/profile", "profile"],
   ["/app/settings", "settings"],
 ];
+
+function extractToken(actionUrl?: string): string | null {
+  if (!actionUrl) return null;
+  try {
+    const url = new URL(actionUrl, 'http://x');
+    return url.searchParams.get('token');
+  } catch {
+    const match = actionUrl.match(/[?&]token=([^&]+)/);
+    return match?.[1] ?? null;
+  }
+}
+
+function InviteNotifRow({
+  notification,
+  onDone,
+}: {
+  notification: ApiNotification;
+  onDone: (id: string) => void;
+}) {
+  const { refreshWorkspaces } = useWorkspace();
+  const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
+  const [result, setResult] = useState<'accepted' | 'declined' | null>(null);
+  const token = extractToken(notification.actionUrl);
+
+  if (result) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-slate-200 dark:bg-slate-600" />
+        <span className="flex-1 text-sm text-muted-foreground">
+          {result === 'accepted' ? '✓ Accepted invitation' : '✗ Invitation declined'}
+        </span>
+      </div>
+    );
+  }
+
+  const handleAccept = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!token) return;
+    setBusy('accept');
+    try {
+      await invitationsApi.accept(token);
+      await refreshWorkspaces();
+      setResult('accepted');
+      onDone(notification.id);
+    } catch { setBusy(null); }
+  };
+
+  const handleDecline = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!token) return;
+    setBusy('decline');
+    try {
+      await invitationsApi.decline(token);
+      setResult('declined');
+      onDone(notification.id);
+    } catch { setBusy(null); }
+  };
+
+  return (
+    <div className={cn(
+      "rounded-2xl px-3 py-2.5 transition-colors",
+      !notification.isRead && "bg-[var(--upz-nav-accent)]/70 dark:bg-blue-500/10",
+    )}>
+      <div className="flex items-center gap-2">
+        <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", !notification.isRead ? "bg-[var(--upz-nav-brand)]" : "bg-slate-200 dark:bg-slate-600")} />
+        <span className="flex-1 min-w-0">
+          <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-500">Workspace Invite</span>
+          <span className="block truncate text-sm font-semibold text-foreground">{notification.title}</span>
+        </span>
+      </div>
+      {token && (
+        <div className="mt-2 flex gap-2 pl-4">
+          <button
+            type="button"
+            onClick={handleAccept}
+            disabled={!!busy}
+            className="flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-60"
+          >
+            {busy === 'accept' ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+            Accept
+          </button>
+          <button
+            type="button"
+            onClick={handleDecline}
+            disabled={!!busy}
+            className="flex items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-60"
+          >
+            {busy === 'decline' ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+            Decline
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
   const { t } = useTranslation();
@@ -146,31 +245,48 @@ export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
                     No notifications
                   </div>
                 )}
-                {realNotifs.map((notification) => (
-                  <button
-                    key={notification.id}
-                    type="button"
-                    onClick={() => { markRead(notification.id); }}
-                    className={cn(
-                      "flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted",
-                      !notification.isRead && "bg-[var(--upz-nav-accent)]/70 dark:bg-blue-500/10",
-                    )}
-                  >
-                    <span className={cn("mt-1 h-2 w-2 flex-shrink-0 rounded-full", !notification.isRead ? "bg-[var(--upz-nav-brand)]" : "bg-slate-200 dark:bg-slate-600")} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{notification.type}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(notification.createdAt).toLocaleDateString()}</span>
+                {realNotifs.map((notification) =>
+                  notification.type === 'workspace_invite' ? (
+                    <InviteNotifRow
+                      key={notification.id}
+                      notification={notification}
+                      onDone={(id) => { markRead(id); refreshNotifs(); }}
+                    />
+                  ) : (
+                    <button
+                      key={notification.id}
+                      type="button"
+                      onClick={() => { markRead(notification.id); }}
+                      className={cn(
+                        "flex w-full gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-muted",
+                        !notification.isRead && "bg-[var(--upz-nav-accent)]/70 dark:bg-blue-500/10",
+                      )}
+                    >
+                      <span className={cn("mt-1 h-2 w-2 flex-shrink-0 rounded-full", !notification.isRead ? "bg-[var(--upz-nav-brand)]" : "bg-slate-200 dark:bg-slate-600")} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{notification.type}</span>
+                          <span className="text-xs text-muted-foreground">{new Date(notification.createdAt).toLocaleDateString()}</span>
+                        </span>
+                        <span className="mt-1 block text-sm font-semibold text-foreground">{notification.title}</span>
+                        <span className="block text-xs leading-5 text-muted-foreground">{notification.body ?? notification.message}</span>
                       </span>
-                      <span className="mt-1 block text-sm font-semibold text-foreground">{notification.title}</span>
-                      <span className="block text-xs leading-5 text-muted-foreground">{notification.body}</span>
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                  )
+                )}
               </div>
-              <div className="mt-2 flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                {wsStatus === "connected" ? t("app.topbar.liveSync", "Live sync active") : t("app.topbar.localOnly")}
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-muted px-3 py-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  {wsStatus === "connected" ? t("app.topbar.liveSync", "Live sync active") : t("app.topbar.localOnly")}
+                </div>
+                <Link
+                  href="/app/inbox"
+                  onClick={() => setBellOpen(false)}
+                  className="flex items-center gap-1 text-xs font-semibold text-[var(--upz-nav-brand)] hover:underline"
+                >
+                  <Inbox className="h-3.5 w-3.5" /> View all
+                </Link>
               </div>
             </motion.div>
           )}

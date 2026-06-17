@@ -510,7 +510,7 @@ export class ChatService {
 
   async generateAiReply(
     message: string,
-    context: string | undefined,
+    history: { role: 'user' | 'model'; text: string }[],
     _userId: string,
   ): Promise<{ reply: string }> {
     const text = (message ?? '').trim();
@@ -520,18 +520,26 @@ export class ChatService {
 
     if (this.gemini) {
       try {
-        const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        // gemini-1.5-flash is on v1, not v1beta
+        const model = this.gemini.getGenerativeModel(
+          { model: 'gemini-1.5-flash' },
+          { apiVersion: 'v1' },
+        );
 
         const systemInstruction = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
 Foydalanuvchilarga vazifalar, loyihalar, jamoa boshqaruvi, xabarlar va ish samaradorligi bo'yicha yordam berasan.
-Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).
-Kontekst mavjud bo'lsa undan foydalanib javob ber.`;
+Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).`;
 
-        const prompt = context
-          ? `${systemInstruction}\n\nOldingi xabarlar:\n${context}\n\nFoydalanuvchi: ${text}`
-          : `${systemInstruction}\n\nFoydalanuvchi: ${text}`;
+        const geminiHistory = history
+          .filter((h) => h.text?.trim())
+          .map((h) => ({ role: h.role, parts: [{ text: h.text }] }));
 
-        const result = await model.generateContent(prompt);
+        const chat = model.startChat({
+          systemInstruction: { role: 'user', parts: [{ text: systemInstruction }] },
+          history: geminiHistory,
+        });
+
+        const result = await chat.sendMessage(text);
         const reply = result.response.text().trim();
         if (reply) return { reply };
       } catch (err) {
@@ -539,7 +547,7 @@ Kontekst mavjud bo'lsa undan foydalanib javob ber.`;
       }
     }
 
-    // Fallback when OpenAI is unavailable
+    // Fallback
     const lower = text.toLowerCase();
     if (/salom|hello|hi\b|hey\b/i.test(lower)) {
       return { reply: "Salom! Men UPZ AI yordamchisiman. Vazifa, loyiha yoki jamoa boshqaruvi bo'yicha yordam bera olaman." };

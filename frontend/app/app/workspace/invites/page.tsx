@@ -5,6 +5,7 @@ import { Loader2, UserPlus } from 'lucide-react';
 import { ActionButton, PageHeader, PageShell, SectionTitle, SurfaceCard } from '@/components/app/DesignSystem';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useInvitations } from '@/hooks/useInvitations';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 type InvitationStatus = 'pending' | 'expired' | 'accepted' | 'declined';
 
@@ -26,7 +27,9 @@ const ROLES = ['guest', 'junior', 'middle', 'senior', 'lead', 'admin'] as const;
 
 export default function WorkspaceInvitesPage() {
   const { activeWorkspace } = useWorkspace();
-  const { invitations, loading, send, cancel } = useInvitations(activeWorkspace?.id);
+  const { invitations, loading, send, cancel, refresh } = useInvitations(activeWorkspace?.id);
+
+  useWebSocket({ onNotification: () => refresh() });
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('junior');

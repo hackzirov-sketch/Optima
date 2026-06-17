@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ChatRoom } from '../../database/entities/chat-room.entity';
@@ -16,7 +16,7 @@ import { ChatController } from './chat.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([ChatRoom, ChatMember, ChatMessage, ChatReaction, Group, Project]),
-    WorkspacesModule,
+    forwardRef(() => WorkspacesModule),
     ModerationModule,
   ],
   controllers: [ChatController],
