@@ -61,8 +61,13 @@ export class AuthProcessor extends WorkerHost {
   private async handleResendVerification(data: { userId: string; email: string }) {
     const { userId, email } = data;
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user || user.isVerified) {
-      this.logger.debug(`resend-verification skipped for ${userId} (verified or missing)`);
+    if (!user) {
+      this.logger.debug(`resend-verification skipped for ${userId} (user not found)`);
+      return;
+    }
+    // Skip only if verified AND no pending password setup
+    if (user.isVerified && !user.needsPasswordSetup) {
+      this.logger.debug(`resend-verification skipped for ${userId} (already verified)`);
       return;
     }
 

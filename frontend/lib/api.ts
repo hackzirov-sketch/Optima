@@ -217,7 +217,7 @@ export const authApi = {
   me: () => request<{ data: ApiUser }>('GET', '/users/me'),
 
   verifyEmail: (code: string) =>
-    request<VerifyEmailResponse>('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
+    request<{ data: VerifyEmailResponse }>('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
 
   setPassword: (password: string) =>
     request('POST', '/auth/set-password', { body: { password } }),
@@ -907,6 +907,47 @@ export const storageApi = {
     request('DELETE', `/storage/file?publicId=${encodeURIComponent(publicId)}`),
 };
 
+// ─── Meetings API ────────────────────────────────────────────────────────────
+export interface ApiMeeting {
+  id: string;
+  workspaceId: string;
+  hostId: string;
+  title: string;
+  description?: string;
+  code: string;
+  startTime: string;
+  endTime?: string;
+  isActive: boolean;
+  isRecurring: boolean;
+  agenda?: string;
+  maxParticipants: number;
+  participantCount?: number;
+  createdAt: string;
+}
+
+export const meetingsApi = {
+  list: (workspaceId: string) =>
+    request<{ data: ApiMeeting[] }>('GET', `/workspaces/${workspaceId}/meetings`),
+  create: (workspaceId: string, dto: {
+    title: string;
+    description?: string;
+    startTime: string;
+    endTime?: string;
+    agenda?: string;
+  }) =>
+    request<{ data: ApiMeeting }>('POST', `/workspaces/${workspaceId}/meetings`, { body: dto }),
+  joinByCode: (code: string) =>
+    request<{ data: ApiMeeting }>('POST', '/meetings/join-by-code', { body: { code } }),
+  getOne: (meetingId: string) =>
+    request<{ data: ApiMeeting }>('GET', `/meetings/${meetingId}`),
+  start: (meetingId: string) =>
+    request<{ data: ApiMeeting }>('PATCH', `/meetings/${meetingId}`, { body: { isActive: true } }),
+  end: (meetingId: string) =>
+    request<{ data: ApiMeeting }>('PATCH', `/meetings/${meetingId}`, { body: { isActive: false } }),
+  delete: (meetingId: string) =>
+    request('DELETE', `/meetings/${meetingId}`),
+};
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -921,4 +962,5 @@ export default {
   pushes: pushesApi,
   tags: tagsApi,
   storage: storageApi,
+  meetings: meetingsApi,
 };

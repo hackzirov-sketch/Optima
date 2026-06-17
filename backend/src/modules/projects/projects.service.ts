@@ -20,6 +20,7 @@ import {
   isActiveEntity,
 } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
+import { ContentFilterService } from '../moderation/services/content-filter.service';
 
 @Injectable()
 export class ProjectsService {
@@ -33,6 +34,7 @@ export class ProjectsService {
     @InjectRepository(GroupMember)
     private readonly groupMemberRepo: Repository<GroupMember>,
     private readonly dataSource: DataSource,
+    private readonly contentFilter: ContentFilterService,
   ) {}
 
   private async checkProjectAccess(
@@ -84,6 +86,11 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
+    await this.contentFilter.filterText(dto.name, userId, 'project_name');
+    if (dto.description) {
+      await this.contentFilter.filterText(dto.description, userId, 'project_description');
+    }
+
     const wsMember = await this.workspaceMemberRepo.findOne({
       where: { workspaceId: dto.workspaceId, userId },
     });

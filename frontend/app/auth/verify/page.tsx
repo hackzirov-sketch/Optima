@@ -24,19 +24,21 @@ export default function VerifyPage() {
     setError("");
     try {
       const res = await authApi.verifyEmail(code);
+      const payload = res?.data;
 
-      if (res?.accessToken && res?.refreshToken) {
-        setTokens(res.accessToken, res.refreshToken);
+      if (payload?.accessToken && payload?.refreshToken) {
+        setTokens(payload.accessToken, payload.refreshToken);
 
-        if (res?.user) {
+        const apiUser = payload.user;
+        if (apiUser) {
           login({
-            name: `${res.user.firstName} ${res.user.lastName}`.trim(),
+            name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
             profession: 'developer',
             goal: 'build_portfolio',
             experience: 'intermediate',
             joinedAt: Date.now(),
-            email: res.user.email,
-            username: res.user.username,
+            email: apiUser.email,
+            username: apiUser.username,
             authProvider: 'email',
           });
         } else {
@@ -55,50 +57,19 @@ export default function VerifyPage() {
               });
             }
           } catch {
-            // ignore and continue to redirect handling
+            // ignore
           }
         }
 
         setSuccess(true);
-        const target = res.redirect === '/set-password' ? '/auth/set-password' : '/app/home';
+        const target = payload.redirect === '/set-password' ? '/auth/set-password' : '/app/home';
         setTimeout(() => router.push(target), 1200);
       } else {
-        const pendingEmail = sessionStorage.getItem('pending_verify_email');
-        const pendingPassword = sessionStorage.getItem('pending_verify_password');
-
-        if (pendingEmail && pendingPassword) {
-          sessionStorage.removeItem('pending_verify_email');
-          sessionStorage.removeItem('pending_verify_password');
-
-          try {
-            const loginRes = await authApi.login({ email: pendingEmail, password: pendingPassword });
-            if (loginRes?.data?.accessToken) {
-              setTokens(loginRes.data.accessToken, loginRes.data.refreshToken);
-              const { user: apiUser } = loginRes.data;
-              login({
-                name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
-                profession: 'developer',
-                goal: 'build_portfolio',
-                experience: 'intermediate',
-                joinedAt: Date.now(),
-                email: apiUser.email,
-                username: apiUser.username,
-                authProvider: 'email',
-              });
-              setSuccess(true);
-              setTimeout(() => router.push('/app/home'), 1200);
-              return;
-            }
-          } catch {
-            // Login failed after verify
-          }
-        }
-
-        setError('Verification succeeded, but automatic sign-in failed. Please sign in manually.');
-        setTimeout(() => router.push('/auth/login'), 2000);
+        setError('Verification failed. Please try again.');
       }
-    } catch {
-      setError('Invalid code or verification failed. Please try again.');
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      setError(apiErr?.message ?? 'Invalid code or verification failed. Please try again.');
     } finally {
       setLoading(false);
     }

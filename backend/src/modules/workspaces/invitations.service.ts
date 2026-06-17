@@ -18,6 +18,8 @@ import { InviteMemberDto } from './dto/invite-member.dto';
 import { WorkspaceRole, ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { MailService } from '../mail/mail.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../../common/enums';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -39,6 +41,7 @@ export class InvitationsService {
     private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly mailService: MailService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -108,6 +111,21 @@ export class InvitationsService {
 
     const saved = await this.invitationRepo.save(invitation);
     await this.mailService.sendInvitationEmail(dto.email, token, workspace.name);
+
+    // Real-time notification to invited user (if they have an account)
+    if (existingUser) {
+      await this.notificationsService.create({
+        userId: existingUser.id,
+        actorId: inviterId,
+        type: NotificationType.WORKSPACE_INVITE,
+        title: `You've been invited to "${workspace.name}"`,
+        message: `Accept the invitation to join the workspace.`,
+        entityType: 'workspace',
+        entityId: workspaceId,
+        actionUrl: `/auth/accept-invite?token=${token}`,
+      });
+    }
+
     return saved;
   }
 
@@ -207,6 +225,22 @@ export class InvitationsService {
       }
 
       await queryRunner.commitTransaction();
+
+      // Notify the inviter that the invitation was accepted
+      if (invitation.invitedById && invitation.invitedById !== userId) {
+        const userName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email;
+        await this.notificationsService.create({
+          userId: invitation.invitedById,
+          actorId: userId,
+          type: NotificationType.WORKSPACE_INVITE,
+          title: `${userName} accepted your invitation`,
+          message: `They joined "${invitation.workspace.name}".`,
+          entityType: 'workspace',
+          entityId: invitation.workspaceId,
+          actionUrl: `/app/teams`,
+        });
+      }
+
       return savedMember;
     } catch (error) {
       await queryRunner.rollbackTransaction();

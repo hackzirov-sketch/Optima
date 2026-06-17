@@ -15,6 +15,7 @@ import { User } from '../../database/entities/user.entity';
 import { Tag } from '../../database/entities/tag.entity';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { MailModule } from '../mail/mail.module';
     ]),
     UsersModule,
     MailModule,
+    NotificationsModule,
   ],
   controllers: [WorkspacesController, InvitationsController],
   providers: [WorkspacesService, MembersService, InvitationsService, TagsService],

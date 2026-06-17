@@ -6,6 +6,7 @@ import { Project } from '../../database/entities/project.entity';
 import { ProjectColumn } from '../../database/entities/project-column.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { GroupMember } from '../../database/entities/group-member.entity';
+import { ModerationModule } from '../moderation/moderation.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { GroupMember } from '../../database/entities/group-member.entity';
       WorkspaceMember,
       GroupMember,
     ]),
+    ModerationModule,
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

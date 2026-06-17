@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In, MoreThan } from 'typeorm';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
@@ -70,16 +70,17 @@ export class ChatService {
     private readonly membersService: MembersService,
     private readonly contentFilter: ContentFilterService,
   ) {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
+      this.gemini = new GoogleGenerativeAI(apiKey);
+      this.logger.log('Gemini AI initialized');
     } else {
-      this.logger.warn('OPENAI_API_KEY not set — AI assistant will use fallback responses');
+      this.logger.warn('GEMINI_API_KEY not set — AI assistant will use fallback responses');
     }
   }
 
   private readonly logger = new Logger(ChatService.name);
-  private openai: OpenAI | null = null;
+  private gemini: GoogleGenerativeAI | null = null;
 
   private async assertRoomMember(
     roomId: string,
@@ -517,35 +518,24 @@ export class ChatService {
       return { reply: "Men tayyorman. Savol, vazifa yoki matn yozing — yordam beraman." };
     }
 
-    if (this.openai) {
+    if (this.gemini) {
       try {
-        const systemPrompt = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
+        const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+        const systemInstruction = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
 Foydalanuvchilarga vazifalar, loyihalar, jamoa boshqaruvi, xabarlar va ish samaradorligi bo'yicha yordam berasan.
 Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).
 Kontekst mavjud bo'lsa undan foydalanib javob ber.`;
 
-        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-          { role: 'system', content: systemPrompt },
-        ];
+        const prompt = context
+          ? `${systemInstruction}\n\nOldingi xabarlar:\n${context}\n\nFoydalanuvchi: ${text}`
+          : `${systemInstruction}\n\nFoydalanuvchi: ${text}`;
 
-        if (context) {
-          messages.push({ role: 'user', content: `Oldingi xabarlar:\n${context}` });
-          messages.push({ role: 'assistant', content: 'Tushundim, davom eting.' });
-        }
-
-        messages.push({ role: 'user', content: text });
-
-        const completion = await this.openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages,
-          max_tokens: 500,
-          temperature: 0.7,
-        });
-
-        const reply = completion.choices[0]?.message?.content?.trim() ?? '';
+        const result = await model.generateContent(prompt);
+        const reply = result.response.text().trim();
         if (reply) return { reply };
       } catch (err) {
-        this.logger.warn(`OpenAI request failed: ${err instanceof Error ? err.message : err}`);
+        this.logger.warn(`Gemini request failed: ${err instanceof Error ? err.message : err}`);
       }
     }
 

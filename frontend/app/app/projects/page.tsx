@@ -137,8 +137,18 @@ export default function Page() {
       setProjectName("");
       setProjectDesc("");
       showNotice(`Project "${proj.name}" created`);
-    } catch {
-      showNotice("Failed to create project");
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string; data?: { message?: string; error?: { message?: string } } };
+      const msg =
+        apiErr?.data?.error?.message ??
+        apiErr?.data?.message ??
+        apiErr?.message ??
+        '';
+      if (msg.toLowerCase().includes('content') || msg.toLowerCase().includes('guideline')) {
+        showNotice(`Blocked: ${msg}`);
+      } else {
+        showNotice("Failed to create project");
+      }
     } finally {
       setSaving(false);
     }

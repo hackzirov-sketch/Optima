@@ -39,10 +39,13 @@ const PATH_TITLE_KEY: [string, string][] = [
 export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const { status: wsStatus } = useWebSocket({ disabled: false });
+  const { notifications: realNotifs, unreadCount, markRead, markAllRead, refresh: refreshNotifs } = useNotifications();
+  const { status: wsStatus } = useWebSocket({
+    disabled: false,
+    onNotification: () => { refreshNotifs(); },
+  });
   const titleKey = PATH_TITLE_KEY.find(([path]) => pathname.startsWith(path))?.[1] ?? "home";
   const [bellOpen, setBellOpen] = useState(false);
-  const { notifications: realNotifs, unreadCount, markRead, markAllRead } = useNotifications();
 
   const localizedTitle = t(`app.nav.${titleKey}`);
 
