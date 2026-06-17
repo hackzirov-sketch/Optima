@@ -18,7 +18,7 @@ export class BannedContent {
   @Column({ length: 20 })
   type: string; // 'word' | 'phrase' | 'regex'
 
-  @Column({ length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   category: string | null; // 'hate' | 'violence' | 'sexual' | 'spam'
 
   @Column({ length: 20, default: 'medium' })

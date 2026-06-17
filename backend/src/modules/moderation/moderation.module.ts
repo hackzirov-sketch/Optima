@@ -19,6 +19,7 @@ import { ImageModerationService } from './services/image-moderation.service';
     ImageModerationService,
   ],
   exports: [
+    TypeOrmModule,
     IpRateLimitGuard,
     ViolationService,
     ContentFilterService,
