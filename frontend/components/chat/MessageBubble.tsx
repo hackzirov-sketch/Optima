@@ -256,7 +256,11 @@ export function MessageBubble({
               <PremiumMessageText text={text} isOwn={isOwn} large={largeEmojiOnly} />
             </div>
             <div className={cn("mt-1.5 flex items-center justify-end gap-1 text-[11px]", isOwn ? "text-white/70" : "text-muted-foreground", largeEmojiOnly && "text-xs")}>
-              {message.edited && <span>{t("app.chat.edited")}</span>}
+              {message.edited && (
+                <span title={message.editedAt ? new Date(message.editedAt).toLocaleString() : undefined}>
+                  {t("app.chat.edited", "tahrirlangan")}
+                </span>
+              )}
               <span>{formatMessageTime(message.timestamp)}</span>
               {isOwn && <span className={message.read === false ? "text-white/65" : "text-cyan-100"}>{message.read === false ? t("app.chat.sent") : t("app.chat.readStatus")}</span>}
             </div>

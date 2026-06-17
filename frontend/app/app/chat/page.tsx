@@ -176,6 +176,8 @@ export default function ChatPage() {
             timestamp: msg.timestamp,
             replyToId: msg.replyToId ?? undefined,
             reactions: (msg.reactions ?? []) as ChatMessage["reactions"],
+            edited: false,
+            editedAt: null,
           };
 
           // Replace optimistic placeholder sent by this user
@@ -407,7 +409,7 @@ export default function ChatPage() {
           ...room,
           messages: room.messages.map((message) =>
             message.id === editingMessage.id
-              ? { ...message, text, edited: true, timestamp: Date.now() }
+              ? { ...message, text, edited: true, editedAt: new Date().toISOString(), timestamp: Date.now() }
               : message,
           ),
         }));

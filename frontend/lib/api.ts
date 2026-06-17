@@ -584,6 +584,7 @@ export interface ApiChatMessage {
   replyToId?: string;
   timestamp: number;
   edited?: boolean;
+  editedAt?: string | null;
   reactions?: { emoji: string; userIds: string[] }[];
   attachments?: { id: string; url: string; name: string; size: number }[];
 }
@@ -601,7 +602,9 @@ export type ApiChatMessageRaw = {
   timestamp?: number;
   isEdited?: boolean;
   edited?: boolean;
+  editedAt?: string | null;
   reactions?: { emoji: string; userIds: string[] }[];
+  sender?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null;
 };
 
 export function mapApiChatMessage(raw: ApiChatMessageRaw, myUserId?: string): ApiChatMessage {
@@ -622,6 +625,7 @@ export function mapApiChatMessage(raw: ApiChatMessageRaw, myUserId?: string): Ap
     replyToId: raw.replyToId ?? undefined,
     timestamp,
     edited: raw.isEdited ?? raw.edited,
+    editedAt: raw.editedAt ?? null,
     reactions: raw.reactions,
   };
 }

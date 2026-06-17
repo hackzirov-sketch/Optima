@@ -66,6 +66,7 @@ export interface ChatMessage {
   timestamp: number;
   read?: boolean;
   edited?: boolean;
+  editedAt?: string | null;
   replyToId?: string;
   reactions?: {
     emoji: ChatReactionEmoji;

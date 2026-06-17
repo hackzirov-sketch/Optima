@@ -15,6 +15,7 @@ export interface WsMessage {
   replyToId?: string | null;
   timestamp: number;
   reactions: { emoji: string; userIds: string[] }[];
+  sender?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null;
 }
 
 export interface TypingEvent {
@@ -250,6 +251,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
             ? new Date(createdAt).getTime()
             : Date.now();
 
+      const rawSender = raw.sender as Record<string, unknown> | null | undefined;
       const msg: WsMessage = {
         id: String(raw.id),
         roomId: String(raw.roomId),
@@ -258,6 +260,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         replyToId: (raw.replyToId as string | null | undefined) ?? undefined,
         timestamp,
         reactions: Array.isArray(raw.reactions) ? (raw.reactions as WsMessage['reactions']) : [],
+        sender: rawSender
+          ? {
+              id: String(rawSender.id ?? ''),
+              firstName: (rawSender.firstName as string | null) ?? null,
+              lastName: (rawSender.lastName as string | null) ?? null,
+              avatarUrl: (rawSender.avatarUrl as string | null) ?? null,
+            }
+          : null,
       };
       cbRefs.current.onNewMessage?.(msg);
     });

@@ -141,7 +141,7 @@ export class ChatService {
       if (msg) {
         lastMessage = {
           id: msg.id,
-          content: msg.content,
+          content: msg.content ?? '',
           senderId: msg.senderId,
           senderName: msg.sender
             ? `${msg.sender.firstName ?? ''} ${msg.sender.lastName ?? ''}`.trim()
@@ -519,6 +519,7 @@ export class ChatService {
       contentType: msg.contentType,
       replyToId: msg.replyToId ?? null,
       isEdited: msg.isEdited,
+      editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
       isSystem: msg.isSystem,
       createdAt: msg.createdAt,
       updatedAt: msg.updatedAt,
@@ -553,15 +554,38 @@ export class ChatService {
       replyToId: dto.replyToId,
     });
     const saved = await this.messageRepo.save(msg);
-    // Attach plaintext for gateway broadcast (not persisted)
-    (saved as any).__plainText = plainText;
 
     await this.roomRepo.update(roomId, {
       lastMessageId: saved.id,
       lastMessageAt: saved.createdAt,
     });
 
-    return saved;
+    // Load sender for gateway broadcast
+    const withSender = await this.messageRepo.findOne({
+      where: { id: saved.id },
+      relations: ['sender'],
+    });
+
+    return {
+      id: saved.id,
+      roomId: saved.roomId,
+      senderId: saved.senderId,
+      content: plainText,                    // already decrypted — safe for broadcast
+      contentType: saved.contentType ?? 'text',
+      replyToId: saved.replyToId ?? null,
+      isEdited: false,
+      editedAt: null,
+      createdAt: saved.createdAt,
+      reactions: [],
+      sender: withSender?.sender
+        ? {
+            id: withSender.sender.id,
+            firstName: withSender.sender.firstName ?? null,
+            lastName: withSender.sender.lastName ?? null,
+            avatarUrl: withSender.sender.avatarUrl ?? null,
+          }
+        : null,
+    };
   }
 
   async deleteMessage(messageId: string, userId: string) {
@@ -593,7 +617,9 @@ export class ChatService {
       msg.contentJson = null;
     }
     msg.isEdited = true;
-    return this.messageRepo.save(msg);
+    msg.editedAt = new Date();
+    const saved = await this.messageRepo.save(msg);
+    return { ...saved, content: plainText, editedAt: saved.editedAt };
   }
 
   async addReaction(messageId: string, userId: string, dto: AddReactionDto) {

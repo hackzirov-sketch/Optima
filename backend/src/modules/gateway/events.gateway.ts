@@ -330,16 +330,19 @@ export class EventsGateway
     }
 
     // Broadcast saved message to everyone in the room (including sender)
-    // Use __plainText (attached by ChatService) so recipients get decrypted content
-    const broadcastContent = (saved as any).__plainText ?? saved.content;
+    // saved.content is already plaintext (decrypted by ChatService.sendMessage)
     this.server.to(`room:${data.roomId}`).emit('new_message', {
       id: saved.id,
       roomId: saved.roomId,
       senderId: saved.senderId,
-      content: broadcastContent,
-      replyToId: saved.replyToId || null,
+      content: saved.content,
+      contentType: saved.contentType ?? 'text',
+      replyToId: saved.replyToId ?? null,
+      isEdited: false,
+      editedAt: null,
       createdAt: saved.createdAt,
       reactions: [],
+      sender: saved.sender ?? null,
     });
 
     return { event: 'message_sent', messageId: saved.id };
