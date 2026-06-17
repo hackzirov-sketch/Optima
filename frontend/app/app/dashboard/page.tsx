@@ -26,7 +26,7 @@ import { useTranslation } from "react-i18next";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CommandCard, MetricTile, PageHeader, PageShell, Pill, ProgressBar, SectionTitle, SurfaceCard } from "@/components/app/DesignSystem";
 import { WidgetCard } from "@/components/app/PowerWorkspaceSystem";
-import { DASHBOARD_WIDGETS } from "@/data/ecosystemData";
+import type { DashboardWidget } from "@/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useProjects } from "@/hooks/useProjects";
@@ -104,15 +104,16 @@ export default function Page() {
   // Draggable widgets
   const [preset, setPreset] = useState("Launch");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const WIDGET_IDS = ['w-tasks', 'w-workload', 'w-goals', 'w-time', 'w-risk', 'w-mentions', 'w-wallet', 'w-ai'];
   const [widgetOrder, setWidgetOrder] = useState(() => {
     const saved = storage.getDashboardLayout();
-    return saved.length ? saved : DASHBOARD_WIDGETS.map((w) => w.id);
+    return saved.length ? saved : WIDGET_IDS;
   });
   useEffect(() => { storage.saveDashboardLayout(widgetOrder); }, [widgetOrder]);
 
   const orderedWidgets = widgetOrder
-    .map((id) => DASHBOARD_WIDGETS.find((w) => w.id === id))
-    .filter((w): w is (typeof DASHBOARD_WIDGETS)[number] => Boolean(w));
+    .map((id) => liveWidgets.find((w) => w.id === id))
+    .filter((w): w is DashboardWidget => Boolean(w));
 
   const moveWidget = (targetId: string) => {
     if (!draggingId || draggingId === targetId) return;
@@ -146,6 +147,90 @@ export default function Page() {
   // Charts
   const weeklyActivity = useMemo(() => buildWeeklyActivity(tasks), [tasks]);
   const productivityData = useMemo(() => buildProductivityData(tasks), [tasks]);
+
+  // Dynamic insight widgets from real backend data
+  const liveWidgets = useMemo((): DashboardWidget[] => {
+    const totalEstHours = tasks
+      .filter((t) => t.status !== 'done')
+      .reduce((s, t) => s + (t.estimatedHours ?? 0), 0);
+
+    const highPriorityOpen = tasks.filter(
+      (t) => t.priority === 'high' && t.status !== 'done',
+    ).length;
+    const riskTone: DashboardWidget['tone'] =
+      highPriorityOpen === 0 ? 'green' : highPriorityOpen <= 2 ? 'amber' : 'red';
+    const riskLabel = highPriorityOpen === 0 ? 'Low' : highPriorityOpen <= 2 ? 'Medium' : 'High';
+
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const dueThisWeek = tasks.filter(
+      (t) => t.dueDate && new Date(t.dueDate) >= weekStart && t.status !== 'done',
+    ).length;
+
+    const completionPct =
+      tasks.length === 0 ? 0 : Math.round((completedTasks / tasks.length) * 100);
+
+    return [
+      {
+        id: 'w-tasks',
+        title: 'Smart tasks',
+        value: tasksLoading ? '…' : String(activeTasks),
+        meta: dueThisWeek > 0 ? `${dueThisWeek} due this week` : 'All on track',
+        tone: 'indigo',
+      },
+      {
+        id: 'w-workload',
+        title: 'Workload',
+        value: tasksLoading ? '…' : `${completionPct}%`,
+        meta: completionPct >= 70 ? 'Team capacity is healthy' : completionPct >= 40 ? 'Keep pushing' : 'Getting started',
+        tone: completionPct >= 60 ? 'green' : completionPct >= 30 ? 'amber' : 'blue',
+      },
+      {
+        id: 'w-goals',
+        title: 'Milestones',
+        value: String(projects.length),
+        meta: projects.length === 0 ? 'No projects yet' : `${projects.length} active project${projects.length !== 1 ? 's' : ''}`,
+        tone: 'amber',
+      },
+      {
+        id: 'w-time',
+        title: 'Focus time',
+        value: tasksLoading ? '…' : `${totalEstHours}h`,
+        meta: totalEstHours > 0 ? 'Estimated open tasks' : 'No estimates set',
+        tone: 'blue',
+      },
+      {
+        id: 'w-risk',
+        title: 'Project risk',
+        value: tasksLoading ? '…' : riskLabel,
+        meta: highPriorityOpen === 0 ? 'No blockers open' : `${highPriorityOpen} high-priority open`,
+        tone: riskTone,
+      },
+      {
+        id: 'w-mentions',
+        title: 'Mentions',
+        value: String(unreadCount),
+        meta: unreadCount === 0 ? 'All caught up' : 'Unread notifications',
+        tone: unreadCount > 5 ? 'red' : unreadCount > 0 ? 'amber' : 'green',
+      },
+      {
+        id: 'w-wallet',
+        title: 'Earnings',
+        value: '$4.6k',
+        meta: 'Universal Bank coming soon',
+        tone: 'green',
+      },
+      {
+        id: 'w-ai',
+        title: 'AI suggestions',
+        value: '14',
+        meta: 'Ready to apply',
+        tone: 'indigo',
+      },
+    ];
+  }, [tasks, projects, completedTasks, activeTasks, unreadCount, tasksLoading]);
 
   // Recent activity
   const recentActivity = notifications.slice(0, 5);
