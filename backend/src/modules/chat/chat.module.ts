@@ -12,6 +12,7 @@ import { ModerationModule } from '../moderation/moderation.module';
 
 import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
+import { ChatEncryptionService } from './chat-encryption.service';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { ChatController } from './chat.controller';
     ModerationModule,
   ],
   controllers: [ChatController],
-  providers: [ChatService],
-  exports: [ChatService],
+  providers: [ChatService, ChatEncryptionService],
+  exports: [ChatService, ChatEncryptionService],
 })
 export class ChatModule {}

@@ -86,6 +86,11 @@ export interface ChatRoom {
   pinnedMessageId?: string;
   projectBadge?: string;
   linkedTask?: string;
+  isPublic?: boolean;
+  inviteCode?: string | null;
+  isMember?: boolean;
+  createdById?: string;
+  description?: string;
 }
 
 export interface Integration {

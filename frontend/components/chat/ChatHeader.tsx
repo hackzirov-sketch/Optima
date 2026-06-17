@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { BellOff, Menu, MoreVertical, Phone, Pin, Search, Trash, User, Video } from "lucide-react";
+import { BellOff, Check, Copy, Globe, Link2, Loader2, Lock, Menu, MoreVertical, Phone, Pin, Search, Trash, User, UserPlus, Video, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ChatRoom, ChatUser } from "@/types";
 import { PremiumGradientBadge, PremiumStatusBadge, getPremiumStatusForUser } from "@/components/premium/PremiumAssets";
 import { Avatar, RoomGlyph, getLinkedTask, getRoomName, getRoomPeer, getUser } from "./chatShared";
+import { chatApi } from "@/lib/api";
 
 export type ChatHeaderAction = "profile" | "search" | "mute" | "pin" | "clear" | "delete";
 export type ChatCallMode = "voice" | "video";
@@ -15,6 +17,159 @@ interface ChatHeaderProps {
   onBackToList: () => void;
   onAction: (action: ChatHeaderAction) => void;
   onStartCall: (mode: ChatCallMode) => void;
+  currentUserId?: string;
+  onRoomUpdated?: (updated: Partial<ChatRoom>) => void;
+}
+
+function RoomInviteModal({
+  room,
+  currentUserId,
+  onClose,
+  onRoomUpdated,
+}: {
+  room: ChatRoom;
+  currentUserId?: string;
+  onClose: () => void;
+  onRoomUpdated?: (updated: Partial<ChatRoom>) => void;
+}) {
+  const [code, setCode] = useState<string | null>(room.inviteCode ?? null);
+  const [isPublic, setIsPublic] = useState(room.isPublic ?? false);
+  const [loadingCode, setLoadingCode] = useState(false);
+  const [loadingVisibility, setLoadingVisibility] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const isCreator = room.createdById === currentUserId;
+  const inviteUrl = code ? `${window.location.origin}/chat/join/${code}` : null;
+
+  const handleGetCode = async () => {
+    setLoadingCode(true);
+    try {
+      const res = await chatApi.getInviteCode(room.id);
+      const newCode = (res as any).data?.code ?? (res as any).code;
+      setCode(newCode);
+      onRoomUpdated?.({ inviteCode: newCode });
+    } finally {
+      setLoadingCode(false);
+    }
+  };
+
+  const handleRevokeCode = async () => {
+    setLoadingCode(true);
+    try {
+      await chatApi.revokeInviteCode(room.id);
+      setCode(null);
+      onRoomUpdated?.({ inviteCode: null });
+    } finally {
+      setLoadingCode(false);
+    }
+  };
+
+  const handleTogglePublic = async () => {
+    setLoadingVisibility(true);
+    try {
+      await chatApi.updateRoomSettings(room.id, { isPublic: !isPublic });
+      setIsPublic((v) => !v);
+      onRoomUpdated?.({ isPublic: !isPublic });
+    } finally {
+      setLoadingVisibility(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const content = (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-3xl border border-gray-200 bg-card p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Xonaga taklif</h3>
+          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+            <X className="h-4 w-4 text-gray-500" />
+          </button>
+        </div>
+
+        {isCreator && (
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-muted px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              {isPublic ? <Globe className="h-4 w-4 text-emerald-500" /> : <Lock className="h-4 w-4 text-gray-400" />}
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{isPublic ? "Ommaviy" : "Yopiq"}</p>
+                <p className="text-xs text-muted-foreground">{isPublic ? "Workspace a'zolari qo'shila oladi" : "Faqat invite link orqali"}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTogglePublic}
+              disabled={loadingVisibility}
+              className={`relative h-6 w-11 rounded-full transition-colors ${isPublic ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isPublic ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Invite link</p>
+          {code ? (
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl bg-muted px-3 py-2.5">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <code className="truncate text-xs text-foreground">{inviteUrl}</code>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-indigo-500 text-white hover:bg-indigo-600"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Hali link yaratilmagan.</p>
+          )}
+
+          {isCreator && (
+            <div className="flex gap-2 pt-1">
+              {!code ? (
+                <button
+                  type="button"
+                  onClick={handleGetCode}
+                  disabled={loadingCode}
+                  className="flex items-center gap-1.5 rounded-2xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60"
+                >
+                  {loadingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                  Link yaratish
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRevokeCode}
+                  disabled={loadingCode}
+                  className="flex items-center gap-1.5 rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/30 disabled:opacity-60"
+                >
+                  {loadingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  Linkni bekor qilish
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(content, document.body);
 }
 
 function roomStatus(room: ChatRoom, users: ChatUser[], t: (key: string, options?: Record<string, unknown>) => string) {
@@ -32,9 +187,10 @@ function roomStatus(room: ChatRoom, users: ChatUser[], t: (key: string, options?
   return { label: t("app.chat.memberStatus", { members: room.memberIds.length, online: onlineCount }) };
 }
 
-export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }: ChatHeaderProps) {
+export function ChatHeader({ room, users, onBackToList, onAction, onStartCall, currentUserId, onRoomUpdated }: ChatHeaderProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const peer = getRoomPeer(room, users);
   const status = roomStatus(room, users, t);
   const memberPreview = room.memberIds.filter((id) => id !== "me").slice(0, 4);
@@ -109,6 +265,16 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
             </button>
           </>
         )}
+        {room.type !== "1on1" && room.type !== "ai" && room.type !== "saved" && (
+          <button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+            aria-label="Invite"
+          >
+            <UserPlus className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onAction("search")}
@@ -166,6 +332,17 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall }:
               {t("app.chat.deleteChat")}
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {inviteOpen && (
+          <RoomInviteModal
+            room={room}
+            currentUserId={currentUserId}
+            onClose={() => setInviteOpen(false)}
+            onRoomUpdated={onRoomUpdated}
+          />
         )}
       </AnimatePresence>
     </header>

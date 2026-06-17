@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Maximize2,
@@ -24,6 +24,8 @@ import type { ChatRoom, ChatUser } from "@/types";
 import { Avatar, RoomGlyph, cn, getRoomName, getRoomPeer, getUser } from "./chatShared";
 import type { ChatCallMode } from "./ChatHeader";
 
+import type { PeerState } from "@/hooks/useMeeting";
+
 interface ChatCallOverlayProps {
   room: ChatRoom;
   users: ChatUser[];
@@ -31,6 +33,16 @@ interface ChatCallOverlayProps {
   startedAt: number;
   onClose: () => void;
   onSwitchMode: (mode: ChatCallMode) => void;
+  // Real WebRTC streams (from useMeeting)
+  localStream?: MediaStream | null;
+  peerStreams?: Map<string, MediaStream>;
+  peerStates?: Map<string, PeerState>;
+  localMicOn?: boolean;
+  localCameraOn?: boolean;
+  localScreenOn?: boolean;
+  onToggleMic?: () => void;
+  onToggleCamera?: () => void;
+  onToggleScreen?: () => void;
 }
 
 interface CallControlProps {
@@ -42,6 +54,82 @@ interface CallControlProps {
 }
 
 const participantStatusKeys = ["speaking", "online", "muted", "listening", "cameraOff", "joining"] as const;
+
+function VideoTile({
+  stream,
+  user,
+  muted = false,
+  label,
+  compact,
+  speaking,
+}: {
+  stream: MediaStream | null;
+  user?: ChatUser;
+  muted?: boolean;
+  label?: string;
+  compact?: boolean;
+  speaking?: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  const hasVideo = stream ? stream.getVideoTracks().some((t) => t.enabled) : false;
+  const displayName = label ?? user?.name ?? "?";
+  const initials = user?.initials ?? displayName[0]?.toUpperCase() ?? "?";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "relative min-h-[148px] overflow-hidden rounded-[28px] border bg-slate-950/65 shadow-2xl shadow-black/25",
+        speaking ? "border-indigo-300/70 ring-4 ring-indigo-400/15" : "border-white/10",
+        compact && "min-h-[120px] rounded-[24px]",
+      )}
+    >
+      {hasVideo ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={muted}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(99,102,241,0.38),transparent_36%)]" />
+          <div className="absolute inset-0 grid place-items-center">
+            <div
+              className={cn(
+                "grid place-items-center rounded-[28px] font-black text-white shadow-2xl shadow-black/30",
+                compact ? "h-14 w-14 text-base" : "h-20 w-20 text-xl",
+              )}
+              style={{ background: `linear-gradient(135deg, ${user?.color ?? "#6366f1"}, #3B82F6)` }}
+            >
+              {initials}
+            </div>
+          </div>
+        </>
+      )}
+      <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent p-3">
+        <p className="truncate text-sm font-bold text-white">{displayName}</p>
+        {speaking && (
+          <span className="flex h-6 items-end gap-0.5 rounded-full bg-emerald-400/15 px-2 py-1">
+            <span className="h-2 w-1 animate-pulse rounded-full bg-emerald-300" />
+            <span className="h-4 w-1 animate-pulse rounded-full bg-emerald-300 [animation-delay:120ms]" />
+            <span className="h-3 w-1 animate-pulse rounded-full bg-emerald-300 [animation-delay:240ms]" />
+          </span>
+        )}
+      </div>
+      <video ref={hasVideo ? undefined : videoRef} autoPlay playsInline muted={muted} className="hidden" />
+    </motion.div>
+  );
+}
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -152,14 +240,24 @@ function ParticipantVideoTile({
   );
 }
 
-export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitchMode }: ChatCallOverlayProps) {
+export function ChatCallOverlay({
+  room, users, mode, startedAt, onClose, onSwitchMode,
+  localStream, peerStreams, peerStates,
+  localMicOn: extMicOn, localCameraOn: extCameraOn, localScreenOn: extScreenOn,
+  onToggleMic, onToggleCamera, onToggleScreen,
+}: ChatCallOverlayProps) {
   const { t } = useTranslation();
   const [now, setNow] = useState(Date.now());
   const [compact, setCompact] = useState(false);
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(mode === "video");
   const [speakerOn, setSpeakerOn] = useState(true);
-  const [screenOn, setScreenOn] = useState(false);
+
+  // Use real controls if provided, else fall back to local state
+  const [localMicOn, setLocalMicOn] = useState(true);
+  const [localCameraOn, setLocalCameraOn] = useState(mode === "video");
+  const [localScreenOn, setLocalScreenOn] = useState(false);
+  const micOn = extMicOn ?? localMicOn;
+  const cameraOn = extCameraOn ?? localCameraOn;
+  const screenOn = extScreenOn ?? localScreenOn;
 
   const isGroupCall = room.type !== "1on1";
   const peer = getRoomPeer(room, users);
@@ -184,7 +282,7 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
   }, []);
 
   useEffect(() => {
-    if (mode === "video") setCameraOn(true);
+    if (mode === "video") setLocalCameraOn(true);
   }, [mode]);
 
   if (compact) {
@@ -277,11 +375,24 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_35%)]" />
 
             {mode === "video" ? (
-              <div className={cn("relative grid h-full gap-3", visibleUsers.length <= 2 ? "md:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3")}>
-                {visibleUsers.map((member, index) => (
-                  <ParticipantVideoTile key={member.id} user={member} index={index} compact={visibleUsers.length > 4} />
-                ))}
-              </div>
+              localStream || (peerStreams && peerStreams.size > 0) ? (
+                // Real WebRTC video tiles
+                <div className={cn("relative grid h-full gap-3",
+                  (1 + (peerStreams?.size ?? 0)) <= 2 ? "md:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3",
+                )}>
+                  <VideoTile stream={localStream ?? null} user={getUser("me", users)} muted label="Me" />
+                  {Array.from(peerStreams?.entries() ?? []).map(([uid, stream]) => (
+                    <VideoTile key={uid} stream={stream} user={getUser(uid, users)} />
+                  ))}
+                </div>
+              ) : (
+                // Fallback: avatar tiles while connecting
+                <div className={cn("relative grid h-full gap-3", visibleUsers.length <= 2 ? "md:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3")}>
+                  {visibleUsers.map((member, index) => (
+                    <ParticipantVideoTile key={member.id} user={member} index={index} compact={visibleUsers.length > 4} />
+                  ))}
+                </div>
+              )
             ) : (
               <div className="relative flex h-full min-h-[340px] flex-col items-center justify-center text-center">
                 <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-card/10 px-3 py-1.5 text-xs font-bold text-white/70 ring-1 ring-white/10">
@@ -355,22 +466,28 @@ export function ChatCallOverlay({ room, users, mode, startedAt, onClose, onSwitc
         </div>
 
         <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[28px] border border-white/10 bg-slate-950/70 px-3 py-3 shadow-2xl shadow-black/35 backdrop-blur-xl sm:gap-3 sm:px-4">
-          <CallControl icon={micOn ? Mic : MicOff} label={micOn ? t("app.chat.call.muteMic") : t("app.chat.call.unmuteMic")} active={micOn} onClick={() => setMicOn((current) => !current)} />
-          <CallControl icon={speakerOn ? Volume2 : VolumeX} label={speakerOn ? t("app.chat.call.speakerOn") : t("app.chat.call.speakerOff")} active={speakerOn} onClick={() => setSpeakerOn((current) => !current)} />
+          <CallControl
+            icon={micOn ? Mic : MicOff}
+            label={micOn ? t("app.chat.call.muteMic") : t("app.chat.call.unmuteMic")}
+            active={micOn}
+            onClick={() => { if (onToggleMic) onToggleMic(); else setLocalMicOn((v) => !v); }}
+          />
+          <CallControl icon={speakerOn ? Volume2 : VolumeX} label={speakerOn ? t("app.chat.call.speakerOn") : t("app.chat.call.speakerOff")} active={speakerOn} onClick={() => setSpeakerOn((v) => !v)} />
           <CallControl
             icon={mode === "video" && cameraOn ? Video : VideoOff}
             label={mode === "video" ? (cameraOn ? t("app.chat.call.stopVideo") : t("app.chat.call.startVideo")) : t("app.chat.call.switchToVideo")}
             active={mode === "video" && cameraOn}
             onClick={() => {
-              if (mode === "voice") {
-                onSwitchMode("video");
-                setCameraOn(true);
-                return;
-              }
-              setCameraOn((current) => !current);
+              if (mode === "voice") { onSwitchMode("video"); setLocalCameraOn(true); return; }
+              if (onToggleCamera) onToggleCamera(); else setLocalCameraOn((v) => !v);
             }}
           />
-          <CallControl icon={MonitorUp} label={t("app.chat.call.shareScreen")} active={screenOn} onClick={() => setScreenOn((current) => !current)} />
+          <CallControl
+            icon={MonitorUp}
+            label={t("app.chat.call.shareScreen")}
+            active={screenOn}
+            onClick={() => { if (onToggleScreen) onToggleScreen(); else setLocalScreenOn((v) => !v); }}
+          />
           <CallControl icon={MessageCircle} label={t("app.chat.call.backToChat")} onClick={() => setCompact(true)} />
           <CallControl icon={Phone} label={t("app.chat.call.end")} danger onClick={onClose} />
         </div>

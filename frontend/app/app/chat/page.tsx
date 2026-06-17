@@ -19,6 +19,7 @@ import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types
 import { storage } from "@/utils/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useMeeting, type MeetingMode } from "@/hooks/useMeeting";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMembers } from "@/hooks/useMembers";
 import { chatApi, mapApiChatRoomType, getAccessToken, API_BASE } from "@/lib/api";
@@ -108,6 +109,7 @@ export default function ChatPage() {
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
   const [activeId, setActiveId] = useState("r-ai");
+  const [roomsKey, setRoomsKey] = useState(0); // increments when rooms reload, forces messages refetch
   const [searchQuery, setSearchQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -125,13 +127,40 @@ export default function ChatPage() {
   // ── WebSocket integration ────────────────────────────────────────────────
   // Only join real backend rooms (never mock r-* IDs — backend validates membership)
   const realRoomIds = useMemo(
-    () => rooms.filter((r) => !r.id.startsWith("r-")).map((r) => r.id),
+    () => rooms.filter((r) => !r.id.startsWith("r-") && r.isMember !== false).map((r) => r.id),
     [rooms],
   );
 
-  const { isConnected, sendMessage: wsSend, sendTyping, addReaction: wsReaction } = useWebSocket({
+  // Meeting: ref-based forward-declaration to break circular dep (WS↔meeting)
+  const meetingWsRef = useRef({
+    meetingJoin: (_id: string) => {},
+    meetingLeave: (_id: string) => {},
+    meetingOffer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => {},
+    meetingAnswer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => {},
+    meetingIce: (_id: string, _t: string, _c: RTCIceCandidateInit) => {},
+    meetingToggle: (_id: string, _k: 'audio'|'video'|'screen', _on: boolean) => {},
+  });
+
+  const meeting = useMeeting({
+    meetingId: activeCall?.roomId ?? null,
+    mode: (activeCall?.mode as MeetingMode) ?? 'voice',
+    enabled: !!activeCall,
+    currentUserId: backendUser?.id ?? null,
+    meetingJoin: (id) => meetingWsRef.current.meetingJoin(id),
+    meetingLeave: (id) => meetingWsRef.current.meetingLeave(id),
+    meetingOffer: (id, t, sdp) => meetingWsRef.current.meetingOffer(id, t, sdp),
+    meetingAnswer: (id, t, sdp) => meetingWsRef.current.meetingAnswer(id, t, sdp),
+    meetingIce: (id, t, c) => meetingWsRef.current.meetingIce(id, t, c),
+    meetingToggle: (id, k, on) => meetingWsRef.current.meetingToggle(id, k, on),
+  });
+
+  const {
+    isConnected, sendMessage: wsSend, sendTyping, addReaction: wsReaction,
+    meetingJoin, meetingLeave, meetingOffer, meetingAnswer, meetingIce, meetingToggle,
+  } = useWebSocket({
     disabled: !hasBackendSession,
     rooms: realRoomIds,
+    ...meeting.handlers,
     onNewMessage: (msg) => {
       setRooms((current) =>
         current.map((room) => {
@@ -202,6 +231,11 @@ export default function ChatPage() {
     onUserOnline: (userId) => setWsOnlineUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId])),
     onUserOffline: (userId) => setWsOnlineUsers((prev) => prev.filter((id) => id !== userId)),
   });
+
+  // Update WS emitters ref so useMeeting can call them
+  useEffect(() => {
+    meetingWsRef.current = { meetingJoin, meetingLeave, meetingOffer, meetingAnswer, meetingIce, meetingToggle };
+  });
   // ────────────────────────────────────────────────────────────────────────
 
   const activeRoom = useMemo(() => rooms.find((room) => room.id === activeId) ?? rooms[0], [activeId, rooms]);
@@ -235,6 +269,8 @@ export default function ChatPage() {
         return [...apiRooms, ...filtered];
       });
       setActiveId((cur) => cur === "r-ai" ? (apiRooms[0]?.id ?? cur) : cur);
+      // Force messages to reload even if activeId didn't change
+      setRoomsKey((k) => k + 1);
     };
 
     chatApi.listRooms(activeWorkspace.id).then(async (res) => {
@@ -246,6 +282,11 @@ export default function ChatPage() {
         messages: [],
         unread: r.unreadCount ?? 0,
         pinned: false,
+        isPublic: r.isPublic ?? false,
+        inviteCode: r.inviteCode ?? null,
+        isMember: r.isMember ?? true,
+        createdById: r.createdById,
+        description: r.description ?? undefined,
       }));
 
       // First visit: auto-create #general workspace channel
@@ -272,13 +313,37 @@ export default function ChatPage() {
       }
 
       if (apiRooms.length > 0) mergeRooms(apiRooms);
+
+      // Also load public rooms user hasn't joined yet
+      chatApi.listPublicRooms(activeWorkspace.id).then((pubRes) => {
+        const pubRooms: ChatRoom[] = (pubRes?.data ?? []).map((r) => ({
+          id: r.id,
+          name: r.name,
+          type: mapApiChatRoomType(r.type) as ChatRoom["type"],
+          memberIds: r.memberIds ?? [],
+          messages: [],
+          unread: 0,
+          pinned: false,
+          isPublic: true,
+          inviteCode: r.inviteCode ?? null,
+          isMember: false,
+          createdById: r.createdById,
+          description: r.description ?? undefined,
+        }));
+        if (pubRooms.length > 0) {
+          setRooms((prev) => {
+            const existingIds = new Set(prev.map((r) => r.id));
+            const newOnes = pubRooms.filter((r) => !existingIds.has(r.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
+      }).catch(() => { /* ignore if endpoint unavailable */ });
     }).catch(console.error);
   }, [hasBackendSession, activeWorkspace]);
 
-  // Load messages for active room from API
+  // Load messages for active room from API (roomsKey forces reload when workspace changes)
   useEffect(() => {
     if (!hasBackendSession || !activeId) return;
-    // Only load for rooms that don't start with mock prefix
     if (activeId.startsWith("r-")) return;
     chatApi.getMessages(activeId, 1, 50, backendUser?.id).then((res) => {
       const apiMessages: ChatMessage[] = (res?.data ?? [])
@@ -296,7 +361,7 @@ export default function ChatPage() {
         r.id === activeId ? { ...r, messages: apiMessages } : r,
       ));
     }).catch(console.error);
-  }, [hasBackendSession, activeId, backendUser?.id]);
+  }, [hasBackendSession, activeId, backendUser?.id, roomsKey]);
 
   useEffect(() => {
     storage.saveChatRooms(rooms);
@@ -668,6 +733,10 @@ export default function ChatPage() {
               onBackToList={() => setMobilePane("list")}
               onAction={handleHeaderAction}
               onStartCall={handleStartCall}
+              currentUserId={backendUser?.id}
+              onRoomUpdated={(updated) =>
+                setRooms((prev) => prev.map((r) => r.id === activeRoom.id ? { ...r, ...updated } : r))
+              }
             />
 
             <div className="relative z-20 border-b border-gray-200 bg-card/96 px-3 py-1.5 backdrop-blur dark:border-gray-700 dark:bg-gray-900/96">
@@ -710,8 +779,17 @@ export default function ChatPage() {
                   users={chatUsers}
                   mode={activeCall.mode}
                   startedAt={activeCall.startedAt}
-                  onClose={() => setActiveCall(null)}
+                  onClose={() => { meeting.leave(); setActiveCall(null); }}
                   onSwitchMode={(mode) => setActiveCall((currentCall) => (currentCall ? { ...currentCall, mode } : currentCall))}
+                  localStream={meeting.localStream}
+                  peerStreams={meeting.peerStreams}
+                  peerStates={meeting.peerStates}
+                  localMicOn={meeting.localMicOn}
+                  localCameraOn={meeting.localCameraOn}
+                  localScreenOn={meeting.localScreenOn}
+                  onToggleMic={meeting.toggleMic}
+                  onToggleCamera={meeting.toggleCamera}
+                  onToggleScreen={meeting.toggleScreen}
                 />
               )}
             </AnimatePresence>
@@ -753,6 +831,34 @@ export default function ChatPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {activeRoom.isMember === false && activeRoom.isPublic && (
+              <div className="relative z-20 flex items-center gap-3 border-b border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-800 dark:bg-indigo-950/40">
+                <p className="flex-1 text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                  Bu ommaviy xona. Xabarlarni ko'rish va yozish uchun qo'shiling.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await chatApi.joinPublicRoom(activeRoom.id);
+                      const joined = res.data;
+                      setRooms((prev) => prev.map((r) =>
+                        r.id === activeRoom.id
+                          ? { ...r, isMember: true, memberIds: joined.memberIds ?? r.memberIds }
+                          : r,
+                      ));
+                      setNotice("Xonaga qo'shildingiz!");
+                    } catch {
+                      setNotice("Qo'shilishda xatolik");
+                    }
+                  }}
+                  className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
+                  Qo'shilish
+                </button>
+              </div>
+            )}
 
             {pinnedMessage && (
               <button

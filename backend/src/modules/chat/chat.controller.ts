@@ -126,6 +126,66 @@ export class ChatController {
     );
   }
 
+  // ─── Group invite / public room endpoints ─────────────────
+
+  @Get('workspaces/:workspaceId/chat/public-rooms')
+  @ApiOperation({ summary: 'List public rooms the user has not joined' })
+  listPublicRooms(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.listPublicRooms(workspaceId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/join')
+  @ApiOperation({ summary: 'Join a public room' })
+  joinPublicRoom(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.joinPublicRoom(roomId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/invite-code')
+  @ApiOperation({ summary: 'Generate / retrieve room invite link' })
+  getInviteCode(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.getOrCreateInviteCode(roomId, userId);
+  }
+
+  @Delete('chat/rooms/:roomId/invite-code')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Revoke room invite link' })
+  async revokeInviteCode(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    await this.chatService.revokeInviteCode(roomId, userId);
+  }
+
+  @Post('chat/join/:code')
+  @ApiOperation({ summary: 'Join room by invite code' })
+  joinByCode(
+    @Param('code') code: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.joinByInviteCode(code, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/settings')
+  @ApiOperation({ summary: 'Update room settings (isPublic, name, description)' })
+  updateRoomSettings(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: { isPublic?: boolean; name?: string; description?: string },
+  ) {
+    return this.chatService.updateRoomSettings(roomId, userId, dto);
+  }
+
+  // ─── AI ───────────────────────────────────────────────────
+
   @Post('chat/ai')
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(

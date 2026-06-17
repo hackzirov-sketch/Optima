@@ -42,6 +42,9 @@ export class ChatMessage {
   @Column({ type: 'text', nullable: true })
   content: string;
 
+  @Column({ name: 'content_json', type: 'jsonb', nullable: true })
+  contentJson!: { iv: string; data: string; v: number } | null;
+
   @Column({ name: 'content_type', length: 20, default: 'text' })
   contentType: string;
 

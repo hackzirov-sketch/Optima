@@ -17,6 +17,7 @@ import { Group } from '../../database/entities/group.entity';
 import { Project } from '../../database/entities/project.entity';
 import { MembersService } from '../workspaces/members.service';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
+import { ChatEncryptionService } from './chat-encryption.service';
 
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -35,6 +36,9 @@ export interface ChatRoomDto {
   description: string | null;
   isArchived: boolean;
   isReadOnly: boolean;
+  isPublic: boolean;
+  inviteCode: string | null;
+  isMember: boolean;
   groupId: string | null;
   projectId: string | null;
   createdById: string;
@@ -69,6 +73,7 @@ export class ChatService {
     private readonly projectRepo: Repository<Project>,
     private readonly membersService: MembersService,
     private readonly contentFilter: ContentFilterService,
+    private readonly chatEncryption: ChatEncryptionService,
   ) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
@@ -155,6 +160,8 @@ export class ChatService {
       description: room.description ?? null,
       isArchived: room.isArchived,
       isReadOnly: room.isReadOnly,
+      isPublic: room.isPublic,
+      inviteCode: room.inviteCode ?? null,
       groupId: room.groupId ?? null,
       projectId: room.projectId ?? null,
       createdById: room.createdById,
@@ -164,6 +171,7 @@ export class ChatService {
       memberCount: members.length,
       lastMessage,
       unreadCount,
+      isMember: true,
     };
   }
 
@@ -246,6 +254,8 @@ export class ChatService {
         description: room.description ?? null,
         isArchived: room.isArchived,
         isReadOnly: room.isReadOnly,
+        isPublic: room.isPublic,
+        inviteCode: room.inviteCode ?? null,
         groupId: room.groupId ?? null,
         projectId: room.projectId ?? null,
         createdById: room.createdById,
@@ -256,7 +266,7 @@ export class ChatService {
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
-              content: lastMsg.content,
+              content: this.chatEncryption.safeDecrypt(lastMsg.contentJson, lastMsg.content),
               senderId: lastMsg.senderId,
               senderName: lastMsg.sender
                 ? `${lastMsg.sender.firstName ?? ''} ${lastMsg.sender.lastName ?? ''}`.trim()
@@ -265,8 +275,116 @@ export class ChatService {
             }
           : null,
         unreadCount: unreadMap.get(room.id) ?? 0,
+        isMember: true,
       };
     });
+  }
+
+  async listPublicRooms(workspaceId: string, userId: string) {
+    await this.membersService.assertMember(workspaceId, userId);
+
+    const memberRoomIds = (await this.memberRepo.find({
+      where: { userId, leftAt: IsNull() },
+      select: ['roomId'],
+    })).map((m) => m.roomId);
+
+    const publicRooms = await this.roomRepo.find({
+      where: { workspaceId, isPublic: true, isArchived: false },
+    });
+
+    const nonMemberRooms = publicRooms.filter((r) => !memberRoomIds.includes(r.id));
+    return nonMemberRooms.map((r) => ({
+      id: r.id,
+      workspaceId: r.workspaceId,
+      type: r.type,
+      name: r.name ?? null,
+      avatarUrl: r.avatarUrl ?? null,
+      description: r.description ?? null,
+      isPublic: true,
+      isArchived: false,
+      isReadOnly: r.isReadOnly,
+      groupId: r.groupId ?? null,
+      projectId: r.projectId ?? null,
+      createdById: r.createdById,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      memberIds: [],
+      memberCount: 0,
+      lastMessage: null,
+      unreadCount: 0,
+      isMember: false,
+    }));
+  }
+
+  async joinPublicRoom(roomId: string, userId: string) {
+    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (!room.isPublic) throw new ForbiddenException({ code: ErrorCode.ROOM_NOT_PUBLIC, message: 'Room is not public' });
+
+    const existing = await this.memberRepo.findOne({ where: { roomId, userId, leftAt: IsNull() } });
+    if (existing) throw new BadRequestException({ code: ErrorCode.ALREADY_ROOM_MEMBER, message: 'Already a member' });
+
+    const member = this.memberRepo.create({ roomId, userId });
+    await this.memberRepo.save(member);
+    return this.enrichRoom(room, userId);
+  }
+
+  async getOrCreateInviteCode(roomId: string, userId: string): Promise<{ code: string }> {
+    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+
+    const member = await this.memberRepo.findOne({ where: { roomId, userId, leftAt: IsNull() } });
+    if (!member) throw new ForbiddenException({ code: ErrorCode.NOT_ROOM_MEMBER, message: 'Not a member' });
+    if (room.createdById !== userId && room.type !== ChatRoomType.GROUP) {
+      throw new ForbiddenException({ code: ErrorCode.ROOM_INVITE_FORBIDDEN, message: 'Only the creator can manage invite links' });
+    }
+
+    if (room.inviteCode) return { code: room.inviteCode };
+
+    const { randomBytes } = await import('crypto');
+    const code = randomBytes(9).toString('base64url').slice(0, 12);
+    await this.roomRepo.update(roomId, { inviteCode: code });
+    return { code };
+  }
+
+  async revokeInviteCode(roomId: string, userId: string): Promise<void> {
+    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (room.createdById !== userId)
+      throw new ForbiddenException({ code: ErrorCode.ROOM_INVITE_FORBIDDEN, message: 'Only the creator can revoke invite links' });
+    await this.roomRepo.update(roomId, { inviteCode: null });
+  }
+
+  async joinByInviteCode(code: string, userId: string) {
+    const room = await this.roomRepo.findOne({ where: { inviteCode: code } });
+    if (!room) throw new NotFoundException({ code: ErrorCode.INVITE_CODE_INVALID, message: 'Invalid invite link' });
+
+    const existing = await this.memberRepo.findOne({ where: { roomId: room.id, userId, leftAt: IsNull() } });
+    if (existing) return this.enrichRoom(room, userId);
+
+    await this.membersService.assertMember(room.workspaceId, userId);
+
+    const member = this.memberRepo.create({ roomId: room.id, userId });
+    await this.memberRepo.save(member);
+    return this.enrichRoom(room, userId);
+  }
+
+  async updateRoomSettings(
+    roomId: string,
+    userId: string,
+    dto: { isPublic?: boolean; name?: string; description?: string },
+  ) {
+    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    await this.assertRoomMember(roomId, userId);
+    if (room.createdById !== userId)
+      throw new ForbiddenException({ code: ErrorCode.ROOM_INVITE_FORBIDDEN, message: 'Only the creator can update room settings' });
+
+    if (dto.isPublic !== undefined) room.isPublic = dto.isPublic;
+    if (dto.name !== undefined) room.name = dto.name;
+    if (dto.description !== undefined) room.description = dto.description;
+    await this.roomRepo.save(room);
+    return this.enrichRoom(room, userId);
   }
 
   async createRoom(
@@ -397,7 +515,7 @@ export class ChatService {
             avatarUrl: msg.sender.avatarUrl,
           }
         : null,
-      content: msg.content,
+      content: this.chatEncryption.safeDecrypt(msg.contentJson, msg.content),
       contentType: msg.contentType,
       replyToId: msg.replyToId ?? null,
       isEdited: msg.isEdited,
@@ -422,13 +540,21 @@ export class ChatService {
 
     await this.contentFilter.filterText(dto.content, userId, 'chat');
 
+    const plainText = dto.content.trim();
+    const contentJson = this.chatEncryption.isEnabled()
+      ? this.chatEncryption.encrypt(plainText)
+      : null;
+
     const msg = this.messageRepo.create({
       roomId,
       senderId: userId,
-      content: dto.content.trim(),
+      content: contentJson ? '' : plainText,
+      contentJson,
       replyToId: dto.replyToId,
     });
     const saved = await this.messageRepo.save(msg);
+    // Attach plaintext for gateway broadcast (not persisted)
+    (saved as any).__plainText = plainText;
 
     await this.roomRepo.update(roomId, {
       lastMessageId: saved.id,
@@ -458,7 +584,14 @@ export class ChatService {
     await this.assertRoomMember(msg.roomId, userId);
     if (msg.senderId !== userId)
       throw new ForbiddenException({ code: ErrorCode.CANNOT_EDIT_MESSAGE, message: 'You can only edit your own messages' });
-    msg.content = dto.content;
+    const plainText = dto.content.trim();
+    if (this.chatEncryption.isEnabled()) {
+      msg.contentJson = this.chatEncryption.encrypt(plainText);
+      msg.content = '';
+    } else {
+      msg.content = plainText;
+      msg.contentJson = null;
+    }
     msg.isEdited = true;
     return this.messageRepo.save(msg);
   }

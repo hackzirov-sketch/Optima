@@ -569,6 +569,11 @@ export interface ApiChatRoom {
   lastMessage?: ApiChatMessage;
   unreadCount?: number;
   createdAt: string;
+  isPublic?: boolean;
+  inviteCode?: string | null;
+  isMember?: boolean;
+  createdById?: string;
+  description?: string | null;
 }
 
 export interface ApiChatMessage {
@@ -678,6 +683,29 @@ export const chatApi = {
 
   removeReaction: (messageId: string, emoji: string) =>
     request('DELETE', `/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`),
+
+  listPublicRooms: async (workspaceId: string) => {
+    const res = await request<{ data: ApiChatRoom[] | ApiNestedList<ApiChatRoom> }>(
+      'GET',
+      `/workspaces/${workspaceId}/chat/public-rooms`,
+    );
+    return { data: unwrapApiList(res) };
+  },
+
+  joinPublicRoom: (roomId: string) =>
+    request<{ data: ApiChatRoom }>('POST', `/chat/rooms/${roomId}/join`),
+
+  getInviteCode: (roomId: string) =>
+    request<{ data: { code: string } }>('POST', `/chat/rooms/${roomId}/invite-code`),
+
+  revokeInviteCode: (roomId: string) =>
+    request('DELETE', `/chat/rooms/${roomId}/invite-code`),
+
+  joinByCode: (code: string) =>
+    request<{ data: ApiChatRoom }>('POST', `/chat/join/${code}`),
+
+  updateRoomSettings: (roomId: string, dto: { isPublic?: boolean; name?: string; description?: string }) =>
+    request<{ data: ApiChatRoom }>('PATCH', `/chat/rooms/${roomId}/settings`, { body: dto }),
 };
 
 // ─── Notifications ────────────────────────────────────────────────────────
