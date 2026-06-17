@@ -101,34 +101,7 @@ export default function Page() {
     5,
   );
 
-  // Draggable widgets
-  const [preset, setPreset] = useState("Launch");
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const WIDGET_IDS = ['w-tasks', 'w-workload', 'w-goals', 'w-time', 'w-risk', 'w-mentions', 'w-wallet', 'w-ai'];
-  const [widgetOrder, setWidgetOrder] = useState(() => {
-    const saved = storage.getDashboardLayout();
-    return saved.length ? saved : WIDGET_IDS;
-  });
-  useEffect(() => { storage.saveDashboardLayout(widgetOrder); }, [widgetOrder]);
-
-  const orderedWidgets = widgetOrder
-    .map((id) => liveWidgets.find((w) => w.id === id))
-    .filter((w): w is DashboardWidget => Boolean(w));
-
-  const moveWidget = (targetId: string) => {
-    if (!draggingId || draggingId === targetId) return;
-    setWidgetOrder((cur) => {
-      const si = cur.indexOf(draggingId);
-      const ti = cur.indexOf(targetId);
-      if (si < 0 || ti < 0) return cur;
-      const next = [...cur];
-      const [moved] = next.splice(si, 1);
-      next.splice(ti, 0, moved);
-      return next;
-    });
-  };
-
-  // Computed metrics
+  // Computed metrics (must be before liveWidgets)
   const completedTasks = tasks.filter((task) => task.status === 'done').length;
   const activeTasks = tasks.filter((task) => task.status !== 'done').length;
   const inReview = tasks.filter((task) => task.status === 'review').length;
@@ -148,7 +121,7 @@ export default function Page() {
   const weeklyActivity = useMemo(() => buildWeeklyActivity(tasks), [tasks]);
   const productivityData = useMemo(() => buildProductivityData(tasks), [tasks]);
 
-  // Dynamic insight widgets from real backend data
+  // Dynamic insight widgets from real backend data (must be before orderedWidgets)
   const liveWidgets = useMemo((): DashboardWidget[] => {
     const totalEstHours = tasks
       .filter((t) => t.status !== 'done')
@@ -231,6 +204,33 @@ export default function Page() {
       },
     ];
   }, [tasks, projects, completedTasks, activeTasks, unreadCount, tasksLoading]);
+
+  // Draggable widgets (after liveWidgets to avoid TDZ)
+  const [preset, setPreset] = useState("Launch");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const WIDGET_IDS = ['w-tasks', 'w-workload', 'w-goals', 'w-time', 'w-risk', 'w-mentions', 'w-wallet', 'w-ai'];
+  const [widgetOrder, setWidgetOrder] = useState(() => {
+    const saved = storage.getDashboardLayout();
+    return saved.length ? saved : WIDGET_IDS;
+  });
+  useEffect(() => { storage.saveDashboardLayout(widgetOrder); }, [widgetOrder]);
+
+  const orderedWidgets = widgetOrder
+    .map((id) => liveWidgets.find((w) => w.id === id))
+    .filter((w): w is DashboardWidget => Boolean(w));
+
+  const moveWidget = (targetId: string) => {
+    if (!draggingId || draggingId === targetId) return;
+    setWidgetOrder((cur) => {
+      const si = cur.indexOf(draggingId);
+      const ti = cur.indexOf(targetId);
+      if (si < 0 || ti < 0) return cur;
+      const next = [...cur];
+      const [moved] = next.splice(si, 1);
+      next.splice(ti, 0, moved);
+      return next;
+    });
+  };
 
   // Recent activity
   const recentActivity = notifications.slice(0, 5);
