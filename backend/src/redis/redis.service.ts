@@ -51,18 +51,21 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (!client) {
-        this.logger.error(
-          'Redis unavailable — JWT blacklist check FAILED CLOSED. Token rejected.',
-        );
-        return true;
+        // Fail open in dev; fail closed in production
+        if (process.env.NODE_ENV === 'production') {
+          this.logger.error('Redis unavailable — JWT blacklist check FAILED CLOSED. Token rejected.');
+          return true;
+        }
+        return false;
       }
       const v = await client.get(`upz:blacklist:${jti}`);
       return v !== null;
     } catch (e) {
-      this.logger.error(
-        `JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Token rejected for safety.`,
-      );
-      return true;
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(`JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Token rejected for safety.`);
+        return true;
+      }
+      return false;
     }
   }
 
@@ -95,14 +98,12 @@ export class RedisService implements OnModuleDestroy {
   async isUserSessionBlocked(userId: string): Promise<boolean> {
     try {
       const client = this.getClient();
-      if (!client) return true;
+      if (!client) return process.env.NODE_ENV === 'production';
       const v = await client.get(`upz:user_blocked:${userId}`);
       return v !== null;
     } catch (e) {
-      this.logger.warn(
-        `Redis user-block check failed: ${e instanceof Error ? e.message : e}`,
-      );
-      return true;
+      this.logger.warn(`Redis user-block check failed: ${e instanceof Error ? e.message : e}`);
+      return process.env.NODE_ENV === 'production';
     }
   }
 

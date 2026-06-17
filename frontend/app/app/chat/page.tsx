@@ -14,7 +14,6 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { cn, getMessageText, getReplySnippet, getRoomName } from "@/components/chat/chatShared";
 import { normalizeReactionId } from "@/components/premium/PremiumAssets";
-import { MOCK_CHAT_ROOMS } from "@/data/mockData";
 import { SMART_TASKS } from "@/data/ecosystemData";
 import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
 import { storage } from "@/utils/storage";
@@ -22,7 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useMembers } from "@/hooks/useMembers";
-import { chatApi, mapApiChatRoomType } from "@/lib/api";
+import { chatApi, mapApiChatRoomType, getAccessToken, API_BASE } from "@/lib/api";
 
 const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6'];
 const AI_USER: ChatUser = { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' };
@@ -35,26 +34,18 @@ interface ActiveCall {
   startedAt: number;
 }
 
-function getInitialRooms() {
-  const saved = storage.getChatRooms();
-  if (saved.length === 0) return MOCK_CHAT_ROOMS;
+const AI_ROOM: ChatRoom = {
+  id: "r-ai",
+  name: "UPZ AI",
+  type: "ai",
+  memberIds: [],
+  messages: [],
+  unread: 0,
+  pinned: false,
+};
 
-  const savedIds = new Set(saved.map((room) => room.id));
-  const requiredDemoRooms = MOCK_CHAT_ROOMS.filter((room) => ["r-ai", "r-saved"].includes(room.id) && !savedIds.has(room.id));
-  return [...requiredDemoRooms, ...saved];
-}
-
-function createAiReply(text: string) {
-  const clean = text.replace(/^\/ai\s*/i, "").trim();
-  if (!clean) {
-    return "Men tayyorman. Matn, loyiha yoki vazifa yozing, men uni tartiblayman.";
-  }
-
-  if (clean.length < 90) {
-    return `Tushunarli. Mana professionalroq variant: "${clean.charAt(0).toUpperCase()}${clean.slice(1)}"`;
-  }
-
-  return `Qisqa xulosa: ${clean.slice(0, 150)}${clean.length > 150 ? "..." : ""}\n\nTaklif: buni task, meeting agenda yoki chat reply formatiga aylantirish mumkin.`;
+function getInitialRooms(): ChatRoom[] {
+  return [AI_ROOM];
 }
 
 function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): ChatMessage {
@@ -116,7 +107,7 @@ export default function ChatPage() {
   const router = useRouter();
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
-  const [activeId, setActiveId] = useState(MOCK_CHAT_ROOMS[0]?.id ?? "");
+  const [activeId, setActiveId] = useState("r-ai");
   const [searchQuery, setSearchQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -238,14 +229,12 @@ export default function ChatPage() {
 
     const mergeRooms = (apiRooms: ChatRoom[]) => {
       setRooms((prev) => {
-        const demoRooms = prev.filter((r) => ["r-ai", "r-saved"].includes(r.id));
+        const localRooms = prev.filter((r) => r.id === "r-ai");
         const realIds = new Set(apiRooms.map((r) => r.id));
-        const filtered = demoRooms.filter((r) => !realIds.has(r.id));
+        const filtered = localRooms.filter((r) => !realIds.has(r.id));
         return [...apiRooms, ...filtered];
       });
-      setActiveId((cur) =>
-        cur === (MOCK_CHAT_ROOMS[0]?.id ?? "") ? (apiRooms[0]?.id ?? cur) : cur,
-      );
+      setActiveId((cur) => cur === "r-ai" ? (apiRooms[0]?.id ?? cur) : cur);
     };
 
     chatApi.listRooms(activeWorkspace.id).then(async (res) => {
@@ -423,7 +412,7 @@ export default function ChatPage() {
       return;
     }
 
-    const newMessage: ChatMessage = {
+    const userMsg: ChatMessage = {
       id: `m-${Date.now()}`,
       userId: "me",
       text,
@@ -432,24 +421,50 @@ export default function ChatPage() {
       replyToId: replyTo?.id,
     };
 
-    updateActiveRoom((room) => ({
-      ...room,
-      unread: 0,
-      messages:
-        room.type === "ai"
-          ? [
-              ...room.messages,
-              newMessage,
-              {
-                id: `m-ai-${Date.now() + 1}`,
-                userId: "ai",
-                text: createAiReply(text),
-                timestamp: Date.now() + 600,
-                read: true,
-              },
-            ]
-          : [...room.messages, newMessage],
-    }));
+    if (activeRoom.type === "ai") {
+      // Show user message immediately
+      updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }));
+      setDraft("");
+      setReplyTo(null);
+
+      // Fetch real AI reply from backend
+      const context = activeRoom.messages.slice(-6).map((m) => m.text).join('\n');
+      const thinkingId = `m-ai-thinking-${Date.now()}`;
+      updateActiveRoom((room) => ({
+        ...room,
+        messages: [...room.messages, { id: thinkingId, userId: "ai", text: "…", timestamp: Date.now() + 1, read: true }],
+      }));
+
+      fetch(`${API_BASE}/chat/ai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAccessToken() ?? ''}`,
+        },
+        body: JSON.stringify({ message: text, context }),
+      })
+        .then((r) => r.json())
+        .then((res: { data?: { reply?: string } }) => {
+          const reply = res?.data?.reply ?? "Hozircha javob bera olmayapman.";
+          updateActiveRoom((room) => ({
+            ...room,
+            messages: room.messages.map((m) =>
+              m.id === thinkingId ? { ...m, text: reply } : m,
+            ),
+          }));
+        })
+        .catch(() => {
+          updateActiveRoom((room) => ({
+            ...room,
+            messages: room.messages.map((m) =>
+              m.id === thinkingId ? { ...m, text: "Tarmoq xatosi. Qayta urinib ko'ring." } : m,
+            ),
+          }));
+        });
+      return;
+    }
+
+    updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }));
     setDraft("");
     setReplyTo(null);
   };
@@ -849,6 +864,7 @@ export default function ChatPage() {
       <AnimatePresence>
         {createRoomOpen && (
           <motion.div
+            key="create-room-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -895,7 +911,7 @@ export default function ChatPage() {
             </motion.div>
           </motion.div>
         )}
-        <Toast message={notice} />
+        <Toast key="chat-toast" message={notice} />
       </AnimatePresence>
     </div>
   );

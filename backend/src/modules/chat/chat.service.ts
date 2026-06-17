@@ -3,9 +3,11 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In, MoreThan } from 'typeorm';
+import OpenAI from 'openai';
 
 import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
@@ -67,7 +69,17 @@ export class ChatService {
     private readonly projectRepo: Repository<Project>,
     private readonly membersService: MembersService,
     private readonly contentFilter: ContentFilterService,
-  ) {}
+  ) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (apiKey) {
+      this.openai = new OpenAI({ apiKey });
+    } else {
+      this.logger.warn('OPENAI_API_KEY not set — AI assistant will use fallback responses');
+    }
+  }
+
+  private readonly logger = new Logger(ChatService.name);
+  private openai: OpenAI | null = null;
 
   private async assertRoomMember(
     roomId: string,
@@ -493,5 +505,58 @@ export class ChatService {
       this.reactionRepo.create({ messageId, userId, emoji }),
     );
     return 'added';
+  }
+
+  async generateAiReply(
+    message: string,
+    context: string | undefined,
+    _userId: string,
+  ): Promise<{ reply: string }> {
+    const text = (message ?? '').trim();
+    if (!text) {
+      return { reply: "Men tayyorman. Savol, vazifa yoki matn yozing — yordam beraman." };
+    }
+
+    if (this.openai) {
+      try {
+        const systemPrompt = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
+Foydalanuvchilarga vazifalar, loyihalar, jamoa boshqaruvi, xabarlar va ish samaradorligi bo'yicha yordam berasan.
+Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).
+Kontekst mavjud bo'lsa undan foydalanib javob ber.`;
+
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          { role: 'system', content: systemPrompt },
+        ];
+
+        if (context) {
+          messages.push({ role: 'user', content: `Oldingi xabarlar:\n${context}` });
+          messages.push({ role: 'assistant', content: 'Tushundim, davom eting.' });
+        }
+
+        messages.push({ role: 'user', content: text });
+
+        const completion = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages,
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+
+        const reply = completion.choices[0]?.message?.content?.trim() ?? '';
+        if (reply) return { reply };
+      } catch (err) {
+        this.logger.warn(`OpenAI request failed: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
+    // Fallback when OpenAI is unavailable
+    const lower = text.toLowerCase();
+    if (/salom|hello|hi\b|hey\b/i.test(lower)) {
+      return { reply: "Salom! Men UPZ AI yordamchisiman. Vazifa, loyiha yoki jamoa boshqaruvi bo'yicha yordam bera olaman." };
+    }
+    if (/task|vazifa/i.test(lower)) {
+      return { reply: `Vazifa yaratish uchun Projects sahifasiga o'ting va "+" tugmasini bosing. Sarlavha, prioritet va muddat belgilang.` };
+    }
+    return { reply: `"${text}" — bu bo'yicha yordam berish uchun to'liqroq savol yozing.` };
   }
 }

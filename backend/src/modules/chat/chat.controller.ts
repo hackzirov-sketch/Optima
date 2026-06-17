@@ -125,4 +125,14 @@ export class ChatController {
       decodeURIComponent(emoji),
     );
   }
+
+  @Post('chat/ai')
+  @ApiOperation({ summary: 'AI assistant chat response' })
+  async aiReply(
+    @Body('message') message: string,
+    @Body('context') context: string | undefined,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.chatService.generateAiReply(message, context, userId);
+  }
 }
