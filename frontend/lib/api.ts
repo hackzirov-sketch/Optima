@@ -770,6 +770,51 @@ export const notificationsApi = {
   markAllRead: () => request('POST', '/notifications/read-all'),
 };
 
+// ─── Earnings ─────────────────────────────────────────────────────────────
+
+export interface ApiEarningsSummary {
+  total: number;
+  thisMonth: number;
+  count: number;
+  currency: string;
+}
+
+export interface ApiEarning {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  description: string | null;
+  date: string;
+  sourceType: string | null;
+  sourceId: string | null;
+  createdAt: string;
+}
+
+export interface CreateEarningDto {
+  amount: number;
+  currency?: string;
+  description?: string;
+  date: string;
+  sourceType?: string;
+  sourceId?: string;
+}
+
+export const earningsApi = {
+  getSummary: (workspaceId: string) =>
+    request<ApiEarningsSummary>('GET', `/workspaces/${workspaceId}/earnings/summary`),
+
+  list: (workspaceId: string) =>
+    request<ApiEarning[]>('GET', `/workspaces/${workspaceId}/earnings`),
+
+  create: (workspaceId: string, dto: CreateEarningDto) =>
+    request<ApiEarning>('POST', `/workspaces/${workspaceId}/earnings`, { body: dto }),
+
+  remove: (workspaceId: string, earningId: string) =>
+    request('DELETE', `/workspaces/${workspaceId}/earnings/${earningId}`),
+};
+
 // ─── Analytics ────────────────────────────────────────────────────────────
 
 export const analyticsApi = {
@@ -1022,6 +1067,7 @@ export default {
   tasks: tasksApi,
   chat: chatApi,
   notifications: notificationsApi,
+  earnings: earningsApi,
   analytics: analyticsApi,
   pushes: pushesApi,
   tags: tagsApi,

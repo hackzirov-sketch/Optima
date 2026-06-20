@@ -37,6 +37,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { EarningsModule } from './modules/earnings/earnings.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -125,6 +126,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     GatewayModule,
     MeetingsModule,
     ModerationModule,
+    EarningsModule,
   ],
   providers: [
     {

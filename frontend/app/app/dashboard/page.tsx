@@ -34,6 +34,7 @@ import { useAllWorkspaceTasks } from "@/hooks/useTasks";
 import { useMembers } from "@/hooks/useMembers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWorkspaceAnalytics } from "@/hooks/useWorkspaceAnalytics";
+import { useEarnings } from "@/hooks/useEarnings";
 import { tasksApi } from "@/lib/api";
 import { TaskCompletionModal } from "@/components/tasks/TaskCompletionModal";
 import { getUserDisplayName } from "@/lib/displayUser";
@@ -75,6 +76,7 @@ export default function Page() {
   const { members } = useMembers(activeWorkspace?.id);
   const { notifications, unreadCount, loading: notifsLoading } = useNotifications();
   const { analytics } = useWorkspaceAnalytics(activeWorkspace?.id);
+  const { summary: earningsSummary } = useEarnings(activeWorkspace?.id);
 
   // Real-time clock
   const [time, setTime] = useState(new Date());
@@ -209,8 +211,16 @@ export default function Page() {
       {
         id: 'w-wallet',
         title: 'Earnings',
-        value: '$4.6k',
-        meta: 'Universal Bank coming soon',
+        value: earningsSummary
+          ? earningsSummary.total >= 1000
+            ? `$${(earningsSummary.total / 1000).toFixed(1)}k`
+            : `$${earningsSummary.total.toFixed(0)}`
+          : '$0',
+        meta: earningsSummary && earningsSummary.thisMonth > 0
+          ? `$${earningsSummary.thisMonth.toFixed(0)} this month`
+          : earningsSummary && earningsSummary.count === 0
+            ? 'No earnings logged yet'
+            : 'This month',
         tone: 'green',
       },
       {
