@@ -12,7 +12,9 @@ import { MeetingParticipant } from '../../database/entities/meeting-participant.
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meeting.enum';
+import { NotificationType } from '../../common/enums';
 import { MembersService } from '../workspaces/members.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import * as crypto from 'crypto';
 
@@ -31,6 +33,7 @@ export class MeetingsService {
     @InjectRepository(MeetingParticipant)
     private readonly participantRepo: Repository<MeetingParticipant>,
     private readonly membersService: MembersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async assertHost(meetingId: string, userId: string) {
@@ -56,7 +59,7 @@ export class MeetingsService {
         : null,
       title: meeting.title,
       description: meeting.description ?? null,
-      meetingCode: meeting.meetingCode,
+      code: meeting.meetingCode,
       status: meeting.status,
       startTime: meeting.startTime,
       endTime: meeting.endTime ?? null,
@@ -209,7 +212,7 @@ export class MeetingsService {
       existing.joinedAt = new Date();
       existing.leftAt = null;
       await this.participantRepo.save(existing);
-      return { joined: true, participantId: existing.id };
+      return this.getOne(meetingId, userId);
     }
 
     const activeCount = await this.participantRepo.count({
@@ -231,8 +234,8 @@ export class MeetingsService {
       role: MeetingParticipantRole.PARTICIPANT,
       joinedAt: new Date(),
     });
-    const saved = await this.participantRepo.save(participant);
-    return { joined: true, participantId: saved.id };
+    await this.participantRepo.save(participant);
+    return this.getOne(meetingId, userId);
   }
 
   async leave(meetingId: string, userId: string) {
@@ -261,5 +264,41 @@ export class MeetingsService {
     });
     if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_CODE_INVALID, message: 'Invalid meeting code' });
     return this.join(meeting.id, userId);
+  }
+
+  async inviteMembers(meetingId: string, inviterId: string, targetUserIds: string[]) {
+    const meeting = await this.meetingRepo.findOne({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
+    
+    // Ensure inviter is a member of the workspace
+    await this.membersService.assertMember(meeting.workspaceId, inviterId);
+
+    // Filter valid workspace members
+    const validMembers = await Promise.all(
+      targetUserIds.map(async (uid) => {
+        try {
+          await this.membersService.assertMember(meeting.workspaceId, uid);
+          return uid;
+        } catch {
+          return null;
+        }
+      })
+    );
+    const validUserIds = validMembers.filter(Boolean) as string[];
+
+    const notifications = validUserIds.map(uid => this.notificationsService.create({
+      userId: uid,
+      actorId: inviterId,
+      type: NotificationType.MEETING_INVITE,
+      title: 'Meeting Invitation',
+      message: `Sizni "${meeting.title || 'Uchrashuv'}" nomli meetingga taklif qilishdi.`,
+      entityType: 'meeting',
+      entityId: meeting.id,
+      actionUrl: `/app/meetings`,
+      metadata: { joinCode: meeting.meetingCode }
+    }));
+
+    await Promise.all(notifications);
+    return { success: true, invitedCount: validUserIds.length };
   }
 }

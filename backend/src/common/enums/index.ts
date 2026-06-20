@@ -125,4 +125,5 @@ export enum NotificationType {
   PROJECT_MEMBER_INVITE = 'project_member_invite',
   PROJECT_MEMBER_ACCEPTED = 'project_member_accepted',
   PROJECT_MEMBER_DECLINED = 'project_member_declined',
+  MEETING_INVITE = 'meeting_invite',
 }

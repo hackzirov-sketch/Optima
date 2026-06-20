@@ -5,62 +5,26 @@ import {
   Bell,
   Calendar,
   CalendarPlus,
-  CheckSquare,
-  Clock3,
   Copy,
   Loader2,
   Mic,
-  MicOff,
-  MonitorUp,
-  Phone,
-  Plus,
   Search,
-  Trash2,
-  Users,
   Video,
   VideoOff,
-  Hand,
-  X,
+  CheckSquare,
+  Sparkles
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { ActionButton, Modal, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { MeetingCallView } from "@/components/meeting/MeetingCallView";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useMembers } from "@/hooks/useMembers";
 import { useMeetings } from "@/hooks/useMeetings";
-import { useTasks } from "@/hooks/useTasks";
 import { useProjects } from "@/hooks/useProjects";
-import { useNotifications } from "@/hooks/useNotifications";
-import type { ApiMeeting } from "@/lib/api";
+import { useTasks } from "@/hooks/useTasks";
 import { meetingsApi } from "@/lib/api";
 
-const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6'];
-
-function formatTime(isoString: string) {
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '—';
-  }
-}
-
-function formatDate(isoString: string) {
-  try {
-    const d = new Date(isoString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return 'Today';
-    if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
-
-function meetingStatus(meeting: ApiMeeting): 'live' | 'upcoming' | 'past' {
+function meetingStatus(meeting: any): 'live' | 'upcoming' | 'past' {
   const now = Date.now();
   const start = new Date(meeting.startTime).getTime();
   const end = meeting.endTime ? new Date(meeting.endTime).getTime() : start + 3600000;
@@ -69,133 +33,22 @@ function meetingStatus(meeting: ApiMeeting): 'live' | 'upcoming' | 'past' {
   return 'past';
 }
 
-function MeetingCard({
-  meeting,
-  active,
-  onSelect,
-  onDelete,
-  canDelete,
-}: {
-  meeting: ApiMeeting;
-  active: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-  canDelete: boolean;
-}) {
-  const status = meetingStatus(meeting);
-  const tone = status === 'live' ? 'green' : status === 'upcoming' ? 'indigo' : 'slate';
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "group w-full rounded-2xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-        active ? "border-indigo-300 ring-2 ring-indigo-100 dark:ring-indigo-900/40" : "border-border hover:border-indigo-200 dark:hover:border-indigo-800",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill tone={tone}>
-              {status === 'live' ? '● Live' : status === 'upcoming' ? 'Upcoming' : 'Past'}
-            </Pill>
-            <span className="text-xs text-muted-foreground">{formatDate(meeting.startTime)}</span>
-          </div>
-          <h3 className="mt-2 truncate text-sm font-bold text-foreground">{meeting.title}</h3>
-          {meeting.description && (
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{meeting.description}</p>
-          )}
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-1">
-          {canDelete && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              onKeyDown={(e) => e.key === 'Enter' && (e.stopPropagation(), onDelete())}
-              className="hidden rounded-xl p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-rose-600 group-hover:opacity-100"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </span>
-          )}
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
-            <Video className="h-4 w-4" />
-          </span>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-muted-foreground">
-          <Clock3 className="h-3 w-3" />
-          {formatTime(meeting.startTime)}
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-mono font-medium text-muted-foreground">
-          {meeting.code}
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function TaskCalendarRow({ task }: { task: { id: string; title: string; status: string; dueDate?: string; priority?: string } }) {
-  const dueLabel = task.dueDate ? formatDate(task.dueDate) : null;
-  const isOverdue = task.dueDate ? new Date(task.dueDate) < new Date() && task.status !== 'done' : false;
-  const priorityTone = task.priority === 'high' ? 'red' : task.priority === 'medium' ? 'amber' : 'green';
-
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 transition-colors hover:border-indigo-200 dark:hover:border-indigo-800">
-      <div className={cn("h-2 w-2 flex-shrink-0 rounded-full", task.status === 'done' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600')} />
-      <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", task.status === 'done' && 'line-through text-muted-foreground')}>
-        {task.title}
-      </span>
-      <div className="flex flex-shrink-0 items-center gap-2">
-        {task.priority && <Pill tone={priorityTone}>{task.priority}</Pill>}
-        {dueLabel ? (
-          <span className={cn("text-xs font-medium", isOverdue ? 'text-rose-600' : 'text-muted-foreground')}>
-            {isOverdue ? '⚠ ' : ''}{dueLabel}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">No due date</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function Page() {
   const { t } = useTranslation();
   const { activeWorkspace } = useWorkspace();
   const { backendUser } = useAuth();
   const { members } = useMembers(activeWorkspace?.id);
-  const { meetings, loading: meetingsLoading, createMeeting, deleteMeeting } = useMeetings(activeWorkspace?.id);
-  const { projects } = useProjects(activeWorkspace?.id);
-  const { tasks } = useTasks(projects[0]?.id);
-  const { notifications, unreadCount, markRead } = useNotifications();
+  const { meetings, loading: meetingsLoading, createMeeting, addMeeting } = useMeetings(activeWorkspace?.id);
 
+  const [inCall, setInCall] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [joiningCode, setJoiningCode] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [inCall, setInCall] = useState(false);
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(true);
-  const [screenOn, setScreenOn] = useState(false);
-  const [handRaised, setHandRaised] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  // Schedule form state
-  const [schedTitle, setSchedTitle] = useState("");
-  const [schedDesc, setSchedDesc] = useState("");
-  const [schedDate, setSchedDate] = useState("");
-  const [schedTime, setSchedTime] = useState("");
-  const [schedDuration, setSchedDuration] = useState("60");
-  const [schedAgenda, setSchedAgenda] = useState("");
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    window.setTimeout(() => setToast(null), 2000);
+    setTimeout(() => setToast(null), 2000);
   }, []);
 
   const activeMeeting = useMemo(
@@ -204,62 +57,31 @@ export default function Page() {
   );
 
   const upcomingMeetings = useMemo(
-    () => meetings.filter((m) => meetingStatus(m) !== 'past').sort((a, b) =>
-      new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-    ),
+    () => meetings.filter((m) => meetingStatus(m) !== 'past').sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
     [meetings],
   );
 
   const pastMeetings = useMemo(
-    () => meetings.filter((m) => meetingStatus(m) === 'past').slice(0, 5),
+    () => meetings.filter((m) => meetingStatus(m) === 'past'),
     [meetings],
   );
-
-  // Calendar: tasks with due dates this week
-  const weekTasks = useMemo(() => {
-    const now = new Date();
-    const weekEnd = new Date(now);
-    weekEnd.setDate(now.getDate() + 7);
-    return tasks
-      .filter((t) => {
-        if (t.status === 'done') return false;
-        if (!t.dueDate) return true; // Show tasks without due date too
-        const d = new Date(t.dueDate);
-        return d >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      })
-      .slice(0, 8);
-  }, [tasks]);
 
   const selfMember = members.find((m) => m.userId === backendUser?.id);
   const callParticipants = useMemo(() => {
     const selfName = selfMember
       ? `${selfMember.user.firstName ?? ''} ${selfMember.user.lastName ?? ''}`.trim()
-      : (backendUser?.email ?? 'You');
-    const selfInitials = selfMember
-      ? `${selfMember.user.firstName?.[0] ?? 'Y'}${selfMember.user.lastName?.[0] ?? ''}`.toUpperCase()
-      : 'YO';
+      : backendUser?.firstName ?? "Me";
+    
     const selfParticipant = {
-      id: backendUser?.id ?? 'me',
-      name: selfName,
-      initials: selfInitials,
-      color: '#6366F1',
-      isHost: true,
+      id: backendUser?.id ?? "local-user",
+      name: selfName || "Anonymous",
+      initials: (selfName?.[0] ?? "M").toUpperCase(),
+      color: "#6366F1",
       isSelf: true,
-      isMuted: !micOn,
-      cameraOff: !cameraOn,
+      isHost: activeMeeting?.hostId === backendUser?.id,
     };
-    const memberParticipants = members.slice(0, 3).map((m, i) => ({
-      id: m.userId,
-      name: `${m.user.firstName} ${m.user.lastName}`.trim(),
-      initials: `${m.user.firstName?.[0] ?? ''}${m.user.lastName?.[0] ?? ''}`.toUpperCase(),
-      color: USER_COLORS[(i + 1) % USER_COLORS.length],
-      isHost: false,
-      isSelf: false,
-      isMuted: false,
-      cameraOff: false,
-    }));
-    return [selfParticipant, ...memberParticipants];
-  }, [backendUser, members, micOn, cameraOn, selfMember]);
+    return [selfParticipant];
+  }, [backendUser, selfMember, activeMeeting]);
 
   const handleJoinByCode = async () => {
     const code = joinCode.trim();
@@ -267,6 +89,7 @@ export default function Page() {
     setJoiningCode(true);
     try {
       const res = await meetingsApi.joinByCode(code);
+      addMeeting(res.data);
       setActiveId(res.data.id);
       setInCall(true);
       showToast(`Joined: ${res.data.title}`);
@@ -277,437 +100,317 @@ export default function Page() {
     }
   };
 
-  const handleSchedule = async () => {
-    if (!schedTitle.trim() || !schedDate || !schedTime) return;
-    setSaving(true);
+  const handleCreateMeeting = async () => {
     try {
-      const startTime = new Date(`${schedDate}T${schedTime}`).toISOString();
-      const endISO = new Date(
-        new Date(`${schedDate}T${schedTime}`).getTime() + parseInt(schedDuration) * 60000,
-      ).toISOString();
-      await createMeeting({
-        title: schedTitle.trim(),
-        description: schedDesc.trim() || undefined,
-        startTime,
-        endTime: endISO,
-        agenda: schedAgenda.trim() || undefined,
+      const res = await createMeeting({
+        title: `${backendUser?.firstName || 'User'}'s Meeting`,
+        startTime: new Date().toISOString(),
       });
-      setScheduleOpen(false);
-      setSchedTitle(""); setSchedDesc(""); setSchedDate(""); setSchedTime(""); setSchedAgenda("");
-      showToast("Meeting scheduled");
+      setActiveId(res.id);
+      setInCall(true);
+      showToast("Meeting started");
     } catch {
-      showToast("Failed to schedule meeting");
-    } finally {
-      setSaving(false);
+      showToast("Failed to start meeting");
     }
   };
 
   if (inCall && activeMeeting) {
     return (
       <MeetingCallView
+        meetingId={activeMeeting.id}
+        meetingCode={activeMeeting.code}
         title={activeMeeting.title}
         participants={callParticipants}
+        workspaceMembers={members}
         onLeave={() => setInCall(false)}
       />
     );
   }
 
+  // Active meeting for the large card
+  const displayMeeting = activeMeeting || upcomingMeetings[0] || pastMeetings[0];
+
   return (
-    <>
-      <PageShell>
-        <PageHeader
-          eyebrow={t("app.meetings.eyebrow")}
-          title={t("app.meetings.title")}
-          description={t("app.meetings.description")}
-        >
-          <ActionButton onClick={() => { setInCall(true); showToast("Meeting started"); }}>
-            <Video className="h-4 w-4" /> {t("app.meetings.newMeeting")}
-          </ActionButton>
-          <ActionButton variant="secondary" onClick={() => setScheduleOpen(true)}>
-            <CalendarPlus className="h-4 w-4" /> {t("app.meetings.schedule")}
-          </ActionButton>
-          {/* Notification bell */}
-          <button
-            type="button"
-            onClick={() => setNotifOpen(true)}
-            className="relative grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-indigo-300 hover:text-indigo-600"
-          >
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
-        </PageHeader>
+    <div className="min-h-screen bg-[#0B0D14] text-white p-6 pb-20 overflow-y-auto font-sans">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-[#4361EE] px-4 py-2.5 text-[13px] font-bold text-white shadow-[0_0_20px_rgba(67,97,238,0.3)] transition-all animate-in fade-in slide-in-from-bottom-4">
+          {toast}
+        </div>
+      )}
 
-        <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-          {/* Left: active meeting room */}
-          <SurfaceCard className="overflow-hidden p-0">
-            <div className="relative overflow-hidden border-b border-border bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 p-5 text-white">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(99,102,241,0.4),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.25),transparent_32%)]" />
-              {meetingsLoading ? (
-                <div className="relative flex items-center gap-2 text-slate-300">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading meetings…
-                </div>
-              ) : activeMeeting ? (
-                <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Pill tone={meetingStatus(activeMeeting) === 'live' ? 'green' : 'indigo'}>
-                        {meetingStatus(activeMeeting) === 'live' ? '● Live' : 'Ready'}
-                      </Pill>
-                      <span className="text-xs font-medium text-slate-400">{formatDate(activeMeeting.startTime)} · {formatTime(activeMeeting.startTime)}</span>
-                    </div>
-                    <h2 className="mt-3 text-xl font-black tracking-tight md:text-2xl">{activeMeeting.title}</h2>
-                    {activeMeeting.description && (
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{activeMeeting.description}</p>
-                    )}
-                    {activeMeeting.agenda && (
-                      <p className="mt-2 text-xs text-slate-400">Agenda: {activeMeeting.agenda}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-shrink-0 flex-wrap gap-2">
-                    <span className="rounded-xl bg-white/10 px-3 py-1.5 font-mono text-xs font-bold text-white ring-1 ring-white/15">
-                      {activeMeeting.code}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { navigator.clipboard?.writeText(activeMeeting.code); showToast("Code copied"); }}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15"
-                    >
-                      <Copy className="h-3.5 w-3.5" /> Copy code
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative">
-                  <h2 className="text-lg font-black text-white">No meetings yet</h2>
-                  <p className="mt-1 text-sm text-slate-300">Schedule your first meeting above.</p>
-                </div>
-              )}
+      <div className="max-w-[1100px] mx-auto space-y-8">
+        
+        {/* Header Section */}
+        <div className="flex items-start justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-[#4361EE] font-bold text-[10px] tracking-widest mb-3 uppercase">
+              <div className="w-3 h-[2px] bg-[#4361EE]"></div> MEETINGS
             </div>
-
-            {/* Participants grid */}
-            <div className="bg-muted/50 p-4">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Workspace members ({members.length})
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
-                {members.slice(0, 6).map((member, i) => (
-                  <div key={member.id} className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm">
-                    <div className="pointer-events-none absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_0%_0%,rgba(99,102,241,0.08),transparent_60%)]" />
-                    <div className="relative">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{member.role}</span>
-                        <span className="h-2 w-2 rounded-full bg-green-400" />
-                      </div>
-                      <div className="mt-3 flex flex-col items-center gap-2">
-                        <div
-                          className="grid h-12 w-12 place-items-center rounded-2xl text-sm font-black text-white"
-                          style={{ background: `linear-gradient(135deg, ${USER_COLORS[i % USER_COLORS.length]}, ${USER_COLORS[(i + 2) % USER_COLORS.length]})` }}
-                        >
-                          {`${member.user.firstName?.[0] ?? ''}${member.user.lastName?.[0] ?? ''}`.toUpperCase()}
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm font-bold text-foreground">{member.user.firstName} {member.user.lastName}</p>
-                          <p className="text-xs text-muted-foreground">{member.user.email}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {members.length === 0 && (
-                  <div className="col-span-full py-6 text-center text-sm text-muted-foreground">
-                    No workspace members yet.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex flex-col gap-3 border-t border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <Pill tone="slate">{inCall ? 'In call' : 'Preview'}</Pill>
-                <span className="text-xs text-muted-foreground">End-to-end encrypted</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMicOn((v) => !v)}
-                  className={cn(
-                    "grid h-10 w-10 place-items-center rounded-xl border transition-colors",
-                    micOn ? "border-border bg-muted text-foreground hover:border-indigo-300" : "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950/40",
-                  )}
-                >
-                  {micOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCameraOn((v) => !v)}
-                  className={cn(
-                    "grid h-10 w-10 place-items-center rounded-xl border transition-colors",
-                    cameraOn ? "border-border bg-muted text-foreground hover:border-indigo-300" : "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950/40",
-                  )}
-                >
-                  {cameraOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScreenOn((v) => !v)}
-                  className={cn(
-                    "grid h-10 w-10 place-items-center rounded-xl border transition-colors",
-                    screenOn ? "border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-950/40" : "border-border bg-muted text-foreground hover:border-indigo-300",
-                  )}
-                >
-                  <MonitorUp className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHandRaised((v) => !v)}
-                  className={cn(
-                    "grid h-10 w-10 place-items-center rounded-xl border transition-colors",
-                    handRaised ? "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-800 dark:bg-amber-950/40" : "border-border bg-muted text-foreground hover:border-indigo-300",
-                  )}
-                >
-                  <Hand className="h-4 w-4" />
-                </button>
-                <ActionButton onClick={() => setInCall(true)} className="h-10 px-4">
-                  <Video className="h-4 w-4" /> Join
-                </ActionButton>
-                <button
-                  type="button"
-                  onClick={() => setInCall(false)}
-                  className="grid h-10 w-12 place-items-center rounded-xl bg-rose-600 text-white transition-colors hover:bg-rose-500"
-                >
-                  <Phone className="h-4 w-4 rotate-[135deg]" />
-                </button>
-              </div>
-            </div>
-          </SurfaceCard>
-
-          {/* Right: join + upcoming */}
-          <div className="flex flex-col gap-5">
-            <SurfaceCard>
-              <SectionTitle icon={Search} title="Join meeting" description="Enter a meeting code to join instantly." />
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2.5 focus-within:border-indigo-300 focus-within:bg-card dark:focus-within:bg-gray-900">
-                <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                <input
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
-                  placeholder="Enter meeting code…"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                />
-                {joinCode && (
-                  <button type="button" onClick={() => setJoinCode("")} className="text-muted-foreground hover:text-foreground">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <ActionButton className="mt-3 w-full" onClick={handleJoinByCode} disabled={!joinCode.trim() || joiningCode}>
-                {joiningCode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                Join
-              </ActionButton>
-            </SurfaceCard>
-
-            <SurfaceCard className="flex-1 overflow-hidden">
-              <SectionTitle icon={Calendar} title="Upcoming meetings" description="Meetings scheduled for your workspace." />
-              {meetingsLoading ? (
-                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
-              ) : upcomingMeetings.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                  No upcoming meetings. Schedule one above.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {upcomingMeetings.map((m) => (
-                    <MeetingCard
-                      key={m.id}
-                      meeting={m}
-                      active={m.id === activeMeeting?.id}
-                      onSelect={() => setActiveId(m.id)}
-                      onDelete={() => deleteMeeting(m.id)}
-                      canDelete={m.hostId === backendUser?.id}
-                    />
-                  ))}
-                </div>
-              )}
-              {pastMeetings.length > 0 && (
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">
-                    Past meetings ({pastMeetings.length})
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {pastMeetings.map((m) => (
-                      <MeetingCard
-                        key={m.id}
-                        meeting={m}
-                        active={false}
-                        onSelect={() => setActiveId(m.id)}
-                        onDelete={() => deleteMeeting(m.id)}
-                        canDelete={m.hostId === backendUser?.id}
-                      />
-                    ))}
-                  </div>
-                </details>
-              )}
-            </SurfaceCard>
+            <h1 className="text-[28px] font-bold tracking-tight mb-2.5 text-gray-100">
+              Jamoa va mijoz qo'ng'iroqlari uchun lux<br/>video uchrashuvlar
+            </h1>
+            <p className="text-gray-400 text-[13px] font-medium leading-relaxed max-w-[480px]">
+              Instant call, rejalashtirilgan session, team sync va screen sharing — bittasi joyida.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button onClick={handleCreateMeeting} className="flex items-center gap-2 bg-[#4361EE] hover:bg-[#4361EE]/90 transition-colors px-4 py-2.5 rounded-xl font-bold text-[13px] shadow-[0_0_20px_rgba(67,97,238,0.2)] text-white border border-[#4361EE]/50">
+              <Video className="w-4 h-4" /> Yangi meeting
+            </button>
+            <button className="flex items-center gap-2 bg-[#12141D] hover:bg-[#1A1C28] transition-colors px-4 py-2.5 rounded-xl font-bold text-[13px] text-gray-300 border border-white/5">
+              <CalendarPlus className="w-4 h-4" /> Rejalashtirish
+            </button>
+            <button className="flex items-center justify-center w-10 h-10 bg-[#12141D] hover:bg-[#1A1C28] transition-colors rounded-xl text-gray-400 border border-white/5">
+              <Bell className="w-[18px] h-[18px]" />
+            </button>
           </div>
         </div>
 
-        {/* Calendar view - tasks with due dates */}
-        <SurfaceCard>
-          <div className="flex items-start justify-between gap-4">
-            <SectionTitle
-              icon={Calendar}
-              title="Calendar view"
-              description="Tasks ordered by due date."
-            />
-            <Pill tone="indigo">{weekTasks.filter((t) => t.dueDate).length} scheduled</Pill>
-          </div>
-          {weekTasks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-              No tasks found. Create tasks in the Projects page.
-            </div>
-          ) : (
-            <div className="mt-2 space-y-2">
-              {weekTasks.map((task) => (
-                <TaskCalendarRow key={task.id} task={task} />
-              ))}
-            </div>
-          )}
-        </SurfaceCard>
+        {/* Grid Layout */}
+        <div className="grid grid-cols-[1fr_380px] gap-5 items-start">
+          
+          {/* Left Column */}
+          <div className="flex flex-col gap-5">
+            
+            {/* Main Meeting Card */}
+            <div className="bg-[#12141D] rounded-[24px] border border-white/5 p-6 shadow-xl relative overflow-hidden">
+              <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-[#4361EE]/10 blur-[80px]" />
+              
+              <div className="relative z-10">
+                {displayMeeting ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/20 px-3 py-1.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981]"></span>
+                        <span className="text-[11px] font-bold text-[#10B981]">Qo'shilishga tayyor</span>
+                      </div>
+                      <div className="text-[11px] font-bold text-gray-500 tracking-wide">
+                        15-iyun • 15:00
+                      </div>
+                    </div>
 
-        {/* Meeting to tasks */}
-        <SurfaceCard>
-          <SectionTitle
-            icon={CheckSquare}
-            title="Meeting → Tasks"
-            description="Convert meeting action items to workspace tasks."
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { label: "Total meetings", value: meetings.length, tone: "indigo" as const },
-              { label: "Live now", value: meetings.filter((m) => meetingStatus(m) === 'live').length, tone: "green" as const },
-              { label: "Upcoming", value: upcomingMeetings.filter((m) => meetingStatus(m) !== 'live').length, tone: "blue" as const },
-            ].map(({ label, value, tone }) => (
-              <div key={label} className="rounded-2xl bg-muted p-4 ring-1 ring-border">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="mt-2 text-3xl font-black text-foreground">{value}</p>
+                    <h2 className="text-[22px] font-bold text-gray-100 mb-2.5">
+                      {displayMeeting.title || "Mijoz bilan onboarding qo'ng'irog'i"}
+                    </h2>
+                    <p className="text-gray-400 text-[13px] leading-relaxed max-w-[500px] mb-5">
+                      {displayMeeting.description || "Yangi mijozni platforma bilan tanishtirish, integratsiya bosqichlarini ko'rsatish va keyingi qadamlarni belgilash."}
+                    </p>
+
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="flex items-center gap-1.5 bg-white/5 border border-white/5 px-3 py-1.5 rounded-[10px] text-[11px] font-bold text-gray-400">
+                        <CheckSquare className="w-[14px] h-[14px]" />
+                        Kirish • Demo • Savol-javob
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-[#F59E0B]/10 border border-[#F59E0B]/20 px-3 py-1.5 rounded-[10px] text-[11px] font-bold text-[#F59E0B]">
+                        <Sparkles className="w-[14px] h-[14px]" />
+                        AI yordamchi yoqilgan
+                      </div>
+                    </div>
+
+                    {/* Participants Row */}
+                    <div className="flex items-center gap-3 mb-8">
+                       <div className="flex -space-x-2">
+                         <div className="w-[34px] h-[34px] rounded-full bg-[#14B8A6] border-2 border-[#12141D] flex items-center justify-center text-[10px] font-bold text-white z-20">E</div>
+                         <div className="w-[34px] h-[34px] rounded-full bg-[#F59E0B] border-2 border-[#12141D] flex items-center justify-center text-[10px] font-bold text-white z-10">ER</div>
+                       </div>
+                       <div className="text-[12px] font-medium text-gray-500">
+                          <span className="text-gray-300 font-bold">elbek</span> • owner + Elbek Rustamjanov • junior
+                       </div>
+                    </div>
+
+                    {/* Action Bar inside Main Card */}
+                    <div className="flex items-center justify-between mt-auto bg-[#0B0D14] border border-white/5 p-3 rounded-[20px]">
+                      <div className="flex items-center gap-3 pl-1">
+                        <div className="w-10 h-10 bg-white/5 rounded-[12px] flex items-center justify-center border border-white/5">
+                          <Video className="w-[18px] h-[18px] text-gray-400" />
+                        </div>
+                        <div>
+                          <div className="text-[13px] font-bold text-gray-300 mb-0.5">Lobby preview</div>
+                          <div className="text-[10px] font-medium text-gray-500 flex items-center gap-1.5">
+                            <span className="w-2.5 h-3 border border-gray-500/50 rounded-[3px] border-t-2"></span>
+                            End-to-end shifrlangan
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                         <button className="w-10 h-10 bg-[#161824] border border-white/5 hover:bg-white/10 rounded-[12px] flex items-center justify-center transition-colors">
+                           <Mic className="w-[18px] h-[18px] text-gray-400" />
+                         </button>
+                         <button className="w-10 h-10 bg-[#161824] border border-white/5 hover:bg-white/10 rounded-[12px] flex items-center justify-center transition-colors">
+                           <VideoOff className="w-[18px] h-[18px] text-gray-400" />
+                         </button>
+                         
+                         <div className="flex items-center gap-2 bg-[#161824] border border-white/5 px-3 py-2.5 rounded-[12px] ml-1">
+                            <span className="font-mono text-[12px] font-bold text-gray-300 tracking-wider">
+                              {displayMeeting.code || "KZ-4F2-PLM"}
+                            </span>
+                            <button 
+                              onClick={() => { navigator.clipboard.writeText(displayMeeting.code); showToast("Kod nusxalandi"); }}
+                              className="text-gray-500 hover:text-white ml-1"
+                            >
+                              <Copy className="w-[14px] h-[14px]" />
+                            </button>
+                         </div>
+                         
+                         <button onClick={() => { setActiveId(displayMeeting.id); setInCall(true); }} className="flex items-center gap-2 bg-[#4361EE] hover:bg-[#4361EE]/90 transition-colors px-5 py-2.5 rounded-[12px] font-bold text-[13px] shadow-[0_0_20px_rgba(67,97,238,0.25)] border border-[#4361EE]/50 ml-1">
+                           <Video className="w-4 h-4" /> Join Call
+                         </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-16 flex flex-col items-center justify-center text-center opacity-70">
+                    <Calendar className="w-12 h-12 text-gray-600 mb-4" />
+                    <h2 className="text-lg font-bold text-gray-400">Meetinglar topilmadi</h2>
+                    <p className="text-gray-500 text-[13px] mt-1.5 font-medium">Hozircha hech qanday reja yo'q.</p>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        </SurfaceCard>
+            </div>
 
-        {/* Schedule meeting modal */}
-        <Modal
-          open={scheduleOpen}
-          title={t("app.meetings.modalTitle")}
-          description="Schedule a meeting for your workspace."
-          onClose={() => setScheduleOpen(false)}
-        >
-          <div className="space-y-3">
-            <input
-              value={schedTitle}
-              onChange={(e) => setSchedTitle(e.target.value)}
-              className="w-full rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
-              placeholder="Meeting title *"
-              autoFocus
-            />
-            <textarea
-              value={schedDesc}
-              onChange={(e) => setSchedDesc(e.target.value)}
-              className="min-h-16 w-full resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
-              placeholder="Description (optional)"
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Date *</label>
-                <input
-                  type="date"
-                  value={schedDate}
-                  onChange={(e) => setSchedDate(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
+            {/* Bottom Split Cards */}
+            <div className="grid grid-cols-2 gap-5">
+               {/* Calendar View */}
+               <div className="bg-[#12141D] rounded-[24px] border border-white/5 p-6 shadow-md">
+                 <div className="flex items-center justify-between mb-6">
+                   <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 bg-[#4361EE]/10 rounded-[12px] flex items-center justify-center text-[#4361EE]">
+                       <Calendar className="w-[18px] h-[18px]" />
+                     </div>
+                     <div>
+                       <div className="text-[13px] font-bold text-gray-200">Calendar view</div>
+                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Muddat bo'yicha tartiblangan</div>
+                     </div>
+                   </div>
+                   <div className="bg-[#4361EE]/10 text-[#4361EE] px-2.5 py-1 rounded-full text-[10px] font-bold">
+                     1 ta
+                   </div>
+                 </div>
+
+                 {/* Task Item */}
+                 <div className="bg-[#0B0D14] border border-white/5 rounded-[16px] p-4 flex items-center justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#EF233C] mt-1.5 shadow-[0_0_8px_#EF233C]"></div>
+                      <span className="text-[12px] font-bold text-gray-300 leading-snug">Mijozga shartnoma<br/>yuborish</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-[#EF233C]/10 text-[#EF233C] px-1.5 py-0.5 rounded-[6px] text-[9px] font-black tracking-wider">HIGH</span>
+                      <span className="text-[11px] font-medium text-gray-500">26-iyun</span>
+                    </div>
+                 </div>
+               </div>
+
+               {/* Meeting -> Tasks */}
+               <div className="bg-[#12141D] rounded-[24px] border border-white/5 p-6 shadow-md">
+                 <div className="flex items-center gap-3 mb-6">
+                     <div className="w-10 h-10 bg-[#4361EE]/10 rounded-[12px] flex items-center justify-center text-[#4361EE]">
+                       <CheckSquare className="w-[18px] h-[18px]" />
+                     </div>
+                     <div>
+                       <div className="text-[13px] font-bold text-gray-200">Meeting → Tasks</div>
+                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Action item'larni vazifaga aylantirish</div>
+                     </div>
+                 </div>
+
+                 <div className="flex flex-col items-center justify-center h-[72px] opacity-40">
+                    <CheckSquare className="w-6 h-6 text-gray-500 mb-2" />
+                    <p className="text-[11px] font-medium text-center text-gray-500 max-w-[200px]">
+                      Qo'ng'iroq tugagach, action item'lar shu yerda paydo bo'ladi.
+                    </p>
+                 </div>
+               </div>
+            </div>
+
+          </div>
+
+          {/* Right Column */}
+          <div className="flex flex-col gap-5">
+            
+            {/* Join Meeting Box */}
+            <div className="bg-[#12141D] rounded-[24px] border border-white/5 p-6 relative overflow-hidden shadow-md">
+              <div className="pointer-events-none absolute -right-10 -bottom-10 h-32 w-32 rounded-full bg-[#4361EE]/10 blur-[50px]" />
+              
+              <div className="flex items-center gap-3 mb-5 relative z-10">
+                <div className="w-10 h-10 bg-[#4361EE]/10 rounded-[12px] flex items-center justify-center text-[#4361EE]">
+                  <Search className="w-[18px] h-[18px]" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-bold text-gray-200">Join meeting</div>
+                  <div className="text-[10px] font-medium text-gray-500 mt-0.5">Kodni kiriting va darhol qo'shiling</div>
+                </div>
+              </div>
+
+              <div className="relative z-10 mb-4">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input 
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoinByCode()}
+                  className="w-full bg-[#0B0D14] border border-white/5 rounded-[14px] pl-11 pr-4 py-3.5 text-[13px] text-white placeholder:text-gray-600 focus:outline-none focus:border-[#4361EE]/50 transition-colors shadow-inner"
+                  placeholder="Masalan: KZ-4F2-PLM"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Time *</label>
-                <input
-                  type="time"
-                  value={schedTime}
-                  onChange={(e) => setSchedTime(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Duration</label>
-              <select
-                value={schedDuration}
-                onChange={(e) => setSchedDuration(e.target.value)}
-                className="w-full rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
-              >
-                <option value="30">30 minutes</option>
-                <option value="60">1 hour</option>
-                <option value="90">1.5 hours</option>
-                <option value="120">2 hours</option>
-              </select>
-            </div>
-            <textarea
-              value={schedAgenda}
-              onChange={(e) => setSchedAgenda(e.target.value)}
-              className="min-h-16 w-full resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground outline-none focus:border-indigo-400 dark:bg-gray-800"
-              placeholder="Agenda (optional)"
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <ActionButton variant="secondary" onClick={() => setScheduleOpen(false)}>Cancel</ActionButton>
-              <ActionButton
-                onClick={handleSchedule}
-                disabled={saving || !schedTitle.trim() || !schedDate || !schedTime}
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Schedule
-              </ActionButton>
-            </div>
-          </div>
-        </Modal>
 
-        {/* Notifications panel */}
-        <Modal
-          open={notifOpen}
-          title="Notifications"
-          description="Your recent workspace notifications."
-          onClose={() => setNotifOpen(false)}
-        >
-          <div className="space-y-2">
-            {notifications.slice(0, 15).length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">No notifications</p>
-            ) : (
-              notifications.slice(0, 15).map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => markRead(n.id)}
-                  className={cn(
-                    "w-full rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted",
-                    !n.isRead && "bg-indigo-50 dark:bg-indigo-950/30",
-                  )}
-                >
-                  <p className="text-sm font-medium text-foreground">{n.title}</p>
-                  {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {new Date(n.createdAt).toLocaleString()}
-                  </p>
-                </button>
-              ))
-            )}
+              <button 
+                onClick={handleJoinByCode}
+                disabled={!joinCode.trim() || joiningCode}
+                className="w-full bg-[#4361EE] hover:bg-[#4361EE]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors py-3.5 rounded-[14px] flex items-center justify-center gap-2 font-bold text-[13px] shadow-[0_0_20px_rgba(67,97,238,0.25)] border border-[#4361EE]/50 relative z-10 text-white"
+              >
+                {joiningCode ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Video className="w-[18px] h-[18px]" />}
+                Join
+              </button>
+            </div>
+
+            {/* Upcoming Meetings Box */}
+            <div className="bg-[#12141D] rounded-[24px] border border-white/5 p-6 flex flex-col shadow-md">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-white/5 rounded-[12px] flex items-center justify-center text-gray-400 border border-white/5">
+                  <Calendar className="w-[18px] h-[18px]" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-bold text-gray-200">Upcoming meetings</div>
+                  <div className="text-[10px] font-medium text-gray-500 mt-0.5">Workspace uchun rejalashtirilgan</div>
+                </div>
+              </div>
+
+              <div className="border border-dashed border-white/10 rounded-[16px] p-6 flex flex-col items-center justify-center mb-6">
+                 <Calendar className="w-5 h-5 text-gray-600 mb-3 opacity-70" />
+                 <p className="text-[11px] font-medium text-gray-500 mb-2">Hozircha reja yo'q.</p>
+                 <button className="text-[11px] font-bold text-[#4361EE] hover:text-[#4361EE]/80 transition-colors">
+                   + Meeting rejalashtirish
+                 </button>
+              </div>
+
+              <button className="text-[11px] font-bold text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1.5 mt-auto">
+                <span className="text-[9px] font-black opacity-70">&gt;</span> O'tgan meeting'lar ({pastMeetings.length})
+              </button>
+            </div>
+
+            {/* Stats Row */}
+            <div className="bg-[#12141D] rounded-[24px] border border-white/5 flex items-center justify-between p-6 shadow-md">
+               <div className="flex flex-col items-center flex-1">
+                 <span className="text-[22px] font-bold text-white mb-0.5">{meetings.length || 1}</span>
+                 <span className="text-[9px] font-bold text-gray-500 tracking-widest">TOTAL</span>
+               </div>
+               <div className="w-[1px] h-8 bg-white/5"></div>
+               <div className="flex flex-col items-center flex-1">
+                 <span className="text-[22px] font-bold text-white mb-0.5">{upcomingMeetings.filter(m => meetingStatus(m) === 'live').length}</span>
+                 <span className="text-[9px] font-bold text-gray-500 tracking-widest">LIVE NOW</span>
+               </div>
+               <div className="w-[1px] h-8 bg-white/5"></div>
+               <div className="flex flex-col items-center flex-1">
+                 <span className="text-[22px] font-bold text-white mb-0.5">{upcomingMeetings.filter(m => meetingStatus(m) === 'upcoming').length}</span>
+                 <span className="text-[9px] font-bold text-gray-500 tracking-widest">UPCOMING</span>
+               </div>
+            </div>
+
           </div>
-        </Modal>
-      </PageShell>
-      <Toast message={toast} />
-    </>
+
+        </div>
+      </div>
+    </div>
   );
 }

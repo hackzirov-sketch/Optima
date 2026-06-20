@@ -159,7 +159,7 @@ export class Task {
   @Column({ name: 'completion_note', type: 'text', nullable: true })
   completionNote!: string | null;
 
-  @Column({ name: 'github_pr_number', nullable: true })
+  @Column({ name: 'github_pr_number', type: 'integer', nullable: true })
   githubPrNumber!: number | null;
 
   @Column({ name: 'github_pr_url', type: 'text', nullable: true })

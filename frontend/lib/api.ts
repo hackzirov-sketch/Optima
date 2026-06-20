@@ -1055,6 +1055,8 @@ export const meetingsApi = {
     request<{ data: ApiMeeting }>('PATCH', `/meetings/${meetingId}`, { body: { isActive: false } }),
   delete: (meetingId: string) =>
     request('DELETE', `/meetings/${meetingId}`),
+  inviteMembers: (meetingId: string, userIds: string[]) =>
+    request('POST', `/meetings/${meetingId}/invite`, { body: { userIds } }),
 };
 
 export default {

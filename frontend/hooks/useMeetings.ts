@@ -40,5 +40,12 @@ export function useMeetings(workspaceId: string | undefined) {
     setMeetings((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
-  return { meetings, loading, refresh: load, createMeeting, deleteMeeting };
+  const addMeeting = useCallback((meeting: ApiMeeting) => {
+    setMeetings((prev) => {
+      if (prev.some(m => m.id === meeting.id)) return prev;
+      return [meeting, ...prev];
+    });
+  }, []);
+
+  return { meetings, loading, refresh: load, createMeeting, deleteMeeting, addMeeting };
 }

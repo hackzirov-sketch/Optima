@@ -66,7 +66,7 @@ export class ChatRoom {
   @Column({ name: 'is_public', default: false })
   isPublic!: boolean;
 
-  @Column({ name: 'invite_code', length: 32, nullable: true, unique: true })
+  @Column({ name: 'invite_code', type: 'varchar', length: 32, nullable: true, unique: true })
   inviteCode!: string | null;
 
   @Column({ name: 'last_message_id', nullable: true })

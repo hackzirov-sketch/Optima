@@ -43,7 +43,7 @@ export class Earning {
   @Column({ type: 'date' })
   date!: string;
 
-  @Column({ name: 'source_type', length: 50, nullable: true })
+  @Column({ name: 'source_type', type: 'varchar', length: 50, nullable: true })
   sourceType!: string | null;
 
   @Column({ name: 'source_id', type: 'uuid', nullable: true })

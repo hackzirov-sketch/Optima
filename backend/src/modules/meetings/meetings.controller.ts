@@ -117,4 +117,15 @@ export class MeetingsController {
   ) {
     return this.meetingsService.leave(meetingId, userId);
   }
+
+  @Post('meetings/:meetingId/invite')
+  @ApiOperation({ summary: 'Invite members to a meeting' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  invite(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+    @Body('userIds') userIds: string[],
+  ) {
+    return this.meetingsService.inviteMembers(meetingId, userId, userIds || []);
+  }
 }
