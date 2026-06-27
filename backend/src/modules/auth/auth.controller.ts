@@ -20,7 +20,7 @@ import { ErrorCode } from '../../common/enums/error-code.enum';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { Throttle } from '@nestjs/throttler';
 
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';

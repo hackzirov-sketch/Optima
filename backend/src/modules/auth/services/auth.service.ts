@@ -17,28 +17,28 @@ import * as crypto from 'crypto';
 import ms from 'ms';
 import { UAParser } from 'ua-parser-js';
 
-import { UsersService } from '../users/users.service';
-import { MailService } from '../mail/mail.service';
-import { RedisService } from '../../redis/redis.service';
-import { ContentFilterService } from '../moderation/services/content-filter.service';
-import { RefreshToken } from '../../database/entities/refresh-token.entity';
-import { UserSettings } from '../../database/entities/user-settings.entity';
-import { UserIpLog } from '../../database/entities/user-ip-log.entity';
-import { GithubAccount } from '../../database/entities/github-account.entity';
-import { UserVerification } from '../../database/entities/user-verification.entity';
-import { EncryptionService } from '../../common/services/encryption.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { VerifyEmailDto } from './dto/verify-email.dto';
-import { SetPasswordDto } from './dto/set-password.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
-import { ErrorCode } from '../../common/enums/error-code.enum';
-import { User } from '../../database/entities/user.entity';
+import { UsersService } from '../../users/users.service';
+import { MailService } from '../../mail/mail.service';
+import { RedisService } from '../../../redis/redis.service';
+import { ContentFilterService } from '../../moderation/services/content-filter.service';
+import { RefreshToken } from '../../../database/entities/refresh-token.entity';
+import { UserSettings } from '../../../database/entities/user-settings.entity';
+import { UserIpLog } from '../../../database/entities/user-ip-log.entity';
+import { GithubAccount } from '../../../database/entities/github-account.entity';
+import { UserVerification } from '../../../database/entities/user-verification.entity';
+import { EncryptionService } from '../../../common/services/encryption.service';
+import { RegisterDto } from '../dto/register.dto';
+import { LoginDto } from '../dto/login.dto';
+import { VerifyEmailDto } from '../dto/verify-email.dto';
+import { SetPasswordDto } from '../dto/set-password.dto';
+import { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { ErrorCode } from '../../../common/enums/error-code.enum';
+import { User } from '../../../database/entities/user.entity';
 import {
   GoogleOAuthProfile,
   GitHubOAuthProfile,
-} from './interfaces/oauth-profiles.interface';
+} from '../interfaces/oauth-profiles.interface';
 
 interface TokenContext {
   ip?: string;
