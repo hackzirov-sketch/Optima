@@ -18,4 +18,10 @@ export class SendMessageDto {
   @IsOptional()
   @IsUUID()
   replyToId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  clientMessageId?: string;
 }

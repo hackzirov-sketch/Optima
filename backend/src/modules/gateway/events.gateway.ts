@@ -15,7 +15,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { ChatService } from '../chat/chat.service';
+import { ChatMessageService } from '../chat/services/message.service';
+import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
@@ -76,7 +77,8 @@ export class EventsGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly chatService: ChatService,
+    private readonly messageService: ChatMessageService,
+    private readonly reactionService: ChatReactionService,
     private readonly violationService: ViolationService,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
@@ -294,10 +296,10 @@ export class EventsGateway
 
     if (!await this.assertActiveUser(userId, client)) return;
 
-    // Persist to DB — ChatService checks room membership internally
+    // Persist to DB — ChatMessageService checks room membership internally
     let saved: any;
     try {
-      saved = await this.chatService.sendMessage(data.roomId, userId, {
+      saved = await this.messageService.sendMessage(data.roomId, userId, {
         content: data.text,
         replyToId: data.replyToId,
       });
@@ -341,7 +343,7 @@ export class EventsGateway
     if (!await this.assertActiveUser(userId, client)) return;
 
     try {
-      const action = await this.chatService.toggleReaction(
+      const action = await this.reactionService.toggleReaction(
         data.messageId,
         userId,
         data.emoji,

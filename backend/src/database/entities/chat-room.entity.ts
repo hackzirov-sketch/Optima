@@ -79,6 +79,9 @@ export class ChatRoom {
   @Column({ name: 'last_message_at', type: 'timestamptz', nullable: true })
   lastMessageAt: Date;
 
+  @Column({ name: 'message_seq', type: 'int', default: 0 })
+  messageSeq: number;
+
   @Column({ name: 'created_by' })
   createdById: string;
 

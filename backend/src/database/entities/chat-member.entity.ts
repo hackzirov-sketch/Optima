@@ -42,6 +42,9 @@ export class ChatMember {
   @Column({ name: 'last_read_message_id', nullable: true })
   lastReadMessageId: string;
 
+  @Column({ name: 'last_read_seq', type: 'int', default: 0 })
+  lastReadSeq: number;
+
   @CreateDateColumn({ name: 'joined_at', type: 'timestamptz' })
   joinedAt: Date;
 

@@ -12,6 +12,9 @@ import {
 import { ChatRoom } from './chat-room.entity';
 import { User } from './user.entity';
 
+@Index(['roomId', 'sequence'], { unique: true })
+@Index(['roomId', 'senderId', 'clientMessageId'], { unique: true, where: 'client_message_id IS NOT NULL' })
+@Index(['replyToId'])
 @Index(['roomId', 'isDeleted', 'createdAt'])
 @Entity('chat_messages')
 export class ChatMessage {
@@ -71,4 +74,13 @@ export class ChatMessage {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
+
+  @Column({ type: 'int', nullable: true })
+  sequence!: number;
+
+  @Column({ name: 'client_message_id', type: 'varchar', length: 64, nullable: true })
+  clientMessageId!: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata!: any;
 }
