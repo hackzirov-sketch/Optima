@@ -143,6 +143,9 @@ export default function Page() {
 
   // Dynamic insight widgets from real backend data (must be before orderedWidgets)
   const liveWidgets = useMemo((): DashboardWidget[] => {
+      const total = earningsSummary?.total ?? 0;
+const thisMonth = earningsSummary?.thisMonth ?? 0;
+const count = earningsSummary?.count ?? 0;
     const totalEstHours = tasks
       .filter((t) => t.status !== 'done')
       .reduce((s, t) => s + (t.estimatedHours ?? 0), 0);
@@ -161,6 +164,12 @@ export default function Page() {
     const dueThisWeek = tasks.filter(
       (t) => t.dueDate && new Date(t.dueDate) >= weekStart && t.status !== 'done',
     ).length;
+
+    const safeEarnings = {
+  total: earningsSummary?.total ?? 0,
+  thisMonth: earningsSummary?.thisMonth ?? 0,
+  count: earningsSummary?.count ?? 0,
+};
 
     const completionPct =
       tasks.length === 0 ? 0 : Math.round((completedTasks / tasks.length) * 100);
@@ -209,20 +218,22 @@ export default function Page() {
         tone: unreadCount > 5 ? 'red' : unreadCount > 0 ? 'amber' : 'green',
       },
       {
-        id: 'w-wallet',
-        title: 'Earnings',
-        value: earningsSummary
-          ? earningsSummary.total >= 1000
-            ? `$${(earningsSummary.total / 1000).toFixed(1)}k`
-            : `$${earningsSummary.total.toFixed(0)}`
-          : '$0',
-        meta: earningsSummary && earningsSummary.thisMonth > 0
-          ? `$${earningsSummary.thisMonth.toFixed(0)} this month`
-          : earningsSummary && earningsSummary.count === 0
-            ? 'No earnings logged yet'
-            : 'This month',
-        tone: 'green',
-      },
+  id: 'w-wallet',
+  title: 'Earnings',
+  value:
+    safeEarnings.total >= 1000
+      ? `$${(safeEarnings.total / 1000).toFixed(1)}k`
+      : `$${safeEarnings.total.toFixed(0)}`,
+
+  meta:
+    safeEarnings.thisMonth > 0
+      ? `$${safeEarnings.thisMonth.toFixed(0)} this month`
+      : safeEarnings.count === 0
+        ? 'No earnings logged yet'
+        : 'This month',
+
+  tone: 'green',
+},
       {
         id: 'w-ai',
         title: 'AI suggestions',

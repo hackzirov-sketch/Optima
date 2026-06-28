@@ -98,4 +98,39 @@ export class MailService {
       this.logger.error(`Failed to send reset email to ${email}`, error.stack);
     }
   }
+
+  async sendNotificationEmail(
+    email: string,
+    firstName: string,
+    title: string,
+    message: string,
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"UPZ" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: title,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+            <div style="background:#1a1f2e;padding:20px;border-radius:12px 12px 0 0;">
+              <h1 style="color:#fff;margin:0;font-size:20px;">UPZ</h1>
+            </div>
+            <div style="background:#f9fafb;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e5e7eb;">
+              <p style="color:#374151;margin:0 0 8px;">Salom, ${firstName}!</p>
+              <h2 style="color:#111827;font-size:18px;margin:0 0 12px;">${title}</h2>
+              <p style="color:#6b7280;line-height:1.6;">${message}</p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+              <p style="color:#9ca3af;font-size:12px;margin:0;">
+                UPZ — Professional Development Platform<br/>
+                Agar bu xabar siz uchun tegishli bo'lmasa, e'tiborsiz qoldiring.
+              </p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to send notification email to ${email}`, error.stack);
+      throw error;
+    }
+  }
 }

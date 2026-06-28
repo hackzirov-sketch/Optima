@@ -127,3 +127,41 @@ export enum NotificationType {
   PROJECT_MEMBER_DECLINED = 'project_member_declined',
   MEETING_INVITE = 'meeting_invite',
 }
+
+// ─── Notification Channel & Priority ──────────────────────────────────────────
+
+export enum NotificationChannel {
+  IN_APP    = 'in_app',
+  EMAIL     = 'email',
+  TELEGRAM  = 'telegram',
+  SMS       = 'sms',
+}
+
+export enum NotificationPriority {
+  LOW      = 'low',      // in_app only
+  NORMAL   = 'normal',   // telegram + in_app
+  HIGH     = 'high',     // telegram + email + in_app
+  CRITICAL = 'critical', // sms + telegram + email + in_app
+}
+
+export enum NotificationCategory {
+  MEETING    = 'meeting',
+  TASK       = 'task',
+  HOMEWORK   = 'homework',
+  PAYMENT    = 'payment',
+  SECURITY   = 'security',
+  COURSE     = 'course',
+  MARKETING  = 'marketing',
+  CERTIFICATE = 'certificate',
+  SYSTEM     = 'system',
+}
+
+export enum ReminderJobType {
+  MEETING_24H  = 'meeting_24h',
+  MEETING_3H   = 'meeting_3h',
+  MEETING_30M  = 'meeting_30m',
+  MEETING_5M   = 'meeting_5m',
+  TASK_3D      = 'task_3d',
+  TASK_1D      = 'task_1d',
+  TASK_2H      = 'task_2h',
+}

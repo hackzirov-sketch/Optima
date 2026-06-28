@@ -1,14 +1,56 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
+
 import { Notification } from '../../database/entities/notification.entity';
+import { UserNotificationPrefs } from '../../database/entities/user-notification-prefs.entity';
+import { NotificationDeliveryLog } from '../../database/entities/notification-delivery-log.entity';
+import { User } from '../../database/entities/user.entity';
+import { Meeting } from '../../database/entities/meeting.entity';
+import { MeetingParticipant } from '../../database/entities/meeting-participant.entity';
+import { Task } from '../../database/entities/task.entity';
+
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { NotificationDispatcherService } from './notification-dispatcher.service';
+import { ReminderSchedulerService } from './reminder-scheduler.service';
+import { ReminderProcessor, REMINDER_QUEUE } from './processors/reminder.processor';
+import { TelegramChannelService } from './channels/telegram-channel.service';
+import { SmsChannelService } from './channels/sms-channel.service';
+
 import { GatewayModule } from '../gateway/gateway.module';
+import { MailModule } from '../mail/mail.module';
+import { RedisModule } from '../../redis/redis.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Notification]), GatewayModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      Notification,
+      UserNotificationPrefs,
+      NotificationDeliveryLog,
+      User,
+      Meeting,
+      MeetingParticipant,
+      Task,
+    ]),
+    BullModule.registerQueue({ name: REMINDER_QUEUE }),
+    GatewayModule,
+    MailModule,
+    RedisModule,
+  ],
   controllers: [NotificationsController],
-  providers: [NotificationsService],
-  exports: [NotificationsService],
+  providers: [
+    NotificationsService,
+    NotificationDispatcherService,
+    ReminderSchedulerService,
+    ReminderProcessor,
+    TelegramChannelService,
+    SmsChannelService,
+  ],
+  exports: [
+    NotificationsService,
+    NotificationDispatcherService,
+    ReminderSchedulerService,
+  ],
 })
 export class NotificationsModule {}

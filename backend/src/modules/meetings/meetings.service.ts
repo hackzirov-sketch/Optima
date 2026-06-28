@@ -15,6 +15,7 @@ import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meetin
 import { NotificationType } from '../../common/enums';
 import { MembersService } from '../workspaces/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import * as crypto from 'crypto';
 
@@ -34,6 +35,7 @@ export class MeetingsService {
     private readonly participantRepo: Repository<MeetingParticipant>,
     private readonly membersService: MembersService,
     private readonly notificationsService: NotificationsService,
+    private readonly reminderScheduler: ReminderSchedulerService,
   ) {}
 
   private async assertHost(meetingId: string, userId: string) {
@@ -154,6 +156,12 @@ export class MeetingsService {
       relations: ['host'],
     });
     const participants = await this.participantRepo.find({ where: { meetingId: saved.id } });
+
+    // Schedule reminders if meeting has a scheduledAt/startTime
+    if (saved.startTime) {
+      this.reminderScheduler.scheduleMeetingReminders(saved.id, saved.startTime).catch(() => {});
+    }
+
     return this.enrichMeeting(full!, participants);
   }
 
@@ -185,6 +193,12 @@ export class MeetingsService {
     if (dto.agenda !== undefined) meeting.agenda = dto.agenda;
 
     const saved = await this.meetingRepo.save(meeting);
+
+    // Reschedule reminders if startTime changed
+    if (dto.startTime && saved.startTime) {
+      this.reminderScheduler.scheduleMeetingReminders(saved.id, saved.startTime).catch(() => {});
+    }
+
     const full = await this.meetingRepo.findOne({ where: { id: saved.id }, relations: ['host'] });
     const participants = await this.participantRepo.find({ where: { meetingId: saved.id } });
     return this.enrichMeeting(full!, participants);
@@ -194,6 +208,7 @@ export class MeetingsService {
     const meeting = await this.assertHost(meetingId, userId);
     meeting.status = MeetingStatus.CANCELLED;
     await this.meetingRepo.save(meeting);
+    this.reminderScheduler.cancelMeetingReminders(meetingId).catch(() => {});
   }
 
   async join(meetingId: string, userId: string) {
