@@ -1,9 +1,9 @@
 import { registerAs } from '@nestjs/config';
 
 function resolveBcryptRounds(): number {
-  const raw = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
-  if (Number.isNaN(raw)) return 12;
-  return Math.min(15, Math.max(10, raw));
+  const raw = parseInt(process.env.BCRYPT_ROUNDS || '10', 10);
+  if (Number.isNaN(raw)) return 10;
+  return Math.min(14, Math.max(10, raw));
 }
 
 export default registerAs('app', () => ({

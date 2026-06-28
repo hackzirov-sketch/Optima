@@ -53,9 +53,9 @@ export class AuthService {
 
   async verifyEmail(dto: VerifyEmailDto) {
     return this.dataSource.transaction(async (manager) => {
+      // Lock only the UserVerification row (no JOIN to avoid PostgreSQL "FOR UPDATE cannot be applied to nullable side of outer join")
       const verification = await manager.findOne(UserVerification, {
         where: { code: dto.code },
-        relations: ['user'],
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -66,7 +66,14 @@ export class AuthService {
         });
       }
 
-      const user = verification.user;
+      // Load user separately after lock is acquired
+      const user = await manager.findOne(User, { where: { id: verification.userId } });
+      if (!user) {
+        throw new BadRequestException({
+          code: ErrorCode.TOKEN_INVALID,
+          message: 'Invalid or expired verification code',
+        });
+      }
 
       const updateData: Partial<User> = { isVerified: true };
       let setupToken: string | undefined;
@@ -100,15 +107,19 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existingUser = await this.usersService.findByEmail(dto.email);
+    // Parallel: DB uniqueness checks + bcrypt hashing (independent operations)
+    const [existingUser, existingUsername, passwordHash] = await Promise.all([
+      this.usersService.findByEmail(dto.email),
+      this.usersService.findByUsername(dto.username),
+      this.securityService.hashPassword(dto.password),
+    ]);
+
     if (existingUser) {
       throw new ConflictException({
         code: ErrorCode.EMAIL_ALREADY_EXISTS,
         message: 'Email already exists',
       });
     }
-
-    const existingUsername = await this.usersService.findByUsername(dto.username);
     if (existingUsername) {
       throw new ConflictException({
         code: ErrorCode.USERNAME_ALREADY_EXISTS,
@@ -116,14 +127,15 @@ export class AuthService {
       });
     }
 
-    await this.contentFilter.filterText(dto.username, undefined, 'username');
-    await this.contentFilter.filterText(
-      [dto.firstName, dto.lastName].filter(Boolean).join(' '),
-      undefined,
-      'profile',
-    );
-
-    const passwordHash = await this.securityService.hashPassword(dto.password);
+    // Parallel: content filter checks (independent)
+    await Promise.all([
+      this.contentFilter.filterText(dto.username, undefined, 'username'),
+      this.contentFilter.filterText(
+        [dto.firstName, dto.lastName].filter(Boolean).join(' '),
+        undefined,
+        'profile',
+      ),
+    ]);
 
     const user = await this.usersService.create({
       firstName: dto.firstName,
@@ -131,6 +143,7 @@ export class AuthService {
       username: dto.username,
       email: dto.email,
       passwordHash,
+      phoneNumber: dto.phoneNumber ?? null,
       isVerified: false,
       providers: ['local'],
       needsPasswordSetup: false,
@@ -152,6 +165,8 @@ export class AuthService {
   ) {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
+      // Constant-time response to prevent email enumeration
+      await this.securityService.comparePassword(dto.password, '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Invalid credentials',
@@ -170,7 +185,12 @@ export class AuthService {
       });
     }
 
-    const lockoutTtl = await this.redisService.getAccountLockout(user.id);
+    // Parallel: bcrypt compare + Redis lockout check (independent operations, saves ~80ms)
+    const [isPasswordValid, lockoutTtl] = await Promise.all([
+      this.securityService.comparePassword(dto.password, user.passwordHash),
+      this.redisService.getAccountLockout(user.id),
+    ]);
+
     if (lockoutTtl !== null) {
       throw new HttpException({
         code: ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -178,7 +198,6 @@ export class AuthService {
       }, HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const isPasswordValid = await this.securityService.comparePassword(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       await this.redisService.incrementAccountLockoutFailures(user.id, 5, 900); // 5 attempts -> 15 min lock
       throw new UnauthorizedException({
