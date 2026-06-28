@@ -32,6 +32,7 @@ export interface SendMessageWsDto {
   roomId: string;
   text: string;
   replyToId?: string;
+  clientMessageId?: string; // idempotency — WS reconnect'da duplicate oldini olish
 }
 
 export interface TypingDto {
@@ -133,20 +134,21 @@ export class EventsGateway
     // Store workspace memberships in socket data for cleanup on disconnect
     client.data.workspaceIds = wsIds;
 
+    // Parallel: har workspace uchun fetchSockets'ni bir vaqtda chaqiramiz
     const onlineInMyWorkspaces = new Set<string>();
-    for (const wsId of wsIds) {
-      client.join(`workspace:${wsId}`);
-      // Notify existing members in this workspace that user came online
-      client.to(`workspace:${wsId}`).emit('user_online', { userId: user.id });
-      
-      // Collect already-online users who share this workspace across the cluster
-      const sockets = await this.server.in(`workspace:${wsId}`).fetchSockets();
-      for (const s of sockets) {
-        if (s.data?.userId && s.data.userId !== user.id) {
-          onlineInMyWorkspaces.add(s.data.userId);
+    await Promise.all(
+      wsIds.map(async (wsId) => {
+        client.join(`workspace:${wsId}`);
+        client.to(`workspace:${wsId}`).emit('user_online', { userId: user.id });
+
+        const sockets = await this.server.in(`workspace:${wsId}`).fetchSockets();
+        for (const s of sockets) {
+          if (s.data?.userId && s.data.userId !== user.id) {
+            onlineInMyWorkspaces.add(s.data.userId);
+          }
         }
-      }
-    }
+      }),
+    );
 
     // Send filtered online list only (workspace-scoped, not global)
     client.emit('online_users', { userIds: Array.from(onlineInMyWorkspaces) });
@@ -302,6 +304,7 @@ export class EventsGateway
       saved = await this.messageService.sendMessage(data.roomId, userId, {
         content: data.text,
         replyToId: data.replyToId,
+        clientMessageId: data.clientMessageId, // idempotency: WS reconnect'da duplicate yo'q
       });
     } catch (err: any) {
       // ForbiddenException → emit error back to sender only

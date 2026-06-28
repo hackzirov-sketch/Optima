@@ -10,12 +10,15 @@ export class ChatPresenceService {
     if (!client) return;
 
     const key = `presence:${userId}`;
-    await client.hset(key, {
+    // Pipeline: 2 ta sequential call o'rniga bitta round trip
+    const pipeline = client.pipeline();
+    pipeline.hset(key, {
       status: 'online',
       lastSeen: new Date().toISOString(),
       socketId,
     });
-    await client.expire(key, 60);
+    pipeline.expire(key, 60);
+    await pipeline.exec();
   }
 
   async setOffline(userId: string) {
@@ -23,9 +26,10 @@ export class ChatPresenceService {
     if (!client) return;
 
     const key = `presence:${userId}`;
-    await client.hset(key, 'status', 'offline');
-    // keep for some time
-    await client.expire(key, 300);
+    const pipeline = client.pipeline();
+    pipeline.hset(key, 'status', 'offline');
+    pipeline.expire(key, 300);
+    await pipeline.exec();
   }
 
   async getPresence(userId: string) {
@@ -39,8 +43,11 @@ export class ChatPresenceService {
     if (!client) return;
 
     const key = `typing:${roomId}`;
-    await client.sadd(key, userId);
-    await client.expire(key, 5);
+    // Pipeline: sadd + expire bitta round trip
+    const pipeline = client.pipeline();
+    pipeline.sadd(key, userId);
+    pipeline.expire(key, 5);
+    await pipeline.exec();
   }
 
   async getTyping(roomId: string) {

@@ -53,16 +53,26 @@ export class ChatMessageService {
       query.skip((p - 1) * l); // Fallback to offset if no cursor provided (for backward compat)
     }
 
-    const [messages, total] = await query.getManyAndCount();
+    // cursor mode'da count kerak emas — extra DB work oldini olamiz
+    let messages: ChatMessage[];
+    let total: number | undefined;
+    if (cursor) {
+      messages = await query.getMany();
+      total = undefined;
+    } else {
+      [messages, total] = await query.getManyAndCount();
+    }
 
     if (messages.length === 0) {
       return { data: [], total, page: cursor ? undefined : page, limit: l };
     }
 
     const msgIds = messages.map((m) => m.id);
-    const reactions = await this.reactionRepo.find({
-      where: msgIds.map(id => ({ messageId: id })),
-    });
+    // Fix: OR chain o'rniga bitta IN query
+    const reactions = await this.reactionRepo
+      .createQueryBuilder('r')
+      .where('r.message_id IN (:...msgIds)', { msgIds })
+      .getMany();
 
     const reactionsByMsg = new Map<string, ChatReaction[]>();
     for (const r of reactions) {
@@ -102,7 +112,8 @@ export class ChatMessageService {
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
     const room = await this.roomRepo.findOne({ where: { id: roomId }, select: ['id', 'isReadOnly'] });
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
-    await this.chatMemberService.assertRoomMember(roomId, userId);
+    // assertRoomMemberWithUser: membership + user bir SELECT'da — keyinroq sender uchun alohida query yo'q
+    const member = await this.chatMemberService.assertRoomMemberWithUser(roomId, userId);
     if (room.isReadOnly) throw new ForbiddenException({ code: ErrorCode.ROOM_READ_ONLY, message: 'Room is read-only' });
 
     if (!dto.content?.trim()) {
@@ -171,25 +182,25 @@ export class ChatMessageService {
     });
     const saved = await this.messageRepo.save(msg);
 
-    // 4. Background Jobs for side-effects (Dedup room update, notifications)
-    await this.chatQueue.add(
-      'update-room-metadata',
-      { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
-      { jobId: roomId } // Dedup by roomId
-    );
+    // 4. Background Jobs — parallel, not sequential
+    await Promise.all([
+      this.chatQueue.add(
+        'update-room-metadata',
+        { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
+        { jobId: roomId }, // Dedup by roomId
+      ),
+      this.chatQueue.add(
+        'message-side-effects',
+        { messageId: saved.id, roomId, senderId: userId },
+        { jobId: saved.id },
+      ),
+    ]);
 
-    await this.chatQueue.add(
-      'message-side-effects',
-      { messageId: saved.id, roomId, senderId: userId },
-      { jobId: saved.id }
-    );
+    // Fix: sender'ni DB'dan qayta yuklamaymiz — assertRoomMember (yuqorida) relations: ['user'] bilan
+    // chaqirilgan, shuning uchun alohida SELECT yo'q.
+    const senderUser = (member as any).user ?? null;
 
-    const withSender = await this.messageRepo.findOne({
-      where: { id: saved.id },
-      relations: ['sender'],
-    });
-
-    return this.mapToResponse(withSender || saved, plainText);
+    return this.mapToResponseWithSender(saved, plainText, senderUser);
   }
 
   async deleteMessage(messageId: string, userId: string) {
@@ -229,6 +240,10 @@ export class ChatMessageService {
   }
 
   private mapToResponse(msg: ChatMessage, decryptedContent: string) {
+    return this.mapToResponseWithSender(msg, decryptedContent, msg.sender ?? null);
+  }
+
+  private mapToResponseWithSender(msg: ChatMessage, decryptedContent: string, sender: any) {
     return {
       id: msg.id,
       roomId: msg.roomId,
@@ -243,12 +258,12 @@ export class ChatMessageService {
       editedAt: msg.editedAt ?? null,
       createdAt: msg.createdAt,
       reactions: [],
-      sender: msg.sender
+      sender: sender
         ? {
-            id: msg.sender.id,
-            firstName: msg.sender.firstName ?? null,
-            lastName: msg.sender.lastName ?? null,
-            avatarUrl: msg.sender.avatarUrl ?? null,
+            id: sender.id,
+            firstName: sender.firstName ?? null,
+            lastName: sender.lastName ?? null,
+            avatarUrl: sender.avatarUrl ?? null,
           }
         : null,
     };
