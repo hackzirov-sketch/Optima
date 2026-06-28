@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
@@ -13,10 +14,15 @@ interface TokenContext {
 
 @Injectable()
 export class SessionService {
+  private readonly maxSessions: number;
+
   constructor(
     @InjectRepository(RefreshToken)
     private refreshTokensRepository: Repository<RefreshToken>,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
+  }
 
   async getSessions(userId: string) {
     const sessions = await this.refreshTokensRepository.find({
@@ -63,7 +69,7 @@ export class SessionService {
     const activeCount = await this.refreshTokensRepository.count({
       where: { userId, revokedAt: IsNull(), isDeleted: false },
     });
-    if (activeCount >= 5) {
+    if (activeCount >= this.maxSessions) {
       const oldest = await this.refreshTokensRepository.find({
         where: { userId, revokedAt: IsNull(), isDeleted: false },
         order: { createdAt: 'ASC' },

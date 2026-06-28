@@ -38,7 +38,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
-    const user = await this.usersService.findById(payload.sub);
+    let user = await this.redisService.getCachedUser(payload.sub);
+    if (!user) {
+      user = await this.usersService.findById(payload.sub);
+      if (user) {
+        await this.redisService.cacheUser(payload.sub, user, 10);
+      }
+    }
+
     if (!user || !user.isActive) {
       throw new UnauthorizedException({
         code: ErrorCode.ACCOUNT_INACTIVE,

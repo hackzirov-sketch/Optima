@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as crypto from 'crypto';
@@ -46,46 +46,55 @@ export class AuthService {
     @InjectQueue('auth') private authQueue: Queue,
     @InjectRepository(UserVerification)
     private userVerificationsRepository: Repository<UserVerification>,
+    private dataSource: DataSource,
   ) {}
 
   async verifyEmail(dto: VerifyEmailDto) {
-    const verification = await this.userVerificationsRepository.findOne({
-      where: { code: dto.code },
-      relations: ['user'],
-    });
-
-    if (!verification || verification.expiresAt < new Date()) {
-      throw new BadRequestException({
-        code: ErrorCode.TOKEN_INVALID,
-        message: 'Invalid or expired verification code',
+    return this.dataSource.transaction(async (manager) => {
+      const verification = await manager.findOne(UserVerification, {
+        where: { code: dto.code },
+        relations: ['user'],
+        lock: { mode: 'pessimistic_write' },
       });
-    }
 
-    const user = verification.user;
+      if (!verification || verification.expiresAt < new Date()) {
+        throw new BadRequestException({
+          code: ErrorCode.TOKEN_INVALID,
+          message: 'Invalid or expired verification code',
+        });
+      }
 
-    const updateData: Partial<User> = { isVerified: true };
-    if (!user.passwordHash) {
-      updateData.needsPasswordSetup = true;
-      user.needsPasswordSetup = true;
-    }
+      const user = verification.user;
 
-    await this.usersService.update(user.id, updateData);
-    await this.userVerificationsRepository.delete({ userId: user.id });
+      const updateData: Partial<User> = { isVerified: true };
+      let setupToken: string | undefined;
 
-    const {
-      accessToken,
-      refreshToken,
-      user: authUser,
-    } = await this.tokenService.generateTokens(user);
+      if (!user.passwordHash) {
+        updateData.needsPasswordSetup = true;
+        user.needsPasswordSetup = true;
+        setupToken = crypto.randomUUID();
+        await this.redisService.setPasswordResetToken(setupToken, user.id);
+      }
 
-    return {
-      message: 'Email verified successfully',
-      redirect: !user.passwordHash ? '/set-password' : undefined,
-      requiresPasswordSetup: !user.passwordHash,
-      accessToken,
-      refreshToken,
-      user: authUser,
-    };
+      await manager.update(User, user.id, updateData);
+      await manager.delete(UserVerification, { userId: user.id });
+
+      const {
+        accessToken,
+        refreshToken,
+        user: authUser,
+      } = await this.tokenService.generateTokens(user);
+
+      return {
+        message: 'Email verified successfully',
+        redirect: !user.passwordHash ? '/set-password' : undefined,
+        requiresPasswordSetup: !user.passwordHash,
+        setupToken,
+        accessToken,
+        refreshToken,
+        user: authUser,
+      };
+    });
   }
 
   async register(dto: RegisterDto) {
@@ -159,13 +168,24 @@ export class AuthService {
       });
     }
 
+    const lockoutTtl = await this.redisService.getAccountLockout(user.id);
+    if (lockoutTtl !== null) {
+      throw new UnauthorizedException({
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        message: `Account is temporarily locked. Try again in ${Math.ceil(lockoutTtl / 60)} minute(s).`,
+      });
+    }
+
     const isPasswordValid = await this.securityService.comparePassword(dto.password, user.passwordHash);
     if (!isPasswordValid) {
+      await this.redisService.incrementAccountLockoutFailures(user.id, 5, 900); // 5 attempts -> 15 min lock
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Invalid credentials',
       });
     }
+
+    await this.redisService.clearAccountLockout(user.id);
 
     if (!user.isVerified) {
       await this.enqueueResendVerification(user.id, user.email);
@@ -193,8 +213,27 @@ export class AuthService {
     return this.tokenService.generateTokens(user, { ip, userAgent, deviceName, provider: 'local' });
   }
 
-  async setPassword(userId: string, dto: SetPasswordDto) {
-    const user = await this.usersService.findById(userId);
+  async setPassword(userId: string | undefined, dto: SetPasswordDto, authHeader?: string) {
+    let finalUserId: string | null | undefined = userId;
+
+    if (!finalUserId && dto.setupToken) {
+      finalUserId = await this.redisService.getAndDeletePasswordResetToken(dto.setupToken);
+    }
+
+    if (!finalUserId && authHeader?.toLowerCase().startsWith('bearer ')) {
+      const token = authHeader.substring(7).trim();
+      const decodedId = await this.tokenService.verifyAccessToken(token);
+      if (decodedId) finalUserId = decodedId;
+    }
+
+    if (!finalUserId) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Valid token required to set password',
+      });
+    }
+
+    const user = await this.usersService.findById(finalUserId);
     if (!user) throw new UnauthorizedException();
 
     const passwordHash = await this.securityService.hashPassword(dto.password);
@@ -204,7 +243,7 @@ export class AuthService {
       providers.push('local');
     }
 
-    await this.usersService.update(userId, {
+    await this.usersService.update(finalUserId, {
       passwordHash,
       providers,
       needsPasswordSetup: false,

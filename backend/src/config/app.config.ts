@@ -12,4 +12,5 @@ export default registerAs('app', () => ({
   apiPrefix: process.env.API_PREFIX || 'api/v1',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3001',
   bcryptRounds: resolveBcryptRounds(),
+  maxSessions: parseInt(process.env.MAX_SESSIONS || '5', 10),
 }));

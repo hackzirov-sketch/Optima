@@ -52,6 +52,16 @@ export class TokenService {
     return { requiresPasswordSetup: user.needsPasswordSetup, accessToken, refreshToken, user };
   }
 
+  async verifyAccessToken(token: string): Promise<string | null> {
+    try {
+      const secret = this.configService.get<string>('jwt.accessSecret');
+      const decoded = await this.jwtService.verifyAsync<{ sub?: string }>(token, { secret });
+      return decoded?.sub || null;
+    } catch {
+      return null;
+    }
+  }
+
   async refresh(refreshToken: string) {
     const tokenHash = crypto
       .createHash('sha256')
@@ -59,9 +69,17 @@ export class TokenService {
       .digest('hex');
     const storedToken = await this.sessionService.findByTokenHash(tokenHash);
 
+    if (storedToken && storedToken.revokedAt) {
+      // Token Reuse Detection
+      await this.sessionService.revokeAllSessions(storedToken.userId);
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_REVOKED,
+        message: 'Token reuse detected. All sessions revoked.',
+      });
+    }
+
     if (
       !storedToken ||
-      storedToken.revokedAt ||
       new Date() > storedToken.expiresAt
     ) {
       throw new UnauthorizedException({

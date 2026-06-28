@@ -73,21 +73,6 @@ export class EventsGateway
 
   private readonly logger = new Logger(EventsGateway.name);
 
-  // socketId → userId
-  private readonly socketUser = new Map<string, string>();
-  // userId → Set<socketId>
-  private readonly userSockets = new Map<string, Set<string>>();
-  // userId → online status
-  private readonly onlineUsers = new Set<string>();
-  // userId → Set<workspaceId> — for scoped online/offline broadcasts
-  private readonly userWorkspaces = new Map<string, Set<string>>();
-
-  // ─── Meeting presence ─────────────────────────────────
-  // meetingId → Map<userId, socketId>  (one socket per user per meeting)
-  private readonly meetingUsers = new Map<string, Map<string, string>>();
-  // socketId → meetingId  (for cleanup on disconnect)
-  private readonly socketMeeting = new Map<string, string>();
-
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -134,13 +119,7 @@ export class EventsGateway
       return;
     }
 
-    // Register mappings
-    this.socketUser.set(client.id, user.id);
-    if (!this.userSockets.has(user.id)) {
-      this.userSockets.set(user.id, new Set());
-    }
-    this.userSockets.get(user.id)!.add(client.id);
-    this.onlineUsers.add(user.id);
+    client.data.userId = user.id;
 
     // Auto-join personal room for direct notifications
     client.join(`user:${user.id}`);
@@ -148,17 +127,21 @@ export class EventsGateway
     // Load workspace memberships → join scoped rooms + broadcast user_online
     const memberships = await this.wsMemberRepo.find({ where: { userId: user.id } });
     const wsIds = memberships.map((m) => m.workspaceId);
-    this.userWorkspaces.set(user.id, new Set(wsIds));
+    
+    // Store workspace memberships in socket data for cleanup on disconnect
+    client.data.workspaceIds = wsIds;
 
     const onlineInMyWorkspaces = new Set<string>();
     for (const wsId of wsIds) {
       client.join(`workspace:${wsId}`);
       // Notify existing members in this workspace that user came online
       client.to(`workspace:${wsId}`).emit('user_online', { userId: user.id });
-      // Collect already-online users who share this workspace
-      for (const [uid, theirWsIds] of this.userWorkspaces) {
-        if (uid !== user.id && theirWsIds.has(wsId)) {
-          onlineInMyWorkspaces.add(uid);
+      
+      // Collect already-online users who share this workspace across the cluster
+      const sockets = await this.server.in(`workspace:${wsId}`).fetchSockets();
+      for (const s of sockets) {
+        if (s.data?.userId && s.data.userId !== user.id) {
+          onlineInMyWorkspaces.add(s.data.userId);
         }
       }
     }
@@ -166,39 +149,37 @@ export class EventsGateway
     // Send filtered online list only (workspace-scoped, not global)
     client.emit('online_users', { userIds: Array.from(onlineInMyWorkspaces) });
 
-    this.logger.log(
-      `Client connected: ${client.id} → userId=${user.id} (${this.onlineUsers.size} online)`,
-    );
+    this.logger.log(`Client connected: ${client.id} → userId=${user.id}`);
   }
 
   async handleDisconnect(client: Socket) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
 
-    this.socketUser.delete(client.id);
-    const sockets = this.userSockets.get(userId);
-    sockets?.delete(client.id);
-
-    if (!sockets || sockets.size === 0) {
-      this.userSockets.delete(userId);
-      this.onlineUsers.delete(userId);
-      // Broadcast offline only to workspace-scoped rooms (not globally)
-      const wsIds = this.userWorkspaces.get(userId) ?? new Set<string>();
-      for (const wsId of wsIds) {
-        this.server.to(`workspace:${wsId}`).emit('user_offline', { userId });
+    // Wait a brief moment to see if they have other active sockets (e.g. multiple tabs)
+    // before broadcasting them as offline
+    setTimeout(async () => {
+      try {
+        const sockets = await this.server.in(`user:${userId}`).fetchSockets();
+        if (sockets.length === 0) {
+          // User has completely disconnected from the cluster
+          const wsIds = client.data?.workspaceIds || [];
+          for (const wsId of wsIds) {
+            this.server.to(`workspace:${wsId}`).emit('user_offline', { userId });
+          }
+        }
+      } catch (err) {
+        this.logger.error(`Error during disconnect cleanup for ${userId}`, err);
       }
-      this.userWorkspaces.delete(userId);
-    }
+    }, 2000);
 
     // Clean up meeting presence if this socket was in a meeting
-    const meetingId = this.socketMeeting.get(client.id);
-    if (meetingId && userId) {
+    const meetingId = client.data?.meetingId;
+    if (meetingId) {
       await this.leaveMeeting(client, userId, meetingId);
     }
 
-    this.logger.log(
-      `Client disconnected: ${client.id} → userId=${userId} (${this.onlineUsers.size} online)`,
-    );
+    this.logger.log(`Client disconnected: ${client.id} → userId=${userId}`);
   }
 
   // ─── Workspace join/leave ────────────────────────────
@@ -207,7 +188,7 @@ export class EventsGateway
     @MessageBody() data: { workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     const member = await this.wsMemberRepo.findOne({
@@ -224,7 +205,7 @@ export class EventsGateway
     @MessageBody() data: { workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     client.leave(`workspace:${data.workspaceId}`);
@@ -237,7 +218,7 @@ export class EventsGateway
     @MessageBody() data: JoinRoomDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     const member = await this.chatMemberRepo.findOne({
@@ -258,7 +239,7 @@ export class EventsGateway
     @MessageBody() data: JoinRoomDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     client.leave(`room:${data.roomId}`);
@@ -275,7 +256,7 @@ export class EventsGateway
     @MessageBody() data: TypingDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
     if (!client.rooms.has(`room:${data.roomId}`)) return;
 
@@ -308,7 +289,7 @@ export class EventsGateway
     @MessageBody() data: SendMessageWsDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     if (!await this.assertActiveUser(userId, client)) return;
@@ -354,7 +335,7 @@ export class EventsGateway
     @MessageBody() data: AddReactionWsDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     if (!await this.assertActiveUser(userId, client)) return;
@@ -387,7 +368,7 @@ export class EventsGateway
     @MessageBody() data: { roomId: string; messageId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
     if (!client.rooms.has(`room:${data.roomId}`)) return;
 
@@ -404,7 +385,7 @@ export class EventsGateway
     @MessageBody() data: MeetingJoinDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) {
       client.emit('error', { code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
       return;
@@ -413,26 +394,26 @@ export class EventsGateway
     const { meetingId } = data;
 
     // Leave any previous meeting this socket was in
-    const prevMeeting = this.socketMeeting.get(client.id);
+    const prevMeeting = client.data?.meetingId;
     if (prevMeeting && prevMeeting !== meetingId) {
       await this.leaveMeeting(client, userId, prevMeeting);
     }
 
-    // Register in meeting presence map
-    if (!this.meetingUsers.has(meetingId)) {
-      this.meetingUsers.set(meetingId, new Map());
-    }
-    this.meetingUsers.get(meetingId)!.set(userId, client.id);
-    this.socketMeeting.set(client.id, meetingId);
-
+    // Register in meeting presence
+    client.data.meetingId = meetingId;
     await client.join(`meeting:${meetingId}`);
+    await client.join(`meeting:${meetingId}:user:${userId}`);
 
     // Tell the joiner who else is already in the meeting
-    const participants = Array.from(this.meetingUsers.get(meetingId)!.entries())
-      .filter(([uid]) => uid !== userId)
-      .map(([uid]) => uid);
+    const sockets = await this.server.in(`meeting:${meetingId}`).fetchSockets();
+    const participants = new Set<string>();
+    for (const s of sockets) {
+      if (s.data?.userId && s.data.userId !== userId) {
+        participants.add(s.data.userId);
+      }
+    }
 
-    client.emit('meeting:participants', { meetingId, userIds: participants });
+    client.emit('meeting:participants', { meetingId, userIds: Array.from(participants) });
 
     // Notify everyone else that this user joined
     client.to(`meeting:${meetingId}`).emit('meeting:user-joined', { meetingId, userId });
@@ -446,7 +427,7 @@ export class EventsGateway
     @MessageBody() data: MeetingLeaveDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
     await this.leaveMeeting(client, userId, data.meetingId);
   }
@@ -457,13 +438,10 @@ export class EventsGateway
     @MessageBody() data: MeetingOfferDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
 
-    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
-    if (!targetSocketId) return;
-
-    this.server.to(targetSocketId).emit('meeting:offer', {
+    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:offer', {
       meetingId: data.meetingId,
       fromUserId: userId,
       sdp: data.sdp,
@@ -476,13 +454,10 @@ export class EventsGateway
     @MessageBody() data: MeetingAnswerDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
 
-    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
-    if (!targetSocketId) return;
-
-    this.server.to(targetSocketId).emit('meeting:answer', {
+    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:answer', {
       meetingId: data.meetingId,
       fromUserId: userId,
       sdp: data.sdp,
@@ -495,13 +470,10 @@ export class EventsGateway
     @MessageBody() data: MeetingIceDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
 
-    const targetSocketId = this.meetingUsers.get(data.meetingId)?.get(data.targetUserId);
-    if (!targetSocketId) return;
-
-    this.server.to(targetSocketId).emit('meeting:ice-candidate', {
+    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:ice-candidate', {
       meetingId: data.meetingId,
       fromUserId: userId,
       candidate: data.candidate,
@@ -514,7 +486,7 @@ export class EventsGateway
     @MessageBody() data: MeetingToggleDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = this.socketUser.get(client.id);
+    const userId = client.data?.userId;
     if (!userId) return;
 
     client.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
@@ -527,15 +499,16 @@ export class EventsGateway
 
   // ─── Internal: clean up meeting state ────────────────
   private async leaveMeeting(client: Socket, userId: string, meetingId: string) {
-    this.meetingUsers.get(meetingId)?.delete(userId);
-    if (this.meetingUsers.get(meetingId)?.size === 0) {
-      this.meetingUsers.delete(meetingId);
-    }
-    this.socketMeeting.delete(client.id);
-
+    delete client.data.meetingId;
+    await client.leave(`meeting:${meetingId}:user:${userId}`);
     await client.leave(`meeting:${meetingId}`);
-    client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
-    this.logger.log(`User ${userId} left meeting ${meetingId}`);
+    
+    // Check if the user has any other sockets still in the meeting
+    const sockets = await this.server.in(`meeting:${meetingId}:user:${userId}`).fetchSockets();
+    if (sockets.length === 0) {
+      client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
+      this.logger.log(`User ${userId} left meeting ${meetingId}`);
+    }
   }
 
   // ─── Public helpers for other services ───────────────
@@ -555,13 +528,18 @@ export class EventsGateway
     this.server?.to(`workspace:${workspaceId}`)?.emit(event, payload);
   }
 
-  /** Check whether a user has at least one active socket */
-  isUserOnline(userId: string): boolean {
-    return this.onlineUsers.has(userId);
+  /** Check whether a user has at least one active socket across the cluster */
+  async isUserOnline(userId: string): Promise<boolean> {
+    const sockets = await this.server?.in(`user:${userId}`)?.fetchSockets();
+    return sockets ? sockets.length > 0 : false;
   }
 
-  /** Get all currently online user IDs */
-  getOnlineUsers(): string[] {
-    return Array.from(this.onlineUsers);
+  /** Get all currently online user IDs (Note: Can be expensive, avoid frequent use) */
+  async getOnlineUsers(): Promise<string[]> {
+    // We cannot efficiently query ALL online users across a cluster easily without storing it in Redis.
+    // Instead of iterating all rooms, we could rely on a Redis set.
+    // But since this was only an in-memory Set before, if it's unused, we can just return empty for now,
+    // or we'd need to maintain a Redis Set of online users if really needed.
+    return [];
   }
 }

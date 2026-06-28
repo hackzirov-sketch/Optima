@@ -11,9 +11,14 @@ import { GoogleOAuthProfile, GitHubOAuthProfile } from '../interfaces/oauth-prof
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
+import { Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class OAuthService {
+  private readonly logger = new Logger(OAuthService.name);
+
   constructor(
     private usersService: UsersService,
     private redisService: RedisService,
@@ -22,7 +27,34 @@ export class OAuthService {
     private deviceService: DeviceService,
     @InjectRepository(GithubAccount)
     private githubAccountsRepository: Repository<GithubAccount>,
+    @InjectQueue('auth') private authQueue: Queue,
   ) {}
+
+  private async generateUniqueUsername(base: string): Promise<string> {
+    let username = base;
+    let suffix = 0;
+    while (await this.usersService.findByUsername(username)) {
+      suffix++;
+      username = `${base}${suffix}`;
+    }
+    return username;
+  }
+
+  private async enqueueOnRegister(userId: string, email: string): Promise<void> {
+    try {
+      await this.authQueue.add(
+        'on-register',
+        { userId, email },
+        {
+          jobId: `on-register_${userId}`,
+          removeOnComplete: true,
+          attempts: 3,
+        },
+      );
+    } catch (error) {
+      this.logger.warn(`BullMQ on-register failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
 
   async googleLogin(googleUser: GoogleOAuthProfile, ip?: string, userAgent?: string) {
     if (!googleUser) {
@@ -35,10 +67,12 @@ export class OAuthService {
     let user = await this.usersService.findByEmail(googleUser.email);
 
     if (!user) {
-      const username = googleUser.email.split('@')[0] + crypto.randomInt(1000);
+      const baseUsername = googleUser.email.split('@')[0];
+      const username = await this.generateUniqueUsername(baseUsername);
+
       user = await this.usersService.create({
         email: googleUser.email,
-        firstName: googleUser.firstName || googleUser.email.split('@')[0],
+        firstName: googleUser.firstName || baseUsername,
         lastName: googleUser.lastName || '',
         username,
         avatarUrl: googleUser.picture,
@@ -48,7 +82,7 @@ export class OAuthService {
         needsPasswordSetup: true,
       });
 
-      // Usually would enqueue OnRegister here, let's just assume we return a flag or do it via event emitter or caller handles it
+      await this.enqueueOnRegister(user.id, user.email);
     }
 
     if (ip) {
@@ -87,27 +121,31 @@ export class OAuthService {
       }
       await this.githubAccountsRepository.save(githubAccount);
     } else {
-      user = await this.usersService.findByEmail(githubUser.email!);
+      const email = githubUser.email || `${githubUser.githubId}@github.placeholder.com`;
+      user = await this.usersService.findByEmail(email);
 
       if (!user) {
+        const username = await this.generateUniqueUsername(githubUser.username || `github_user_${githubUser.githubId}`);
         user = await this.usersService.create({
-          email: githubUser.email,
-          firstName: githubUser.firstName || githubUser.email?.split('@')[0],
+          email,
+          firstName: githubUser.firstName || username,
           lastName: githubUser.lastName || '',
-          username: githubUser.username,
+          username,
           avatarUrl: githubUser.avatarUrl,
           isVerified: true,
           passwordHash: null,
           providers: ['github'],
           needsPasswordSetup: true,
         });
+        
+        await this.enqueueOnRegister(user.id, user.email);
       }
 
       githubAccount = this.githubAccountsRepository.create({
         userId: user.id,
         githubUserId: Number(githubUser.githubId),
         username: githubUser.username,
-        email: githubUser.email,
+        email,
         avatarUrl: githubUser.avatarUrl,
         accessTokenEncrypted: this.encryptionService.encrypt(githubUser.accessToken),
         refreshTokenEncrypted: githubUser.refreshToken

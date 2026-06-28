@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
@@ -82,11 +83,18 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     }),
 
     // ── Rate Limiting ─────────────────────────────
-    ThrottlerModule.forRoot([
-      { name: 'short', ttl: 1000, limit: 20 }, // 20 req/sec
-      { name: 'medium', ttl: 10000, limit: 100 }, // 100 req/10sec
-      { name: 'long', ttl: 60000, limit: 300 }, // 300 req/min
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          { name: 'short', ttl: 1000, limit: 20 }, // 20 req/sec
+          { name: 'medium', ttl: 10000, limit: 100 }, // 100 req/10sec
+          { name: 'long', ttl: 60000, limit: 300 }, // 300 req/min
+        ],
+        storage: new ThrottlerStorageRedisService(config.get('REDIS_URL') as string),
+      }),
+    }),
 
     // ── Event Emitter (internal) ───────────────────
     EventEmitterModule.forRoot({ wildcard: true }),

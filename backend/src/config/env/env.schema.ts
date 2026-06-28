@@ -162,4 +162,8 @@ export class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   IP_RATE_WINDOW_HOURS?: number = 24;
+
+  @IsNumber()
+  @IsOptional()
+  MAX_SESSIONS?: number = 5;
 }

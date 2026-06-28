@@ -18,8 +18,6 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
-import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './services/auth.service';
 import { OAuthService } from './services/oauth.service';
@@ -34,8 +32,12 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
+import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard';
+import { AuthRateLimit } from './decorators/auth-rate-limit.decorator';
+
 @ApiTags('Auth')
 @Controller('auth')
+@UseGuards(AuthRateLimitGuard)
 export class AuthController {
   constructor(
     private authService: AuthService,
@@ -45,61 +47,76 @@ export class AuthController {
     private configService: ConfigService,
   ) {}
 
+  @Public()
   @Post('set-password')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Set password for social login accounts' })
-  async setPassword(@Req() req, @Body() dto: SetPasswordDto) {
-    return this.authService.setPassword(req.user.id, dto);
+  @ApiOperation({ summary: 'Set password for social login accounts or new users' })
+  async setPassword(
+    @Req() req,
+    @Body() dto: SetPasswordDto,
+    @Headers('authorization') authHeader?: string
+  ) {
+    return this.authService.setPassword(req.user?.id, dto, authHeader);
   }
 
   @Public()
   @Post('register')
-  @UseGuards(IpRateLimitGuard)
-  @Throttle({ default: { ttl: 3600000, limit: 10 } }) // 10 per hour
+  @AuthRateLimit({ action: 'register', maxAttempts: 3, windowSeconds: 3600, blockSeconds: 86400 })
   @ApiOperation({ summary: 'Register a new user and send verification email' })
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Req() req, @Body() dto: RegisterDto) {
+    const result = await this.authService.register(dto);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @Post('verify-email')
-  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 per minute
+  @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 60, blockSeconds: 1800 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address with 6-digit code' })
-  async verifyEmail(@Body() dto: VerifyEmailDto) {
-    return this.authService.verifyEmail(dto);
+  async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto) {
+    const result = await this.authService.verifyEmail(dto);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @Post('login')
-  @Throttle({ default: { ttl: 60000, limit: 5 } }) // 5 per minute — brute force protection
+  @AuthRateLimit({ action: 'login', maxAttempts: 5, windowSeconds: 60, blockSeconds: 900 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user and return tokens' })
   async login(
+    @Req() req,
     @Body() dto: LoginDto,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    return this.authService.login(dto, ip, userAgent);
+    const result = await this.authService.login(dto, ip, userAgent);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @Post('forgot-password')
-  @Throttle({ default: { ttl: 3600000, limit: 5 } }) // 5 per hour
+  @AuthRateLimit({ action: 'forgot-password', maxAttempts: 5, windowSeconds: 600, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send password reset email' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+  async forgotPassword(@Req() req, @Body() dto: ForgotPasswordDto) {
+    const result = await this.authService.forgotPassword(dto);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @Post('reset-password')
-  @Throttle({ default: { ttl: 3600000, limit: 5 } }) // 5 per hour
+  @AuthRateLimit({ action: 'reset-password', maxAttempts: 5, windowSeconds: 3600, blockSeconds: 3600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using one-time token from email' })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
+  async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
+    const result = await this.authService.resetPassword(dto);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
@@ -120,7 +137,6 @@ export class AuthController {
   ) {
     const data = await this.oauthService.googleLogin(req.user, ip, userAgent);
     const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
-    // Store tokens behind a short-lived one-time code (60s) — never in the URL
     const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
@@ -143,28 +159,32 @@ export class AuthController {
   ) {
     const data = await this.oauthService.githubLogin(req.user, ip, userAgent);
     const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
-    // Store tokens behind a short-lived one-time code (60s) — never in the URL
     const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
   @Public()
-  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 per minute — one-time code brute force protection
   @Post('exchange-code')
+  @AuthRateLimit({ action: 'exchange-code', maxAttempts: 10, windowSeconds: 60, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })
-  async exchangeOAuthCode(@Body() body: { code: string }) {
+  async exchangeOAuthCode(@Req() req, @Body() body: { code: string }) {
     if (!body?.code) throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'code is required' });
-    return this.oauthService.exchangeOAuthSessionCode(body.code);
+    const result = await this.oauthService.exchangeOAuthSessionCode(body.code);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @UseGuards(AuthGuard('jwt-refresh'))
   @Post('refresh')
+  @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 60, blockSeconds: 300 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  async refresh(@Body() dto: RefreshTokenDto) {
-    return this.tokenService.refresh(dto.refreshToken);
+  async refresh(@Req() req, @Body() dto: RefreshTokenDto) {
+    const result = await this.tokenService.refresh(dto.refreshToken);
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Post('logout')
