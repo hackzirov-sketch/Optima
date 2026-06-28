@@ -18,7 +18,7 @@ export class RedisService implements OnModuleDestroy {
 
   constructor(private readonly config: ConfigService) {}
 
-  private getClient(): Redis | null {
+  public getClient(): Redis | null {
     if (this.disabled) return null;
 
     if (!this.client) {

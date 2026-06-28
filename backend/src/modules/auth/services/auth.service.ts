@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -170,10 +172,10 @@ export class AuthService {
 
     const lockoutTtl = await this.redisService.getAccountLockout(user.id);
     if (lockoutTtl !== null) {
-      throw new UnauthorizedException({
+      throw new HttpException({
         code: ErrorCode.RATE_LIMIT_EXCEEDED,
         message: `Account is temporarily locked. Try again in ${Math.ceil(lockoutTtl / 60)} minute(s).`,
-      });
+      }, HttpStatus.TOO_MANY_REQUESTS);
     }
 
     const isPasswordValid = await this.securityService.comparePassword(dto.password, user.passwordHash);

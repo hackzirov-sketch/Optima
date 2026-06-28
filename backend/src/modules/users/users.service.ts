@@ -10,6 +10,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { PublicUserDto } from './dto/public-user.dto';
 import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
 import { ImageModerationService } from '../moderation/services/image-moderation.service';
 
@@ -111,6 +112,12 @@ export class UsersService {
   }
 
   async updateLastSeen(userId: string): Promise<void> {
+    const key = RedisKeys.lastSeen(userId);
+    const client = this.redisService.getClient();
+    if (client) {
+      const isSet = await client.set(key, '1', 'EX', 30, 'NX');
+      if (!isSet) return; // Debounce for 30 seconds
+    }
     await this.usersRepository.update(userId, { lastSeen: new Date() });
   }
 

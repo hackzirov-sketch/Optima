@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, ILike } from 'typeorm';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
 
 import { Task } from '../../database/entities/task.entity';
 import { Project } from '../../database/entities/project.entity';
@@ -61,6 +63,7 @@ export class TasksService {
     private readonly gateway: EventsGateway,
     private readonly permission: PermissionService,
     private readonly notifications: NotificationsService,
+    private readonly redisService: RedisService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -71,11 +74,26 @@ export class TasksService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember> {
+    const cacheKey = RedisKeys.workspaceMember(workspaceId, userId);
+    const client = this.redisService.getClient();
+    
+    if (client) {
+      const cached = await client.get(cacheKey);
+      if (cached) return JSON.parse(cached) as WorkspaceMember;
+    }
+
     const member = await this.wsMemberRepo.findOne({
       where: { workspaceId, userId },
     });
-    if (!member)
+    
+    if (!member) {
       throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'You are not a member of this workspace' });
+    }
+
+    if (client) {
+      await client.set(cacheKey, JSON.stringify(member), 'EX', 300); // cache for 5 minutes
+    }
+    
     return member;
   }
 
@@ -102,11 +120,30 @@ export class TasksService {
     await this.activityRepo.save(activity);
   }
 
-  /** Detect circular dependency using BFS */
+  /** Detect circular dependency using BFS locally */
   private async hasCycle(
     taskId: string,
     newDependsOnId: string,
+    workspaceId: string,
   ): Promise<boolean> {
+    // Fetch all dependencies for tasks in the same workspace in ONE query
+    const allDependencies = await this.dependencyRepo
+      .createQueryBuilder('dep')
+      .innerJoin('dep.task', 'task')
+      .where('task.workspaceId = :wsId', { wsId: workspaceId })
+      .getMany();
+
+    // Build adjacency list: dependsOnId -> array of taskIds (reverse dependencies)
+    const adj = new Map<string, string[]>();
+    for (const d of allDependencies) {
+      if (!adj.has(d.taskId)) adj.set(d.taskId, []);
+      adj.get(d.taskId)!.push(d.dependsOnId);
+    }
+    
+    // Add the pending dependency to check if it creates a cycle
+    if (!adj.has(taskId)) adj.set(taskId, []);
+    adj.get(taskId)!.push(newDependsOnId);
+
     // Starting from newDependsOnId, see if we can reach taskId following blocks chains
     const visited = new Set<string>();
     const queue = [newDependsOnId];
@@ -117,10 +154,8 @@ export class TasksService {
       if (visited.has(current)) continue;
       visited.add(current);
 
-      const deps = await this.dependencyRepo.find({
-        where: { taskId: current },
-      });
-      for (const d of deps) queue.push(d.dependsOnId);
+      const nextNodes = adj.get(current) || [];
+      for (const n of nextNodes) queue.push(n);
     }
     return false;
   }
@@ -608,8 +643,8 @@ export class TasksService {
       throw new BadRequestException({ code: ErrorCode.TASK_CROSS_WORKSPACE, message: 'Dependencies must be within the same workspace' });
     }
 
-    // Cycle detection
-    if (await this.hasCycle(taskId, dto.dependsOnId)) {
+    // Cycle detection using local BFS (single query)
+    if (await this.hasCycle(taskId, dto.dependsOnId, task.workspaceId)) {
       throw new ConflictException({ code: ErrorCode.TASK_DEPENDENCY_CYCLE, message: 'Adding this dependency would create a cycle' });
     }
 

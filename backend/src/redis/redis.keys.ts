@@ -8,4 +8,6 @@ export const RedisKeys = {
   accountLockout: (userId: string) => `upz:account_lock:${userId}`,
   accountLockoutFailures: (userId: string) => `upz:account_lock:fails:${userId}`,
   cachedUser: (userId: string) => `upz:user_cache:${userId}`,
+  lastSeen: (userId: string) => `upz:last_seen:${userId}`,
+  workspaceMember: (workspaceId: string, userId: string) => `upz:ws_member:${workspaceId}:${userId}`,
 };
