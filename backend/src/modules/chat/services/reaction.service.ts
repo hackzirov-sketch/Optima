@@ -25,43 +25,23 @@ export class ChatReactionService {
     return Array.from(map.entries()).map(([emoji, userIds]) => ({ emoji, userIds }));
   }
 
-  /**
-   * message va membership'ni parallel tekshiradi — 2 ta SELECT bir vaqtda.
-   * Keyin reaction bilan birgalikda jami 2 round trip (avval 3 edi).
-   */
-  private async assertMessageAndMember(
-    messageId: string,
-    userId: string,
-  ): Promise<ChatMessage> {
-    const [msg, member] = await Promise.all([
-      this.messageRepo.findOne({ where: { id: messageId } }),
-      // roomId messagedan keyin kerak — lekin message topilmasa member'ni tekshirmaymiz
-      // Shuning uchun avval msg topib, keyin parallel member'ni tekshiramiz
-      // Bu qatorni quyida override qilamiz — placeholder
-      Promise.resolve(null as ChatMember | null),
-    ]);
-
+  async addReaction(messageId: string, userId: string, dto: AddReactionDto) {
+    // 1. message topish
+    const msg = await this.messageRepo.findOne({ where: { id: messageId } });
     if (!msg || msg.isDeleted) {
       throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     }
 
-    // Endi roomId mavjud — member check
-    const memberRecord = await this.memberRepo.findOne({
-      where: { roomId: msg.roomId, userId, leftAt: IsNull() },
-    });
+    // 2. member check va existing reaction — parallel (roomId endi ma'lum)
+    const [memberRecord, existing] = await Promise.all([
+      this.memberRepo.findOne({ where: { roomId: msg.roomId, userId, leftAt: IsNull() } }),
+      this.reactionRepo.findOne({ where: { messageId, userId, emoji: dto.emoji } }),
+    ]);
+
     if (!memberRecord) {
       throw new ForbiddenException({ code: ErrorCode.NOT_ROOM_MEMBER, message: 'Not a member of this chat room' });
     }
 
-    return msg;
-  }
-
-  async addReaction(messageId: string, userId: string, dto: AddReactionDto) {
-    const msg = await this.assertMessageAndMember(messageId, userId);
-
-    const existing = await this.reactionRepo.findOne({
-      where: { messageId, userId, emoji: dto.emoji },
-    });
     if (existing) return existing;
 
     return this.reactionRepo.save(
@@ -82,7 +62,7 @@ export class ChatReactionService {
       throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     }
 
-    // 2. member va existing reaction'ni parallel tekshiramiz — 2 ta DB call bir vaqtda
+    // 2. member va existing reaction — parallel (roomId endi ma'lum)
     const [memberRecord, existing] = await Promise.all([
       this.memberRepo.findOne({ where: { roomId: msg.roomId, userId, leftAt: IsNull() } }),
       this.reactionRepo.findOne({ where: { messageId, userId, emoji } }),
@@ -92,7 +72,6 @@ export class ChatReactionService {
       throw new ForbiddenException({ code: ErrorCode.NOT_ROOM_MEMBER, message: 'Not a member of this chat room' });
     }
 
-    // 3. toggle
     if (existing) {
       await this.reactionRepo.delete({ messageId, userId, emoji });
       return 'removed';
