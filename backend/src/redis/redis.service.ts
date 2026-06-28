@@ -1,4 +1,5 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { RedisKeys } from './redis.keys';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -58,7 +59,7 @@ export class RedisService implements OnModuleDestroy {
         }
         return false;
       }
-      const v = await client.get(`upz:blacklist:${jti}`);
+      const v = await client.get(RedisKeys.blacklistToken(jti));
       return v !== null;
     } catch (e) {
       if (process.env.NODE_ENV === 'production') {
@@ -74,7 +75,7 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (!client) return;
-      await client.set(`upz:blacklist:${jti}`, '1', 'EX', ttlSeconds);
+      await client.set(RedisKeys.blacklistToken(jti), '1', 'EX', ttlSeconds);
     } catch (e) {
       this.logger.warn(
         `Redis blacklist set failed: ${e instanceof Error ? e.message : e}`,
@@ -87,7 +88,7 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (!client) return;
-      await client.set(`upz:user_blocked:${userId}`, '1', 'EX', ttlSeconds);
+      await client.set(RedisKeys.userBlock(userId), '1', 'EX', ttlSeconds);
     } catch (e) {
       this.logger.warn(
         `Redis user-block set failed: ${e instanceof Error ? e.message : e}`,
@@ -99,7 +100,7 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (!client) return process.env.NODE_ENV === 'production';
-      const v = await client.get(`upz:user_blocked:${userId}`);
+      const v = await client.get(RedisKeys.userBlock(userId));
       return v !== null;
     } catch (e) {
       this.logger.warn(`Redis user-block check failed: ${e instanceof Error ? e.message : e}`);
@@ -126,7 +127,7 @@ export class RedisService implements OnModuleDestroy {
     code: string,
     tokens: { accessToken: string; refreshToken: string },
   ): Promise<void> {
-    const key = `upz:oauth:${code}`;
+    const key = RedisKeys.oauthCode(code);
     const serialized = JSON.stringify(tokens);
     try {
       const client = this.getClient();
@@ -143,7 +144,7 @@ export class RedisService implements OnModuleDestroy {
   async getAndDeleteOAuthCode(
     code: string,
   ): Promise<{ accessToken: string; refreshToken: string } | null> {
-    const key = `upz:oauth:${code}`;
+    const key = RedisKeys.oauthCode(code);
     try {
       const client = this.getClient();
       if (client) {
@@ -161,7 +162,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async setPasswordResetToken(token: string, userId: string): Promise<void> {
-    const key = `upz:pwd_reset:${token}`;
+    const key = RedisKeys.pwdReset(token);
     try {
       const client = this.getClient();
       if (client) {
@@ -175,7 +176,7 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async getAndDeletePasswordResetToken(token: string): Promise<string | null> {
-    const key = `upz:pwd_reset:${token}`;
+    const key = RedisKeys.pwdReset(token);
     try {
       const client = this.getClient();
       if (client) {

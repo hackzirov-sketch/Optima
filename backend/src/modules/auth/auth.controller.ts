@@ -16,11 +16,15 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './services/auth.service';
+import { OAuthService } from './services/oauth.service';
+import { TokenService } from './services/token.service';
+import { SessionService } from './services/session.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -33,7 +37,13 @@ import { Public } from '../../common/decorators/public.decorator';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private oauthService: OAuthService,
+    private tokenService: TokenService,
+    private sessionService: SessionService,
+    private configService: ConfigService,
+  ) {}
 
   @Post('set-password')
   @HttpCode(HttpStatus.OK)
@@ -108,10 +118,10 @@ export class AuthController {
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    const data = await this.authService.googleLogin(req.user, ip, userAgent);
-    const frontendUrl = this.authService.getFrontendUrl();
+    const data = await this.oauthService.googleLogin(req.user, ip, userAgent);
+    const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
     // Store tokens behind a short-lived one-time code (60s) — never in the URL
-    const code = await this.authService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
@@ -131,10 +141,10 @@ export class AuthController {
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
   ) {
-    const data = await this.authService.githubLogin(req.user, ip, userAgent);
-    const frontendUrl = this.authService.getFrontendUrl();
+    const data = await this.oauthService.githubLogin(req.user, ip, userAgent);
+    const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
     // Store tokens behind a short-lived one-time code (60s) — never in the URL
-    const code = await this.authService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
@@ -145,7 +155,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })
   async exchangeOAuthCode(@Body() body: { code: string }) {
     if (!body?.code) throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'code is required' });
-    return this.authService.exchangeOAuthSessionCode(body.code);
+    return this.oauthService.exchangeOAuthSessionCode(body.code);
   }
 
   @Public()
@@ -154,7 +164,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   async refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto.refreshToken);
+    return this.tokenService.refresh(dto.refreshToken);
   }
 
   @Post('logout')
@@ -171,7 +181,7 @@ export class AuthController {
     if (authorization?.toLowerCase().startsWith('bearer ')) {
       accessToken = authorization.slice(7).trim();
     }
-    await this.authService.logout(dto.refreshToken, accessToken);
+    await this.tokenService.logout(dto.refreshToken, accessToken);
     return { message: 'Logged out successfully' };
   }
 
@@ -179,20 +189,20 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all active sessions for current user' })
   async getSessions(@Req() req) {
-    return this.authService.getSessions(req.user.id);
+    return this.sessionService.getSessions(req.user.id);
   }
 
   @Delete('sessions/:id')
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke a specific session by ID' })
   async revokeSession(@Req() req, @Param('id') id: string) {
-    return this.authService.revokeSession(req.user.id, id);
+    return this.sessionService.revokeSession(req.user.id, id);
   }
 
   @Delete('sessions')
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke all sessions' })
   async revokeAllSessions(@Req() req) {
-    return this.authService.revokeAllSessions(req.user.id);
+    return this.sessionService.revokeAllSessions(req.user.id);
   }
 }

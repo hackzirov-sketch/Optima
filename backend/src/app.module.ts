@@ -8,15 +8,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 
-import appConfig from './config/app.config';
-import databaseConfig from './config/database.config';
-import redisConfig from './config/redis.config';
-import jwtConfig from './config/jwt.config';
-import githubConfig from './config/github.config';
-import r2Config from './config/r2.config';
-import googleConfig from './config/google.config';
-import cloudinaryConfig from './config/cloudinary.config';
-import moderationConfig from './config/moderation.config';
+import configs from './config';
+import { validate } from './config/env';
 
 import { RedisModule } from './redis/redis.module';
 import { CommonModule } from './common/common.module';
@@ -48,18 +41,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     // ── Config (global) ────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [
-        appConfig,
-        databaseConfig,
-        redisConfig,
-        jwtConfig,
-        githubConfig,
-        r2Config,
-        googleConfig,
-        cloudinaryConfig,
-        moderationConfig,
-      ],
+      load: configs,
       envFilePath: '.env',
+      validate,
     }),
 
     // ── Database ───────────────────────────────────

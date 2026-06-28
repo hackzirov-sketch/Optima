@@ -6,6 +6,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 
 import { AuthService } from './services/auth.service';
+import { OAuthService } from './services/oauth.service';
+import { TokenService } from './services/token.service';
+import { SessionService } from './services/session.service';
+import { DeviceService } from './services/device.service';
+import { SecurityService } from './services/security.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
@@ -56,6 +61,11 @@ import { ModerationModule } from '../moderation/moderation.module';
   controllers: [AuthController],
   providers: [
     AuthService,
+    OAuthService,
+    TokenService,
+    SessionService,
+    DeviceService,
+    SecurityService,
     JwtStrategy,
     JwtRefreshStrategy,
     GoogleStrategy,
@@ -63,6 +73,6 @@ import { ModerationModule } from '../moderation/moderation.module';
     EncryptionService,
     AuthProcessor, // Worker to handle background tasks
   ],
-  exports: [AuthService, EncryptionService],
+  exports: [AuthService, OAuthService, TokenService, SessionService, EncryptionService],
 })
 export class AuthModule {}
