@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -20,6 +20,7 @@ export class SessionService {
     @InjectRepository(RefreshToken)
     private refreshTokensRepository: Repository<RefreshToken>,
     private configService: ConfigService,
+    private dataSource: DataSource,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
   }
@@ -65,21 +66,31 @@ export class SessionService {
     return { message: 'All sessions revoked successfully' };
   }
 
+  /**
+   * OPTIMIZED: Single CTE query instead of COUNT → SELECT → SAVE (3 round trips → 1)
+   * Revokes the oldest session when limit is exceeded.
+   */
   async enforceSessionLimit(userId: string): Promise<void> {
-    const activeCount = await this.refreshTokensRepository.count({
-      where: { userId, revokedAt: IsNull(), isDeleted: false },
-    });
-    if (activeCount >= this.maxSessions) {
-      const oldest = await this.refreshTokensRepository.find({
-        where: { userId, revokedAt: IsNull(), isDeleted: false },
-        order: { createdAt: 'ASC' },
-        take: 1,
-      });
-      if (oldest.length > 0) {
-        oldest[0].revokedAt = new Date();
-        await this.refreshTokensRepository.save(oldest[0]);
-      }
-    }
+    await this.dataSource.query(
+      `
+      WITH active_sessions AS (
+        SELECT id, created_at
+        FROM refresh_tokens
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND is_deleted = false
+        ORDER BY created_at ASC
+      ),
+      to_revoke AS (
+        SELECT id FROM active_sessions
+        OFFSET $2
+      )
+      UPDATE refresh_tokens
+      SET revoked_at = NOW(), is_deleted = true
+      WHERE id IN (SELECT id FROM to_revoke)
+      `,
+      [userId, this.maxSessions - 1],
+    );
   }
 
   async persistRefreshToken(
@@ -89,19 +100,25 @@ export class SessionService {
     ctx: TokenContext,
     deviceInfo: { browser?: string; os?: string; deviceName?: string },
   ): Promise<void> {
-    const entity = this.refreshTokensRepository.create({
-      userId,
-      tokenHash,
-      expiresAt,
-      ipAddress: ctx.ip ?? null,
-      userAgent: ctx.userAgent ?? null,
-      deviceName: deviceInfo.deviceName ?? null,
-      deviceInfo: { browser: deviceInfo.browser, os: deviceInfo.os },
-      provider: ctx.provider ?? null,
-      lastUsedAt: new Date(),
-      isDeleted: false,
-    });
-    await this.refreshTokensRepository.save(entity);
+    // Raw INSERT — faster than TypeORM .save() which does SELECT first
+    await this.dataSource.query(
+      `
+      INSERT INTO refresh_tokens
+        (user_id, token_hash, expires_at, ip_address, user_agent, device_name, device_info, provider, last_used_at, is_deleted, created_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), false, NOW())
+      `,
+      [
+        userId,
+        tokenHash,
+        expiresAt,
+        ctx.ip ?? null,
+        ctx.userAgent ?? null,
+        deviceInfo.deviceName ?? null,
+        JSON.stringify({ browser: deviceInfo.browser, os: deviceInfo.os }),
+        ctx.provider ?? null,
+      ],
+    );
   }
 
   async revokeSessionByTokenHash(tokenHash: string) {

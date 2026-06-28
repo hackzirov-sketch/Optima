@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
@@ -18,6 +18,8 @@ interface TokenContext {
 
 @Injectable()
 export class TokenService {
+  private readonly logger = new Logger(TokenService.name);
+
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
@@ -29,25 +31,34 @@ export class TokenService {
   async buildJwtPair(user: User): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     const jti = crypto.randomUUID();
     const payload = { sub: user.id, email: user.email, jti };
-    const accessToken = await this.jwtService.signAsync(payload);
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('jwt.refreshSecret'),
-      expiresIn: this.configService.get<string>('jwt.refreshExpires'),
-    } as any);
+    // Parallel JWT signing (both are CPU-bound, independent)
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get<string>('jwt.refreshSecret'),
+        expiresIn: this.configService.get<string>('jwt.refreshExpires'),
+      } as any),
+    ]);
     return { accessToken, refreshToken, jti };
   }
 
   async generateTokens(user: User, ctx: TokenContext = {}) {
-    await this.sessionService.enforceSessionLimit(user.id);
-
-    const { accessToken, refreshToken } = await this.buildJwtPair(user);
-
     const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
+    const deviceInfo = this.deviceService.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
+
+    // Parallel: enforceSessionLimit + buildJwtPair (independent)
+    const [{ accessToken, refreshToken }] = await Promise.all([
+      this.buildJwtPair(user),
+      this.sessionService.enforceSessionLimit(user.id),
+    ]);
+
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    const deviceInfo = this.deviceService.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
-    await this.sessionService.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
+    // ASYNC: persist session — does not block login response
+    this.sessionService
+      .persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo)
+      .catch((err) => this.logger.error(`persistRefreshToken failed: ${err?.message ?? err}`));
 
     return { requiresPasswordSetup: user.needsPasswordSetup, accessToken, refreshToken, user };
   }

@@ -95,7 +95,12 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    // Select only auth-critical fields — avoids fetching unused columns (avatarUrl, settings, etc.)
+    return this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'email', 'passwordHash', 'isVerified', 'isActive', 'isDeleted',
+               'providers', 'needsPasswordSetup', 'firstName', 'lastName', 'username', 'avatarUrl'],
+    });
   }
 
   async findByUsername(username: string): Promise<User | null> {

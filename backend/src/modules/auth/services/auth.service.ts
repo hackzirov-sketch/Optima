@@ -31,9 +31,6 @@ import { User } from '../../../database/entities/user.entity';
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
-import { performance } from 'node:perf_hooks';
-
-
 
 @Injectable()
 export class AuthService {
@@ -56,7 +53,6 @@ export class AuthService {
 
   async verifyEmail(dto: VerifyEmailDto) {
     return this.dataSource.transaction(async (manager) => {
-      // Lock only the UserVerification row (no JOIN to avoid PostgreSQL "FOR UPDATE cannot be applied to nullable side of outer join")
       const verification = await manager.findOne(UserVerification, {
         where: { code: dto.code },
         lock: { mode: 'pessimistic_write' },
@@ -69,7 +65,6 @@ export class AuthService {
         });
       }
 
-      // Load user separately after lock is acquired
       const user = await manager.findOne(User, { where: { id: verification.userId } });
       if (!user) {
         throw new BadRequestException({
@@ -88,8 +83,11 @@ export class AuthService {
         await this.redisService.setPasswordResetToken(setupToken, user.id);
       }
 
-      await manager.update(User, user.id, updateData);
-      await manager.delete(UserVerification, { userId: user.id });
+      // Parallel: update user + delete verification
+      await Promise.all([
+        manager.update(User, user.id, updateData),
+        manager.delete(UserVerification, { userId: user.id }),
+      ]);
 
       const {
         accessToken,
@@ -110,7 +108,7 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    // Parallel: DB uniqueness checks + bcrypt hashing (independent operations)
+    // Parallel: DB uniqueness checks + bcrypt hashing + content filter
     const [existingUser, existingUsername, passwordHash] = await Promise.all([
       this.usersService.findByEmail(dto.email),
       this.usersService.findByUsername(dto.username),
@@ -130,7 +128,6 @@ export class AuthService {
       });
     }
 
-    // Parallel: content filter checks (independent)
     await Promise.all([
       this.contentFilter.filterText(dto.username, undefined, 'username'),
       this.contentFilter.filterText(
@@ -152,11 +149,8 @@ export class AuthService {
       needsPasswordSetup: false,
     });
 
-    // void this.enqueueOnRegister(user.id, user.email);
-
-
     this.enqueueOnRegister(user.id, user.email).catch((err) =>
-    this.logger.warn(err),
+      this.logger.warn(err),
     );
 
     return {
@@ -171,11 +165,9 @@ export class AuthService {
     userAgent?: string,
     deviceName?: string,
   ) {
-    const total = performance.now()
-      let t = performance.now();
+    // Step 1: Find user by email
     const user = await this.usersService.findByEmail(dto.email);
-    this.logger.log(`findUser ${performance.now()-t} ms`);
-    t = performance.now();
+
     if (!user) {
       // Constant-time response to prevent email enumeration
       await this.securityService.comparePassword(dto.password, '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
@@ -187,25 +179,19 @@ export class AuthService {
 
     if (!user.passwordHash) {
       void this.enqueueResendVerification(user.id, user.email);
-
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
-        message:
-          'This account was created using Google/GitHub. Verification code sent.',
+        message: 'This account was created using Google/GitHub. Verification code sent.',
         requiresPasswordSetup: true,
         redirect: '/verify',
       });
     }
 
-    // Parallel: bcrypt compare + Redis lockout check (independent operations, saves ~80ms)
+    // Step 2: Parallel — bcrypt + redis lockout check (saves ~100ms)
     const [isPasswordValid, lockoutTtl] = await Promise.all([
       this.securityService.comparePassword(dto.password, user.passwordHash),
       this.redisService.getAccountLockout(user.id),
     ]);
-
-this.logger.log(`bcrypt+redis ${performance.now()-t} ms`);
-
-t = performance.now();
 
     if (lockoutTtl !== null) {
       throw new HttpException({
@@ -215,18 +201,18 @@ t = performance.now();
     }
 
     if (!isPasswordValid) {
-      await this.redisService.incrementAccountLockoutFailures(user.id, 5, 900); // 5 attempts -> 15 min lock
+      // Fire-and-forget: don't block response on redis write
+      this.redisService
+        .incrementAccountLockoutFailures(user.id, 5, 900)
+        .catch((e) => this.logger.warn(`lockout increment failed: ${e?.message}`));
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Invalid credentials',
       });
     }
 
-    await this.redisService.clearAccountLockout(user.id);
-
     if (!user.isVerified) {
       await this.enqueueResendVerification(user.id, user.email);
-
       throw new UnauthorizedException({
         code: ErrorCode.PENDING_VERIFICATION,
         message: 'Please verify your email address. A new code has been sent.',
@@ -241,12 +227,20 @@ t = performance.now();
       });
     }
 
+    // Step 3: All async — none block the token generation
+    // clearAccountLockout + logIpAddress + updateLastSeen all fire-and-forget
+    this.redisService
+      .clearAccountLockout(user.id)
+      .catch((e) => this.logger.warn(`clearLockout failed: ${e?.message}`));
+
     if (ip) {
       void this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'local');
     }
 
     void this.usersService.updateLastSeen(user.id);
 
+    // Step 4: generateTokens — now only: enforceSessionLimit(1 CTE) + parallel JWT sign
+    // persistRefreshToken is async inside generateTokens
     return this.tokenService.generateTokens(user, { ip, userAgent, deviceName, provider: 'local' });
   }
 
