@@ -82,14 +82,14 @@ export class OAuthService {
         needsPasswordSetup: true,
       });
 
-      await this.enqueueOnRegister(user.id, user.email);
+      void this.enqueueOnRegister(user.id, user.email);
     }
 
     if (ip) {
       await this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'google');
     }
 
-    await this.usersService.updateLastSeen(user.id);
+    void this.usersService.updateLastSeen(user.id);
 
     return this.tokenService.generateTokens(user, { ip, userAgent, provider: 'google' });
   }
@@ -138,7 +138,7 @@ export class OAuthService {
           needsPasswordSetup: true,
         });
         
-        await this.enqueueOnRegister(user.id, user.email);
+        void this.enqueueOnRegister(user.id, user.email);
       }
 
       githubAccount = this.githubAccountsRepository.create({
@@ -160,7 +160,7 @@ export class OAuthService {
     }
 
     if (user) {
-      await this.usersService.updateLastSeen(user.id);
+      void this.usersService.updateLastSeen(user.id);
       return this.tokenService.generateTokens(user, { ip, userAgent, provider: 'github' });
     } else {
       throw new UnauthorizedException({ code: ErrorCode.OAUTH_LINK_FAILED, message: 'Failed to link or create user' });

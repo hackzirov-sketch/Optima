@@ -31,6 +31,9 @@ import { User } from '../../../database/entities/user.entity';
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
+import { performance } from 'node:perf_hooks';
+
+
 
 @Injectable()
 export class AuthService {
@@ -149,7 +152,12 @@ export class AuthService {
       needsPasswordSetup: false,
     });
 
-    await this.enqueueOnRegister(user.id, user.email);
+    // void this.enqueueOnRegister(user.id, user.email);
+
+
+    this.enqueueOnRegister(user.id, user.email).catch((err) =>
+    this.logger.warn(err),
+    );
 
     return {
       message: 'Registration successful. Verification code sent to email.',
@@ -163,7 +171,11 @@ export class AuthService {
     userAgent?: string,
     deviceName?: string,
   ) {
+    const total = performance.now()
+      let t = performance.now();
     const user = await this.usersService.findByEmail(dto.email);
+    this.logger.log(`findUser ${performance.now()-t} ms`);
+    t = performance.now();
     if (!user) {
       // Constant-time response to prevent email enumeration
       await this.securityService.comparePassword(dto.password, '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
@@ -174,7 +186,7 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      await this.enqueueResendVerification(user.id, user.email);
+      void this.enqueueResendVerification(user.id, user.email);
 
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
@@ -190,6 +202,10 @@ export class AuthService {
       this.securityService.comparePassword(dto.password, user.passwordHash),
       this.redisService.getAccountLockout(user.id),
     ]);
+
+this.logger.log(`bcrypt+redis ${performance.now()-t} ms`);
+
+t = performance.now();
 
     if (lockoutTtl !== null) {
       throw new HttpException({
@@ -226,10 +242,10 @@ export class AuthService {
     }
 
     if (ip) {
-      await this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'local');
+      void this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'local');
     }
 
-    await this.usersService.updateLastSeen(user.id);
+    void this.usersService.updateLastSeen(user.id);
 
     return this.tokenService.generateTokens(user, { ip, userAgent, deviceName, provider: 'local' });
   }
