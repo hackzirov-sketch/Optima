@@ -21,28 +21,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; jti?: string }) {
-    if (
-      payload.jti &&
-      (await this.redisService.isAccessTokenBlacklisted(payload.jti))
-    ) {
+    // OPTIMIZED: Single pipeline — blacklist + sessionBlock + cachedUser in 1 Redis RTT
+    const [blacklisted, sessionBlocked, cachedUser] =
+      await this.redisService.validateTokenPipeline(payload.sub, payload.jti);
+
+    if (blacklisted) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_REVOKED,
         message: 'Token has been revoked',
       });
     }
 
-    if (await this.redisService.isUserSessionBlocked(payload.sub)) {
+    if (sessionBlocked) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_REVOKED,
         message: 'All sessions for this account have been revoked',
       });
     }
 
-    let user = await this.redisService.getCachedUser(payload.sub);
+    let user = cachedUser;
     if (!user) {
       user = await this.usersService.findById(payload.sub);
       if (user) {
-        await this.redisService.cacheUser(payload.sub, user, 10);
+        // fire-and-forget cache write — don't block response
+        this.redisService.cacheUser(payload.sub, user, 30).catch(() => null);
       }
     }
 

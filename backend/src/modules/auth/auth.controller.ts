@@ -15,6 +15,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../common/enums/error-code.enum';
@@ -36,6 +37,7 @@ import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard';
 import { AuthRateLimit } from './decorators/auth-rate-limit.decorator';
 
 @ApiTags('Auth')
+@SkipThrottle() // Auth routes use AuthRateLimitGuard — global ThrottlerGuard skipped (saves 3 Redis calls/req)
 @Controller('auth')
 @UseGuards(AuthRateLimitGuard)
 export class AuthController {

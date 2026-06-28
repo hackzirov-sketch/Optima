@@ -30,6 +30,9 @@ export class RedisService implements OnModuleDestroy {
         maxRetriesPerRequest: 2,
         lazyConnect: true,
         retryStrategy: () => null,
+        // Auto-pipeline: batches concurrent commands into single RTT automatically
+        enableAutoPipelining: true,
+        connectTimeout: 5000,
       });
       this.client.on('error', (err) => {
         const message = err?.message || 'unknown redis error';
@@ -245,6 +248,48 @@ export class RedisService implements OnModuleDestroy {
     return null;
   }
 
+
+  /**
+   * OPTIMIZED: Pipeline checkBlock + increment in ONE round trip (was 2 sequential calls)
+   * Returns [blockTtl | null, incrementedCount]
+   */
+  async checkAndIncrementRateLimit(
+    action: string,
+    ip: string,
+    windowSeconds: number,
+  ): Promise<[number | null, number]> {
+    const blockKey = RedisKeys.rateLimitBlocked(action, ip);
+    const failKey = RedisKeys.rateLimitFailures(action, ip);
+    try {
+      const client = this.getClient();
+      if (client) {
+        // Pipeline: TTL(block) + INCR(fails) + EXPIRE(fails) — 3 commands, 1 RTT
+        const pipeline = client.pipeline();
+        pipeline.ttl(blockKey);
+        pipeline.incr(failKey);
+        pipeline.expire(failKey, windowSeconds);
+        const results = await pipeline.exec();
+        if (results) {
+          const ttl = results[0][1] as number;
+          const count = results[1][1] as number;
+          if (ttl > 0) return [ttl, count];
+          return [null, count];
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Redis checkAndIncrement failed: ${e instanceof Error ? e.message : e}`);
+    }
+    // Fallback: mem store
+    const blockEntry = this.memStore.get(blockKey);
+    if (blockEntry && blockEntry.expiresAt > Date.now()) {
+      return [Math.ceil((blockEntry.expiresAt - Date.now()) / 1000), 0];
+    }
+    const currentStr = this.memStore.get(failKey)?.value || '0';
+    const count = parseInt(currentStr, 10) + 1;
+    this.memSet(failKey, count.toString(), windowSeconds);
+    return [null, count];
+  }
+
   async clearRateLimit(action: string, ip: string): Promise<void> {
     const failuresKey = RedisKeys.rateLimitFailures(action, ip);
     const blockKey = RedisKeys.rateLimitBlocked(action, ip);
@@ -262,6 +307,43 @@ export class RedisService implements OnModuleDestroy {
   }
 
   // --- User Cache ---
+
+  /**
+   * OPTIMIZED: JWT validation — 3 Redis calls → 1 pipeline round trip
+   * Returns [isBlacklisted, isSessionBlocked, cachedUser]
+   */
+  async validateTokenPipeline(
+    userId: string,
+    jti?: string,
+  ): Promise<[boolean, boolean, any | null]> {
+    try {
+      const client = this.getClient();
+      if (client) {
+        const pipeline = client.pipeline();
+        if (jti) {
+          pipeline.get(RedisKeys.blacklistToken(jti));
+        } else {
+          pipeline.get('__noop__'); // placeholder
+        }
+        pipeline.get(RedisKeys.userBlock(userId));
+        pipeline.get(RedisKeys.cachedUser(userId));
+        const results = await pipeline.exec();
+        if (results) {
+          const isBlacklisted = jti ? results[0][1] !== null : false;
+          const isSessionBlocked = results[1][1] !== null;
+          const cachedRaw = results[2][1] as string | null;
+          const cachedUser = cachedRaw ? JSON.parse(cachedRaw) : null;
+          return [isBlacklisted, isSessionBlocked, cachedUser];
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Redis validateTokenPipeline failed: ${e instanceof Error ? e.message : e}`);
+      // Fail safe: in production reject, in dev allow
+      if (process.env.NODE_ENV === 'production') return [true, false, null];
+    }
+    return [false, false, null];
+  }
+
   async cacheUser(userId: string, user: any, ttlSeconds: number = 10): Promise<void> {
     const key = RedisKeys.cachedUser(userId);
     try {

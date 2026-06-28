@@ -40,7 +40,13 @@ export class AuthRateLimitGuard implements CanActivate {
     const ip = this.extractIp(request);
     const { action, maxAttempts, windowSeconds, blockSeconds } = options;
 
-    const blockTtl = await this.redisService.checkRateLimitBlock(action, ip);
+    // OPTIMIZED: Pipeline checkBlock + incrementFailures in one Redis round trip
+    const [blockTtl, count] = await this.redisService.checkAndIncrementRateLimit(
+      action,
+      ip,
+      windowSeconds,
+    );
+
     if (blockTtl !== null) {
       throw new HttpException(
         {
@@ -51,12 +57,6 @@ export class AuthRateLimitGuard implements CanActivate {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    const count = await this.redisService.incrementRateLimitFailures(
-      action,
-      ip,
-      windowSeconds,
-    );
 
     if (count > maxAttempts) {
       await this.redisService.blockRateLimit(action, ip, blockSeconds);
@@ -70,7 +70,6 @@ export class AuthRateLimitGuard implements CanActivate {
       );
     }
 
-    // Attach clear function to request so the controller/service can clear it on success
     (request as any).clearRateLimit = async () => {
       await this.redisService.clearRateLimit(action, ip);
     };
