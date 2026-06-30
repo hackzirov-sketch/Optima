@@ -15,6 +15,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
@@ -89,6 +91,58 @@ export class EventsGateway
 
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway initialized ✅');
+    this.attachRedisAdapter(server).catch((err) => {
+      this.logger.warn(
+        `Socket.IO Redis adapter skipped (Redis unavailable): ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    });
+  }
+
+  // Attach Redis adapter so Socket.IO events are broadcast across
+  // all Node processes / PM2 cluster / Docker replicas. Runs here
+  // (afterInit) rather than in a module's onModuleInit, since `server`
+  // is only guaranteed to be set once Socket.IO has finished initializing
+  // the gateway — attaching earlier silently no-ops with "adapter is not
+  // a function".
+  private async attachRedisAdapter(serverOrNamespace: Server): Promise<void> {
+    // NestJS passes the Namespace object (not the root Server) to afterInit
+    // when `namespace` is explicitly set in @WebSocketGateway options.
+    // Namespace instances don't have .adapter() — only the root Server does,
+    // accessible via Namespace#server.
+    const rootServer: Server =
+      typeof (serverOrNamespace as any).adapter === 'function'
+        ? serverOrNamespace
+        : (serverOrNamespace as any).server;
+
+    if (!rootServer || typeof rootServer.adapter !== 'function') {
+      throw new Error('Could not resolve root Socket.IO server instance');
+    }
+
+    const url = this.configService.get<string>('redis.url') || 'redis://localhost:6379';
+    const password = this.configService.get<string>('redis.password');
+
+    const pubClient = new Redis(url, {
+      password: password || undefined,
+      maxRetriesPerRequest: 2,
+      lazyConnect: false,
+    });
+    const subClient = pubClient.duplicate();
+
+    await Promise.all([
+      new Promise<void>((res, rej) => {
+        pubClient.once('ready', res);
+        pubClient.once('error', rej);
+      }),
+      new Promise<void>((res, rej) => {
+        subClient.once('ready', res);
+        subClient.once('error', rej);
+      }),
+    ]);
+
+    rootServer.adapter(createAdapter(pubClient, subClient));
+    this.logger.log('Socket.IO Redis adapter attached ✅');
   }
 
   // ─── Auth middleware ─────────────────────────────────

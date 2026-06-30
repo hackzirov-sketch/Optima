@@ -74,6 +74,7 @@ export class AuthService {
       }
 
       const updateData: Partial<User> = { isVerified: true };
+      user.isVerified = true;
       let setupToken: string | undefined;
 
       if (!user.passwordHash) {

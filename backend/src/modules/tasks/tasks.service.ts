@@ -220,19 +220,6 @@ export class TasksService {
     await queryRunner.startTransaction();
 
     try {
-      // Get next task number via sequence table
-      await queryRunner.query(
-        `INSERT INTO task_sequences (project_id, last_number)
-         VALUES ($1, 1)
-         ON CONFLICT (project_id) DO UPDATE
-           SET last_number = task_sequences.last_number + 1`,
-        [dto.projectId],
-      );
-      const [{ last_number }] = await queryRunner.query(
-        `SELECT last_number FROM task_sequences WHERE project_id = $1`,
-        [dto.projectId],
-      );
-
       // Compute board position (append to end of column/project)
       const maxPos = await queryRunner.manager
         .createQueryBuilder(Task, 't')
@@ -243,10 +230,12 @@ export class TasksService {
 
       const position = (maxPos?.max ?? -1) + 1;
 
+      // NOTE: task_number is assigned automatically by the `trg_task_number`
+      // DB trigger (assign_task_number()) on insert — do NOT compute/set it
+      // here, doing so would double-increment task_sequences.
       const task = queryRunner.manager.create(Task, {
         ...dto,
         creatorId: userId,
-        taskNumber: Number(last_number),
         position,
         status: dto.status ?? TaskStatus.BACKLOG,
       });
@@ -254,14 +243,19 @@ export class TasksService {
       const saved = await queryRunner.manager.save(task);
       await queryRunner.commitTransaction();
 
+      // Re-read the trigger-assigned task_number — `saved.taskNumber` may be
+      // stale since it's set by the DB trigger, not TypeORM.
+      const persisted = await this.taskRepo.findOne({ where: { id: saved.id } });
+
       await this.logActivity(
         saved.id,
         userId,
         'task_created',
-        `Task UPZ-${saved.taskNumber} created`,
+        `Task UPZ-${persisted?.taskNumber ?? saved.taskNumber} created`,
       );
       const full = await this.findById(saved.id, userId);
       this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
+
 
       // Notify assignee (if assigned and not self)
       if (dto.assigneeId && dto.assigneeId !== userId) {

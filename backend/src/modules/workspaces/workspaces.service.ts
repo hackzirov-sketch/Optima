@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -24,6 +25,8 @@ import { PermissionService } from '../../common/services/permission.service';
 
 @Injectable()
 export class WorkspacesService {
+  private readonly logger = new Logger(WorkspacesService.name);
+
   constructor(
     @InjectRepository(Workspace)
     private readonly workspaceRepo: Repository<Workspace>,
@@ -99,6 +102,7 @@ export class WorkspacesService {
       return savedWorkspace;
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      this.logger.error('Failed to create workspace', error instanceof Error ? error.stack : error);
       throw new InternalServerErrorException({ code: ErrorCode.INTERNAL_ERROR, message: 'Failed to create workspace' });
     } finally {
       await queryRunner.release();
