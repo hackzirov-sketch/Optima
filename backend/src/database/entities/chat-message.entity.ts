@@ -15,7 +15,7 @@ import { User } from './user.entity';
 @Index(['roomId', 'sequence'], { unique: true })
 @Index(['roomId', 'senderId', 'clientMessageId'], { unique: true, where: 'client_message_id IS NOT NULL' })
 @Index(['replyToId'])
-@Index(['roomId', 'isDeleted', 'createdAt'])
+@Index(['roomId', 'deletedAt', 'createdAt'])
 @Entity('chat_messages')
 export class ChatMessage {
   @PrimaryGeneratedColumn('uuid')
@@ -56,9 +56,6 @@ export class ChatMessage {
 
   @Column({ name: 'edited_at', type: 'timestamptz', nullable: true })
   editedAt!: Date | null;
-
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted!: boolean;
 
   @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt!: Date | null;

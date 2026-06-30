@@ -27,7 +27,7 @@ export class SessionService {
 
   async getSessions(userId: string) {
     const sessions = await this.refreshTokensRepository.find({
-      where: { userId, revokedAt: IsNull(), isDeleted: false },
+      where: { userId, revokedAt: IsNull() },
       order: { lastUsedAt: 'DESC' },
     });
 
@@ -46,22 +46,21 @@ export class SessionService {
 
   async revokeSession(userId: string, sessionId: string) {
     const session = await this.refreshTokensRepository.findOne({
-      where: { id: sessionId, userId, isDeleted: false },
+      where: { id: sessionId, userId, revokedAt: IsNull() },
     });
     if (!session) {
       throw new NotFoundException({ code: ErrorCode.SESSION_NOT_FOUND, message: 'Session not found or already revoked' });
     }
 
     session.revokedAt = new Date();
-    session.isDeleted = true;
     await this.refreshTokensRepository.save(session);
     return { message: 'Session revoked successfully' };
   }
 
   async revokeAllSessions(userId: string) {
     await this.refreshTokensRepository.update(
-      { userId, isDeleted: false },
-      { revokedAt: new Date(), isDeleted: true },
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
     );
     return { message: 'All sessions revoked successfully' };
   }
@@ -78,7 +77,6 @@ export class SessionService {
         FROM refresh_tokens
         WHERE user_id = $1
           AND revoked_at IS NULL
-          AND is_deleted = false
         ORDER BY created_at ASC
       ),
       to_revoke AS (
@@ -86,7 +84,7 @@ export class SessionService {
         OFFSET $2
       )
       UPDATE refresh_tokens
-      SET revoked_at = NOW(), is_deleted = true
+      SET revoked_at = NOW()
       WHERE id IN (SELECT id FROM to_revoke)
       `,
       [userId, this.maxSessions - 1],
@@ -104,9 +102,9 @@ export class SessionService {
     await this.dataSource.query(
       `
       INSERT INTO refresh_tokens
-        (user_id, token_hash, expires_at, ip_address, user_agent, device_name, device_info, provider, last_used_at, is_deleted, created_at)
+        (user_id, token_hash, expires_at, ip_address, user_agent, device_name, device_info, provider, last_used_at, created_at)
       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), false, NOW())
+        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
       `,
       [
         userId,
@@ -124,7 +122,7 @@ export class SessionService {
   async revokeSessionByTokenHash(tokenHash: string) {
     await this.refreshTokensRepository.update(
       { tokenHash },
-      { revokedAt: new Date(), isDeleted: true },
+      { revokedAt: new Date() },
     );
   }
 

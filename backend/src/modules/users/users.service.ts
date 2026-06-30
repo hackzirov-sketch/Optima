@@ -98,7 +98,7 @@ export class UsersService {
     // Select only auth-critical fields — avoids fetching unused columns (avatarUrl, settings, etc.)
     return this.usersRepository.findOne({
       where: { email },
-      select: ['id', 'email', 'passwordHash', 'isVerified', 'isActive', 'isDeleted',
+      select: ['id', 'email', 'passwordHash', 'isVerified', 'isActive', 'deletedAt',
                'providers', 'needsPasswordSetup', 'firstName', 'lastName', 'username', 'avatarUrl'],
     });
   }
@@ -168,7 +168,6 @@ export class UsersService {
     await this.refreshTokensRepository.delete({ userId });
     await this.usersRepository.update(userId, {
       deletedBy: userId,
-      isDeleted: true,
     });
     await this.usersRepository.softDelete(userId);
   }

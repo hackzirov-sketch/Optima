@@ -28,6 +28,7 @@ import { ChatRoom } from './entities/chat-room.entity';
 import { ChatMember } from './entities/chat-member.entity';
 import { ChatMessage } from './entities/chat-message.entity';
 import { ChatReaction } from './entities/chat-reaction.entity';
+import { ChatRoomInvite } from './entities/chat-room-invite.entity';
 import { MessageAttachment } from './entities/message-attachment.entity';
 import { Notification } from './entities/notification.entity';
 import { AuditLog } from './entities/audit-log.entity';
@@ -69,6 +70,7 @@ export default new DataSource({
     ChatMember,
     ChatMessage,
     ChatReaction,
+    ChatRoomInvite,
     MessageAttachment,
     Notification,
     AuditLog,

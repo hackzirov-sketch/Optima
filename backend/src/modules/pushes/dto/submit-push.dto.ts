@@ -14,10 +14,10 @@ export class SubmitPushDto {
   @IsNotEmpty()
   taskId: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false, description: 'Omit to submit as a draft push (no repository linked yet)' })
   @IsUUID()
-  @IsNotEmpty()
-  repositoryId: string;
+  @IsOptional()
+  repositoryId?: string;
 
   @ApiProperty()
   @IsString()

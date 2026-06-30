@@ -28,7 +28,7 @@ export class ChatReactionService {
   async addReaction(messageId: string, userId: string, dto: AddReactionDto) {
     // 1. message topish
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) {
+    if (!msg || msg.deletedAt) {
       throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     }
 
@@ -58,7 +58,7 @@ export class ChatReactionService {
   async toggleReaction(messageId: string, userId: string, emoji: string): Promise<'added' | 'removed'> {
     // 1. message topish
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) {
+    if (!msg || msg.deletedAt) {
       throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     }
 

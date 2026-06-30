@@ -53,10 +53,18 @@ export class PermissionService {
   }
 
   // Role assignment rules:
-  //   OWNER → can assign any role
-  //   ADMIN → can only assign ≤ LEAD (cannot grant ADMIN or OWNER)
+  //   OWNER target role → never assignable here, must go through transferOwnership()
+  //   OWNER (requester) → can assign any non-OWNER role
+  //   ADMIN (requester) → can only assign ≤ LEAD (cannot grant ADMIN or OWNER)
   //   Others → cannot change roles at all
   assertCanChangeRoleTo(requester: WorkspaceMember, targetRole: WorkspaceRole): void {
+    if (targetRole === WorkspaceRole.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCode.OWNERSHIP_TRANSFER_REQUIRED,
+        message: 'Use the ownership transfer flow to grant the OWNER role',
+      });
+    }
+
     if (!this.isAtLeast(requester, WorkspaceRole.ADMIN)) {
       throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Admin or owner required to change roles' });
     }
@@ -66,6 +74,17 @@ export class PermissionService {
       ROLE_LEVEL[targetRole] >= ROLE_LEVEL[WorkspaceRole.ADMIN]
     ) {
       throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Admins can only assign roles up to Lead' });
+    }
+  }
+
+  // Only the exact OWNER role may delete the workspace (level-based check is
+  // not enough — ADMIN must NOT be able to delete, even though it's "close" to OWNER).
+  assertCanDeleteWorkspace(member: WorkspaceMember): void {
+    if (member.role !== WorkspaceRole.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_OWNER,
+        message: 'Only the workspace owner can delete the workspace',
+      });
     }
   }
 }

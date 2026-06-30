@@ -70,9 +70,6 @@ export class User {
   @Column({ name: 'needs_password_setup', default: false })
   needsPasswordSetup: boolean;
 
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
-
   @Column({ name: 'last_seen', type: 'timestamptz', nullable: true })
   lastSeen: Date | null;
 

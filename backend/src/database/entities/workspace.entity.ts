@@ -62,9 +62,6 @@ export class Workspace {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy: string | null;
 
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
-
   // Relations
   @OneToMany(() => WorkspaceMember, (member) => member.workspace)
   members: WorkspaceMember[];

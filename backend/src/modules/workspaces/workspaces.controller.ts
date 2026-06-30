@@ -16,6 +16,7 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Workspaces')
@@ -75,6 +76,20 @@ export class WorkspacesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.workspacesService.remove(wsId, userId);
+  }
+
+  @Post(':wsId/transfer-ownership')
+  @ApiOperation({
+    summary: 'Transfer workspace ownership to another member',
+    description:
+      'Only the current OWNER can call this. Old owner becomes ADMIN, target member becomes OWNER. Invariant: exactly one OWNER at all times.',
+  })
+  transferOwnership(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') currentOwnerId: string,
+    @Body() dto: TransferOwnershipDto,
+  ) {
+    return this.workspacesService.transferOwnership(wsId, currentOwnerId, dto.newOwnerUserId);
   }
 
   // ── Members ─────────────────────────────────────

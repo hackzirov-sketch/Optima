@@ -6,6 +6,8 @@ import { ChatRoom } from '../../database/entities/chat-room.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 import { ChatMessage } from '../../database/entities/chat-message.entity';
 import { ChatReaction } from '../../database/entities/chat-reaction.entity';
+import { ChatRoomInvite } from '../../database/entities/chat-room-invite.entity';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { Group } from '../../database/entities/group.entity';
 import { Project } from '../../database/entities/project.entity';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
@@ -20,11 +22,12 @@ import { ChatMemberService } from './services/member.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatPresenceService } from './services/presence.service';
 import { ChatAiService } from './services/ai.service';
+import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatProcessor } from './workers/chat.processor';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ChatRoom, ChatMember, ChatMessage, ChatReaction, Group, Project]),
+    TypeOrmModule.forFeature([ChatRoom, ChatMember, ChatMessage, ChatReaction, ChatRoomInvite, WorkspaceMember, Group, Project]),
     BullModule.registerQueue({ name: 'chat' }),
     forwardRef(() => WorkspacesModule),
     ModerationModule,
@@ -39,6 +42,7 @@ import { ChatProcessor } from './workers/chat.processor';
     ChatReactionService,
     ChatPresenceService,
     ChatAiService,
+    ChatRoomInviteService,
     ChatProcessor,
   ],
   exports: [
@@ -48,6 +52,7 @@ import { ChatProcessor } from './workers/chat.processor';
     ChatMemberService,
     ChatReactionService,
     ChatPresenceService,
+    ChatRoomInviteService,
   ],
 })
 export class ChatModule {}

@@ -5,6 +5,7 @@ import { TaskPush } from '../../database/entities/task-push.entity';
 import { PushReviewComment } from '../../database/entities/push-review-comment.entity';
 import { Task } from '../../database/entities/task.entity';
 import { Repository as LinkedRepository } from '../../database/entities/repository.entity';
+import { WorkspaceGithubInstallation } from '../../database/entities/workspace-github-installation.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
 
@@ -19,6 +20,7 @@ import { PushesController } from './pushes.controller';
       PushReviewComment,
       Task,
       LinkedRepository,
+      WorkspaceGithubInstallation,
       WorkspaceMember,
       TaskActivity,
     ]),

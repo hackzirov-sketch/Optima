@@ -12,6 +12,7 @@ import { TaskPush } from '../../database/entities/task-push.entity';
 import { PushReviewComment } from '../../database/entities/push-review-comment.entity';
 import { Task } from '../../database/entities/task.entity';
 import { Repository as LinkedRepository } from '../../database/entities/repository.entity';
+import { WorkspaceGithubInstallation } from '../../database/entities/workspace-github-installation.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
 
@@ -21,7 +22,9 @@ import { ReviewPushDto } from './dto/review-push.dto';
 import { AddReviewCommentDto } from './dto/add-review-comment.dto';
 import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
-import { PushStatus } from '../../common/enums';
+import { LinkAndPromotePushDto } from './dto/link-and-promote-push.dto';
+import { PushStatus, PushType, WorkspaceRole } from '../../common/enums';
+import { ROLE_LEVEL } from '../../common/constants/role-levels';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
@@ -37,6 +40,8 @@ export class PushesService {
     private readonly taskRepo: Repository<Task>,
     @InjectRepository(LinkedRepository)
     private readonly repoEntity: Repository<LinkedRepository>,
+    @InjectRepository(WorkspaceGithubInstallation)
+    private readonly installationRepo: Repository<WorkspaceGithubInstallation>,
     @InjectRepository(WorkspaceMember)
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
     @InjectRepository(TaskActivity)
@@ -89,6 +94,32 @@ export class PushesService {
     return Number.isNaN(n) ? 7 : Math.min(90, Math.max(1, n));
   }
 
+  /**
+   * System design v2 §5 — PUSH TYPE QOIDASI (yakuniy):
+   * push_type push yaratilganda bir marta belgilanadi, keyin o'zgarmaydi
+   * (faqat status o'zgaradi).
+   *
+   *   repository_id mavjud VA GitHub App ulangan:
+   *     developer.role >= SENIOR → github_direct
+   *     aks holda                → upz_review
+   *   repository ulanmagan:
+   *     → draft
+   */
+  private async resolvePushType(
+    workspaceId: string,
+    submitter: WorkspaceMember,
+    repo: LinkedRepository | null,
+  ): Promise<PushType> {
+    if (!repo) return PushType.DRAFT;
+
+    const installation = await this.installationRepo.findOne({ where: { workspaceId } });
+    if (!installation) return PushType.UPZ_REVIEW;
+
+    return ROLE_LEVEL[submitter.role] >= ROLE_LEVEL[WorkspaceRole.SENIOR]
+      ? PushType.GITHUB_DIRECT
+      : PushType.UPZ_REVIEW;
+  }
+
   async listMine(userId: string, q: ListPushesQueryDto) {
     const page = q.page ?? 1;
     const limit = q.limit ?? 20;
@@ -97,7 +128,6 @@ export class PushesService {
       .leftJoinAndSelect('p.task', 'task')
       .where('p.userId = :userId', { userId })
       .andWhere('p.deletedAt IS NULL')
-      .andWhere('p.isDeleted = :isDeleted', { isDeleted: false })
       .orderBy('p.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -113,24 +143,28 @@ export class PushesService {
     const task = await this.taskRepo.findOne({ where: { id: dto.taskId } });
     if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
 
-    await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.workspaceId, userId);
 
-    const repo = await this.repoEntity.findOne({
-      where: { id: dto.repositoryId },
-    });
-    if (!repo || repo.workspaceId !== task.workspaceId) {
-      throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
+    let repo: LinkedRepository | null = null;
+    if (dto.repositoryId) {
+      repo = await this.repoEntity.findOne({ where: { id: dto.repositoryId } });
+      if (!repo || repo.workspaceId !== task.workspaceId) {
+        throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
+      }
     }
+
+    const pushType = await this.resolvePushType(task.workspaceId, member, repo);
 
     const push = this.pushRepo.create({
       taskId: dto.taskId,
       userId,
-      repositoryId: dto.repositoryId,
+      repositoryId: dto.repositoryId ?? null,
       branchName: dto.branchName,
       commitMessage: dto.commitMessage,
       commitSha: dto.commitSha,
       commitsCount: dto.commitsCount,
       cliVersion: dto.cliVersion,
+      type: pushType,
       status: PushStatus.PENDING,
     });
     const saved = await this.pushRepo.save(push);
@@ -169,6 +203,61 @@ export class PushesService {
   async getById(pushId: string, userId: string): Promise<TaskPush> {
     const push = await this.loadPush(pushId);
     await this.assertPushVisible(push, userId);
+    return push;
+  }
+
+  /**
+   * System design v2 §5: "draft → github_direct'ga avtomatik aylanmaydi.
+   * Repo keyinroq ulansa, lead/admin alohida 'link & promote' action orqali
+   * qo'lda o'tkazadi (yangi GitHub API chaqiruvi + commit sha qayta
+   * generatsiya talab qilingani uchun avtomatlashtirish xavfli)."
+   *
+   * Only callable on DRAFT pushes, only by a lead/admin/owner of the
+   * workspace. Re-resolves push_type using the original submitter's role —
+   * never blindly promotes to github_direct.
+   */
+  async linkAndPromote(
+    pushId: string,
+    requesterId: string,
+    dto: LinkAndPromotePushDto,
+  ): Promise<TaskPush> {
+    const push = await this.loadPush(pushId);
+    const task = await this.taskRepo.findOne({ where: { id: push.taskId } });
+    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+
+    const requester = await this.assertMember(task.workspaceId, requesterId);
+    this.assertApprover(requester); // lead, admin, or owner
+
+    if (push.type !== PushType.DRAFT) {
+      throw new BadRequestException({ code: ErrorCode.PUSH_NOT_DRAFT, message: 'Only draft pushes can be linked to a repository' });
+    }
+
+    const repo = await this.repoEntity.findOne({ where: { id: dto.repositoryId } });
+    if (!repo || repo.workspaceId !== task.workspaceId) {
+      throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
+    }
+
+    const submitter = await this.wsMemberRepo.findOne({
+      where: { workspaceId: task.workspaceId, userId: push.userId },
+    });
+    const newType = submitter
+      ? await this.resolvePushType(task.workspaceId, submitter, repo)
+      : PushType.UPZ_REVIEW;
+
+    push.repositoryId = repo.id;
+    push.type = newType;
+    await this.pushRepo.save(push);
+
+    await this.activityRepo.save(
+      this.activityRepo.create({
+        taskId: task.id,
+        userId: requesterId,
+        type: 'push_linked_and_promoted',
+        description: `Push ${push.id} linked to repository ${repo.fullName} and promoted to ${newType}`,
+        metadata: { pushId: push.id, repositoryId: repo.id, newType },
+      }),
+    );
+
     return push;
   }
 

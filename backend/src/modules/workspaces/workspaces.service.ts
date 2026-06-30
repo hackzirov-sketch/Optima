@@ -20,10 +20,7 @@ import {
   isActiveEntity,
   isSoftDeleted,
 } from '../../common/utils/soft-delete';
-import {
-  assertWorkspaceBillingOwner,
-  assertWorkspaceManager,
-} from '../../common/utils/workspace-auth';
+import { PermissionService } from '../../common/services/permission.service';
 
 @Injectable()
 export class WorkspacesService {
@@ -37,7 +34,19 @@ export class WorkspacesService {
     @InjectRepository(ChatMember)
     private readonly chatMemberRepo: Repository<ChatMember>,
     private readonly dataSource: DataSource,
+    private readonly permission: PermissionService,
   ) {}
+
+  private async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
+    const member = await this.memberRepo.findOne({ where: { workspaceId, userId } });
+    if (!member) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
+    }
+    return member;
+  }
 
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
     const existing = await this.workspaceRepo.findOne({
@@ -142,10 +151,8 @@ export class WorkspacesService {
     dto: UpdateWorkspaceDto,
   ): Promise<Workspace> {
     const workspace = await this.findById(id);
-    const member = await this.memberRepo.findOne({
-      where: { workspaceId: id, userId },
-    });
-    assertWorkspaceManager(workspace, userId, member);
+    const member = await this.getMember(id, userId);
+    this.permission.assertCanManageWorkspace(member);
 
     if (dto.slug && dto.slug !== workspace.slug) {
       const existing = await this.workspaceRepo.findOne({
@@ -163,11 +170,77 @@ export class WorkspacesService {
     return this.workspaceRepo.save(workspace);
   }
 
-  /** Soft-delete workspace. Only billing owner (`ownerId`), not ADMIN members. */
+  /** Soft-delete workspace. Only role === OWNER (access control via PermissionService, not ownerId). */
   async remove(id: string, userId: string): Promise<void> {
     const workspace = await this.findById(id);
-    assertWorkspaceBillingOwner(workspace, userId);
+    const member = await this.getMember(id, userId);
+    this.permission.assertCanDeleteWorkspace(member);
     applySoftDelete(workspace, userId);
     await this.workspaceRepo.save(workspace);
+  }
+
+  /**
+   * Transfer workspace ownership to another member.
+   * Invariant: there is always exactly one OWNER.
+   * 1. Only the current OWNER can initiate the transfer.
+   * 2. Single DB transaction: old OWNER → ADMIN, new member → OWNER, workspace.ownerId updated (audit only).
+   */
+  async transferOwnership(
+    workspaceId: string,
+    currentOwnerId: string,
+    newOwnerUserId: string,
+  ): Promise<Workspace> {
+    const workspace = await this.findById(workspaceId);
+    const currentOwnerMember = await this.getMember(workspaceId, currentOwnerId);
+
+    if (currentOwnerMember.role !== WorkspaceRole.OWNER) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_OWNER,
+        message: 'Only the current workspace owner can transfer ownership',
+      });
+    }
+
+    if (newOwnerUserId === currentOwnerId) {
+      throw new ConflictException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'New owner must be a different member',
+      });
+    }
+
+    const newOwnerMember = await this.memberRepo.findOne({
+      where: { workspaceId, userId: newOwnerUserId },
+    });
+    if (!newOwnerMember) {
+      throw new NotFoundException({
+        code: ErrorCode.MEMBER_NOT_FOUND,
+        message: 'Target user is not a member of this workspace',
+      });
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      currentOwnerMember.role = WorkspaceRole.ADMIN;
+      await queryRunner.manager.save(currentOwnerMember);
+
+      newOwnerMember.role = WorkspaceRole.OWNER;
+      await queryRunner.manager.save(newOwnerMember);
+
+      workspace.ownerId = newOwnerUserId; // audit / billing record only
+      const savedWorkspace = await queryRunner.manager.save(workspace);
+
+      await queryRunner.commitTransaction();
+      return savedWorkspace;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new InternalServerErrorException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Failed to transfer ownership',
+      });
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

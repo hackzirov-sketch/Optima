@@ -243,46 +243,6 @@ export class ChatRoomService {
     return this.enrichRoom(room, userId);
   }
 
-  async getOrCreateInviteCode(roomId: string, userId: string): Promise<{ code: string }> {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
-
-    await this.chatMemberService.assertRoomMember(roomId, userId);
-    
-    if (room.createdById !== userId && room.type !== ChatRoomType.GROUP) {
-      throw new ForbiddenException({ code: ErrorCode.ROOM_INVITE_FORBIDDEN, message: 'Only the creator can manage invite links' });
-    }
-
-    if (room.inviteCode) return { code: room.inviteCode };
-
-    const { randomBytes } = await import('crypto');
-    const code = randomBytes(9).toString('base64url').slice(0, 12);
-    await this.roomRepo.update(roomId, { inviteCode: code });
-    return { code };
-  }
-
-  async revokeInviteCode(roomId: string, userId: string): Promise<void> {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
-    if (room.createdById !== userId)
-      throw new ForbiddenException({ code: ErrorCode.ROOM_INVITE_FORBIDDEN, message: 'Only the creator can revoke invite links' });
-    await this.roomRepo.update(roomId, { inviteCode: null });
-  }
-
-  async joinByInviteCode(code: string, userId: string) {
-    const room = await this.roomRepo.findOne({ where: { inviteCode: code } });
-    if (!room) throw new NotFoundException({ code: ErrorCode.INVITE_CODE_INVALID, message: 'Invalid invite link' });
-
-    const existing = await this.chatMemberRepo.findOne({ where: { roomId: room.id, userId, leftAt: IsNull() } });
-    if (existing) return this.enrichRoom(room, userId);
-
-    await this.wsMembersService.assertMember(room.workspaceId, userId);
-
-    const member = this.chatMemberRepo.create({ roomId: room.id, userId });
-    await this.chatMemberRepo.save(member);
-    return this.enrichRoom(room, userId);
-  }
-
   async updateRoomSettings(roomId: string, userId: string, dto: { isPublic?: boolean; name?: string; description?: string }) {
     const room = await this.roomRepo.findOne({ where: { id: roomId } });
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });

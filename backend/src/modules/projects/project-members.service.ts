@@ -32,7 +32,7 @@ export class ProjectMembersService {
 
   private async getProject(projectId: string): Promise<Project> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
-    if (!project || project.isDeleted) {
+    if (!project || project.deletedAt) {
       throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     }
     return project;

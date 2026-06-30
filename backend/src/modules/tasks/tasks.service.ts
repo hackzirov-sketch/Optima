@@ -160,6 +160,46 @@ export class TasksService {
     return false;
   }
 
+  /**
+   * SOFT BLOCK (final decision, see system design v2 §4.3):
+   * dependency bajarilmagan bo'lsa ham task statusini o'zgartirishga ruxsat
+   * beriladi. Backend hech narsani bloklamaydi — faqat TaskActivity'ga
+   * "blocked dependency mavjud" yozuvi qo'shadi, frontend shu activity asosida
+   * warning badge ko'rsatadi.
+   */
+  private async logUnmetDependenciesIfAny(
+    taskId: string,
+    userId: string,
+    newStatus: TaskStatus,
+  ): Promise<void> {
+    // Cancelled/backlog statusga qaytishda ogohlantirish ma'nosiz
+    if (newStatus === TaskStatus.CANCELLED || newStatus === TaskStatus.BACKLOG) {
+      return;
+    }
+
+    const deps = await this.dependencyRepo.find({
+      where: { taskId },
+      relations: ['dependsOn'],
+    });
+    if (deps.length === 0) return;
+
+    const unmet = deps.filter(
+      (d) => d.dependsOn && d.dependsOn.status !== TaskStatus.DONE,
+    );
+    if (unmet.length === 0) return;
+
+    await this.logActivity(
+      taskId,
+      userId,
+      'blocked_dependency',
+      `Status "${newStatus}" ga o'zgartirildi, lekin ${unmet.length} ta dependency hali tugallanmagan`,
+      {
+        new_status: newStatus,
+        unmet_dependency_task_ids: unmet.map((d) => d.dependsOnId),
+      },
+    );
+  }
+
   // ─────────────────────────────────────────────
   //  CRUD
   // ─────────────────────────────────────────────
@@ -317,8 +357,7 @@ export class TasksService {
       .leftJoinAndSelect('task.creator', 'creator')
       .leftJoinAndSelect('task.column', 'column')
       .where('project.workspaceId = :workspaceId', { workspaceId })
-      .andWhere('task.deletedAt IS NULL')
-      .andWhere('task.isDeleted = :isDeleted', { isDeleted: false });
+      .andWhere('task.deletedAt IS NULL');
 
     if (dto.status)
       qb.andWhere('task.status = :status', { status: dto.status });
@@ -399,6 +438,10 @@ export class TasksService {
         `Status changed from ${old.status} to ${dto.status}`,
         { old_value: old.status, new_value: dto.status },
       );
+
+      // SOFT BLOCK: dependency tugallanmagan bo'lsa ham status o'zgartirishga
+      // ruxsat beriladi (qattiq bloklanmaydi) — faqat ogohlantiruvchi activity yoziladi.
+      await this.logUnmetDependenciesIfAny(taskId, userId, dto.status);
     }
     if (dto.assigneeId !== undefined && dto.assigneeId !== old.assigneeId) {
       await this.logActivity(taskId, userId, 'assigned', `Assignee changed`, {

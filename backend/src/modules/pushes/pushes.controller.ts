@@ -23,6 +23,7 @@ import { ReviewPushDto } from './dto/review-push.dto';
 import { AddReviewCommentDto } from './dto/add-review-comment.dto';
 import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
+import { LinkAndPromotePushDto } from './dto/link-and-promote-push.dto';
 
 @ApiTags('Pushes')
 @ApiBearerAuth('access-token')
@@ -40,6 +41,20 @@ export class PushesController {
   @ApiOperation({ summary: 'Submit a push for UPZ review (CLI / UI)' })
   submit(@CurrentUser('id') userId: string, @Body() dto: SubmitPushDto) {
     return this.pushesService.submit(userId, dto);
+  }
+
+  @Patch(':pushId/link-and-promote')
+  @ApiOperation({
+    summary: 'Link a repository to a draft push and re-resolve its push_type (lead/admin only)',
+    description:
+      "draft → github_direct'ga avtomatik aylanmaydi. Faqat lead/admin/owner ushbu action orqali qo'lda repo bog'laydi va push_type qayta hisoblanadi.",
+  })
+  linkAndPromote(
+    @Param('pushId') pushId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: LinkAndPromotePushDto,
+  ) {
+    return this.pushesService.linkAndPromote(pushId, userId, dto);
   }
 
   @Get(':pushId')

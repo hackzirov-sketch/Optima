@@ -41,7 +41,7 @@ export class ChatMessageService {
     
     const query = this.messageRepo.createQueryBuilder('msg')
       .where('msg.room_id = :roomId', { roomId })
-      .andWhere('msg.is_deleted = false')
+      .andWhere('msg.deletedAt IS NULL')
       .leftJoinAndSelect('msg.sender', 'sender')
       .orderBy('msg.sequence', 'DESC')
       .take(l);
@@ -215,7 +215,7 @@ export class ChatMessageService {
 
   async updateMessage(messageId: string, userId: string, dto: UpdateMessageDto) {
     const msg = await this.messageRepo.findOne({ where: { id: messageId } });
-    if (!msg || msg.isDeleted) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    if (!msg || msg.deletedAt) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.chatMemberService.assertRoomMember(msg.roomId, userId);
     
     if (msg.senderId !== userId)

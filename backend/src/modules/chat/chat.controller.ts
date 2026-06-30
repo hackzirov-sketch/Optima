@@ -5,11 +5,13 @@ import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
+import { ChatRoomInviteService } from './services/room-invite.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
+import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -20,6 +22,7 @@ export class ChatController {
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly aiService: ChatAiService,
+    private readonly roomInviteService: ChatRoomInviteService,
   ) {}
 
   @Get('workspaces/:workspaceId/chat/rooms')
@@ -104,22 +107,61 @@ export class ChatController {
   }
 
   @Post('chat/rooms/:roomId/invite-code')
-  @ApiOperation({ summary: 'Generate / retrieve room invite link' })
-  getInviteCode(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
-    return this.roomService.getOrCreateInviteCode(roomId, userId);
+  @ApiOperation({
+    summary: '(legacy) Generate / retrieve a single unlimited room invite link',
+    description: 'Kept for backward compatibility. New clients should use POST /chat/rooms/:roomId/invites for full control (max uses, expiry, multiple links).',
+  })
+  async getInviteCode(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    const invites = await this.roomInviteService.list(roomId, userId);
+    const existing = invites.find((i) => i.isActive && i.maxUses === null && !i.expiresAt);
+    if (existing) return { code: existing.code };
+    const created = await this.roomInviteService.create(roomId, userId, {});
+    return { code: created.code };
   }
 
   @Delete('chat/rooms/:roomId/invite-code')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Revoke room invite link' })
+  @ApiOperation({ summary: '(legacy) Revoke the single unlimited room invite link' })
   async revokeInviteCode(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
-    await this.roomService.revokeInviteCode(roomId, userId);
+    const invites = await this.roomInviteService.list(roomId, userId);
+    const actives = invites.filter((i) => i.isActive && i.maxUses === null && !i.expiresAt);
+    for (const inv of actives) {
+      await this.roomInviteService.revoke(roomId, inv.id, userId);
+    }
+  }
+
+  // ── Room invites (chat_room_invites, full management) ──────────────
+  @Post('chat/rooms/:roomId/invites')
+  @ApiOperation({ summary: 'Create a room invite link (optionally limited uses / expiry)' })
+  createRoomInvite(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateRoomInviteDto,
+  ) {
+    return this.roomInviteService.create(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/invites')
+  @ApiOperation({ summary: 'List invite links for a room (creator or lead+ only)' })
+  listRoomInvites(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.roomInviteService.list(roomId, userId);
+  }
+
+  @Delete('chat/rooms/:roomId/invites/:inviteId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Revoke a specific room invite link' })
+  async revokeRoomInvite(
+    @Param('roomId') roomId: string,
+    @Param('inviteId') inviteId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    await this.roomInviteService.revoke(roomId, inviteId, userId);
   }
 
   @Post('chat/join/:code')
   @ApiOperation({ summary: 'Join room by invite code' })
   joinByCode(@Param('code') code: string, @CurrentUser('id') userId: string) {
-    return this.roomService.joinByInviteCode(code, userId);
+    return this.roomInviteService.joinByCode(code, userId);
   }
 
   @Patch('chat/rooms/:roomId/settings')

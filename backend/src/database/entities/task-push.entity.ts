@@ -32,12 +32,12 @@ export class TaskPush {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'repository_id' })
-  repositoryId: string;
+  @Column({ name: 'repository_id', nullable: true })
+  repositoryId: string | null;
 
-  @ManyToOne(() => Repository, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Repository, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'repository_id' })
-  repository: Repository;
+  repository: Repository | null;
 
   @Column({ name: 'branch_name', length: 255 })
   branchName: string;
@@ -119,7 +119,4 @@ export class TaskPush {
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
-
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
 }

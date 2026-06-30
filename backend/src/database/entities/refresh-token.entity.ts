@@ -51,9 +51,6 @@ export class RefreshToken {
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt: Date;
 
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
-
   @Column({ name: 'revoked_at', type: 'timestamptz', nullable: true })
   revokedAt: Date | null;
 

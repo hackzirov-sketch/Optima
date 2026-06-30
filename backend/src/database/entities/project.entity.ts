@@ -108,9 +108,6 @@ export class Project {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy: string | null;
 
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
-
   // Relations
   @OneToMany(() => ProjectColumn, (column) => column.project)
   columns: ProjectColumn[];

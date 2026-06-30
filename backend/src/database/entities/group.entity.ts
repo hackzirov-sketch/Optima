@@ -66,9 +66,6 @@ export class Group {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy: string | null;
 
-  @Column({ name: 'is_deleted', default: false })
-  isDeleted: boolean;
-
   @OneToMany(() => GroupMember, (member) => member.group)
   members: GroupMember[];
 }
