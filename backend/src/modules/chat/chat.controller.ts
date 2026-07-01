@@ -6,12 +6,15 @@ import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
+import { ChatMemberService } from './services/member.service';
+import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
+import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -23,6 +26,8 @@ export class ChatController {
     private readonly reactionService: ChatReactionService,
     private readonly aiService: ChatAiService,
     private readonly roomInviteService: ChatRoomInviteService,
+    private readonly memberService: ChatMemberService,
+    private readonly storageService: StorageService,
   ) {}
 
   @Get('workspaces/:workspaceId/chat/rooms')
@@ -183,4 +188,28 @@ export class ChatController {
   ) {
     return this.aiService.generateAiReply(message, history ?? [], userId);
   }
-}
+
+  // ── Media attachment upload ────────────────────────────────────────────────
+  /**
+   * POST /chat/rooms/:roomId/attachments/presign
+   *
+   * Returns a presigned R2 PUT URL. Upload flow:
+   *  1. Client calls this → gets { uploadUrl, storageKey, storageUrl, expiresIn }
+   *  2. Client PUTs raw file bytes to `uploadUrl` with header Content-Type: <mimeType>
+   *  3. Client includes { storageKey, storageUrl, fileName, fileSize, mimeType }
+   *     in the `attachments[]` array of the send-message payload
+   *
+   * Allowed: images, audio/voice, video, pdf, zip, apk, office docs — up to 100 MB.
+   */
+  @Post('chat/rooms/:roomId/attachments/presign')
+  @ApiOperation({ summary: 'Get R2 presigned PUT URL for a chat attachment' })
+  async presignAttachment(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: PresignAttachmentDto,
+  ) {
+    // Ensure user is in the room before handing out upload credentials
+    await this.memberService.assertRoomMember(roomId, userId);
+    return this.storageService.getPresignedUploadUrl('attachments', userId, dto.fileName, dto.mimeType, dto.fileSize);
+  }
+} 

@@ -17,16 +17,25 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
   workspace:   { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
   attachments: {
-    maxBytes: 20 * 1024 * 1024,
+    // Telegram-style chat attachments — everything except round "video message" circles.
+    maxBytes: 100 * 1024 * 1024,
     mimeTypes: [
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      // images
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
+      // documents
       'application/pdf',
       'text/plain', 'text/csv',
-      'application/zip', 'application/x-zip-compressed',
-      'video/mp4', 'video/webm',
-      'audio/mpeg', 'audio/wav', 'audio/ogg',
+      'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/x-7z-compressed',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+      // apps
+      'application/vnd.android.package-archive', // .apk
+      // video (regular files — not round "video message" bubbles)
+      'video/mp4', 'video/webm', 'video/quicktime',
+      // audio / voice notes
+      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/x-m4a',
     ],
   },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
@@ -185,6 +194,51 @@ export class StorageService {
   async getPresignedDownloadUrl(key: string, expiresIn = 3600): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucketName, Key: key });
     return getSignedUrl(this.s3Client, command, { expiresIn });
+  }
+
+  /**
+   * Generate a presigned PUT URL so the browser can upload a chat attachment
+   * directly to R2 without the file passing through our API server.
+   *
+   * Flow: client calls this → PUTs the raw file bytes to `uploadUrl` with
+   * header `Content-Type: <mimeType>` → then includes `{storageKey, storageUrl,
+   * fileName, fileSize, mimeType}` in the `attachments` array when sending the
+   * chat message.
+   */
+  async getPresignedUploadUrl(
+    folder: UploadFolder,
+    userId: string,
+    fileName: string,
+    mimeType: string,
+    fileSize: number,
+  ): Promise<{ uploadUrl: string; storageKey: string; storageUrl: string; expiresIn: number }> {
+    const limits = FOLDER_LIMITS[folder];
+    if (!limits) throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_FOLDER, message: `Unknown folder: ${folder}` });
+
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for ${folder}: ${limits.mimeTypes.join(', ')}` });
+    }
+    if (fileSize > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `File exceeds max size of ${Math.round(limits.maxBytes / 1024 / 1024)}MB for ${folder}` });
+    }
+
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-150);
+    const key = `${folder}/${userId}/${uuidv4()}-${safeName}`;
+    const expiresIn = 300; // 5 min to complete the upload
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      ContentType: mimeType,
+    });
+    const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
+
+    return {
+      uploadUrl,
+      storageKey: key,
+      storageUrl: `${this.r2PublicUrl}/${key}`,
+      expiresIn,
+    };
   }
 
   async deleteFile(key: string): Promise<void> {

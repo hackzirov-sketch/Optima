@@ -7,11 +7,13 @@ import { Queue } from 'bullmq';
 import { ChatMessage } from '../../../database/entities/chat-message.entity';
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
 import { ChatReaction } from '../../../database/entities/chat-reaction.entity';
+import { MessageAttachment } from '../../../database/entities/message-attachment.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
 import { ChatReactionService } from './reaction.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
+import { ViolationService } from '../../moderation/services/violation.service';
 import { StorageService } from '../../storage/storage.service';
 import { RedisService } from '../../../redis/redis.service';
 import { SendMessageDto } from '../dto/send-message.dto';
@@ -25,9 +27,11 @@ export class ChatMessageService {
     @InjectRepository(ChatMessage) private readonly messageRepo: Repository<ChatMessage>,
     @InjectRepository(ChatRoom) private readonly roomRepo: Repository<ChatRoom>,
     @InjectRepository(ChatReaction) private readonly reactionRepo: Repository<ChatReaction>,
+    @InjectRepository(MessageAttachment) private readonly attachmentRepo: Repository<MessageAttachment>,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatReactionService: ChatReactionService,
     private readonly contentFilter: ContentFilterService,
+    private readonly violationService: ViolationService,
     private readonly chatEncryption: ChatEncryptionService,
     private readonly storageService: StorageService,
     private readonly redisService: RedisService,
@@ -80,6 +84,17 @@ export class ChatMessageService {
       reactionsByMsg.get(r.messageId)!.push(r);
     }
 
+    const attachments = await this.attachmentRepo
+      .createQueryBuilder('a')
+      .where('a.message_id IN (:...msgIds)', { msgIds })
+      .getMany();
+
+    const attachmentsByMsg = new Map<string, MessageAttachment[]>();
+    for (const a of attachments) {
+      if (!attachmentsByMsg.has(a.messageId)) attachmentsByMsg.set(a.messageId, []);
+      attachmentsByMsg.get(a.messageId)!.push(a);
+    }
+
     const data = messages.map((msg) => ({
       id: msg.id,
       roomId: msg.roomId,
@@ -97,6 +112,7 @@ export class ChatMessageService {
         : null,
       content: msg.contentType === 'document' ? msg.content : this.chatEncryption.safeDecrypt(msg.contentJson, msg.content ?? ''),
       contentType: msg.contentType,
+      attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) => this.mapAttachment(a)),
       replyToId: msg.replyToId ?? null,
       isEdited: msg.isEdited,
       editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
@@ -109,6 +125,38 @@ export class ChatMessageService {
     return { data, total, limit: l };
   }
 
+  /**
+   * Flood protection: too many messages in a short window ("kop xabar bo'lib ketish").
+   * Content-filter only catches spammy *content* (repeated chars, caps, etc) — this
+   * catches spammy *frequency* (e.g. 20 short messages in 5 seconds), which the
+   * existing heuristics never see because each individual message looks fine.
+   *
+   * Sliding window via Redis INCR + EX. Falls back to allow-through if Redis is down
+   * (same fail-open posture as the rest of the chat pipeline when Redis is unavailable).
+   */
+  private async assertNotFlooding(userId: string, roomId: string): Promise<void> {
+    const redisClient = this.redisService.getClient();
+    if (!redisClient) return;
+
+    const WINDOW_SECONDS = 10;
+    const MAX_MESSAGES = 12; // ~1.2 msg/sec sustained is already very fast for a human typist
+
+    const key = `flood:chat:${userId}:${roomId}`;
+    const count = await redisClient.incr(key);
+    if (count === 1) {
+      await redisClient.expire(key, WINDOW_SECONDS);
+    }
+
+    if (count > MAX_MESSAGES) {
+      await this.violationService.assertNotBlocked(userId);
+      await this.violationService.recordViolation(userId, 'spam', 'message flood (too many messages in a short time)');
+      throw new BadRequestException({
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        message: 'You are sending messages too fast. Please slow down.',
+      });
+    }
+  }
+
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
     const room = await this.roomRepo.findOne({ where: { id: roomId }, select: ['id', 'isReadOnly'] });
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
@@ -116,11 +164,16 @@ export class ChatMessageService {
     const member = await this.chatMemberService.assertRoomMemberWithUser(roomId, userId);
     if (room.isReadOnly) throw new ForbiddenException({ code: ErrorCode.ROOM_READ_ONLY, message: 'Room is read-only' });
 
-    if (!dto.content?.trim()) {
+    const hasAttachments = !!dto.attachments?.length;
+    if (!dto.content?.trim() && !hasAttachments) {
       throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
     }
 
-    await this.contentFilter.filterText(dto.content, userId, 'chat');
+    await this.assertNotFlooding(userId, roomId);
+
+    if (dto.content?.trim()) {
+      await this.contentFilter.filterText(dto.content, userId, 'chat');
+    }
 
     // 1. Idempotency Check
     if (dto.clientMessageId) {
@@ -130,7 +183,8 @@ export class ChatMessageService {
       });
       if (existing) {
         // Return existing to prevent duplicate
-        return this.mapToResponse(existing, existing.content ?? '');
+        const existingAttachments = await this.attachmentRepo.find({ where: { messageId: existing.id } });
+        return this.mapToResponse(existing, existing.content ?? '', existingAttachments);
       }
     }
 
@@ -148,13 +202,13 @@ export class ChatMessageService {
       sequence = (maxRes?.max || 0) + 1;
     }
 
-    const plainText = dto.content.trim();
+    const plainText = (dto.content ?? '').trim();
     let contentToSave = plainText;
-    let contentType = 'text';
+    let contentType = hasAttachments ? 'media' : 'text';
     let contentJson: any = null;
 
-    // 3. Length check (4096)
-    if (plainText.length > 4096) {
+    // 3. Length check (4096) — only applies to plain text messages, not media captions
+    if (!hasAttachments && plainText.length > 4096) {
       contentType = 'document';
       const key = `chat-long-messages/${uuidv4()}.txt`;
       const buffer = Buffer.from(plainText, 'utf-8');
@@ -162,7 +216,7 @@ export class ChatMessageService {
       
       contentToSave = plainText.substring(0, 150) + '...'; // Preview
       contentJson = { documentUrl: url, key }; // Store URL in JSON
-    } else {
+    } else if (plainText) {
       contentJson = this.chatEncryption.isEnabled()
         ? this.chatEncryption.encrypt(plainText)
         : null;
@@ -182,6 +236,25 @@ export class ChatMessageService {
     });
     const saved = await this.messageRepo.save(msg);
 
+    // 3b. Persist attachments (already uploaded to R2 via /chat/rooms/:roomId/attachments/presign)
+    let savedAttachments: MessageAttachment[] = [];
+    if (hasAttachments) {
+      const rows = dto.attachments!.map((a) =>
+        this.attachmentRepo.create({
+          messageId: saved.id,
+          uploaderId: userId,
+          fileName: a.fileName,
+          fileSize: a.fileSize,
+          mimeType: a.mimeType,
+          storageKey: a.storageKey,
+          storageUrl: a.storageUrl,
+          width: a.width ?? null,
+          height: a.height ?? null,
+        }),
+      );
+      savedAttachments = await this.attachmentRepo.save(rows);
+    }
+
     // 4. Background Jobs — parallel, not sequential
     await Promise.all([
       this.chatQueue.add(
@@ -200,7 +273,7 @@ export class ChatMessageService {
     // chaqirilgan, shuning uchun alohida SELECT yo'q.
     const senderUser = (member as any).user ?? null;
 
-    return this.mapToResponseWithSender(saved, plainText, senderUser);
+    return this.mapToResponseWithSender(saved, plainText, senderUser, savedAttachments);
   }
 
   async deleteMessage(messageId: string, userId: string) {
@@ -239,11 +312,23 @@ export class ChatMessageService {
     return { ...saved, content: plainText, editedAt: saved.editedAt };
   }
 
-  private mapToResponse(msg: ChatMessage, decryptedContent: string) {
-    return this.mapToResponseWithSender(msg, decryptedContent, msg.sender ?? null);
+  private mapToResponse(msg: ChatMessage, decryptedContent: string, attachments: MessageAttachment[] = []) {
+    return this.mapToResponseWithSender(msg, decryptedContent, msg.sender ?? null, attachments);
   }
 
-  private mapToResponseWithSender(msg: ChatMessage, decryptedContent: string, sender: any) {
+  private mapAttachment(a: MessageAttachment) {
+    return {
+      id: a.id,
+      fileName: a.fileName,
+      fileSize: Number(a.fileSize),
+      mimeType: a.mimeType,
+      url: a.storageUrl,
+      width: a.width ?? null,
+      height: a.height ?? null,
+    };
+  }
+
+  private mapToResponseWithSender(msg: ChatMessage, decryptedContent: string, sender: any, attachments: MessageAttachment[] = []) {
     return {
       id: msg.id,
       roomId: msg.roomId,
@@ -253,6 +338,7 @@ export class ChatMessageService {
       metadata: msg.metadata,
       content: msg.contentType === 'document' ? msg.content : decryptedContent,
       contentType: msg.contentType ?? 'text',
+      attachments: attachments.map((a) => this.mapAttachment(a)),
       replyToId: msg.replyToId ?? null,
       isEdited: msg.isEdited ?? false,
       editedAt: msg.editedAt ?? null,

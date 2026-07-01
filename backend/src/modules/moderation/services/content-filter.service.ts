@@ -78,6 +78,12 @@ export class ContentFilterService {
   private checkHeuristic(text: string): FilterResult {
     const trimmed = text.trim();
 
+    // Message too long (wall-of-text / paste spam). Threshold: 1500 chars.
+    // Long-form content must use the document upload path instead.
+    if (trimmed.length > 1500) {
+      return { flagged: true, reason: 'message too long (max 1500 characters)', category: 'spam' };
+    }
+
     // Excessive repeated characters: "aaaaaaa" or "!!!!!!"
     if (/(.)\1{9,}/.test(trimmed)) {
       return { flagged: true, reason: 'excessive character repetition', category: 'spam' };

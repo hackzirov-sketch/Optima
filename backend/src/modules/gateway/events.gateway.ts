@@ -32,9 +32,19 @@ export interface WsUser {
 // ─── DTOs ──────────────────────────────────────────────
 export interface SendMessageWsDto {
   roomId: string;
-  text: string;
+  text?: string;
   replyToId?: string;
   clientMessageId?: string; // idempotency — WS reconnect'da duplicate oldini olish
+  /** Pre-uploaded files. Client must call /chat/rooms/:roomId/attachments/presign first. */
+  attachments?: Array<{
+    storageKey: string;
+    storageUrl: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    width?: number;
+    height?: number;
+  }>;
 }
 
 export interface TypingDto {
@@ -359,6 +369,7 @@ export class EventsGateway
         content: data.text,
         replyToId: data.replyToId,
         clientMessageId: data.clientMessageId, // idempotency: WS reconnect'da duplicate yo'q
+        attachments: data.attachments,
       });
     } catch (err: any) {
       // ForbiddenException → emit error back to sender only
@@ -377,6 +388,7 @@ export class EventsGateway
       senderId: saved.senderId,
       content: saved.content,
       contentType: saved.contentType ?? 'text',
+      attachments: saved.attachments ?? [],
       replyToId: saved.replyToId ?? null,
       isEdited: false,
       editedAt: null,
