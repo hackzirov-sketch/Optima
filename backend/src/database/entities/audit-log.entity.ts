@@ -14,15 +14,15 @@ export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'workspace_id', nullable: true })
-  workspaceId: string;
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId: string | null;
 
   @ManyToOne(() => Workspace, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'workspace_id' })
   workspace: Workspace;
 
-  @Column({ name: 'actor_id', nullable: true })
-  actorId: string;
+  @Column({ name: 'actor_id', type: 'uuid', nullable: true })
+  actorId: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'actor_id' })
@@ -31,11 +31,11 @@ export class AuditLog {
   @Column({ length: 100 })
   action: string;
 
-  @Column({ name: 'entity_type', length: 50, nullable: true })
-  entityType: string;
+  @Column({ name: 'entity_type', type: 'varchar', length: 50, nullable: true })
+  entityType: string | null;
 
   @Column({ name: 'entity_id', type: 'uuid', nullable: true })
-  entityId: string;
+  entityId: string | null;
 
   @Column({ name: 'old_value', type: 'jsonb', nullable: true })
   oldValue: any;
@@ -44,10 +44,10 @@ export class AuditLog {
   newValue: any;
 
   @Column({ name: 'ip_address', type: 'inet', nullable: true })
-  ipAddress: string;
+  ipAddress: string | null;
 
   @Column({ name: 'user_agent', type: 'text', nullable: true })
-  userAgent: string;
+  userAgent: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

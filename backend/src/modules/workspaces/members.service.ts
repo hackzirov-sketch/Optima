@@ -12,6 +12,7 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { WorkspaceRole } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
+import { AuditService } from '../../common/services/audit.service';
 import { ROLE_LEVEL } from '../../common/constants/role-levels';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class MembersService {
     @InjectRepository(Workspace)
     private readonly workspaceRepo: Repository<Workspace>,
     private readonly permission: PermissionService,
+    private readonly audit: AuditService,
   ) {}
 
   async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
@@ -100,8 +102,19 @@ export class MembersService {
     }
 
     const member = await this.findOne(workspaceId, targetUserId);
+    const oldRole = member.role;
     member.role = dto.role;
-    return this.memberRepo.save(member);
+    const saved = await this.memberRepo.save(member);
+    await this.audit.log({
+      workspaceId,
+      actorId: requesterId,
+      action: 'member.role_changed',
+      entityType: 'workspace_member',
+      entityId: targetUserId,
+      oldValue: { role: oldRole },
+      newValue: { role: dto.role },
+    });
+    return saved;
   }
 
   async remove(
@@ -131,5 +144,13 @@ export class MembersService {
 
     const member = await this.findOne(workspaceId, targetUserId);
     await this.memberRepo.remove(member);
+    await this.audit.log({
+      workspaceId,
+      actorId: requesterId,
+      action: requesterId === targetUserId ? 'member.left' : 'member.removed',
+      entityType: 'workspace_member',
+      entityId: targetUserId,
+      oldValue: { role: member.role },
+    });
   }
 }

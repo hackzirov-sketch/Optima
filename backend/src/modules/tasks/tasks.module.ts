@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { GatewayModule } from '../gateway/gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RedisModule } from '../../redis/redis.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 
 import { Task } from '../../database/entities/task.entity';
 import { TaskActivity } from '../../database/entities/task-activity.entity';
@@ -39,6 +40,7 @@ import { TasksController } from './tasks.controller';
     GatewayModule,
     NotificationsModule,
     RedisModule,
+    AnalyticsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],

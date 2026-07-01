@@ -32,10 +32,10 @@ export class Workspace {
   slug: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
-  avatarUrl: string;
+  avatarUrl: string | null;
 
   @Column({
     type: 'enum',

@@ -26,10 +26,10 @@ export class UserIpLog {
   ipAddress: string;
 
   @Column({ name: 'provider', type: 'varchar', length: 50, nullable: true })
-  provider: string;
+  provider: string | null;
 
   @Column({ name: 'user_agent', type: 'text', nullable: true })
-  userAgent: string;
+  userAgent: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

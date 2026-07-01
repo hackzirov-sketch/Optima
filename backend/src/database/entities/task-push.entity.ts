@@ -32,7 +32,7 @@ export class TaskPush {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'repository_id', nullable: true })
+  @Column({ name: 'repository_id', type: 'uuid', nullable: true })
   repositoryId: string | null;
 
   @ManyToOne(() => Repository, { onDelete: 'CASCADE', nullable: true })
@@ -78,22 +78,22 @@ export class TaskPush {
   storageProvider: string;
 
   @Column({ name: 'storage_url', type: 'text', nullable: true })
-  storageUrl: string;
+  storageUrl: string | null;
 
   @Column({ name: 'storage_key', type: 'text', nullable: true })
-  storageKey: string;
+  storageKey: string | null;
 
   @Column({ name: 'github_commit_sha', length: 40, nullable: true })
   githubCommitSha: string;
 
   @Column({ name: 'github_pr_url', type: 'text', nullable: true })
-  githubPrUrl: string;
+  githubPrUrl: string | null;
 
   @Column({ name: 'github_pr_number', nullable: true })
   githubPrNumber: number;
 
   @Column({ name: 'expires_at', type: 'timestamptz', nullable: true })
-  expiresAt: Date;
+  expiresAt: Date | null;
 
   @Column({ name: 'reviewed_by', nullable: true })
   reviewedById: string;
@@ -103,7 +103,7 @@ export class TaskPush {
   reviewedBy: User;
 
   @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
-  reviewedAt: Date;
+  reviewedAt: Date | null;
 
   @Column({ name: 'rejected_reason', type: 'text', nullable: true })
   rejectedReason: string | null;

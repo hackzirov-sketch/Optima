@@ -52,10 +52,10 @@ export class ChatRoom {
   name: string;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
-  avatarUrl: string;
+  avatarUrl: string | null;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ name: 'is_archived', default: false })
   isArchived: boolean;
@@ -77,7 +77,7 @@ export class ChatRoom {
   lastMessage: ChatMessage;
 
   @Column({ name: 'last_message_at', type: 'timestamptz', nullable: true })
-  lastMessageAt: Date;
+  lastMessageAt: Date | null;
 
   @Column({ name: 'message_seq', type: 'int', default: 0 })
   messageSeq: number;

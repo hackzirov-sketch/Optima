@@ -28,7 +28,7 @@ export class GithubAccount {
   username: string;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
-  avatarUrl: string;
+  avatarUrl: string | null;
 
   @Column({ length: 255, nullable: true })
   email: string;
@@ -37,10 +37,10 @@ export class GithubAccount {
   accessTokenEncrypted: string;
 
   @Column({ name: 'refresh_token_encrypted', type: 'text', nullable: true })
-  refreshTokenEncrypted: string;
+  refreshTokenEncrypted: string | null;
 
   @Column({ name: 'token_expires_at', type: 'timestamptz', nullable: true })
-  tokenExpiresAt: Date;
+  tokenExpiresAt: Date | null;
 
   @Column({ name: 'connected_at', type: 'timestamptz', default: () => 'NOW()' })
   connectedAt: Date;

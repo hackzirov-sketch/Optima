@@ -28,7 +28,7 @@ export class WorkspaceGithubInstallation {
   githubOrgName: string;
 
   @Column({ name: 'github_org_avatar_url', type: 'text', nullable: true })
-  githubOrgAvatarUrl: string;
+  githubOrgAvatarUrl: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

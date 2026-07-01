@@ -42,10 +42,10 @@ export class Group {
   type: GroupType;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
-  avatarUrl: string;
+  avatarUrl: string | null;
 
   @Column({ name: 'created_by' })
   createdById: string;

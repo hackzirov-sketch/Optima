@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 
 import { ChatRoomService } from './services/room.service';
@@ -15,6 +15,7 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
+import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -164,6 +165,7 @@ export class ChatController {
   }
 
   @Post('chat/join/:code')
+  @UseGuards(IpRateLimitGuard)
   @ApiOperation({ summary: 'Join room by invite code' })
   joinByCode(@Param('code') code: string, @CurrentUser('id') userId: string) {
     return this.roomInviteService.joinByCode(code, userId);

@@ -31,7 +31,7 @@ export class Repository {
   fullName: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ default: false })
   private: boolean;
@@ -40,10 +40,10 @@ export class Repository {
   defaultBranch: string;
 
   @Column({ name: 'clone_url', type: 'text', nullable: true })
-  cloneUrl: string;
+  cloneUrl: string | null;
 
   @Column({ name: 'html_url', type: 'text', nullable: true })
-  htmlUrl: string;
+  htmlUrl: string | null;
 
   @Column({ name: 'require_review', default: true })
   requireReview: boolean;

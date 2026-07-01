@@ -23,7 +23,11 @@ export class IpRateLimitGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const ip = this.extractIp(request);
-    const actionType = request.path;
+    // Use the matched ROUTE PATTERN (e.g. "/chat/join/:code"), not the raw
+    // request path. Using request.path would key each guessed code/token
+    // into its own bucket, so a brute-forcer never hits the limit — the
+    // exact attack this guard exists to stop.
+    const actionType = (request.route as { path?: string } | undefined)?.path ?? request.path;
 
     const maxAttempts = this.config.get<number>('moderation.ipMaxAttempts') ?? 3;
     const windowHours = this.config.get<number>('moderation.ipWindowHours') ?? 24;

@@ -58,7 +58,7 @@ export class PushReviewComment {
   @Column({ name: 'is_resolved', default: false })
   isResolved: boolean;
 
-  @Column({ name: 'resolved_by', nullable: true })
+  @Column({ name: 'resolved_by', type: 'uuid', nullable: true })
   resolvedById: string | null;
 
   @ManyToOne(() => User, { nullable: true })

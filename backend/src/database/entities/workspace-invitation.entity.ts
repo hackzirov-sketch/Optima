@@ -46,10 +46,10 @@ export class WorkspaceInvitation {
   expiresAt: Date;
 
   @Column({ name: 'accepted_at', type: 'timestamptz', nullable: true })
-  acceptedAt: Date;
+  acceptedAt: Date | null;
 
   @Column({ name: 'declined_at', type: 'timestamptz', nullable: true })
-  declinedAt: Date;
+  declinedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

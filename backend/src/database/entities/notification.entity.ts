@@ -40,13 +40,13 @@ export class Notification {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  message: string;
+  message: string | null;
 
   @Column({ name: 'entity_type', length: 50, nullable: true })
   entityType: string;
 
   @Column({ name: 'entity_id', type: 'uuid', nullable: true })
-  entityId: string;
+  entityId: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: any;
@@ -55,10 +55,10 @@ export class Notification {
   isRead: boolean;
 
   @Column({ name: 'read_at', type: 'timestamptz', nullable: true })
-  readAt: Date;
+  readAt: Date | null;
 
   @Column({ name: 'action_url', type: 'text', nullable: true })
-  actionUrl: string;
+  actionUrl: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

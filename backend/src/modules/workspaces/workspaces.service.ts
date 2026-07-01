@@ -22,6 +22,7 @@ import {
   isSoftDeleted,
 } from '../../common/utils/soft-delete';
 import { PermissionService } from '../../common/services/permission.service';
+import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class WorkspacesService {
@@ -38,6 +39,7 @@ export class WorkspacesService {
     private readonly chatMemberRepo: Repository<ChatMember>,
     private readonly dataSource: DataSource,
     private readonly permission: PermissionService,
+    private readonly audit: AuditService,
   ) {}
 
   private async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
@@ -181,6 +183,14 @@ export class WorkspacesService {
     this.permission.assertCanDeleteWorkspace(member);
     applySoftDelete(workspace, userId);
     await this.workspaceRepo.save(workspace);
+    await this.audit.log({
+      workspaceId: id,
+      actorId: userId,
+      action: 'workspace.deleted',
+      entityType: 'workspace',
+      entityId: id,
+      oldValue: { name: workspace.name },
+    });
   }
 
   /**
@@ -236,6 +246,15 @@ export class WorkspacesService {
       const savedWorkspace = await queryRunner.manager.save(workspace);
 
       await queryRunner.commitTransaction();
+      await this.audit.log({
+        workspaceId,
+        actorId: currentOwnerId,
+        action: 'workspace.ownership_transferred',
+        entityType: 'workspace',
+        entityId: workspaceId,
+        oldValue: { ownerId: currentOwnerId },
+        newValue: { ownerId: newOwnerUserId },
+      });
       return savedWorkspace;
     } catch (error) {
       await queryRunner.rollbackTransaction();

@@ -34,10 +34,10 @@ export class ChatMember {
   isMuted: boolean;
 
   @Column({ name: 'muted_until', type: 'timestamptz', nullable: true })
-  mutedUntil: Date;
+  mutedUntil: Date | null;
 
   @Column({ name: 'last_read_at', type: 'timestamptz', nullable: true })
-  lastReadAt: Date;
+  lastReadAt: Date | null;
 
   @Column({ name: 'last_read_message_id', nullable: true })
   lastReadMessageId: string;
@@ -49,5 +49,5 @@ export class ChatMember {
   joinedAt: Date;
 
   @Column({ name: 'left_at', type: 'timestamptz', nullable: true })
-  leftAt: Date;
+  leftAt: Date | null;
 }

@@ -42,7 +42,7 @@ export class ProjectColumn {
     enum: TaskStatus,
     nullable: true,
   })
-  mapsToStatus: TaskStatus;
+  mapsToStatus: TaskStatus | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

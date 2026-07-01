@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
@@ -95,7 +95,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
           { name: 'medium', ttl: 10000, limit: 100 },
           { name: 'long', ttl: 60000, limit: 300 },
         ],
-        storage: new ThrottlerStorageRedisService(config.get('REDIS_URL') as string),
+        storage: new RedisThrottlerStorage(config.get('REDIS_URL') as string),
       }),
     }),
 

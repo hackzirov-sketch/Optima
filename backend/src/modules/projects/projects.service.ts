@@ -22,6 +22,7 @@ import {
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
 import { PermissionService } from '../../common/services/permission.service';
+import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class ProjectsService {
@@ -37,6 +38,7 @@ export class ProjectsService {
     private readonly dataSource: DataSource,
     private readonly contentFilter: ContentFilterService,
     private readonly permission: PermissionService,
+    private readonly audit: AuditService,
   ) {}
 
   private async checkProjectAccess(
@@ -252,6 +254,14 @@ export class ProjectsService {
     const project = await this.checkProjectAccess(id, userId, true);
     applySoftDelete(project, userId);
     await this.projectRepo.save(project);
+    await this.audit.log({
+      workspaceId: project.workspaceId,
+      actorId: userId,
+      action: 'project.deleted',
+      entityType: 'project',
+      entityId: id,
+      oldValue: { name: project.name },
+    });
   }
 
   // Columns Management

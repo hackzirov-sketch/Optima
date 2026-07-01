@@ -35,7 +35,7 @@ export class Meeting {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ name: 'meeting_code', length: 20, unique: true })
   meetingCode: string;
@@ -51,7 +51,7 @@ export class Meeting {
   startTime: Date;
 
   @Column({ name: 'end_time', type: 'timestamptz', nullable: true })
-  endTime: Date;
+  endTime: Date | null;
 
   @Column({ name: 'max_participants', default: 100 })
   maxParticipants: number;
@@ -60,7 +60,7 @@ export class Meeting {
   isRecurring: boolean;
 
   @Column({ name: 'agenda', type: 'text', nullable: true })
-  agenda: string;
+  agenda: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

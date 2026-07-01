@@ -32,7 +32,7 @@ export class TaskActivity {
   type: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: any;

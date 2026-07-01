@@ -28,6 +28,7 @@ import { ROLE_LEVEL } from '../../common/constants/role-levels';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
+import { DailyStatsService } from '../analytics/daily-stats.service';
 
 @Injectable()
 export class PushesService {
@@ -49,6 +50,7 @@ export class PushesService {
     private readonly storage: StorageService,
     private readonly config: ConfigService,
     private readonly permission: PermissionService,
+    private readonly dailyStats: DailyStatsService,
   ) {}
 
   private async assertMember(
@@ -182,6 +184,10 @@ export class PushesService {
       saved.status = PushStatus.UPLOADED;
       saved.expiresAt = expires;
       await this.pushRepo.save(saved);
+
+      await this.dailyStats.increment(userId, task.projectId, task.workspaceId, {
+        pushesSubmitted: 1,
+      });
     } catch {
       saved.status = PushStatus.PENDING;
       await this.pushRepo.save(saved);
@@ -292,6 +298,12 @@ export class PushesService {
     push.reviewedById = userId;
     push.reviewedAt = new Date();
     await this.pushRepo.save(push);
+
+    await this.dailyStats.increment(push.userId, task.projectId, task.workspaceId, {
+      pushesApproved: 1,
+      addedLines: push.addedLines ?? 0,
+      removedLines: push.removedLines ?? 0,
+    });
 
     await this.activityRepo.save(
       this.activityRepo.create({

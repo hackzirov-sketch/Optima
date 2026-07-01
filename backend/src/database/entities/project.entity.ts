@@ -51,10 +51,10 @@ export class Project {
   slug: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({ name: 'cover_url', type: 'text', nullable: true })
-  coverUrl: string;
+  coverUrl: string | null;
 
   @Column({
     type: 'enum',
@@ -74,13 +74,13 @@ export class Project {
   progress: number;
 
   @Column({ name: 'start_date', type: 'date', nullable: true })
-  startDate: string;
+  startDate: string | null;
 
   @Column({ type: 'date', nullable: true })
-  deadline: string;
+  deadline: string | null;
 
   @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
-  completedAt: Date;
+  completedAt: Date | null;
 
   @Column({ name: 'created_by' })
   createdById: string;

@@ -10,6 +10,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,6 +19,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
@@ -56,6 +58,7 @@ export class MeetingsController {
   // ─── Join by meeting code (workspace-agnostic) ────────────────────────────
 
   @Post('meetings/join-by-code')
+  @UseGuards(IpRateLimitGuard)
   @ApiOperation({ summary: 'Join a meeting using its 8-char code' })
   joinByCode(
     @CurrentUser('id') userId: string,

@@ -44,10 +44,10 @@ export class MessageAttachment {
   storageUrl: string;
 
   @Column({ type: 'int', nullable: true })
-  width: number;
+  width: number | null;
 
   @Column({ type: 'int', nullable: true })
-  height: number;
+  height: number | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

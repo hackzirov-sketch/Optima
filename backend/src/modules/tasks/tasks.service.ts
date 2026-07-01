@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, ILike } from 'typeorm';
+import { Repository, DataSource, ILike, IsNull } from 'typeorm';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
@@ -24,13 +24,14 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { AddDependencyDto } from './dto/add-dependency.dto';
-import { NotificationType, TaskStatus } from '../../common/enums';
+import { NotificationType, TaskStatus, ProjectStatus } from '../../common/enums';
 import {
   applySoftDelete,
   isActiveEntity,
 } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
+import { DailyStatsService } from '../analytics/daily-stats.service';
 
 @Injectable()
 export class TasksService {
@@ -64,11 +65,56 @@ export class TasksService {
     private readonly permission: PermissionService,
     private readonly notifications: NotificationsService,
     private readonly redisService: RedisService,
+    private readonly dailyStats: DailyStatsService,
   ) {}
 
   // ─────────────────────────────────────────────
   //  Internal helpers
   // ─────────────────────────────────────────────
+
+  /**
+   * DB trigger `recalculate_project_progress()` recomputes `projects.progress`
+   * on INSERT / UPDATE OF status / hard DELETE — but it never fires on a
+   * *soft* delete (`UPDATE tasks SET deleted_at = ...`), since that touches
+   * `deleted_at`, not `status`. It also never updates `projects.status` and
+   * never emits a WebSocket event (it's raw SQL, outside the Nest/EventEmitter
+   * layer). So instead of trusting the trigger's output, this recomputes
+   * progress itself, keeps status consistent, and broadcasts the change.
+   * Call this after any task create/status-change/move/soft-delete.
+   */
+  private async syncProjectStatusWithProgress(projectId: string): Promise<void> {
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+    if (!project) return;
+
+    const [total, done] = await Promise.all([
+      this.taskRepo.count({ where: { projectId, deletedAt: IsNull(), parentTaskId: IsNull() } }),
+      this.taskRepo.count({
+        where: { projectId, deletedAt: IsNull(), parentTaskId: IsNull(), status: TaskStatus.DONE },
+      }),
+    ]);
+    project.progress = total === 0 ? 0 : Math.round((done * 100) / total);
+
+    // Terminal/manual statuses are never auto-overridden.
+    if (
+      project.status !== ProjectStatus.ARCHIVED &&
+      project.status !== ProjectStatus.CANCELLED
+    ) {
+      if (project.progress >= 100 && project.status !== ProjectStatus.COMPLETED) {
+        project.status = ProjectStatus.COMPLETED;
+        if (!project.completedAt) project.completedAt = new Date();
+      } else if (project.progress < 100 && project.status === ProjectStatus.COMPLETED) {
+        // A previously-completed project was reopened (task un-done'd/re-added).
+        project.status = ProjectStatus.ACTIVE;
+        project.completedAt = null;
+      }
+    }
+
+    await this.projectRepo.save(project);
+
+    this.gateway.broadcastToWorkspace(project.workspaceId, 'project:updated', {
+      project,
+    });
+  }
 
   private async assertMember(
     workspaceId: string,
@@ -255,7 +301,7 @@ export class TasksService {
       );
       const full = await this.findById(saved.id, userId);
       this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
-
+      await this.syncProjectStatusWithProgress(dto.projectId);
 
       // Notify assignee (if assigned and not self)
       if (dto.assigneeId && dto.assigneeId !== userId) {
@@ -447,6 +493,13 @@ export class TasksService {
     // Send notifications when status changes
     if (dto.status && dto.status !== old.status) {
       await this.sendStatusChangeNotifications(saved, userId, old.status, dto.status);
+      await this.syncProjectStatusWithProgress(saved.projectId);
+
+      if (dto.status === TaskStatus.DONE) {
+        await this.dailyStats.increment(saved.assigneeId ?? userId, saved.projectId, saved.workspaceId, {
+          tasksCompleted: 1,
+        });
+      }
     }
 
     this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', { task: saved });
@@ -529,6 +582,7 @@ export class TasksService {
     applySoftDelete(task, userId);
     await this.taskRepo.save(task);
     this.gateway.broadcastToWorkspace(workspaceId, 'task:deleted', { taskId, workspaceId });
+    await this.syncProjectStatusWithProgress(task.projectId);
   }
 
   // ─────────────────────────────────────────────
@@ -591,6 +645,16 @@ export class TasksService {
       oldColumnId,
       oldStatus,
     });
+
+    if (saved.status !== oldStatus) {
+      await this.syncProjectStatusWithProgress(saved.projectId);
+      if (saved.status === TaskStatus.DONE) {
+        await this.dailyStats.increment(saved.assigneeId ?? userId, saved.projectId, saved.workspaceId, {
+          tasksCompleted: 1,
+        });
+      }
+    }
+
     return saved;
   }
 
