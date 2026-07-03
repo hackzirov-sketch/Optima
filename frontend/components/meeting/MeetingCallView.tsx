@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/components/chat/chatShared';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { meetingsApi } from '@/lib/api';
+import { meetingsApi, getAccessToken, API_BASE } from '@/lib/api';
 
 interface Participant {
   id: string;
@@ -42,6 +42,8 @@ interface MeetingCallViewProps {
   title: string;
   participants: Participant[];
   workspaceMembers?: any[];
+  /** Current logged-in user's id — used to keep them out of their own invite list. */
+  currentUserId?: string;
   onLeave: () => void;
 }
 
@@ -160,7 +162,7 @@ function ParticipantVideo({ p, stream, isScreenSharing, className }: { p: Partic
   );
 }
 
-export function MeetingCallView({ meetingId, meetingCode, title, participants, workspaceMembers, onLeave }: MeetingCallViewProps) {
+export function MeetingCallView({ meetingId, meetingCode, title, participants, workspaceMembers, currentUserId, onLeave }: MeetingCallViewProps) {
   const startedAt = useRef(Date.now()).current;
   const timer = useTimer(startedAt);
   const [copied, setCopied] = useState(false);
@@ -198,6 +200,61 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
   const [deviceError, setDeviceError] = useState<string | null>(null);
+
+  // AI Meeting Assistant — real Gemini-backed chat, scoped to this call.
+  const [aiMessages, setAiMessages] = useState<{ id: string; role: 'user' | 'model'; text: string }[]>([]);
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const sendAiMessage = async () => {
+    const text = aiDraft.trim();
+    if (!text || aiLoading) return;
+    setAiDraft('');
+    const userMsg = { id: `ai-u-${Date.now()}`, role: 'user' as const, text };
+    const thinkingId = `ai-thinking-${Date.now()}`;
+    setAiMessages((prev) => [...prev, userMsg, { id: thinkingId, role: 'model' as const, text: '…' }]);
+    setAiLoading(true);
+
+    const history = aiMessages.slice(-20).map((m) => ({ role: m.role, text: m.text }));
+
+    try {
+      const res = await fetch(`${API_BASE}/chat/ai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAccessToken() ?? ''}`,
+        },
+        // Prefix with the meeting title so the assistant has context on
+        // what's being discussed (no separate backend endpoint needed —
+        // /chat/ai already accepts free-form message + history).
+        body: JSON.stringify({
+          message: `[Uchrashuv: "${title}"] ${text}`,
+          history,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      const reply: string = json?.data?.reply ?? json?.reply ?? "Hozircha javob bera olmayapman.";
+      setAiMessages((prev) => prev.map((m) => (m.id === thinkingId ? { ...m, text: reply } : m)));
+    } catch {
+      setAiMessages((prev) =>
+        prev.map((m) => (m.id === thinkingId ? { ...m, text: "Tarmoq xatosi. Qayta urinib ko'ring." } : m)),
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Invite list must never include the current user (host or otherwise) —
+  // inviting yourself is meaningless and previously showed up as a bug
+  // where the host could "invite" themself. Also skip people already in
+  // the call so the list only shows who's actually inviteable.
+  const invitableMembers = useMemo(
+    () =>
+      (workspaceMembers ?? []).filter(
+        (member) => member.userId !== currentUserId && !activeUserIds.includes(member.userId),
+      ),
+    [workspaceMembers, currentUserId, activeUserIds],
+  );
   const [showAiSummary, setShowAiSummary] = useState(true);
   
   const self = participants.find((p) => p.isSelf) ?? participants[0];
@@ -403,7 +460,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                </button>
             </div>
             <div className="p-2 max-h-[350px] overflow-y-auto">
-               {workspaceMembers?.map(member => (
+               {invitableMembers.map(member => (
                  <button
                    key={member.userId}
                    onClick={() => handleInvite(member.userId)}
@@ -421,7 +478,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                     </div>
                  </button>
                ))}
-               {(!workspaceMembers || workspaceMembers.length === 0) && (
+               {invitableMembers.length === 0 && (
                  <div className="p-6 text-center text-gray-500 text-[13px] font-medium">Boshqa a'zolar topilmadi.</div>
                )}
             </div>
@@ -756,10 +813,49 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
 
           {/* Sidebar Content: AI */}
           {sidebarTab === 'ai' && (
-            <div className="flex-1 overflow-y-auto px-5 text-center flex flex-col items-center justify-center opacity-70">
-              <Sparkles className="w-12 h-12 text-[#4361EE] mb-4" />
-              <p className="text-gray-300 text-sm font-medium">AI Meeting Assistant tez orada ishga tushadi.</p>
-              <p className="text-gray-500 text-xs mt-2">Uchrashuv transkripsiyasi va avtomatik xulosalar.</p>
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {aiMessages.length === 0 && (
+                  <div className="text-center opacity-70 mt-8">
+                    <Sparkles className="w-12 h-12 text-[#4361EE] mb-4 mx-auto" />
+                    <p className="text-gray-300 text-sm font-medium">AI Meeting Assistant</p>
+                    <p className="text-gray-500 text-xs mt-2">Savol bering — xulosa, eslatma yoki tushuntirish so'rang.</p>
+                  </div>
+                )}
+                {aiMessages.map((m) => (
+                  <div key={m.id} className={cn("flex", m.role === 'user' ? "justify-end" : "justify-start")}>
+                    <div
+                      className={cn(
+                        "max-w-[85%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap",
+                        m.role === 'user'
+                          ? "bg-[#4361EE] text-white"
+                          : "bg-white/5 text-gray-200 border border-white/5",
+                      )}
+                    >
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t border-white/5">
+                <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10 focus-within:border-[#4361EE]/50 transition-colors">
+                  <input
+                    value={aiDraft}
+                    onChange={(e) => setAiDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAiMessage(); } }}
+                    placeholder="AI'dan so'rang..."
+                    disabled={aiLoading}
+                    className="flex-1 bg-transparent text-[13px] text-white placeholder:text-gray-500 outline-none disabled:opacity-50"
+                  />
+                  <button
+                    onClick={sendAiMessage}
+                    disabled={aiLoading || !aiDraft.trim()}
+                    className="text-[#4361EE] disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-80 transition-opacity"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

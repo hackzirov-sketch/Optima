@@ -122,6 +122,7 @@ export default function Page() {
         title={activeMeeting.title}
         participants={callParticipants}
         workspaceMembers={members}
+        currentUserId={backendUser?.id}
         onLeave={() => setInCall(false)}
       />
     );
@@ -131,7 +132,7 @@ export default function Page() {
   const displayMeeting = activeMeeting || upcomingMeetings[0] || pastMeetings[0];
 
   return (
-    <div className="min-h-screen bg-[#0B0D14] text-white p-6 pb-20 overflow-y-auto font-sans">
+    <div className="min-h-screen text-white p-6 pb-20 overflow-y-auto font-sans">
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-[#4361EE] px-4 py-2.5 text-[13px] font-bold text-white shadow-[0_0_20px_rgba(67,97,238,0.3)] transition-all animate-in fade-in slide-in-from-bottom-4">

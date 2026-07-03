@@ -1,16 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// gemini-1.5-flash (and every 1.0/1.5 model) has been fully shut down by
+// Google — every request returns 404, which the try/catch below silently
+// swallowed, so the assistant always looked "on" while actually running
+// the hardcoded fallback replies 100% of the time. gemini-2.5-flash is the
+// current stable GA replacement. Overridable via GEMINI_MODEL so the next
+// Google deprecation is a config change, not a code change.
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+
 @Injectable()
 export class ChatAiService {
   private readonly logger = new Logger(ChatAiService.name);
   private gemini: GoogleGenerativeAI | null = null;
+  private readonly modelName: string;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
+    this.modelName = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
     if (apiKey) {
       this.gemini = new GoogleGenerativeAI(apiKey);
-      this.logger.log('Gemini AI initialized');
+      this.logger.log(`Gemini AI initialized (model: ${this.modelName})`);
     } else {
       this.logger.warn('GEMINI_API_KEY not set — AI assistant will use fallback responses');
     }
@@ -25,7 +35,7 @@ export class ChatAiService {
     if (this.gemini) {
       try {
         const model = this.gemini.getGenerativeModel(
-          { model: 'gemini-1.5-flash' },
+          { model: this.modelName },
           { apiVersion: 'v1' },
         );
 
@@ -46,7 +56,10 @@ Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa 
         const reply = result.response.text().trim();
         if (reply) return { reply };
       } catch (err) {
-        this.logger.warn(`Gemini request failed: ${err instanceof Error ? err.message : err}`);
+        // Log loudly enough to notice in prod — a silent fallback here is
+        // exactly what hid the 1.5-flash shutdown for as long as it did.
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Gemini request failed (model: ${this.modelName}): ${errMsg}`);
       }
     }
 
@@ -60,3 +73,4 @@ Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa 
     return { reply: `"${text}" — bu bo'yicha yordam berish uchun to'liqroq savol yozing.` };
   }
 }
+

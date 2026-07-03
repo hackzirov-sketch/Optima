@@ -153,6 +153,10 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  GEMINI_MODEL?: string;
+
+  @IsString()
+  @IsOptional()
   GOOGLE_VISION_API_KEY?: string;
 
   @IsNumber()

@@ -14,9 +14,9 @@ import {
   ReminderJobType,
 } from '../../../common/enums';
 import { NotificationsService } from '../notifications.service';
-import { NotificationDispatcherService } from '../notification-dispatcher.service';
 import { RedisKeys } from '../../../redis/redis.keys';
 import { RedisService } from '../../../redis/redis.service';
+import { NotificationDispatcherService } from 'src/modules/notifications/notification-dispatcher.service'
 
 export const REMINDER_QUEUE = 'reminders';
 

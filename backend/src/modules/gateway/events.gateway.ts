@@ -10,7 +10,7 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, Injectable } from '@nestjs/common';
+import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -20,6 +20,7 @@ import Redis from 'ioredis';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
+import { MeetingsService } from '../meetings/meetings.service';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { ChatMember } from '../../database/entities/chat-member.entity';
 
@@ -97,6 +98,8 @@ export class EventsGateway
     private readonly wsMemberRepo: Repository<WorkspaceMember>,
     @InjectRepository(ChatMember)
     private readonly chatMemberRepo: Repository<ChatMember>,
+    @Inject(forwardRef(() => MeetingsService))
+    private readonly meetingsService: MeetingsService,
   ) {}
 
   afterInit(server: Server) {
@@ -463,6 +466,29 @@ export class EventsGateway
     }
 
     const { meetingId } = data;
+    if (!meetingId) {
+      client.emit('meeting:error', { code: 'MEETING_ID_REQUIRED', message: 'meetingId is required' });
+      return;
+    }
+
+    // Run the SAME validation + persistence path as the REST endpoint
+    // (meeting exists, not ended/cancelled, caller is a workspace member,
+    // capacity not exceeded) and write a meeting_participants row. Without
+    // this, the socket would join a Socket.IO room for ANY meetingId with
+    // zero checks, and no participant record would ever be created —
+    // this was the root cause of "users can't join each other's meetings"
+    // (the participant list / permission checks read from the DB, which
+    // stayed empty because only the WS room existed).
+    try {
+      await this.meetingsService.join(meetingId, userId);
+    } catch (err: any) {
+      const response = typeof err?.getResponse === 'function' ? err.getResponse() : null;
+      client.emit('meeting:error', {
+        code: response?.code ?? 'MEETING_JOIN_FAILED',
+        message: response?.message ?? 'Could not join meeting',
+      });
+      return;
+    }
 
     // Leave any previous meeting this socket was in
     const prevMeeting = client.data?.meetingId;
@@ -573,10 +599,16 @@ export class EventsGateway
     delete client.data.meetingId;
     await client.leave(`meeting:${meetingId}:user:${userId}`);
     await client.leave(`meeting:${meetingId}`);
-    
+
     // Check if the user has any other sockets still in the meeting
+    // (multiple tabs/devices) before marking them as left in the DB.
     const sockets = await this.server.in(`meeting:${meetingId}:user:${userId}`).fetchSockets();
     if (sockets.length === 0) {
+      // Persist leftAt so REST reads (participant list, capacity count,
+      // host-leaves-ends-meeting logic) stay consistent with WS presence.
+      // Swallow errors: the participant row may not exist if this socket
+      // never completed a validated join (e.g. it disconnected mid-join).
+      await this.meetingsService.leave(meetingId, userId).catch(() => {});
       client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
       this.logger.log(`User ${userId} left meeting ${meetingId}`);
     }

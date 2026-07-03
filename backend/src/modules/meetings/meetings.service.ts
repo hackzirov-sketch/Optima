@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   ConflictException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, In } from 'typeorm';
@@ -33,6 +35,7 @@ export class MeetingsService {
     private readonly meetingRepo: Repository<Meeting>,
     @InjectRepository(MeetingParticipant)
     private readonly participantRepo: Repository<MeetingParticipant>,
+    @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
     private readonly notificationsService: NotificationsService,
     private readonly reminderScheduler: ReminderSchedulerService,
@@ -288,9 +291,16 @@ export class MeetingsService {
     // Ensure inviter is a member of the workspace
     await this.membersService.assertMember(meeting.workspaceId, inviterId);
 
+    // Server-side guard: never let the inviter invite themself, and
+    // de-duplicate. The frontend also filters the host out of the invite
+    // list, but that filter must not be the only line of defense — a
+    // stale UI, another client, or a direct API call could still send
+    // the inviter's own id.
+    const targetIds = Array.from(new Set(targetUserIds)).filter((uid) => uid !== inviterId);
+
     // Filter valid workspace members
     const validMembers = await Promise.all(
-      targetUserIds.map(async (uid) => {
+      targetIds.map(async (uid) => {
         try {
           await this.membersService.assertMember(meeting.workspaceId, uid);
           return uid;

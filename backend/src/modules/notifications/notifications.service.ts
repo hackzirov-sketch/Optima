@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,6 +28,7 @@ export class NotificationsService {
     private readonly notifRepo: Repository<Notification>,
     @InjectRepository(UserNotificationPrefs)
     private readonly prefsRepo: Repository<UserNotificationPrefs>,
+    @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
     private readonly dispatcher: NotificationDispatcherService,
   ) {}

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 
@@ -34,7 +34,14 @@ import { RedisModule } from '../../redis/redis.module';
       Task,
     ]),
     BullModule.registerQueue({ name: REMINDER_QUEUE }),
-    GatewayModule,
+    // GatewayModule -> ... -> MeetingsModule -> WorkspacesModule ->
+    // NotificationsModule -> GatewayModule closes a cycle now that
+    // GatewayModule also depends on MeetingsModule. forwardRef() is
+    // required on BOTH ends of the edge that closes the loop — it was
+    // only added on the GatewayModule side before, which isn't enough;
+    // Nest still eagerly resolves this edge and throws
+    // UndefinedModuleException. Adding it here too fixes it.
+    forwardRef(() => GatewayModule),
     MailModule,
     RedisModule,
   ],
