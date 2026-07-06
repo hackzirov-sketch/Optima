@@ -1,17 +1,16 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ChatRoom } from '../../../database/entities/chat-room.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
 @Processor('chat')
 export class ChatProcessor extends WorkerHost {
   private readonly logger = new Logger(ChatProcessor.name);
 
   constructor(
-    @InjectRepository(ChatRoom)
-    private readonly roomRepo: Repository<ChatRoom>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {
     super();
   }
@@ -29,11 +28,10 @@ export class ChatProcessor extends WorkerHost {
 
   private async handleUpdateRoomMetadata(data: { roomId: string, sequence: number, lastMessageId: string, lastMessageAt: string }) {
     // This job dedups by roomId, so it processes the latest metadata
-    await this.roomRepo.update(data.roomId, {
-      messageSeq: data.sequence,
-      lastMessageId: data.lastMessageId,
-      lastMessageAt: new Date(data.lastMessageAt),
-    });
+    await this.dataSource.query(
+      `UPDATE chat_rooms SET message_seq = $2, last_message_id = $3, last_message_at = $4 WHERE id = $1`,
+      [data.roomId, data.sequence, data.lastMessageId, new Date(data.lastMessageAt)],
+    );
     this.logger.debug(`Updated room ${data.roomId} metadata to sequence ${data.sequence}`);
   }
 

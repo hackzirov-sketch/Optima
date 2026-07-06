@@ -6,14 +6,9 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
-import { Workspace } from '../../database/entities/workspace.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
-import { ChatRoom } from '../../database/entities/chat-room.entity';
-import { ChatMember } from '../../database/entities/chat-member.entity';
-import { User } from '../../database/entities/user.entity';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
@@ -22,24 +17,14 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../../common/enums';
 import { PermissionService } from '../../common/services/permission.service';
 import * as crypto from 'crypto';
+import { WORKSPACE_INVITATION_COLUMNS_SQL, WORKSPACE_MEMBER_COLUMNS_SQL } from './workspaces.sql';
 
 @Injectable()
 export class InvitationsService {
   private readonly logger = new Logger(InvitationsService.name);
 
   constructor(
-    @InjectRepository(WorkspaceInvitation)
-    private readonly invitationRepo: Repository<WorkspaceInvitation>,
-    @InjectRepository(Workspace)
-    private readonly workspaceRepo: Repository<Workspace>,
-    @InjectRepository(WorkspaceMember)
-    private readonly memberRepo: Repository<WorkspaceMember>,
-    @InjectRepository(ChatRoom)
-    private readonly chatRoomRepo: Repository<ChatRoom>,
-    @InjectRepository(ChatMember)
-    private readonly chatMemberRepo: Repository<ChatMember>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly mailService: MailService,
     private readonly notificationsService: NotificationsService,
@@ -51,25 +36,32 @@ export class InvitationsService {
     inviterId: string,
     dto: InviteMemberDto,
   ): Promise<WorkspaceInvitation> {
-    const workspace = await this.workspaceRepo.findOne({
-      where: { id: workspaceId },
-    });
+    const workspaceRows: Array<{ id: string; name: string }> = await this.dataSource.query(
+      `SELECT id, name FROM workspaces WHERE id = $1`,
+      [workspaceId],
+    );
+    const workspace = workspaceRows[0];
     if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
 
-    const inviter = await this.memberRepo.findOne({
-      where: { workspaceId, userId: inviterId },
-    });
+    const inviterRows = await this.dataSource.query(
+      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, inviterId],
+    );
+    const inviter = inviterRows[0];
     if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
     this.permission.assertCanManageWorkspace(inviter);
 
-    const existingUser = await this.userRepo.findOne({
-      where: { email: dto.email },
-    });
+    const existingUserRows: Array<{ id: string }> = await this.dataSource.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [dto.email],
+    );
+    const existingUser = existingUserRows[0] ?? null;
     if (existingUser) {
-      const alreadyMember = await this.memberRepo.findOne({
-        where: { workspaceId, userId: existingUser.id },
-      });
-      if (alreadyMember) {
+      const alreadyMemberRows = await this.dataSource.query(
+        `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+        [workspaceId, existingUser.id],
+      );
+      if (alreadyMemberRows[0]) {
         throw new ConflictException({
           code: ErrorCode.ALREADY_MEMBER,
           message: 'User is already a member of this workspace',
@@ -77,13 +69,12 @@ export class InvitationsService {
       }
     }
 
-    const existingInvite = await this.invitationRepo
-      .createQueryBuilder('i')
-      .where('i.workspaceId = :workspaceId', { workspaceId })
-      .andWhere('i.email = :email', { email: dto.email })
-      .andWhere('i.acceptedAt IS NULL')
-      .andWhere('i.declinedAt IS NULL')
-      .getOne();
+    const existingInviteRows: WorkspaceInvitation[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
+       WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND declined_at IS NULL`,
+      [workspaceId, dto.email],
+    );
+    const existingInvite = existingInviteRows[0];
 
     if (existingInvite && existingInvite.expiresAt > new Date()) {
       // Already invited
@@ -94,17 +85,20 @@ export class InvitationsService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 5); // 5 days
 
-    const invitation = this.invitationRepo.create({
-      workspaceId,
-      invitedById: inviterId,
-      email: dto.email,
-      role: dto.role,
-      token,
-      expiresAt,
-    });
+    const savedRows: WorkspaceInvitation[] = await this.dataSource.query(
+      `INSERT INTO workspace_invitations (workspace_id, invited_by, email, role, token, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING ${WORKSPACE_INVITATION_COLUMNS_SQL}`,
+      [workspaceId, inviterId, dto.email, dto.role, token, expiresAt],
+    );
+    const saved = savedRows[0];
 
-    const saved = await this.invitationRepo.save(invitation);
-    await this.mailService.sendInvitationEmail(dto.email, token, workspace.name);
+    // Fire-and-forget: sendInvitationEmail already catches its own errors and
+    // just logs on failure, but awaiting it here blocked the whole request
+    // (and the client) for up to ~90s whenever the SMTP host was slow or
+    // unreachable. The invite is already persisted — email delivery is a
+    // side effect, not something the caller should wait on.
+    void this.mailService.sendInvitationEmail(dto.email, token, workspace.name);
 
     // Real-time notification to invited user (if they have an account)
     if (existingUser) {
@@ -127,27 +121,36 @@ export class InvitationsService {
     workspaceId: string,
     requesterId: string,
   ): Promise<WorkspaceInvitation[]> {
-    const requester = await this.memberRepo.findOne({
-      where: { workspaceId, userId: requesterId },
-    });
-    if (!requester) {
+    const requesterRows = await this.dataSource.query(
+      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, requesterId],
+    );
+    if (!requesterRows[0]) {
       throw new ForbiddenException({
         code: ErrorCode.NOT_WORKSPACE_MEMBER,
         message: 'You are not a member of this workspace',
       });
     }
-    return this.invitationRepo.find({
-      where: { workspaceId },
-      order: { createdAt: 'DESC' },
-    });
+    return this.dataSource.query(
+      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
+       WHERE workspace_id = $1 ORDER BY created_at DESC`,
+      [workspaceId],
+    );
   }
 
-  async accept(token: string, userId: string): Promise<WorkspaceMember> {
-    const invitation = await this.invitationRepo.findOne({
-      where: { token },
-      relations: ['workspace'],
-    });
+  async accept(token: string, userId: string): Promise<any> {
+    const invitationRows: Array<WorkspaceInvitation & { workspaceName: string }> = await this.dataSource.query(
+      `SELECT i.id, i.workspace_id AS "workspaceId", i.email, i.role,
+              i.invited_by AS "invitedById", i.token, i.expires_at AS "expiresAt",
+              i.accepted_at AS "acceptedAt", i.declined_at AS "declinedAt",
+              i.created_at AS "createdAt", w.name AS "workspaceName"
+       FROM workspace_invitations i
+       JOIN workspaces w ON w.id = i.workspace_id
+       WHERE i.token = $1`,
+      [token],
+    );
 
+    const invitation = invitationRows[0];
     if (!invitation) {
       throw new NotFoundException({
         code: ErrorCode.INVITATION_NOT_FOUND,
@@ -169,7 +172,11 @@ export class InvitationsService {
       });
     }
 
-    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const userRows: Array<{ id: string; email: string; firstName: string; lastName: string }> = await this.dataSource.query(
+      `SELECT id, email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = userRows[0];
     if (!user || user.email !== invitation.email) {
       throw new ConflictException({
         code: ErrorCode.INVITATION_EMAIL_MISMATCH,
@@ -177,10 +184,11 @@ export class InvitationsService {
       });
     }
 
-    const alreadyMember = await this.memberRepo.findOne({
-      where: { workspaceId: invitation.workspaceId, userId },
-    });
-    if (alreadyMember) {
+    const alreadyMemberRows = await this.dataSource.query(
+      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [invitation.workspaceId, userId],
+    );
+    if (alreadyMemberRows[0]) {
       throw new ConflictException({
         code: ErrorCode.ALREADY_MEMBER,
         message: 'User is already a member',
@@ -192,30 +200,28 @@ export class InvitationsService {
     await queryRunner.startTransaction();
 
     try {
-      invitation.acceptedAt = new Date();
-      await queryRunner.manager.save(invitation);
+      await queryRunner.query(`UPDATE workspace_invitations SET accepted_at = now() WHERE id = $1`, [invitation.id]);
 
-      const newMember = this.memberRepo.create({
-        workspaceId: invitation.workspaceId,
-        userId: userId,
-        role: invitation.role,
-      });
-      const savedMember = await queryRunner.manager.save(newMember);
+      const savedMemberRows: any[] = await queryRunner.query(
+        `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)
+         RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
+        [invitation.workspaceId, userId, invitation.role],
+      );
+      const savedMember = savedMemberRows[0];
 
       // Auto-join all workspace-scoped channels (e.g. #general)
-      const wsRooms = await this.chatRoomRepo.find({
-        where: { workspaceId: invitation.workspaceId, type: ChatRoomType.WORKSPACE },
-        select: ['id'],
-      });
+      const wsRooms: Array<{ id: string }> = await queryRunner.query(
+        `SELECT id FROM chat_rooms WHERE workspace_id = $1 AND type = $2`,
+        [invitation.workspaceId, ChatRoomType.WORKSPACE],
+      );
       for (const room of wsRooms) {
-        const alreadyIn = await this.chatMemberRepo.findOne({
-          where: { roomId: room.id, userId },
-        });
-        if (!alreadyIn) {
-          await queryRunner.manager.save(
-            this.chatMemberRepo.create({ roomId: room.id, userId }),
-          );
-        }
+        await queryRunner.query(
+          `INSERT INTO chat_members (room_id, user_id)
+           SELECT $1, $2 WHERE NOT EXISTS (
+             SELECT 1 FROM chat_members WHERE room_id = $1 AND user_id = $2
+           )`,
+          [room.id, userId],
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -228,7 +234,7 @@ export class InvitationsService {
           actorId: userId,
           type: NotificationType.WORKSPACE_INVITE,
           title: `${userName} accepted your invitation`,
-          message: `They joined "${invitation.workspace.name}".`,
+          message: `They joined "${invitation.workspaceName}".`,
           entityType: 'workspace',
           entityId: invitation.workspaceId,
           actionUrl: `/app/teams`,
@@ -246,8 +252,11 @@ export class InvitationsService {
   }
 
   async decline(token: string, userId: string): Promise<void> {
-    const invitation = await this.invitationRepo.findOne({ where: { token } });
-
+    const invitationRows: WorkspaceInvitation[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations WHERE token = $1`,
+      [token],
+    );
+    const invitation = invitationRows[0];
     if (!invitation) {
       throw new NotFoundException({
         code: ErrorCode.INVITATION_NOT_FOUND,
@@ -255,7 +264,11 @@ export class InvitationsService {
       });
     }
 
-    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const userRows: Array<{ email: string }> = await this.dataSource.query(
+      `SELECT email FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = userRows[0];
     if (!user || user.email !== invitation.email) {
       throw new ConflictException({
         code: ErrorCode.INVITATION_EMAIL_MISMATCH,
@@ -263,8 +276,7 @@ export class InvitationsService {
       });
     }
 
-    invitation.declinedAt = new Date();
-    await this.invitationRepo.save(invitation);
+    await this.dataSource.query(`UPDATE workspace_invitations SET declined_at = now() WHERE id = $1`, [invitation.id]);
   }
 
   async remove(
@@ -272,17 +284,20 @@ export class InvitationsService {
     id: string,
     requesterId: string,
   ): Promise<void> {
-    const inviter = await this.memberRepo.findOne({
-      where: { workspaceId, userId: requesterId },
-    });
+    const inviterRows = await this.dataSource.query(
+      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, requesterId],
+    );
+    const inviter = inviterRows[0];
     if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
     this.permission.assertCanManageWorkspace(inviter);
 
-    const invitation = await this.invitationRepo.findOne({
-      where: { id, workspaceId },
-    });
-    if (!invitation) throw new NotFoundException({ code: ErrorCode.INVITATION_NOT_FOUND, message: 'Invitation not found' });
+    const invitationRows = await this.dataSource.query(
+      `SELECT id FROM workspace_invitations WHERE id = $1 AND workspace_id = $2`,
+      [id, workspaceId],
+    );
+    if (!invitationRows[0]) throw new NotFoundException({ code: ErrorCode.INVITATION_NOT_FOUND, message: 'Invitation not found' });
 
-    await this.invitationRepo.remove(invitation);
+    await this.dataSource.query(`DELETE FROM workspace_invitations WHERE id = $1`, [id]);
   }
 }

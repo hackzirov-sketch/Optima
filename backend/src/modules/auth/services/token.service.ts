@@ -60,7 +60,18 @@ export class TokenService {
       .persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo)
       .catch((err) => this.logger.error(`persistRefreshToken failed: ${err?.message ?? err}`));
 
-    return { requiresPasswordSetup: user.needsPasswordSetup, accessToken, refreshToken, user };
+    // SECURITY: raw-SQL rows are plain objects, not User class instances, so the
+    // @Exclude() on User.passwordHash is NOT applied by ClassSerializerInterceptor.
+    // Strip it explicitly here — this is the single choke point every login/register/
+    // oauth/refresh flow returns through.
+    const { passwordHash: _omit, ...safeUser } = user;
+
+    return {
+      requiresPasswordSetup: user.needsPasswordSetup,
+      accessToken,
+      refreshToken,
+      user: safeUser,
+    };
   }
 
   async verifyAccessToken(token: string): Promise<string | null> {

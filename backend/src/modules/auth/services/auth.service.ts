@@ -8,8 +8,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as crypto from 'crypto';
@@ -18,7 +17,6 @@ import { UsersService } from '../../users/users.service';
 import { MailService } from '../../mail/mail.service';
 import { RedisService } from '../../../redis/redis.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
-import { UserVerification } from '../../../database/entities/user-verification.entity';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { VerifyEmailDto } from '../dto/verify-email.dto';
@@ -27,6 +25,7 @@ import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { User } from '../../../database/entities/user.entity';
+import { USER_COLUMNS_SQL, mapUserRow } from '../../users/users.sql';
 
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
@@ -46,17 +45,28 @@ export class AuthService {
     private tokenService: TokenService,
     private deviceService: DeviceService,
     @InjectQueue('auth') private authQueue: Queue,
-    @InjectRepository(UserVerification)
-    private userVerificationsRepository: Repository<UserVerification>,
     private dataSource: DataSource,
   ) {}
 
   async verifyEmail(dto: VerifyEmailDto) {
-    return this.dataSource.transaction(async (manager) => {
-      const verification = await manager.findOne(UserVerification, {
-        where: { code: dto.code },
-        lock: { mode: 'pessimistic_write' },
-      });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const verificationRows: Array<{
+        id: string;
+        userId: string;
+        code: string;
+        expiresAt: Date;
+      }> = await queryRunner.query(
+        `SELECT id, user_id AS "userId", code, expires_at AS "expiresAt"
+         FROM user_verifications
+         WHERE code = $1
+         FOR UPDATE`,
+        [dto.code],
+      );
+      const verification = verificationRows[0];
 
       if (!verification || verification.expiresAt < new Date()) {
         throw new BadRequestException({
@@ -65,7 +75,12 @@ export class AuthService {
         });
       }
 
-      const user = await manager.findOne(User, { where: { id: verification.userId } });
+      const userRows: Array<User & { passwordHash: string | null }> = await queryRunner.query(
+        `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
+         FROM users WHERE id = $1 FOR UPDATE`,
+        [verification.userId],
+      );
+      const user = userRows[0] && mapUserRow(userRows[0]);
       if (!user) {
         throw new BadRequestException({
           code: ErrorCode.TOKEN_INVALID,
@@ -73,22 +88,26 @@ export class AuthService {
         });
       }
 
-      const updateData: Partial<User> = { isVerified: true };
-      user.isVerified = true;
       let setupToken: string | undefined;
+      const needsPasswordSetup = !user.passwordHash;
 
-      if (!user.passwordHash) {
-        updateData.needsPasswordSetup = true;
-        user.needsPasswordSetup = true;
+      await Promise.all([
+        queryRunner.query(
+          `UPDATE users SET is_verified = true, needs_password_setup = $2, updated_at = now() WHERE id = $1`,
+          [user.id, needsPasswordSetup],
+        ),
+        queryRunner.query(`DELETE FROM user_verifications WHERE user_id = $1`, [user.id]),
+      ]);
+
+      user.isVerified = true;
+      user.needsPasswordSetup = needsPasswordSetup;
+
+      if (needsPasswordSetup) {
         setupToken = crypto.randomUUID();
         await this.redisService.setPasswordResetToken(setupToken, user.id);
       }
 
-      // Parallel: update user + delete verification
-      await Promise.all([
-        manager.update(User, user.id, updateData),
-        manager.delete(UserVerification, { userId: user.id }),
-      ]);
+      await queryRunner.commitTransaction();
 
       const {
         accessToken,
@@ -105,7 +124,12 @@ export class AuthService {
         refreshToken,
         user: authUser,
       };
-    });
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async register(dto: RegisterDto) {
@@ -145,7 +169,8 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       phoneNumber: dto.phoneNumber ?? null,
-      isVerified: false,
+      // Email verification step removed — accounts are active immediately on signup.
+      isVerified: true,
       providers: ['local'],
       needsPasswordSetup: false,
     });
@@ -154,9 +179,14 @@ export class AuthService {
       this.logger.warn(err),
     );
 
+    const { accessToken, refreshToken, user: authUser } =
+      await this.tokenService.generateTokens(user, { provider: 'local' });
+
     return {
-      message: 'Registration successful. Verification code sent to email.',
-      userId: user.id,
+      message: 'Registration successful.',
+      accessToken,
+      refreshToken,
+      user: authUser,
     };
   }
 
@@ -212,14 +242,7 @@ export class AuthService {
       });
     }
 
-    if (!user.isVerified) {
-      await this.enqueueResendVerification(user.id, user.email);
-      throw new UnauthorizedException({
-        code: ErrorCode.PENDING_VERIFICATION,
-        message: 'Please verify your email address. A new code has been sent.',
-        redirect: '/verify',
-      });
-    }
+    // Email verification requirement removed — verified status no longer gates login.
 
     if (!user.isActive) {
       throw new UnauthorizedException({

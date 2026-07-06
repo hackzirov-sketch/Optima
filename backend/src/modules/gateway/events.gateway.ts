@@ -11,8 +11,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -21,8 +21,6 @@ import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
-import { ChatMember } from '../../database/entities/chat-member.entity';
 
 export interface WsUser {
   id: string;
@@ -94,10 +92,8 @@ export class EventsGateway
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly violationService: ViolationService,
-    @InjectRepository(WorkspaceMember)
-    private readonly wsMemberRepo: Repository<WorkspaceMember>,
-    @InjectRepository(ChatMember)
-    private readonly chatMemberRepo: Repository<ChatMember>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @Inject(forwardRef(() => MeetingsService))
     private readonly meetingsService: MeetingsService,
   ) {}
@@ -195,7 +191,10 @@ export class EventsGateway
     client.join(`user:${user.id}`);
 
     // Load workspace memberships → join scoped rooms + broadcast user_online
-    const memberships = await this.wsMemberRepo.find({ where: { userId: user.id } });
+    const memberships: Array<{ workspaceId: string }> = await this.dataSource.query(
+      `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
+      [user.id],
+    );
     const wsIds = memberships.map((m) => m.workspaceId);
     
     // Store workspace memberships in socket data for cleanup on disconnect
@@ -262,9 +261,11 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
-    const member = await this.wsMemberRepo.findOne({
-      where: { workspaceId: data.workspaceId, userId },
-    });
+    const memberRows = await this.dataSource.query(
+      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [data.workspaceId, userId],
+    );
+    const member = memberRows[0];
     if (!member) throw new WsException({ code: 'WS_NOT_WORKSPACE_MEMBER', message: 'Not a workspace member' });
 
     client.join(`workspace:${data.workspaceId}`);
@@ -292,9 +293,11 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
-    const member = await this.chatMemberRepo.findOne({
-      where: { roomId: data.roomId, userId },
-    });
+    const chatMemberRows = await this.dataSource.query(
+      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [data.roomId, userId],
+    );
+    const member = chatMemberRows[0];
     if (!member) throw new WsException({ code: 'WS_NOT_ROOM_MEMBER', message: 'Not a room member' });
 
     client.join(`room:${data.roomId}`);

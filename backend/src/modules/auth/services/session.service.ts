@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, DataSource } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
+import { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
+import { mapUserRow } from '../../users/users.sql';
+import { normalizeReturning } from '../../../common/utils/sql.util';
 
 interface TokenContext {
   ip?: string;
@@ -12,24 +15,32 @@ interface TokenContext {
   provider?: string;
 }
 
+const REFRESH_TOKEN_COLUMNS_SQL = `
+  id, user_id AS "userId", token_hash AS "tokenHash", device_name AS "deviceName",
+  device_info AS "deviceInfo", ip_address AS "ipAddress", location, user_agent AS "userAgent",
+  provider, last_used_at AS "lastUsedAt", expires_at AS "expiresAt", revoked_at AS "revokedAt",
+  created_at AS "createdAt"
+`;
+
 @Injectable()
 export class SessionService {
   private readonly maxSessions: number;
 
   constructor(
-    @InjectRepository(RefreshToken)
-    private refreshTokensRepository: Repository<RefreshToken>,
-    private configService: ConfigService,
+    @InjectDataSource()
     private dataSource: DataSource,
+    private configService: ConfigService,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
   }
 
   async getSessions(userId: string) {
-    const sessions = await this.refreshTokensRepository.find({
-      where: { userId, revokedAt: IsNull() },
-      order: { lastUsedAt: 'DESC' },
-    });
+    const sessions: RefreshToken[] = await this.dataSource.query(
+      `SELECT ${REFRESH_TOKEN_COLUMNS_SQL} FROM refresh_tokens
+       WHERE user_id = $1 AND revoked_at IS NULL
+       ORDER BY last_used_at DESC`,
+      [userId],
+    );
 
     return sessions.map((s) => ({
       id: s.id,
@@ -45,28 +56,33 @@ export class SessionService {
   }
 
   async revokeSession(userId: string, sessionId: string) {
-    const session = await this.refreshTokensRepository.findOne({
-      where: { id: sessionId, userId, revokedAt: IsNull() },
-    });
-    if (!session) {
-      throw new NotFoundException({ code: ErrorCode.SESSION_NOT_FOUND, message: 'Session not found or already revoked' });
+    const raw = await this.dataSource.query(
+      `UPDATE refresh_tokens SET revoked_at = now()
+       WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+       RETURNING id`,
+      [sessionId, userId],
+    );
+    const result = normalizeReturning(raw);
+    if (!result[0]) {
+      throw new NotFoundException({
+        code: ErrorCode.SESSION_NOT_FOUND,
+        message: 'Session not found or already revoked',
+      });
     }
-
-    session.revokedAt = new Date();
-    await this.refreshTokensRepository.save(session);
     return { message: 'Session revoked successfully' };
   }
 
   async revokeAllSessions(userId: string) {
-    await this.refreshTokensRepository.update(
-      { userId, revokedAt: IsNull() },
-      { revokedAt: new Date() },
+    await this.dataSource.query(
+      `UPDATE refresh_tokens SET revoked_at = now()
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId],
     );
     return { message: 'All sessions revoked successfully' };
   }
 
   /**
-   * OPTIMIZED: Single CTE query instead of COUNT → SELECT → SAVE (3 round trips → 1)
+   * OPTIMIZED: Single CTE query instead of COUNT -> SELECT -> SAVE (3 round trips -> 1)
    * Revokes the oldest session when limit is exceeded.
    */
   async enforceSessionLimit(userId: string): Promise<void> {
@@ -120,20 +136,72 @@ export class SessionService {
   }
 
   async revokeSessionByTokenHash(tokenHash: string) {
-    await this.refreshTokensRepository.update(
-      { tokenHash },
-      { revokedAt: new Date() },
+    await this.dataSource.query(
+      `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1`,
+      [tokenHash],
     );
   }
 
-  async findByTokenHash(tokenHash: string): Promise<RefreshToken | null> {
-    return this.refreshTokensRepository.findOne({
-      where: { tokenHash },
-      relations: ['user'],
-    });
+  /** Returns the stored refresh token row plus the joined user (camelCase, matches RefreshToken.user). */
+  async findByTokenHash(
+    tokenHash: string,
+  ): Promise<(RefreshToken & { user: User }) | null> {
+    const rows: any[] = await this.dataSource.query(
+      `SELECT
+         rt.id AS "id", rt.user_id AS "userId", rt.token_hash AS "tokenHash",
+         rt.device_name AS "deviceName", rt.device_info AS "deviceInfo",
+         rt.ip_address AS "ipAddress", rt.location AS "location", rt.user_agent AS "userAgent",
+         rt.provider AS "provider", rt.last_used_at AS "lastUsedAt", rt.expires_at AS "expiresAt",
+         rt.revoked_at AS "revokedAt", rt.created_at AS "createdAt",
+         u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
+         u.username AS "u_username", u.email AS "u_email", u.phone_number AS "u_phoneNumber",
+         u.password_hash AS "u_passwordHash", u.avatar_url AS "u_avatarUrl",
+         u.language AS "u_language", u.timezone AS "u_timezone", u.theme AS "u_theme",
+         u.is_active AS "u_isActive", u.is_verified AS "u_isVerified", u.providers AS "u_providers",
+         u.needs_password_setup AS "u_needsPasswordSetup", u.last_seen AS "u_lastSeen",
+         u.created_at AS "u_createdAt", u.updated_at AS "u_updatedAt",
+         u.deleted_at AS "u_deletedAt", u.deleted_by AS "u_deletedBy"
+       FROM refresh_tokens rt
+       JOIN users u ON u.id = rt.user_id
+       WHERE rt.token_hash = $1`,
+      [tokenHash],
+    );
+    const row = rows[0];
+    if (!row) return null;
+
+    const {
+      id, userId, tokenHash: th, deviceName, deviceInfo, ipAddress, location,
+      userAgent, provider, lastUsedAt, expiresAt, revokedAt, createdAt,
+      ...prefixed
+    } = row;
+
+    const user = mapUserRow(
+      Object.fromEntries(
+        Object.entries(prefixed).map(([k, v]) => [k.slice(2), v]),
+      ) as unknown as User,
+    );
+
+    return {
+      id, userId, tokenHash: th, deviceName, deviceInfo, ipAddress, location,
+      userAgent, provider, lastUsedAt, expiresAt, revokedAt, createdAt,
+      user,
+    } as RefreshToken & { user: User };
   }
 
   async save(session: RefreshToken) {
-    return this.refreshTokensRepository.save(session);
+    const { setClause, values } = (() => {
+      const cols = ['revokedAt', 'lastUsedAt'] as const;
+      const entries = cols
+        .filter((c) => session[c] !== undefined)
+        .map((c) => [c === 'revokedAt' ? 'revoked_at' : 'last_used_at', session[c]] as const);
+      const setClause = entries.map(([col], i) => `${col} = $${i + 2}`).join(', ');
+      return { setClause, values: entries.map(([, v]) => v) };
+    })();
+    if (!setClause) return session;
+    await this.dataSource.query(
+      `UPDATE refresh_tokens SET ${setClause} WHERE id = $1`,
+      [session.id, ...values],
+    );
+    return session;
   }
 }

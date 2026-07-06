@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { UAParser } from 'ua-parser-js';
-import { UserIpLog } from '../../../database/entities/user-ip-log.entity';
 
 @Injectable()
 export class DeviceService {
   constructor(
-    @InjectRepository(UserIpLog)
-    private userIpLogsRepository: Repository<UserIpLog>,
+    @InjectDataSource()
+    private dataSource: DataSource,
   ) {}
 
   async logIpAddress(
@@ -17,13 +16,11 @@ export class DeviceService {
     userAgent: string,
     provider: string = 'unknown',
   ) {
-    const log = this.userIpLogsRepository.create({
-      userId,
-      ipAddress: ip,
-      userAgent,
-      provider,
-    });
-    await this.userIpLogsRepository.save(log);
+    await this.dataSource.query(
+      `INSERT INTO user_ip_logs (user_id, ip_address, user_agent, provider)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, ip, userAgent, provider],
+    );
   }
 
   parseDeviceInfo(userAgent?: string, deviceName?: string): {

@@ -1,13 +1,10 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 
-import { UserSettings } from '../../../database/entities/user-settings.entity';
-import { UserVerification } from '../../../database/entities/user-verification.entity';
-import { User } from '../../../database/entities/user.entity';
 import { MailService } from '../../mail/mail.service';
 
 const VERIFICATION_COOLDOWN_MS = 2 * 60 * 1000;
@@ -18,12 +15,8 @@ export class AuthProcessor extends WorkerHost {
 
   constructor(
     private mailService: MailService,
-    @InjectRepository(UserSettings)
-    private userSettingsRepository: Repository<UserSettings>,
-    @InjectRepository(UserVerification)
-    private userVerificationsRepository: Repository<UserVerification>,
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    @InjectDataSource()
+    private dataSource: DataSource,
   ) {
     super();
   }
@@ -43,24 +36,30 @@ export class AuthProcessor extends WorkerHost {
     const { userId, email } = data;
     this.logger.log(`on-register: settings for user ${userId}`);
 
-    const existingSettings = await this.userSettingsRepository.findOne({
-      where: { userId },
-    });
-    if (!existingSettings) {
-      await this.userSettingsRepository.save(
-        this.userSettingsRepository.create({ userId }),
-      );
-    }
+    await this.dataSource.query(
+      `INSERT INTO user_settings (user_id) VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId],
+    );
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user?.isVerified) {
+    const rows: Array<{ isVerified: boolean }> = await this.dataSource.query(
+      `SELECT is_verified AS "isVerified" FROM users WHERE id = $1`,
+      [userId],
+    );
+    if (!rows[0]?.isVerified) {
       await this.issueVerificationCode(userId, email);
     }
   }
 
   private async handleResendVerification(data: { userId: string; email: string }) {
     const { userId, email } = data;
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const rows: Array<{ isVerified: boolean; needsPasswordSetup: boolean }> =
+      await this.dataSource.query(
+        `SELECT is_verified AS "isVerified", needs_password_setup AS "needsPasswordSetup"
+         FROM users WHERE id = $1`,
+        [userId],
+      );
+    const user = rows[0];
     if (!user) {
       this.logger.debug(`resend-verification skipped for ${userId} (user not found)`);
       return;
@@ -75,24 +74,24 @@ export class AuthProcessor extends WorkerHost {
   }
 
   private async issueVerificationCode(userId: string, email: string) {
-    const recent = await this.userVerificationsRepository.findOne({
-      where: {
-        userId,
-        createdAt: MoreThan(new Date(Date.now() - VERIFICATION_COOLDOWN_MS)),
-      },
-      order: { createdAt: 'DESC' },
-    });
-    if (recent) {
+    const recentRows: Array<{ id: string }> = await this.dataSource.query(
+      `SELECT id FROM user_verifications
+       WHERE user_id = $1 AND created_at > $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, new Date(Date.now() - VERIFICATION_COOLDOWN_MS)],
+    );
+    if (recentRows[0]) {
       this.logger.debug(`Verification cooldown active for ${userId}`);
       return;
     }
 
-    await this.userVerificationsRepository.delete({ userId });
+    await this.dataSource.query(`DELETE FROM user_verifications WHERE user_id = $1`, [userId]);
     const code = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    await this.userVerificationsRepository.save(
-      this.userVerificationsRepository.create({ userId, code, expiresAt }),
+    await this.dataSource.query(
+      `INSERT INTO user_verifications (user_id, code, expires_at) VALUES ($1, $2, $3)`,
+      [userId, code, expiresAt],
     );
 
     await this.mailService.sendVerificationEmail(email, code);

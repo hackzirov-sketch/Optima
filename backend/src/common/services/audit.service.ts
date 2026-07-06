@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { AuditLog } from '../../database/entities/audit-log.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
 export interface AuditLogEntry {
   workspaceId?: string | null;
@@ -27,24 +26,27 @@ export interface AuditLogEntry {
 @Injectable()
 export class AuditService {
   constructor(
-    @InjectRepository(AuditLog)
-    private readonly repo: Repository<AuditLog>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async log(entry: AuditLogEntry): Promise<void> {
     try {
-      await this.repo.save(
-        this.repo.create({
-          workspaceId: entry.workspaceId ?? null,
-          actorId: entry.actorId,
-          action: entry.action,
-          entityType: entry.entityType ?? null,
-          entityId: entry.entityId ?? null,
-          oldValue: entry.oldValue ?? null,
-          newValue: entry.newValue ?? null,
-          ipAddress: entry.ipAddress ?? null,
-          userAgent: entry.userAgent ?? null,
-        }),
+      await this.dataSource.query(
+        `INSERT INTO audit_logs
+           (workspace_id, actor_id, action, entity_type, entity_id, old_value, new_value, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          entry.workspaceId ?? null,
+          entry.actorId,
+          entry.action,
+          entry.entityType ?? null,
+          entry.entityId ?? null,
+          entry.oldValue ?? null,
+          entry.newValue ?? null,
+          entry.ipAddress ?? null,
+          entry.userAgent ?? null,
+        ],
       );
     } catch {
       // Audit logging must never break the caller's actual operation.

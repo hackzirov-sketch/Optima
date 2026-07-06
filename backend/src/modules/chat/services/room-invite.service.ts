@@ -1,10 +1,8 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
-import { ChatRoomInvite } from '../../../database/entities/chat-room-invite.entity';
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
-import { ChatMember } from '../../../database/entities/chat-member.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { PermissionService } from '../../../common/services/permission.service';
@@ -12,6 +10,7 @@ import { MembersService } from '../../workspaces/members.service';
 import { ChatMemberService } from './member.service';
 import { ChatRoomService } from './room.service';
 import { CreateRoomInviteDto } from '../dto/create-room-invite.dto';
+import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_INVITE_COLUMNS_SQL } from '../chat.sql';
 
 export interface RoomInviteDto {
   id: string;
@@ -26,24 +25,29 @@ export interface RoomInviteDto {
   isActive: boolean;
 }
 
+interface ChatRoomInviteRow {
+  id: string;
+  roomId: string;
+  createdById: string;
+  code: string;
+  maxUses: number | null;
+  usesCount: number;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
 @Injectable()
 export class ChatRoomInviteService {
   constructor(
-    @InjectRepository(ChatRoomInvite)
-    private readonly inviteRepo: Repository<ChatRoomInvite>,
-    @InjectRepository(ChatRoom)
-    private readonly roomRepo: Repository<ChatRoom>,
-    @InjectRepository(ChatMember)
-    private readonly chatMemberRepo: Repository<ChatMember>,
-    @InjectRepository(WorkspaceMember)
-    private readonly wsMemberRepo: Repository<WorkspaceMember>,
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly permission: PermissionService,
     private readonly wsMembersService: MembersService,
     private readonly chatMemberService: ChatMemberService,
     private readonly roomService: ChatRoomService,
   ) {}
 
-  private toDto(invite: ChatRoomInvite): RoomInviteDto {
+  private toDto(invite: ChatRoomInviteRow): RoomInviteDto {
     const now = new Date();
     const isActive =
       !invite.revokedAt &&
@@ -64,6 +68,14 @@ export class ChatRoomInviteService {
     };
   }
 
+  private async findRoomById(roomId: string): Promise<ChatRoom | null> {
+    const rows: ChatRoom[] = await this.dataSource.query(
+      `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE id = $1`,
+      [roomId],
+    );
+    return rows[0] ?? null;
+  }
+
   /**
    * Generatsiya ruxsati: assertCanCreateChatRoom darajasi (lead+) yoki room
    * creator. Aks holda → ROOM_INVITE_FORBIDDEN (system design v2 §4.1).
@@ -71,9 +83,11 @@ export class ChatRoomInviteService {
   private async assertCanManageInvites(room: ChatRoom, userId: string): Promise<void> {
     if (room.createdById === userId) return;
 
-    const wsMember = await this.wsMemberRepo.findOne({
-      where: { workspaceId: room.workspaceId, userId },
-    });
+    const rows: WorkspaceMember[] = await this.dataSource.query(
+      `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [room.workspaceId, userId],
+    );
+    const wsMember = rows[0];
     if (!wsMember) {
       throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
     }
@@ -91,14 +105,14 @@ export class ChatRoomInviteService {
     const { randomBytes } = await import('crypto');
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = randomBytes(6).toString('base64url').slice(0, 8);
-      const existing = await this.inviteRepo.findOne({ where: { code } });
-      if (!existing) return code;
+      const existing = await this.dataSource.query(`SELECT id FROM chat_room_invites WHERE code = $1`, [code]);
+      if (!existing[0]) return code;
     }
     throw new BadRequestException({ code: ErrorCode.INTERNAL_ERROR, message: 'Could not generate a unique invite code, try again' });
   }
 
   async create(roomId: string, userId: string, dto: CreateRoomInviteDto): Promise<RoomInviteDto> {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    const room = await this.findRoomById(roomId);
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
 
     await this.chatMemberService.assertRoomMember(roomId, userId);
@@ -111,46 +125,52 @@ export class ChatRoomInviteService {
       expiresAt.setHours(expiresAt.getHours() + dto.expiresInHours);
     }
 
-    const invite = this.inviteRepo.create({
-      roomId,
-      createdById: userId,
-      code,
-      maxUses: dto.maxUses ?? null,
-      expiresAt,
-    });
-    const saved = await this.inviteRepo.save(invite);
-    return this.toDto(saved);
+    const rows: ChatRoomInviteRow[] = await this.dataSource.query(
+      `INSERT INTO chat_room_invites (room_id, created_by, code, max_uses, expires_at)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING ${CHAT_ROOM_INVITE_COLUMNS_SQL}`,
+      [roomId, userId, code, dto.maxUses ?? null, expiresAt],
+    );
+    return this.toDto(rows[0]);
   }
 
   async list(roomId: string, userId: string): Promise<RoomInviteDto[]> {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    const room = await this.findRoomById(roomId);
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
 
     await this.assertCanManageInvites(room, userId);
 
-    const invites = await this.inviteRepo.find({
-      where: { roomId },
-      order: { createdAt: 'DESC' },
-    });
+    const invites: ChatRoomInviteRow[] = await this.dataSource.query(
+      `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites
+       WHERE room_id = $1 ORDER BY created_at DESC`,
+      [roomId],
+    );
     return invites.map((i) => this.toDto(i));
   }
 
   async revoke(roomId: string, inviteId: string, userId: string): Promise<void> {
-    const room = await this.roomRepo.findOne({ where: { id: roomId } });
+    const room = await this.findRoomById(roomId);
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
 
     await this.assertCanManageInvites(room, userId);
 
-    const invite = await this.inviteRepo.findOne({ where: { id: inviteId, roomId } });
+    const rows: ChatRoomInviteRow[] = await this.dataSource.query(
+      `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites WHERE id = $1 AND room_id = $2`,
+      [inviteId, roomId],
+    );
+    const invite = rows[0];
     if (!invite) throw new NotFoundException({ code: ErrorCode.ROOM_INVITE_NOT_FOUND, message: 'Invite not found' });
     if (invite.revokedAt) return;
 
-    invite.revokedAt = new Date();
-    await this.inviteRepo.save(invite);
+    await this.dataSource.query(`UPDATE chat_room_invites SET revoked_at = now() WHERE id = $1`, [inviteId]);
   }
 
   async joinByCode(code: string, userId: string) {
-    const invite = await this.inviteRepo.findOne({ where: { code, revokedAt: IsNull() } });
+    const inviteRows: ChatRoomInviteRow[] = await this.dataSource.query(
+      `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites WHERE code = $1 AND revoked_at IS NULL`,
+      [code],
+    );
+    const invite = inviteRows[0];
     if (!invite) {
       throw new NotFoundException({ code: ErrorCode.INVITE_CODE_INVALID, message: 'Invalid invite link' });
     }
@@ -161,23 +181,23 @@ export class ChatRoomInviteService {
       throw new BadRequestException({ code: ErrorCode.INVITE_CODE_EXHAUSTED, message: 'This invite link has reached its usage limit' });
     }
 
-    const room = await this.roomRepo.findOne({ where: { id: invite.roomId } });
+    const room = await this.findRoomById(invite.roomId);
     if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
 
-    const existing = await this.chatMemberRepo.findOne({
-      where: { roomId: room.id, userId, leftAt: IsNull() },
-    });
-    if (existing) return this.roomService.enrichRoom(room, userId);
+    const existingRows = await this.dataSource.query(
+      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [room.id, userId],
+    );
+    if (existingRows[0]) return this.roomService.enrichRoom(room, userId);
 
     // Joining a room requires workspace membership; chat invites don't bypass
     // workspace access control, only room-level access within the workspace.
     await this.wsMembersService.assertMember(room.workspaceId, userId);
 
-    const member = this.chatMemberRepo.create({ roomId: room.id, userId });
-    await this.chatMemberRepo.save(member);
+    await this.dataSource.query(`INSERT INTO chat_members (room_id, user_id) VALUES ($1, $2)`, [room.id, userId]);
 
     // Atomic increment to avoid race conditions on concurrent joins.
-    await this.inviteRepo.increment({ id: invite.id }, 'usesCount', 1);
+    await this.dataSource.query(`UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`, [invite.id]);
 
     return this.roomService.enrichRoom(room, userId);
   }

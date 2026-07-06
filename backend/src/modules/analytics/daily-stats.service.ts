@@ -1,20 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { DeveloperDailyStats } from '../../database/entities/developer-daily-stats.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
-type Increments = Partial<
-  Pick<
-    DeveloperDailyStats,
-    | 'tasksCompleted'
-    | 'pushesSubmitted'
-    | 'pushesApproved'
-    | 'commitsCount'
-    | 'addedLines'
-    | 'removedLines'
-    | 'activeMinutes'
-  >
->;
+type Increments = Partial<{
+  tasksCompleted: number;
+  pushesSubmitted: number;
+  pushesApproved: number;
+  commitsCount: number;
+  addedLines: number;
+  removedLines: number;
+  activeMinutes: number;
+}>;
+
+const INCREMENT_COLUMNS: Record<keyof Increments, string> = {
+  tasksCompleted: 'tasks_completed',
+  pushesSubmitted: 'pushes_submitted',
+  pushesApproved: 'pushes_approved',
+  commitsCount: 'commits_count',
+  addedLines: 'added_lines',
+  removedLines: 'removed_lines',
+  activeMinutes: 'active_minutes',
+};
 
 /**
  * `developer_daily_stats` was queried by AnalyticsService but nothing ever
@@ -27,8 +33,8 @@ type Increments = Partial<
 @Injectable()
 export class DailyStatsService {
   constructor(
-    @InjectRepository(DeveloperDailyStats)
-    private readonly repo: Repository<DeveloperDailyStats>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async increment(
@@ -39,34 +45,22 @@ export class DailyStatsService {
   ): Promise<void> {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-    let row = await this.repo.findOne({
-      where: { userId, projectId, date: today },
-    });
+    const entries = Object.entries(inc).filter(([, v]) => v !== undefined) as Array<[keyof Increments, number]>;
+    if (entries.length === 0) return;
 
-    if (!row) {
-      row = this.repo.create({
-        userId,
-        projectId,
-        workspaceId,
-        date: today,
-        commitsCount: 0,
-        tasksCompleted: 0,
-        pushesSubmitted: 0,
-        pushesApproved: 0,
-        addedLines: 0,
-        removedLines: 0,
-        activeMinutes: 0,
-      });
-    }
+    // Atomic upsert via ON CONFLICT — avoids the read-then-write race the
+    // previous find-or-create + save() pattern had under concurrent requests
+    // (e.g. two tasks completed by the same dev in the same second).
+    const insertCols = entries.map(([k]) => INCREMENT_COLUMNS[k]);
+    const insertVals = entries.map(([, v]) => v);
+    const conflictSet = insertCols.map((col) => `${col} = developer_daily_stats.${col} + EXCLUDED.${col}`).join(', ');
 
-    for (const [key, value] of Object.entries(inc)) {
-      const k = key as keyof Increments;
-      (row[k] as number) = (row[k] as number) + (value ?? 0);
-    }
-
-    // Unique(userId, projectId, date) — a concurrent request racing us here
-    // just means one of the two increments loses a duplicate insert; that's
-    // acceptable for a best-effort activity counter, not billing-critical.
-    await this.repo.save(row);
+    await this.dataSource.query(
+      `INSERT INTO developer_daily_stats (user_id, project_id, workspace_id, date, ${insertCols.join(', ')})
+       VALUES ($1, $2, $3, $4, ${insertVals.map((_, i) => `$${i + 5}`).join(', ')})
+       ON CONFLICT (user_id, project_id, date)
+       DO UPDATE SET ${conflictSet}`,
+      [userId, projectId, workspaceId, today, ...insertVals],
+    );
   }
 }

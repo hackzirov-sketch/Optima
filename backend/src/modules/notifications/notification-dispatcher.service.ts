@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 
 import { UserNotificationPrefs } from '../../database/entities/user-notification-prefs.entity';
-import { NotificationDeliveryLog } from '../../database/entities/notification-delivery-log.entity';
-import { User } from '../../database/entities/user.entity';
 import {
   NotificationChannel,
   NotificationPriority,
@@ -16,6 +14,7 @@ import { RedisService } from '../../redis/redis.service';
 import { TelegramChannelService } from './channels/telegram-channel.service';
 import { SmsChannelService } from './channels/sms-channel.service';
 import { MailService } from '../mail/mail.service';
+import { NOTIFICATION_PREFS_COLUMNS_SQL } from './notifications.sql';
 
 export interface DispatchPayload {
   userId: string;
@@ -66,12 +65,8 @@ export class NotificationDispatcherService {
   private readonly frontendUrl: string;
 
   constructor(
-    @InjectRepository(UserNotificationPrefs)
-    private readonly prefsRepo: Repository<UserNotificationPrefs>,
-    @InjectRepository(NotificationDeliveryLog)
-    private readonly logRepo: Repository<NotificationDeliveryLog>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly redis: RedisService,
     private readonly telegram: TelegramChannelService,
     private readonly sms: SmsChannelService,
@@ -145,15 +140,18 @@ export class NotificationDispatcherService {
         return;
       }
 
-      await this.logRepo.save(
-        this.logRepo.create({
-          notificationId: notificationId ?? null,
+      await this.dataSource.query(
+        `INSERT INTO notification_delivery_logs
+           (notification_id, user_id, channel, is_success, error_message, external_id)
+         VALUES ($1, $2, $3::notification_channel_enum, $4, $5, $6)`,
+        [
+          notificationId ?? null,
           userId,
           channel,
-          isSuccess: result.success,
-          errorMessage: result.error ?? null,
-          externalId: result.externalId ?? null,
-        }),
+          result.success,
+          result.error ?? null,
+          result.externalId ?? null,
+        ],
       );
     } catch (err) {
       this.logger.error(`Channel ${channel} dispatch error for user=${userId}: ${err}`);
@@ -194,10 +192,11 @@ export class NotificationDispatcherService {
     userId: string,
     message: string,
   ): Promise<{ success: boolean; externalId?: string; error?: string }> {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      select: ['id', 'phoneNumber'],
-    });
+    const userRows: Array<{ id: string; phoneNumber: string | null }> = await this.dataSource.query(
+      `SELECT id, phone_number AS "phoneNumber" FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = userRows[0];
 
     if (!user?.phoneNumber) {
       return { success: false, error: 'No phone number' };
@@ -217,10 +216,11 @@ export class NotificationDispatcherService {
     title: string,
     message: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      select: ['id', 'email', 'firstName'],
-    });
+    const userRows: Array<{ id: string; email: string | null; firstName: string }> = await this.dataSource.query(
+      `SELECT id, email, first_name AS "firstName" FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = userRows[0];
     if (!user?.email) return { success: false, error: 'No email' };
 
     try {
@@ -291,7 +291,11 @@ export class NotificationDispatcherService {
       }
     } catch {}
 
-    const prefs = await this.prefsRepo.findOne({ where: { userId } });
+    const rows: UserNotificationPrefs[] = await this.dataSource.query(
+      `SELECT ${NOTIFICATION_PREFS_COLUMNS_SQL} FROM user_notification_prefs WHERE user_id = $1`,
+      [userId],
+    );
+    const prefs = rows[0] ?? null;
 
     // Cache for 5 min
     try {

@@ -4,38 +4,49 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ProjectMember } from '../../database/entities/project-member.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Project } from '../../database/entities/project.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
-import { User } from '../../database/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
+import { PROJECT_COLUMNS_SQL } from './projects.sql';
+import { normalizeReturning } from '../../common/utils/sql.util';
+
+const PROJECT_MEMBER_COLUMNS_SQL = `
+  id, project_id AS "projectId", user_id AS "userId", role, status,
+  invited_by AS "invitedBy", invited_at AS "invitedAt", joined_at AS "joinedAt"
+`;
 
 @Injectable()
 export class ProjectMembersService {
   constructor(
-    @InjectRepository(ProjectMember)
-    private readonly memberRepo: Repository<ProjectMember>,
-    @InjectRepository(Project)
-    private readonly projectRepo: Repository<Project>,
-    @InjectRepository(WorkspaceMember)
-    private readonly wsMemberRepo: Repository<WorkspaceMember>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly permission: PermissionService,
   ) {}
 
   private async getProject(projectId: string): Promise<Project> {
-    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+    const rows: Project[] = await this.dataSource.query(
+      `SELECT ${PROJECT_COLUMNS_SQL} FROM projects WHERE id = $1`,
+      [projectId],
+    );
+    const project = rows[0];
     if (!project || project.deletedAt) {
       throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
     }
     return project;
+  }
+
+  private async getWorkspaceMember(workspaceId: string, userId: string) {
+    const rows = await this.dataSource.query(
+      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
+       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, userId],
+    );
+    return rows[0] ?? null;
   }
 
   private async assertProjectManager(projectId: string, userId: string): Promise<Project> {
@@ -45,9 +56,7 @@ export class ProjectMembersService {
     if (project.createdById === userId) return project;
 
     // Or workspace LEAD+ role
-    const wsMember = await this.wsMemberRepo.findOne({
-      where: { workspaceId: project.workspaceId, userId },
-    });
+    const wsMember = await this.getWorkspaceMember(project.workspaceId, userId);
     if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
     this.permission.assertCanManageProject(wsMember);
 
@@ -56,18 +65,23 @@ export class ProjectMembersService {
 
   async listMembers(projectId: string, requesterId: string) {
     const project = await this.getProject(projectId);
-    const wsMember = await this.wsMemberRepo.findOne({
-      where: { workspaceId: project.workspaceId, userId: requesterId },
-    });
+    const wsMember = await this.getWorkspaceMember(project.workspaceId, requesterId);
     if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
 
-    const members = await this.memberRepo.find({
-      where: { projectId },
-      relations: ['user', 'inviter'],
-      order: { invitedAt: 'ASC' },
-    });
+    const rows: any[] = await this.dataSource.query(
+      `SELECT
+         pm.id AS "id", pm.user_id AS "userId", pm.role, pm.status,
+         pm.invited_by AS "invitedBy", pm.invited_at AS "invitedAt", pm.joined_at AS "joinedAt",
+         u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
+         u.avatar_url AS "u_avatarUrl", u.email AS "u_email"
+       FROM project_members pm
+       LEFT JOIN users u ON u.id = pm.user_id
+       WHERE pm.project_id = $1
+       ORDER BY pm.invited_at ASC`,
+      [projectId],
+    );
 
-    return members.map((m) => ({
+    return rows.map((m) => ({
       id: m.id,
       userId: m.userId,
       role: m.role,
@@ -75,8 +89,8 @@ export class ProjectMembersService {
       invitedBy: m.invitedBy,
       invitedAt: m.invitedAt,
       joinedAt: m.joinedAt,
-      user: m.user
-        ? { id: m.user.id, firstName: m.user.firstName, lastName: m.user.lastName, avatarUrl: m.user.avatarUrl, email: m.user.email }
+      user: m.u_id
+        ? { id: m.u_id, firstName: m.u_firstName, lastName: m.u_lastName, avatarUrl: m.u_avatarUrl, email: m.u_email }
         : null,
     }));
   }
@@ -90,28 +104,31 @@ export class ProjectMembersService {
     const project = await this.assertProjectManager(projectId, inviterId);
 
     // Target must be workspace member
-    const wsTarget = await this.wsMemberRepo.findOne({
-      where: { workspaceId: project.workspaceId, userId: targetUserId },
-    });
+    const wsTarget = await this.getWorkspaceMember(project.workspaceId, targetUserId);
     if (!wsTarget) throw new NotFoundException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Target user is not a workspace member' });
 
     // Check not already a member
-    const existing = await this.memberRepo.findOne({ where: { projectId, userId: targetUserId } });
-    if (existing) {
+    const existing = await this.dataSource.query(
+      `SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2`,
+      [projectId, targetUserId],
+    );
+    if (existing[0]) {
       throw new ConflictException({ code: ErrorCode.ALREADY_ROOM_MEMBER, message: 'User is already a project member' });
     }
 
-    const saved = await this.memberRepo.save(
-      this.memberRepo.create({
-        projectId,
-        userId: targetUserId,
-        role,
-        status: 'pending',
-        invitedBy: inviterId,
-      }),
+    const savedRows = await this.dataSource.query(
+      `INSERT INTO project_members (project_id, user_id, role, status, invited_by)
+       VALUES ($1, $2, $3, 'pending', $4)
+       RETURNING ${PROJECT_MEMBER_COLUMNS_SQL}`,
+      [projectId, targetUserId, role, inviterId],
     );
+    const saved = savedRows[0];
 
-    const inviter = await this.userRepo.findOne({ where: { id: inviterId } });
+    const inviterRows = await this.dataSource.query(
+      `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
+      [inviterId],
+    );
+    const inviter = inviterRows[0];
     const inviterName = inviter ? `${inviter.firstName ?? ''} ${inviter.lastName ?? ''}`.trim() : 'Someone';
 
     await this.notifications.create({
@@ -119,7 +136,7 @@ export class ProjectMembersService {
       actorId: inviterId,
       type: NotificationType.PROJECT_MEMBER_INVITE,
       title: `"${project.name}" loyihasiga taklif`,
-      message: `${inviterName} sizni "${project.name}" loyihasiga ${role === 'manager' ? 'menejer' : 'a\'zo'} sifatida taklif qildi`,
+      message: `${inviterName} sizni "${project.name}" loyihasiga ${role === 'manager' ? 'menejer' : "a'zo"} sifatida taklif qildi`,
       entityType: 'project_member',
       entityId: saved.id,
       actionUrl: `/app/projects/${projectId}`,
@@ -130,22 +147,33 @@ export class ProjectMembersService {
   }
 
   async respondToInvite(memberId: string, userId: string, accept: boolean) {
-    const member = await this.memberRepo.findOne({
-      where: { id: memberId, userId },
-      relations: ['project'],
-    });
+    const memberRows = await this.dataSource.query(
+      `SELECT ${PROJECT_MEMBER_COLUMNS_SQL} FROM project_members WHERE id = $1 AND user_id = $2`,
+      [memberId, userId],
+    );
+    const member = memberRows[0];
     if (!member) throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Invite not found' });
     if (member.status !== 'pending') {
       throw new ConflictException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Invite already responded' });
     }
 
-    member.status = accept ? 'accepted' : 'declined';
-    if (accept) member.joinedAt = new Date();
-    const saved = await this.memberRepo.save(member);
+    const newStatus = accept ? 'accepted' : 'declined';
+    const savedRows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE project_members SET status = $2, joined_at = $3 WHERE id = $1
+         RETURNING ${PROJECT_MEMBER_COLUMNS_SQL}`,
+        [memberId, newStatus, accept ? new Date() : null],
+      ),
+    );
+    const saved = savedRows[0];
 
     // Notify project creator + managers
-    const project = await this.projectRepo.findOne({ where: { id: member.projectId } });
-    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const project = await this.getProject(member.projectId).catch(() => null);
+    const userRows = await this.dataSource.query(
+      `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
+      [userId],
+    );
+    const user = userRows[0];
     const userName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() : 'Someone';
 
     const notifType = accept ? NotificationType.PROJECT_MEMBER_ACCEPTED : NotificationType.PROJECT_MEMBER_DECLINED;
@@ -156,9 +184,10 @@ export class ProjectMembersService {
     const managersToNotify = new Set<string>();
     if (project?.createdById && project.createdById !== userId) managersToNotify.add(project.createdById);
 
-    const otherManagers = await this.memberRepo.find({
-      where: { projectId: member.projectId, role: 'manager', status: 'accepted' },
-    });
+    const otherManagers = await this.dataSource.query(
+      `SELECT user_id AS "userId" FROM project_members WHERE project_id = $1 AND role = 'manager' AND status = 'accepted'`,
+      [member.projectId],
+    );
     for (const m of otherManagers) {
       if (m.userId !== userId) managersToNotify.add(m.userId);
     }
@@ -170,7 +199,7 @@ export class ProjectMembersService {
           actorId: userId,
           type: notifType,
           title: notifTitle,
-          message: `${userName} "${project?.name ?? 'loyiha'}"ga ${accept ? 'qo\'shildi' : 'qo\'shilmadi'}`,
+          message: `${userName} "${project?.name ?? 'loyiha'}"ga ${accept ? "qo'shildi" : "qo'shilmadi"}`,
           entityType: 'project',
           entityId: member.projectId,
           actionUrl: `/app/projects/${member.projectId}`,
@@ -183,21 +212,29 @@ export class ProjectMembersService {
 
   async removeMember(projectId: string, targetUserId: string, requesterId: string) {
     await this.assertProjectManager(projectId, requesterId);
-    const member = await this.memberRepo.findOne({ where: { projectId, userId: targetUserId } });
-    if (!member) throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Member not found' });
-    await this.memberRepo.remove(member);
+    const member = await this.dataSource.query(
+      `SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2`,
+      [projectId, targetUserId],
+    );
+    if (!member[0]) throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Member not found' });
+    await this.dataSource.query(`DELETE FROM project_members WHERE project_id = $1 AND user_id = $2`, [projectId, targetUserId]);
   }
 
   async getMyInvites(userId: string) {
-    const members = await this.memberRepo.find({
-      where: { userId, status: 'pending' },
-      relations: ['project'],
-      order: { invitedAt: 'DESC' },
-    });
-    return members.map((m) => ({
+    const rows: any[] = await this.dataSource.query(
+      `SELECT
+         pm.id AS "id", pm.project_id AS "projectId", pm.role, pm.invited_by AS "invitedBy",
+         pm.invited_at AS "invitedAt", p.name AS "projectName"
+       FROM project_members pm
+       LEFT JOIN projects p ON p.id = pm.project_id
+       WHERE pm.user_id = $1 AND pm.status = 'pending'
+       ORDER BY pm.invited_at DESC`,
+      [userId],
+    );
+    return rows.map((m) => ({
       id: m.id,
       projectId: m.projectId,
-      projectName: m.project?.name ?? '',
+      projectName: m.projectName ?? '',
       role: m.role,
       invitedBy: m.invitedBy,
       invitedAt: m.invitedAt,

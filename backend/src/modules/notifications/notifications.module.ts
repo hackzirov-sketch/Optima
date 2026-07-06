@@ -1,14 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-
-import { Notification } from '../../database/entities/notification.entity';
-import { UserNotificationPrefs } from '../../database/entities/user-notification-prefs.entity';
-import { NotificationDeliveryLog } from '../../database/entities/notification-delivery-log.entity';
-import { User } from '../../database/entities/user.entity';
-import { Meeting } from '../../database/entities/meeting.entity';
-import { MeetingParticipant } from '../../database/entities/meeting-participant.entity';
-import { Task } from '../../database/entities/task.entity';
 
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
@@ -24,15 +15,6 @@ import { RedisModule } from '../../redis/redis.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Notification,
-      UserNotificationPrefs,
-      NotificationDeliveryLog,
-      User,
-      Meeting,
-      MeetingParticipant,
-      Task,
-    ]),
     BullModule.registerQueue({ name: REMINDER_QUEUE }),
     // GatewayModule -> ... -> MeetingsModule -> WorkspacesModule ->
     // NotificationsModule -> GatewayModule closes a cycle now that

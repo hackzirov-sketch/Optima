@@ -5,18 +5,26 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
-import { IpRateLimit } from '../../../database/entities/ip-rate-limit.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
+
+interface IpRateLimitRow {
+  id: string;
+  ip: string;
+  actionType: string;
+  count: number;
+  windowStart: Date;
+  blockedUntil: Date | null;
+}
 
 @Injectable()
 export class IpRateLimitGuard implements CanActivate {
   constructor(
-    @InjectRepository(IpRateLimit)
-    private readonly repo: Repository<IpRateLimit>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly config: ConfigService,
   ) {}
 
@@ -35,52 +43,86 @@ export class IpRateLimitGuard implements CanActivate {
 
     const now = new Date();
 
-    let record = await this.repo.findOne({ where: { ip, actionType } });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (record) {
-      // Currently blocked
-      if (record.blockedUntil && record.blockedUntil > now) {
-        const retryAfter = Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
-        throw new HttpException(
-          {
-            code: ErrorCode.RATE_LIMIT_EXCEEDED,
-            message: `Too many attempts. Try again in ${Math.ceil(retryAfter / 3600)} hour(s).`,
-            retryAfter,
-          },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
+    try {
+      const rows: IpRateLimitRow[] = await queryRunner.query(
+        `SELECT id, ip, action_type AS "actionType", count, window_start AS "windowStart",
+                blocked_until AS "blockedUntil"
+         FROM ip_rate_limits WHERE ip = $1 AND action_type = $2 FOR UPDATE`,
+        [ip, actionType],
+      );
+      const record = rows[0];
 
-      // Window expired — reset
-      if (record.windowStart.getTime() + windowMs < now.getTime()) {
-        record.count = 1;
-        record.windowStart = now;
-        record.blockedUntil = null;
-      } else {
-        record.count += 1;
-
-        if (record.count >= maxAttempts) {
-          record.blockedUntil = new Date(now.getTime() + windowMs);
-          await this.repo.save(record);
-
+      if (record) {
+        // Currently blocked
+        if (record.blockedUntil && record.blockedUntil > now) {
+          const retryAfter = Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
           throw new HttpException(
             {
               code: ErrorCode.RATE_LIMIT_EXCEEDED,
-              message: `Too many attempts. Try again in ${windowHours} hour(s).`,
+              message: `Too many attempts. Try again in ${Math.ceil(retryAfter / 3600)} hour(s).`,
+              retryAfter,
             },
             HttpStatus.TOO_MANY_REQUESTS,
           );
         }
+
+        let newCount: number;
+        let newWindowStart: Date;
+        let newBlockedUntil: Date | null;
+
+        // Window expired — reset
+        if (record.windowStart.getTime() + windowMs < now.getTime()) {
+          newCount = 1;
+          newWindowStart = now;
+          newBlockedUntil = null;
+        } else {
+          newCount = record.count + 1;
+          newWindowStart = record.windowStart;
+          newBlockedUntil = null;
+
+          if (newCount >= maxAttempts) {
+            newBlockedUntil = new Date(now.getTime() + windowMs);
+            await queryRunner.query(
+              `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
+               WHERE id = $1`,
+              [record.id, newCount, newWindowStart, newBlockedUntil],
+            );
+            await queryRunner.commitTransaction();
+
+            throw new HttpException(
+              {
+                code: ErrorCode.RATE_LIMIT_EXCEEDED,
+                message: `Too many attempts. Try again in ${windowHours} hour(s).`,
+              },
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+          }
+        }
+
+        await queryRunner.query(
+          `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
+           WHERE id = $1`,
+          [record.id, newCount, newWindowStart, newBlockedUntil],
+        );
+      } else {
+        await queryRunner.query(
+          `INSERT INTO ip_rate_limits (ip, action_type, count, window_start) VALUES ($1, $2, 1, $3)`,
+          [ip, actionType, now],
+        );
       }
 
-      await this.repo.save(record);
-    } else {
-      await this.repo.save(
-        this.repo.create({ ip, actionType, count: 1, windowStart: now }),
-      );
+      await queryRunner.commitTransaction();
+      return true;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    return true;
   }
 
   private extractIp(request: Request): string {

@@ -1,15 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Earning } from '../../database/entities/earning.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { MembersService } from '../workspaces/members.service';
 import { CreateEarningDto } from './dto/create-earning.dto';
+
+const EARNING_COLUMNS_SQL = `
+  id, workspace_id AS "workspaceId", user_id AS "userId", amount, currency,
+  description, date, source_type AS "sourceType", source_id AS "sourceId",
+  created_at AS "createdAt", updated_at AS "updatedAt"
+`;
 
 @Injectable()
 export class EarningsService {
   constructor(
-    @InjectRepository(Earning)
-    private readonly earningRepo: Repository<Earning>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly membersService: MembersService,
   ) {}
 
@@ -21,56 +26,60 @@ export class EarningsService {
       .toISOString()
       .split('T')[0];
 
-    const [allTime, thisMonth] = await Promise.all([
-      this.earningRepo
-        .createQueryBuilder('e')
-        .select('COALESCE(SUM(e.amount), 0)', 'total')
-        .addSelect('COUNT(*)', 'count')
-        .where('e.workspace_id = :ws', { ws: workspaceId })
-        .getRawOne<{ total: string; count: string }>(),
-
-      this.earningRepo
-        .createQueryBuilder('e')
-        .select('COALESCE(SUM(e.amount), 0)', 'total')
-        .where('e.workspace_id = :ws', { ws: workspaceId })
-        .andWhere('e.date >= :start', { start: monthStart })
-        .getRawOne<{ total: string }>(),
+    const [allTimeRows, thisMonthRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
+         FROM earnings WHERE workspace_id = $1`,
+        [workspaceId],
+      ),
+      this.dataSource.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total
+         FROM earnings WHERE workspace_id = $1 AND date >= $2`,
+        [workspaceId, monthStart],
+      ),
     ]);
 
     return {
-      total: Number(allTime?.total ?? 0),
-      thisMonth: Number(thisMonth?.total ?? 0),
-      count: Number(allTime?.count ?? 0),
+      total: Number(allTimeRows[0]?.total ?? 0),
+      thisMonth: Number(thisMonthRows[0]?.total ?? 0),
+      count: Number(allTimeRows[0]?.count ?? 0),
       currency: 'USD',
     };
   }
 
   async list(workspaceId: string, userId: string) {
     await this.membersService.assertMember(workspaceId, userId);
-    return this.earningRepo.find({
-      where: { workspaceId },
-      order: { date: 'DESC', createdAt: 'DESC' },
-      take: 50,
-    });
+    return this.dataSource.query(
+      `SELECT ${EARNING_COLUMNS_SQL} FROM earnings
+       WHERE workspace_id = $1
+       ORDER BY date DESC, created_at DESC
+       LIMIT 50`,
+      [workspaceId],
+    );
   }
 
   async create(workspaceId: string, userId: string, dto: CreateEarningDto) {
     await this.membersService.assertMember(workspaceId, userId);
-    const earning = this.earningRepo.create({
-      workspaceId,
-      userId,
-      amount: dto.amount,
-      currency: dto.currency ?? 'USD',
-      description: dto.description ?? null,
-      date: dto.date,
-      sourceType: dto.sourceType ?? null,
-      sourceId: dto.sourceId ?? null,
-    });
-    return this.earningRepo.save(earning);
+    const rows = await this.dataSource.query(
+      `INSERT INTO earnings (workspace_id, user_id, amount, currency, description, date, source_type, source_id)
+       VALUES ($1, $2, $3, COALESCE($4, 'USD'), $5, $6, $7, $8)
+       RETURNING ${EARNING_COLUMNS_SQL}`,
+      [
+        workspaceId,
+        userId,
+        dto.amount,
+        dto.currency ?? null,
+        dto.description ?? null,
+        dto.date,
+        dto.sourceType ?? null,
+        dto.sourceId ?? null,
+      ],
+    );
+    return rows[0];
   }
 
   async remove(workspaceId: string, userId: string, earningId: string) {
     await this.membersService.assertMember(workspaceId, userId);
-    await this.earningRepo.delete({ id: earningId, workspaceId });
+    await this.dataSource.query(`DELETE FROM earnings WHERE id = $1 AND workspace_id = $2`, [earningId, workspaceId]);
   }
 }

@@ -3,10 +3,9 @@ import {
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { UserViolation } from '../../../database/entities/user-violation.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
 export type ViolationType = 'text' | 'image' | 'spam';
@@ -18,13 +17,23 @@ export interface ViolationStatus {
   count: number;
 }
 
+interface ViolationRow {
+  id: string;
+  userId: string;
+  type: string;
+  count: number;
+  blockedUntil: Date | null;
+  isPermanent: boolean;
+  reason: string | null;
+}
+
 @Injectable()
 export class ViolationService {
   private readonly logger = new Logger(ViolationService.name);
 
   constructor(
-    @InjectRepository(UserViolation)
-    private readonly repo: Repository<UserViolation>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly config: ConfigService,
   ) {}
 
@@ -38,41 +47,70 @@ export class ViolationService {
     const permanentThreshold =
       this.config.get<number>('moderation.permanentBlockThreshold') ?? 3;
 
-    let record = await this.repo.findOne({ where: { userId } });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (!record) {
-      record = this.repo.create({ userId, type, count: 0, reason });
+    try {
+      // Lock any existing row for this user to avoid a lost-update race when two
+      // violations land concurrently (e.g. two flagged messages sent back to back).
+      const existingRows: ViolationRow[] = await queryRunner.query(
+        `SELECT id, user_id AS "userId", type, count, blocked_until AS "blockedUntil",
+                is_permanent AS "isPermanent", reason
+         FROM user_violations WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      const existing = existingRows[0];
+
+      const count = (existing?.count ?? 0) + 1;
+      const now = new Date();
+      let isPermanent = false;
+      let blockedUntil: Date | null = null;
+
+      if (count >= permanentThreshold) {
+        isPermanent = true;
+        blockedUntil = null;
+        this.logger.warn(`User ${userId} permanently blocked after ${count} violations`);
+      } else {
+        const minutes = blockDurations[count - 1] ?? blockDurations[blockDurations.length - 1];
+        blockedUntil = new Date(now.getTime() + minutes * 60 * 1000);
+        this.logger.warn(`User ${userId} temp-blocked for ${minutes} min (violation #${count})`);
+      }
+
+      if (existing) {
+        await queryRunner.query(
+          `UPDATE user_violations
+           SET count = $2, type = $3, reason = $4, blocked_until = $5, is_permanent = $6, updated_at = now()
+           WHERE user_id = $1`,
+          [userId, count, type, reason, blockedUntil, isPermanent],
+        );
+      } else {
+        await queryRunner.query(
+          `INSERT INTO user_violations (user_id, type, count, reason, blocked_until, is_permanent)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [userId, type, count, reason, blockedUntil, isPermanent],
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return { blocked: true, isPermanent, blockedUntil, count };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    record.count += 1;
-    record.type = type;
-    record.reason = reason;
-
-    const now = new Date();
-
-    if (record.count >= permanentThreshold) {
-      record.isPermanent = true;
-      record.blockedUntil = null;
-      this.logger.warn(`User ${userId} permanently blocked after ${record.count} violations`);
-    } else {
-      const minutes = blockDurations[record.count - 1] ?? blockDurations[blockDurations.length - 1];
-      record.blockedUntil = new Date(now.getTime() + minutes * 60 * 1000);
-      record.isPermanent = false;
-      this.logger.warn(`User ${userId} temp-blocked for ${minutes} min (violation #${record.count})`);
-    }
-
-    await this.repo.save(record);
-
-    return {
-      blocked: true,
-      isPermanent: record.isPermanent,
-      blockedUntil: record.blockedUntil,
-      count: record.count,
-    };
   }
 
   async getStatus(userId: string): Promise<ViolationStatus> {
-    const record = await this.repo.findOne({ where: { userId } });
+    const rows: ViolationRow[] = await this.dataSource.query(
+      `SELECT id, user_id AS "userId", type, count, blocked_until AS "blockedUntil",
+              is_permanent AS "isPermanent", reason
+       FROM user_violations WHERE user_id = $1`,
+      [userId],
+    );
+    const record = rows[0];
     if (!record) return { blocked: false, isPermanent: false, blockedUntil: null, count: 0 };
 
     if (record.isPermanent) {

@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { BannedContent } from '../../../database/entities/banned-content.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ViolationService } from './violation.service';
@@ -18,8 +18,8 @@ export class ContentFilterService {
   private cacheExpiry = 0;
 
   constructor(
-    @InjectRepository(BannedContent)
-    private readonly bannedRepo: Repository<BannedContent>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly violationService: ViolationService,
   ) {}
 
@@ -127,7 +127,11 @@ export class ContentFilterService {
 
     // Set expiry optimistically before await to prevent parallel DB queries
     this.cacheExpiry = now + 5 * 60 * 1000;
-    this.patternCache = await this.bannedRepo.find({ where: { active: true } });
+    this.patternCache = await this.dataSource.query(
+      `SELECT id, pattern, type, category, severity, is_regex AS "isRegex", active,
+              created_at AS "createdAt"
+       FROM banned_content WHERE active = true`,
+    );
     return this.patternCache;
   }
 

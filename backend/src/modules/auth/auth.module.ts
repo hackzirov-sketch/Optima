@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 
@@ -14,12 +13,6 @@ import { SecurityService } from './services/security.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
-import { RefreshToken } from '../../database/entities/refresh-token.entity';
-import { UserSettings } from '../../database/entities/user-settings.entity';
-import { UserIpLog } from '../../database/entities/user-ip-log.entity';
-import { GithubAccount } from '../../database/entities/github-account.entity';
-import { UserVerification } from '../../database/entities/user-verification.entity';
-import { User } from '../../database/entities/user.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -38,14 +31,6 @@ import { ModerationModule } from '../moderation/moderation.module';
     BullModule.registerQueue({
       name: 'auth',
     }),
-    TypeOrmModule.forFeature([
-      RefreshToken,
-      UserSettings,
-      UserIpLog,
-      GithubAccount,
-      UserVerification,
-      User,
-    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) =>

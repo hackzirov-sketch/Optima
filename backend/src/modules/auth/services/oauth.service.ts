@@ -1,11 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { UsersService } from '../../users/users.service';
 import { RedisService } from '../../../redis/redis.service';
 import { EncryptionService } from '../../../common/services/encryption.service';
-import { GithubAccount } from '../../../database/entities/github-account.entity';
 import { User } from '../../../database/entities/user.entity';
 import { GoogleOAuthProfile, GitHubOAuthProfile } from '../interfaces/oauth-profiles.interface';
 import { TokenService } from './token.service';
@@ -14,6 +13,13 @@ import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+
+const GITHUB_ACCOUNT_COLUMNS_SQL = `
+  id, user_id AS "userId", github_user_id AS "githubUserId", username,
+  avatar_url AS "avatarUrl", email, access_token_encrypted AS "accessTokenEncrypted",
+  refresh_token_encrypted AS "refreshTokenEncrypted", token_expires_at AS "tokenExpiresAt",
+  connected_at AS "connectedAt", created_at AS "createdAt", updated_at AS "updatedAt"
+`;
 
 @Injectable()
 export class OAuthService {
@@ -25,8 +31,8 @@ export class OAuthService {
     private encryptionService: EncryptionService,
     private tokenService: TokenService,
     private deviceService: DeviceService,
-    @InjectRepository(GithubAccount)
-    private githubAccountsRepository: Repository<GithubAccount>,
+    @InjectDataSource()
+    private dataSource: DataSource,
     @InjectQueue('auth') private authQueue: Queue,
   ) {}
 
@@ -102,24 +108,32 @@ export class OAuthService {
       });
     }
 
-    let githubAccount = await this.githubAccountsRepository.findOne({
-      where: { githubUserId: Number(githubUser.githubId) },
-      relations: ['user'],
-    });
+    const accountRows: Array<{
+      id: string;
+      userId: string;
+      accessTokenEncrypted: string;
+      refreshTokenEncrypted: string | null;
+    }> = await this.dataSource.query(
+      `SELECT ${GITHUB_ACCOUNT_COLUMNS_SQL} FROM github_accounts WHERE github_user_id = $1`,
+      [Number(githubUser.githubId)],
+    );
+    let githubAccount = accountRows[0];
 
     let user: User | null = null;
 
     if (githubAccount) {
-      user = githubAccount.user;
-      githubAccount.accessTokenEncrypted = this.encryptionService.encrypt(
-        githubUser.accessToken,
+      user = await this.usersService.findById(githubAccount.userId);
+      const accessTokenEncrypted = this.encryptionService.encrypt(githubUser.accessToken);
+      const refreshTokenEncrypted = githubUser.refreshToken
+        ? this.encryptionService.encrypt(githubUser.refreshToken)
+        : githubAccount.refreshTokenEncrypted;
+
+      await this.dataSource.query(
+        `UPDATE github_accounts
+         SET access_token_encrypted = $2, refresh_token_encrypted = $3, updated_at = now()
+         WHERE id = $1`,
+        [githubAccount.id, accessTokenEncrypted, refreshTokenEncrypted],
       );
-      if (githubUser.refreshToken) {
-        githubAccount.refreshTokenEncrypted = this.encryptionService.encrypt(
-          githubUser.refreshToken,
-        );
-      }
-      await this.githubAccountsRepository.save(githubAccount);
     } else {
       const email = githubUser.email || `${githubUser.githubId}@github.placeholder.com`;
       user = await this.usersService.findByEmail(email);
@@ -137,22 +151,25 @@ export class OAuthService {
           providers: ['github'],
           needsPasswordSetup: true,
         });
-        
+
         void this.enqueueOnRegister(user.id, user.email);
       }
 
-      githubAccount = this.githubAccountsRepository.create({
-        userId: user.id,
-        githubUserId: Number(githubUser.githubId),
-        username: githubUser.username,
-        email,
-        avatarUrl: githubUser.avatarUrl,
-        accessTokenEncrypted: this.encryptionService.encrypt(githubUser.accessToken),
-        refreshTokenEncrypted: githubUser.refreshToken
-          ? this.encryptionService.encrypt(githubUser.refreshToken)
-          : undefined,
-      });
-      await this.githubAccountsRepository.save(githubAccount);
+      await this.dataSource.query(
+        `INSERT INTO github_accounts
+           (user_id, github_user_id, username, email, avatar_url,
+            access_token_encrypted, refresh_token_encrypted)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          user.id,
+          Number(githubUser.githubId),
+          githubUser.username,
+          email,
+          githubUser.avatarUrl ?? null,
+          this.encryptionService.encrypt(githubUser.accessToken),
+          githubUser.refreshToken ? this.encryptionService.encrypt(githubUser.refreshToken) : null,
+        ],
+      );
     }
 
     if (user && ip) {

@@ -1,13 +1,13 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 
-import { TaskPush } from '../../database/entities/task-push.entity';
-import { Repository as LinkedRepository } from '../../database/entities/repository.entity';
 import { PushStatus } from '../../common/enums';
+import { TASK_PUSH_COLUMNS_SQL } from '../tasks/tasks.sql';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 @Injectable()
 export class GithubService {
@@ -15,10 +15,8 @@ export class GithubService {
 
   constructor(
     private readonly configService: ConfigService,
-    @InjectRepository(TaskPush)
-    private readonly pushRepo: Repository<TaskPush>,
-    @InjectRepository(LinkedRepository)
-    private readonly repoEntity: Repository<LinkedRepository>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   verifyWebhookSignature(
@@ -68,6 +66,14 @@ export class GithubService {
     return { received: true, event };
   }
 
+  private async findLinkedRepo(githubRepoId: number): Promise<{ id: string } | null> {
+    const rows = await this.dataSource.query(
+      `SELECT id FROM repositories WHERE github_repo_id = $1`,
+      [githubRepoId],
+    );
+    return rows[0] ?? null;
+  }
+
   private async handlePushEvent(payload: Record<string, unknown>) {
     const p = payload as {
       ref?: string;
@@ -85,9 +91,7 @@ export class GithubService {
       return;
     }
 
-    const linkedRepo = await this.repoEntity.findOne({
-      where: { githubRepoId },
-    });
+    const linkedRepo = await this.findLinkedRepo(githubRepoId);
     if (!linkedRepo) {
       this.logger.debug(
         `No linked repository for GitHub id ${githubRepoId} (${p.repository?.full_name})`,
@@ -95,15 +99,18 @@ export class GithubService {
       return;
     }
 
-    const candidates = await this.pushRepo.find({
-      where: {
-        repositoryId: linkedRepo.id,
-        branchName: branch,
-        deletedAt: IsNull(),
-      },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
+    const candidates: Array<{
+      id: string;
+      commitSha: string | null;
+      githubCommitSha: string | null;
+    }> = await this.dataSource.query(
+      `SELECT id, commit_sha AS "commitSha", github_commit_sha AS "githubCommitSha"
+       FROM task_pushes
+       WHERE repository_id = $1 AND branch_name = $2 AND deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [linkedRepo.id, branch],
+    );
 
     const push =
       candidates.find(
@@ -120,11 +127,10 @@ export class GithubService {
       return;
     }
 
-    push.githubCommitSha = headSha;
-    if (!push.commitSha) {
-      push.commitSha = headSha;
-    }
-    await this.pushRepo.save(push);
+    await this.dataSource.query(
+      `UPDATE task_pushes SET github_commit_sha = $2, commit_sha = COALESCE(commit_sha, $2) WHERE id = $1`,
+      [push.id, headSha],
+    );
 
     this.logger.log(
       `Linked GitHub push ${headSha.slice(0, 7)} to UPZ push ${push.id}`,
@@ -147,19 +153,17 @@ export class GithubService {
     const pr = p.pull_request;
     if (!githubRepoId || !pr?.head?.ref) return;
 
-    const linkedRepo = await this.repoEntity.findOne({
-      where: { githubRepoId },
-    });
+    const linkedRepo = await this.findLinkedRepo(githubRepoId);
     if (!linkedRepo) return;
 
-    const push = await this.pushRepo.findOne({
-      where: {
-        repositoryId: linkedRepo.id,
-        branchName: pr.head.ref,
-        deletedAt: IsNull(),
-      },
-      order: { createdAt: 'DESC' },
-    });
+    const rows: Array<{ id: string; status: PushStatus }> = await this.dataSource.query(
+      `SELECT id, status FROM task_pushes
+       WHERE repository_id = $1 AND branch_name = $2 AND deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [linkedRepo.id, pr.head.ref],
+    );
+    const push = rows[0];
 
     if (!push) {
       this.logger.debug(
@@ -168,17 +172,20 @@ export class GithubService {
       return;
     }
 
-    if (pr.html_url) push.githubPrUrl = pr.html_url;
-    if (pr.number != null) push.githubPrNumber = pr.number;
-    if (pr.head.sha) push.githubCommitSha = pr.head.sha;
+    const patch: Record<string, unknown> = {};
+    if (pr.html_url) patch.githubPrUrl = pr.html_url;
+    if (pr.number != null) patch.githubPrNumber = pr.number;
+    if (pr.head.sha) patch.githubCommitSha = pr.head.sha;
 
-    if (p.action === 'closed' && pr.merged) {
-      if (push.status === PushStatus.APPROVED) {
-        push.status = PushStatus.MERGED;
-      }
+    if (p.action === 'closed' && pr.merged && push.status === PushStatus.APPROVED) {
+      patch.status = PushStatus.MERGED;
     }
 
-    await this.pushRepo.save(push);
+    const { setClause, values } = buildUpdateSet(patch, 2, { status: 'task_pushes_status_enum' });
+    if (setClause) {
+      await this.dataSource.query(`UPDATE task_pushes SET ${setClause} WHERE id = $1`, [push.id, ...values]);
+    }
+
     this.logger.log(
       `Updated UPZ push ${push.id} from PR #${pr.number} (${p.action})`,
     );

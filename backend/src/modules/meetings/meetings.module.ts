@@ -1,7 +1,4 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Meeting } from '../../database/entities/meeting.entity';
-import { MeetingParticipant } from '../../database/entities/meeting-participant.entity';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ModerationModule } from '../moderation/moderation.module';
@@ -10,10 +7,11 @@ import { MeetingsController } from './meetings.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Meeting, MeetingParticipant]),
     forwardRef(() => WorkspacesModule),
     ModerationModule,
-    NotificationsModule,
+    // WorkspacesModule -> NotificationsModule -> GatewayModule -> MeetingsModule
+    // -> NotificationsModule closes a cycle; forwardRef required here too.
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [MeetingsController],
   providers: [MeetingsService],

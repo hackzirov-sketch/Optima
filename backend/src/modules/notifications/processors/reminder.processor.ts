@@ -1,22 +1,19 @@
-import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Job, Queue } from 'bullmq';
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
-import { Meeting } from '../../../database/entities/meeting.entity';
-import { Task } from '../../../database/entities/task.entity';
-import { MeetingParticipant } from '../../../database/entities/meeting-participant.entity';
 import {
   NotificationCategory,
   NotificationPriority,
   NotificationChannel,
+  NotificationType,
   ReminderJobType,
 } from '../../../common/enums';
 import { NotificationsService } from '../notifications.service';
-import { RedisKeys } from '../../../redis/redis.keys';
 import { RedisService } from '../../../redis/redis.service';
-import { NotificationDispatcherService } from 'src/modules/notifications/notification-dispatcher.service'
+import { NotificationDispatcherService } from '../notification-dispatcher.service';
 
 export const REMINDER_QUEUE = 'reminders';
 
@@ -32,12 +29,9 @@ export class ReminderProcessor extends WorkerHost {
   private readonly logger = new Logger(ReminderProcessor.name);
 
   constructor(
-    @InjectRepository(Meeting)
-    private readonly meetingRepo: Repository<Meeting>,
-    @InjectRepository(MeetingParticipant)
-    private readonly participantRepo: Repository<MeetingParticipant>,
-    @InjectRepository(Task)
-    private readonly taskRepo: Repository<Task>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => NotificationsService))
     private readonly notifService: NotificationsService,
     private readonly dispatcher: NotificationDispatcherService,
     private readonly redis: RedisService,
@@ -64,10 +58,12 @@ export class ReminderProcessor extends WorkerHost {
   // ── Meeting reminders ────────────────────────────────────────────────────────
 
   private async processMeetingReminder(type: ReminderJobType, meetingId: string): Promise<void> {
-    const meeting = await this.meetingRepo.findOne({
-      where: { id: meetingId },
-      select: ['id', 'title', 'startTime', 'hostId'],
-    });
+    const meetingRows: Array<{ id: string; title: string | null; startTime: Date | null; hostId: string }> =
+      await this.dataSource.query(
+        `SELECT id, title, start_time AS "startTime", host_id AS "hostId" FROM meetings WHERE id = $1`,
+        [meetingId],
+      );
+    const meeting = meetingRows[0];
 
     if (!meeting) {
       this.logger.warn(`Meeting ${meetingId} not found — skipping reminder`);
@@ -80,11 +76,11 @@ export class ReminderProcessor extends WorkerHost {
       return;
     }
 
-    const participants = await this.participantRepo.find({
-      where: { meetingId },
-      select: ['userId'],
-    });
-    const userIds = [...new Set([meeting.hostId, ...participants.map(p => p.userId)])];
+    const participants: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT user_id AS "userId" FROM meeting_participants WHERE meeting_id = $1`,
+      [meetingId],
+    );
+    const userIds = [...new Set([meeting.hostId, ...participants.map((p) => p.userId)])];
 
     const config = MEETING_REMINDER_CONFIG[type];
     if (!config) return;
@@ -93,11 +89,11 @@ export class ReminderProcessor extends WorkerHost {
       await this.sendReminder({
         userId,
         title: config.title,
-        message: config.getMessage(meeting.title ?? 'Meeting', meeting.startTime),
+        message: config.getMessage(meeting.title ?? 'Meeting', meeting.startTime ?? undefined),
         category: NotificationCategory.MEETING,
         priority: config.priority,
         forceChannels: config.forceChannels,
-        notifType: 'meeting_reminder',
+        notifType: NotificationType.MEETING_INVITE,
         entityId: meetingId,
         entityType: 'meeting',
       });
@@ -107,39 +103,41 @@ export class ReminderProcessor extends WorkerHost {
   // ── Task reminders ───────────────────────────────────────────────────────────
 
   private async processTaskReminder(type: ReminderJobType, taskId: string): Promise<void> {
-    const task = await this.taskRepo.findOne({
-      where: { id: taskId },
-      relations: ['assignees'],
-      select: { id: true, title: true, dueDate: true, assignees: { id: true } },
-    } as any);
+    // NOTE: Task has a single `assigneeId` (not a many-to-many `assignees`
+    // relation — that relation doesn't exist on the entity). The previous
+    // version of this method referenced `relations: ['assignees']`, which
+    // would have thrown at runtime the first time this job ran.
+    const taskRows: Array<{ id: string; title: string | null; dueDate: Date | null; assigneeId: string | null }> =
+      await this.dataSource.query(
+        `SELECT id, title, due_date AS "dueDate", assignee_id AS "assigneeId" FROM tasks WHERE id = $1 AND deleted_at IS NULL`,
+        [taskId],
+      );
+    const task = taskRows[0];
 
     if (!task) {
       this.logger.warn(`Task ${taskId} not found — skipping`);
       return;
     }
 
-    if (!task.dueDate || (task as any).dueDate < new Date()) {
+    if (!task.dueDate || task.dueDate < new Date()) {
       return;
     }
 
-    const userIds: string[] = (task as any).assignees?.map((a: any) => a.id) ?? [];
-    if (!userIds.length) return;
+    if (!task.assigneeId) return;
 
     const config = TASK_REMINDER_CONFIG[type];
     if (!config) return;
 
-    for (const userId of userIds) {
-      await this.sendReminder({
-        userId,
-        title: config.title,
-        message: config.getMessage((task as any).title ?? 'Task'),
-        category: NotificationCategory.TASK,
-        priority: config.priority,
-        notifType: 'task_reminder',
-        entityId: taskId,
-        entityType: 'task',
-      });
-    }
+    await this.sendReminder({
+      userId: task.assigneeId,
+      title: config.title,
+      message: config.getMessage(task.title ?? 'Task'),
+      category: NotificationCategory.TASK,
+      priority: config.priority,
+      notifType: NotificationType.TASK_UPDATED,
+      entityId: taskId,
+      entityType: 'task',
+    });
   }
 
   // ── Shared sender ────────────────────────────────────────────────────────────
@@ -151,7 +149,7 @@ export class ReminderProcessor extends WorkerHost {
     category: NotificationCategory;
     priority: NotificationPriority;
     forceChannels?: NotificationChannel[];
-    notifType: string;
+    notifType: NotificationType;
     entityId: string;
     entityType: string;
   }): Promise<void> {
@@ -171,7 +169,7 @@ export class ReminderProcessor extends WorkerHost {
 
     const notif = await this.notifService.create({
       userId: params.userId,
-      type: 'meeting_invite' as any, // reuse existing type — extend NotificationType later
+      type: params.notifType,
       title: params.title,
       message: params.message,
       entityType: params.entityType,

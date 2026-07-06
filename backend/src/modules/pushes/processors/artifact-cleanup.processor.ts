@@ -1,10 +1,9 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
-import { TaskPush } from '../../../database/entities/task-push.entity';
 import { PushStatus } from '../../../common/enums';
 import { StorageService } from '../../storage/storage.service';
 
@@ -30,8 +29,8 @@ export class ArtifactCleanupProcessor extends WorkerHost implements OnModuleInit
   constructor(
     @InjectQueue(ARTIFACT_CLEANUP_QUEUE)
     private readonly queue: Queue,
-    @InjectRepository(TaskPush)
-    private readonly pushRepo: Repository<TaskPush>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly storage: StorageService,
   ) {
     super();
@@ -53,24 +52,26 @@ export class ArtifactCleanupProcessor extends WorkerHost implements OnModuleInit
     // Batch to avoid loading unbounded rows into memory on the first run
     // against a backlog that's been accumulating since launch.
     for (;;) {
-      const batch = await this.pushRepo.find({
-        where: {
-          status: PushStatus.UPLOADED,
-          expiresAt: LessThan(new Date()),
-        },
-        take: BATCH_SIZE,
-      });
+      const batch: Array<{ id: string; storageKey: string | null }> = await this.dataSource.query(
+        `SELECT id, storage_key AS "storageKey" FROM task_pushes
+         WHERE status = $1::task_pushes_status_enum AND expires_at < now()
+         LIMIT $2`,
+        [PushStatus.UPLOADED, BATCH_SIZE],
+      );
       if (batch.length === 0) break;
 
       for (const push of batch) {
         if (push.storageKey) {
           await this.storage.deleteFile(push.storageKey);
         }
-        push.status = PushStatus.EXPIRED;
-        push.storageUrl = null;
-        push.storageKey = null;
       }
-      await this.pushRepo.save(batch);
+
+      const ids = batch.map((p) => p.id);
+      await this.dataSource.query(
+        `UPDATE task_pushes SET status = $1::task_pushes_status_enum, storage_url = NULL, storage_key = NULL
+         WHERE id = ANY($2::uuid[])`,
+        [PushStatus.EXPIRED, ids],
+      );
       expired += batch.length;
 
       if (batch.length < BATCH_SIZE) break;

@@ -6,58 +6,48 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
-import { ChatRoom } from '../../database/entities/chat-room.entity';
-import { ChatMember } from '../../database/entities/chat-member.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { WorkspaceRole, ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import {
-  applySoftDelete,
-  isActiveEntity,
-  isSoftDeleted,
-} from '../../common/utils/soft-delete';
+import { isActiveEntity, isSoftDeleted } from '../../common/utils/soft-delete';
 import { PermissionService } from '../../common/services/permission.service';
 import { AuditService } from '../../common/services/audit.service';
+import { WORKSPACE_COLUMNS_SQL, WORKSPACE_COLUMNS_SQL_W, WORKSPACE_MEMBER_COLUMNS_SQL } from './workspaces.sql';
+import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
 
 @Injectable()
 export class WorkspacesService {
   private readonly logger = new Logger(WorkspacesService.name);
 
   constructor(
-    @InjectRepository(Workspace)
-    private readonly workspaceRepo: Repository<Workspace>,
-    @InjectRepository(WorkspaceMember)
-    private readonly memberRepo: Repository<WorkspaceMember>,
-    @InjectRepository(ChatRoom)
-    private readonly chatRoomRepo: Repository<ChatRoom>,
-    @InjectRepository(ChatMember)
-    private readonly chatMemberRepo: Repository<ChatMember>,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly permission: PermissionService,
     private readonly audit: AuditService,
   ) {}
 
   private async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
-    const member = await this.memberRepo.findOne({ where: { workspaceId, userId } });
-    if (!member) {
+    const rows: WorkspaceMember[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, userId],
+    );
+    if (!rows[0]) {
       throw new ForbiddenException({
         code: ErrorCode.NOT_WORKSPACE_MEMBER,
         message: 'Not a workspace member',
       });
     }
-    return member;
+    return rows[0];
   }
 
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
-    const existing = await this.workspaceRepo.findOne({
-      where: { slug: dto.slug },
-    });
-    if (existing) {
+    const existing = await this.dataSource.query(`SELECT id FROM workspaces WHERE slug = $1`, [dto.slug]);
+    if (existing[0]) {
       throw new ConflictException({
         code: ErrorCode.WORKSPACE_SLUG_TAKEN,
         message: 'Workspace slug is already taken',
@@ -69,36 +59,39 @@ export class WorkspacesService {
     await queryRunner.startTransaction();
 
     try {
-      // Create Workspace
-      const workspace = this.workspaceRepo.create({
-        ...dto,
-        ownerId: userId,
-      });
-      const savedWorkspace = await queryRunner.manager.save(workspace);
+      const savedWorkspaceRows: Workspace[] = await queryRunner.query(
+        `INSERT INTO workspaces (owner_id, name, slug, description, visibility, max_members, max_projects)
+         VALUES ($1, $2, $3, $4, COALESCE($5, 'private')::workspaces_visibility_enum, COALESCE($6, 10), COALESCE($7, 20))
+         RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+        [
+          userId,
+          dto.name,
+          dto.slug,
+          dto.description ?? null,
+          dto.visibility ?? null,
+          dto.maxMembers ?? null,
+          dto.maxProjects ?? null,
+        ],
+      );
+      const savedWorkspace = savedWorkspaceRows[0];
 
       // Add owner as a member with OWNER role
-      const member = this.memberRepo.create({
-        workspaceId: savedWorkspace.id,
-        userId: userId,
-        role: WorkspaceRole.OWNER,
-      });
-      await queryRunner.manager.save(member);
+      await queryRunner.query(
+        `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)`,
+        [savedWorkspace.id, userId, WorkspaceRole.OWNER],
+      );
 
       // Create default #general workspace channel
-      const generalRoom = this.chatRoomRepo.create({
-        workspaceId: savedWorkspace.id,
-        type: ChatRoomType.WORKSPACE,
-        name: 'general',
-        createdById: userId,
-      });
-      const savedRoom = await queryRunner.manager.save(generalRoom);
+      const savedRoomRows: Array<{ id: string }> = await queryRunner.query(
+        `INSERT INTO chat_rooms (workspace_id, type, name, created_by) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [savedWorkspace.id, ChatRoomType.WORKSPACE, 'general', userId],
+      );
 
       // Add owner to the channel
-      const chatMember = this.chatMemberRepo.create({
-        roomId: savedRoom.id,
-        userId: userId,
-      });
-      await queryRunner.manager.save(chatMember);
+      await queryRunner.query(
+        `INSERT INTO chat_members (room_id, user_id) VALUES ($1, $2)`,
+        [savedRoomRows[0].id, userId],
+      );
 
       await queryRunner.commitTransaction();
       return savedWorkspace;
@@ -113,17 +106,22 @@ export class WorkspacesService {
 
   async findAllForUser(userId: string): Promise<Workspace[]> {
     // Find all workspaces where the user is a member
-    const members = await this.memberRepo.find({
-      where: { userId },
-      relations: ['workspace'],
-    });
-    return members
-      .map((m) => m.workspace)
-      .filter((ws) => ws && !isSoftDeleted(ws));
+    const rows: Workspace[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_COLUMNS_SQL_W}
+       FROM workspace_members wm
+       JOIN workspaces w ON w.id = wm.workspace_id
+       WHERE wm.user_id = $1`,
+      [userId],
+    );
+    return rows.filter((ws) => ws && !isSoftDeleted(ws));
   }
 
   async findById(id: string): Promise<Workspace> {
-    const workspace = await this.workspaceRepo.findOne({ where: { id } });
+    const rows: Workspace[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_COLUMNS_SQL} FROM workspaces WHERE id = $1`,
+      [id],
+    );
+    const workspace = rows[0] ?? null;
     if (!isActiveEntity(workspace)) {
       throw new NotFoundException({
         code: ErrorCode.WORKSPACE_NOT_FOUND,
@@ -134,7 +132,11 @@ export class WorkspacesService {
   }
 
   async findBySlug(slug: string, userId: string): Promise<Workspace> {
-    const workspace = await this.workspaceRepo.findOne({ where: { slug } });
+    const rows: Workspace[] = await this.dataSource.query(
+      `SELECT ${WORKSPACE_COLUMNS_SQL} FROM workspaces WHERE slug = $1`,
+      [slug],
+    );
+    const workspace = rows[0] ?? null;
     if (!isActiveEntity(workspace)) {
       throw new NotFoundException({
         code: ErrorCode.WORKSPACE_NOT_FOUND,
@@ -142,10 +144,11 @@ export class WorkspacesService {
       });
     }
     // Ensure requesting user is actually a member of this workspace
-    const member = await this.memberRepo.findOne({
-      where: { workspaceId: workspace.id, userId },
-    });
-    if (!member) {
+    const memberRows = await this.dataSource.query(
+      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspace.id, userId],
+    );
+    if (!memberRows[0]) {
       throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'Access denied to this workspace' });
     }
     return workspace;
@@ -161,10 +164,8 @@ export class WorkspacesService {
     this.permission.assertCanManageWorkspace(member);
 
     if (dto.slug && dto.slug !== workspace.slug) {
-      const existing = await this.workspaceRepo.findOne({
-        where: { slug: dto.slug },
-      });
-      if (existing) {
+      const existing = await this.dataSource.query(`SELECT id FROM workspaces WHERE slug = $1`, [dto.slug]);
+      if (existing[0]) {
         throw new ConflictException({
           code: ErrorCode.WORKSPACE_SLUG_TAKEN,
           message: 'Workspace slug is already taken',
@@ -172,8 +173,17 @@ export class WorkspacesService {
       }
     }
 
-    Object.assign(workspace, dto);
-    return this.workspaceRepo.save(workspace);
+    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2, {
+      visibility: 'workspaces_visibility_enum',
+    });
+    if (!setClause) return workspace;
+    const rows: Workspace[] = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE workspaces SET ${setClause} WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+        [id, ...values],
+      ),
+    );
+    return rows[0];
   }
 
   /** Soft-delete workspace. Only role === OWNER (access control via PermissionService, not ownerId). */
@@ -181,8 +191,11 @@ export class WorkspacesService {
     const workspace = await this.findById(id);
     const member = await this.getMember(id, userId);
     this.permission.assertCanDeleteWorkspace(member);
-    applySoftDelete(workspace, userId);
-    await this.workspaceRepo.save(workspace);
+
+    await this.dataSource.query(
+      `UPDATE workspaces SET deleted_at = now(), deleted_by = $2 WHERE id = $1`,
+      [id, userId],
+    );
     await this.audit.log({
       workspaceId: id,
       actorId: userId,
@@ -204,7 +217,7 @@ export class WorkspacesService {
     currentOwnerId: string,
     newOwnerUserId: string,
   ): Promise<Workspace> {
-    const workspace = await this.findById(workspaceId);
+    await this.findById(workspaceId);
     const currentOwnerMember = await this.getMember(workspaceId, currentOwnerId);
 
     if (currentOwnerMember.role !== WorkspaceRole.OWNER) {
@@ -221,10 +234,11 @@ export class WorkspacesService {
       });
     }
 
-    const newOwnerMember = await this.memberRepo.findOne({
-      where: { workspaceId, userId: newOwnerUserId },
-    });
-    if (!newOwnerMember) {
+    const newOwnerRows = await this.dataSource.query(
+      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, newOwnerUserId],
+    );
+    if (!newOwnerRows[0]) {
       throw new NotFoundException({
         code: ErrorCode.MEMBER_NOT_FOUND,
         message: 'Target user is not a member of this workspace',
@@ -236,14 +250,20 @@ export class WorkspacesService {
     await queryRunner.startTransaction();
 
     try {
-      currentOwnerMember.role = WorkspaceRole.ADMIN;
-      await queryRunner.manager.save(currentOwnerMember);
-
-      newOwnerMember.role = WorkspaceRole.OWNER;
-      await queryRunner.manager.save(newOwnerMember);
-
-      workspace.ownerId = newOwnerUserId; // audit / billing record only
-      const savedWorkspace = await queryRunner.manager.save(workspace);
+      await queryRunner.query(
+        `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
+        [workspaceId, currentOwnerId, WorkspaceRole.ADMIN],
+      );
+      await queryRunner.query(
+        `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
+        [workspaceId, newOwnerUserId, WorkspaceRole.OWNER],
+      );
+      const savedRows: Workspace[] = normalizeReturning(
+        await queryRunner.query(
+          `UPDATE workspaces SET owner_id = $2 WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+          [workspaceId, newOwnerUserId],
+        ),
+      );
 
       await queryRunner.commitTransaction();
       await this.audit.log({
@@ -255,7 +275,7 @@ export class WorkspacesService {
         oldValue: { ownerId: currentOwnerId },
         newValue: { ownerId: newOwnerUserId },
       });
-      return savedWorkspace;
+      return savedRows[0];
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw new InternalServerErrorException({
