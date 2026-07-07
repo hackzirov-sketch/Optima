@@ -430,6 +430,145 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  // --- Email verification (Redis-native, replaces the old Postgres user_verifications table) ---
+
+  private readonly EMAIL_VERIFY_TTL_SECONDS = 15 * 60; // 15 minutes
+  private readonly EMAIL_VERIFY_MAX_ATTEMPTS = 5;
+  private readonly EMAIL_VERIFY_RESEND_COOLDOWN_SECONDS = 60;
+  private readonly EMAIL_VERIFY_RESEND_DAILY_CAP = 5;
+
+  /**
+   * Stores a pending email verification, keyed by `token` (long, unguessable,
+   * unique per attempt — generated fresh on every register/resend). `code` is
+   * the short human-enterable OTP sent by email; it is only ever compared
+   * *within* the record identified by `token`, never looked up globally, so
+   * two different users can be issued the same 6-digit code at the same time
+   * with zero collision risk.
+   */
+  async setEmailVerification(
+    token: string,
+    data: { userId: string; email: string; code: string },
+  ): Promise<void> {
+    const key = RedisKeys.emailVerify(token);
+    const payload = JSON.stringify({ ...data, attempts: 0 });
+    try {
+      const client = this.getClient();
+      if (client) {
+        await client.set(key, payload, 'EX', this.EMAIL_VERIFY_TTL_SECONDS);
+        return;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis setEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+    }
+    this.memSet(key, payload, this.EMAIL_VERIFY_TTL_SECONDS);
+  }
+
+  async getEmailVerification(
+    token: string,
+  ): Promise<{ userId: string; email: string; code: string; attempts: number } | null> {
+    const key = RedisKeys.emailVerify(token);
+    try {
+      const client = this.getClient();
+      if (client) {
+        const raw = await client.get(key);
+        return raw ? JSON.parse(raw) : null;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis getEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+    }
+    const entry = this.memStore.get(key);
+    if (!entry || Date.now() > entry.expiresAt) return null;
+    return JSON.parse(entry.value);
+  }
+
+  /** Increments the wrong-code attempt counter; deletes the record once it hits the max (forces a fresh resend). */
+  async incrementEmailVerifyAttempts(token: string): Promise<number> {
+    const key = RedisKeys.emailVerify(token);
+    const record = await this.getEmailVerification(token);
+    if (!record) return this.EMAIL_VERIFY_MAX_ATTEMPTS;
+
+    const attempts = record.attempts + 1;
+    if (attempts >= this.EMAIL_VERIFY_MAX_ATTEMPTS) {
+      await this.deleteEmailVerification(token);
+      return attempts;
+    }
+
+    const updated = JSON.stringify({ ...record, attempts });
+    try {
+      const client = this.getClient();
+      if (client) {
+        const ttl = await client.ttl(key);
+        await client.set(key, updated, 'EX', ttl > 0 ? ttl : this.EMAIL_VERIFY_TTL_SECONDS);
+        return attempts;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis incrementEmailVerifyAttempts failed: ${e instanceof Error ? e.message : e}`);
+    }
+    this.memSet(key, updated, this.EMAIL_VERIFY_TTL_SECONDS);
+    return attempts;
+  }
+
+  async deleteEmailVerification(token: string): Promise<void> {
+    const key = RedisKeys.emailVerify(token);
+    try {
+      const client = this.getClient();
+      if (client) {
+        await client.del(key);
+        return;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis deleteEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+    }
+    this.memStore.delete(key);
+  }
+
+  /**
+   * Rate limit for resending verification emails: a short cooldown between
+   * individual requests, plus a hard daily cap so a single account can't be
+   * used to spam an inbox (or run up email-provider costs) all day long.
+   * Returns null if allowed, or the reason + retryAfter (seconds) if blocked.
+   */
+  async checkEmailVerifyResendLimit(
+    userId: string,
+  ): Promise<{ blocked: true; reason: 'cooldown' | 'daily_cap'; retryAfter: number } | null> {
+    const cooldownKey = RedisKeys.emailVerifyResendCooldown(userId);
+    const countKey = RedisKeys.emailVerifyResendCount(userId);
+    try {
+      const client = this.getClient();
+      if (client) {
+        const [cooldownTtl, count] = await Promise.all([client.ttl(cooldownKey), client.get(countKey)]);
+        if (cooldownTtl > 0) return { blocked: true, reason: 'cooldown', retryAfter: cooldownTtl };
+        if (count && parseInt(count, 10) >= this.EMAIL_VERIFY_RESEND_DAILY_CAP) {
+          const dailyTtl = await client.ttl(countKey);
+          return { blocked: true, reason: 'daily_cap', retryAfter: dailyTtl > 0 ? dailyTtl : 86400 };
+        }
+        return null;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis checkEmailVerifyResendLimit failed: ${e instanceof Error ? e.message : e}`);
+    }
+    return null; // fail-open for resend limiting — worst case is an extra email, not a security issue
+  }
+
+  /** Call after actually sending a resend — starts the cooldown and increments the daily counter. */
+  async markEmailVerifyResendSent(userId: string): Promise<void> {
+    const cooldownKey = RedisKeys.emailVerifyResendCooldown(userId);
+    const countKey = RedisKeys.emailVerifyResendCount(userId);
+    try {
+      const client = this.getClient();
+      if (client) {
+        const pipeline = client.pipeline();
+        pipeline.set(cooldownKey, '1', 'EX', this.EMAIL_VERIFY_RESEND_COOLDOWN_SECONDS);
+        pipeline.incr(countKey);
+        pipeline.expire(countKey, 86400, 'NX');
+        await pipeline.exec();
+        return;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis markEmailVerifyResendSent failed: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
   onModuleDestroy() {
     this.client?.disconnect();
     this.client = null;

@@ -165,3 +165,21 @@ export enum ReminderJobType {
   TASK_1D      = 'task_1d',
   TASK_2H      = 'task_2h',
 }
+
+/**
+ * Self-selected profession at signup — purely informational/onboarding data
+ * (used for personalization, defaults, analytics). NOT to be confused with
+ * `WorkspaceRole` (owner/admin/lead/senior/middle/junior/guest), which is the
+ * per-workspace RBAC role and governs actual permissions.
+ */
+export enum UserOccupation {
+  DEVELOPER        = 'developer',
+  DESIGNER         = 'designer',
+  FREELANCER       = 'freelancer',
+  PROJECT_MANAGER  = 'project_manager',
+  QA_ENGINEER      = 'qa_engineer',
+  DEVOPS_ENGINEER  = 'devops_engineer',
+  PRODUCT_MANAGER  = 'product_manager',
+  STUDENT          = 'student',
+  OTHER            = 'other',
+}

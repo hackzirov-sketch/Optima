@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { MeetingStatus, MeetingParticipantRole } from '../../common/enums/meeting.enum';
@@ -16,9 +18,13 @@ import { NotificationType } from '../../common/enums';
 import { MembersService } from '../workspaces/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
+import { StorageService } from '../storage/storage.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
 import * as crypto from 'crypto';
+
+export const MEETING_RECORDING_QUEUE = 'meeting-recording';
+export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enforced server-side regardless of client behavior
 
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
@@ -31,6 +37,13 @@ const PARTICIPANT_COLUMNS_SQL = `
   id, meeting_id AS "meetingId", user_id AS "userId", role, joined_at AS "joinedAt",
   left_at AS "leftAt", is_muted AS "isMuted", camera_enabled AS "cameraEnabled",
   screen_sharing AS "screenSharing", created_at AS "createdAt"
+`;
+
+const RECORDING_COLUMNS_SQL = `
+  id, meeting_id AS "meetingId", started_by AS "startedBy", status,
+  started_at AS "startedAt", stopped_at AS "stoppedAt", duration_seconds AS "durationSeconds",
+  auto_stopped AS "autoStopped", storage_key AS "storageKey", storage_url AS "storageUrl",
+  file_size AS "fileSize", created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 
 function generateMeetingCode(): string {
@@ -53,6 +66,9 @@ export class MeetingsService {
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => ReminderSchedulerService))
     private readonly reminderScheduler: ReminderSchedulerService,
+    @InjectQueue(MEETING_RECORDING_QUEUE)
+    private readonly recordingQueue: Queue,
+    private readonly storageService: StorageService,
   ) {}
 
   private async findMeeting(meetingId: string) {
@@ -380,5 +396,165 @@ export class MeetingsService {
 
     await Promise.all(notifications);
     return { success: true, invitedCount: validUserIds.length };
+  }
+
+  // ─────────────────────────────────────────────
+  //  Recording (hard 1-hour cap, enforced server-side)
+  // ─────────────────────────────────────────────
+
+  /**
+   * Only the host or a co-host can start a recording. Enforced here (not
+   * just in the UI) because the WebSocket handler is a thin wrapper around
+   * this method — this is the actual authorization boundary.
+   */
+  private async assertCanRecord(meetingId: string, userId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
+
+    if (meeting.hostId === userId) return meeting;
+
+    const participantRows = await this.dataSource.query(
+      `SELECT role FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [meetingId, userId],
+    );
+    const role = participantRows[0]?.role;
+    if (role !== MeetingParticipantRole.CO_HOST) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_HOST_ONLY,
+        message: 'Only the host or a co-host can control recording',
+      });
+    }
+    return meeting;
+  }
+
+  async startRecording(meetingId: string, userId: string) {
+    await this.assertCanRecord(meetingId, userId);
+
+    const activeRows = await this.dataSource.query(
+      `SELECT id FROM meeting_recordings WHERE meeting_id = $1 AND status = 'recording'`,
+      [meetingId],
+    );
+    if (activeRows[0]) {
+      throw new ConflictException({
+        code: ErrorCode.MEETING_RECORDING_ALREADY_ACTIVE,
+        message: 'A recording is already in progress for this meeting',
+      });
+    }
+
+    const rows = await this.dataSource.query(
+      `INSERT INTO meeting_recordings (meeting_id, started_by, status, started_at)
+       VALUES ($1, $2, 'recording', now())
+       RETURNING ${RECORDING_COLUMNS_SQL}`,
+      [meetingId, userId],
+    );
+    const recording = rows[0];
+
+    // Hard server-side cutoff: fires even if the client crashes, loses
+    // connection, or simply never sends a stop — this is the real cap,
+    // not just a UI countdown.
+    await this.recordingQueue.add(
+      'auto-stop',
+      { recordingId: recording.id, meetingId },
+      { delay: MAX_RECORDING_DURATION_SECONDS * 1000, jobId: `auto-stop_${recording.id}` },
+    );
+
+    return recording;
+  }
+
+  /**
+   * Called either by the host (manual stop) or by the auto-stop BullMQ job
+   * (`autoStopped: true`) once MAX_RECORDING_DURATION_SECONDS elapses.
+   */
+  async stopRecording(
+    meetingId: string,
+    userId: string | null,
+    opts: { autoStopped?: boolean; storageKey?: string; storageUrl?: string; fileSize?: number } = {},
+  ) {
+    if (userId) await this.assertCanRecord(meetingId, userId);
+
+    const rows = await this.dataSource.query(
+      `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 AND status = 'recording'`,
+      [meetingId],
+    );
+    const recording = rows[0];
+    if (!recording) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_RECORDING_NOT_ACTIVE,
+        message: 'No active recording for this meeting',
+      });
+    }
+
+    const durationSeconds = Math.min(
+      MAX_RECORDING_DURATION_SECONDS,
+      Math.floor((Date.now() - new Date(recording.startedAt).getTime()) / 1000),
+    );
+
+    const updatedRows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meeting_recordings
+         SET status = 'completed', stopped_at = now(), duration_seconds = $2,
+             auto_stopped = $3, storage_key = COALESCE($4, storage_key),
+             storage_url = COALESCE($5, storage_url), file_size = COALESCE($6, file_size)
+         WHERE id = $1
+         RETURNING ${RECORDING_COLUMNS_SQL}`,
+        [
+          recording.id,
+          durationSeconds,
+          opts.autoStopped ?? false,
+          opts.storageKey ?? null,
+          opts.storageUrl ?? null,
+          opts.fileSize ?? null,
+        ],
+      ),
+    );
+
+    // If this was a manual stop, cancel the pending auto-stop job so it
+    // doesn't fire a redundant stop later.
+    if (!opts.autoStopped) {
+      const job = await this.recordingQueue.getJob(`auto-stop_${recording.id}`);
+      await job?.remove().catch(() => undefined);
+    }
+
+    return updatedRows[0];
+  }
+
+  async listRecordings(meetingId: string, userId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting) throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Meeting not found' });
+    await this.membersService.assertMember(meeting.workspaceId, userId);
+
+    return this.dataSource.query(
+      `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 ORDER BY started_at DESC`,
+      [meetingId],
+    );
+  }
+
+  /** Presigned PUT URL for the client to upload the recorded blob directly to R2 once stopped. */
+  async presignRecordingUpload(
+    meetingId: string,
+    recordingId: string,
+    userId: string,
+    mimeType: string,
+    fileSize: number,
+  ) {
+    await this.assertCanRecord(meetingId, userId);
+
+    const rows = await this.dataSource.query(
+      `SELECT id FROM meeting_recordings WHERE id = $1 AND meeting_id = $2`,
+      [recordingId, meetingId],
+    );
+    if (!rows[0]) {
+      throw new NotFoundException({ code: ErrorCode.MEETING_RECORDING_NOT_FOUND, message: 'Recording not found' });
+    }
+
+    const ext = mimeType === 'video/mp4' ? 'mp4' : 'webm';
+    const { uploadUrl, storageKey, storageUrl } = await this.storageService.getPresignedUploadUrl(
+      'meeting-recordings',
+      meetingId,
+      `${recordingId}.${ext}`,
+      mimeType,
+      fileSize,
+    );
+    return { uploadUrl, storageKey, storageUrl };
   }
 }

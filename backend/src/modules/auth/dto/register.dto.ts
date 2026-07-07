@@ -5,12 +5,14 @@ import {
   IsString,
   IsOptional,
   IsNumber,
+  IsEnum,
   Min,
   Max,
   MinLength,
   MaxLength,
   Matches,
 } from 'class-validator';
+import { UserOccupation } from '../../../common/enums';
 
 export class RegisterDto {
   @ApiProperty({ example: 'John' })
@@ -59,4 +61,13 @@ export class RegisterDto {
   @Min(10000000000)
   @Max(999999999999999)
   phoneNumber?: number;
+
+  @ApiPropertyOptional({
+    enum: UserOccupation,
+    example: UserOccupation.DEVELOPER,
+    description: 'Self-selected profession — shown as a question during onboarding',
+  })
+  @IsOptional()
+  @IsEnum(UserOccupation)
+  occupation?: UserOccupation;
 }

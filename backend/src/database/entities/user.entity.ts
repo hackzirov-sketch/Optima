@@ -9,7 +9,7 @@ import {
   OneToOne,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { UserTheme, UserLanguage } from '../../common/enums';
+import { UserTheme, UserLanguage, UserOccupation } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { WorkspaceMember } from './workspace-member.entity';
 import { UserSettings } from './user-settings.entity';
@@ -63,6 +63,13 @@ export class User {
 
   @Column({ name: 'is_verified', default: false })
   isVerified: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: UserOccupation,
+    nullable: true,
+  })
+  occupation: UserOccupation | null;
 
   @Column({ type: 'simple-array', default: 'local' })
   providers: string[];

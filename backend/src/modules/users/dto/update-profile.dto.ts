@@ -9,7 +9,7 @@ import {
   IsEnum,
   IsUrl,
 } from 'class-validator';
-import { UserTheme, UserLanguage } from '../../../common/enums';
+import { UserTheme, UserLanguage, UserOccupation } from '../../../common/enums';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'John' })
@@ -53,4 +53,9 @@ export class UpdateProfileDto {
   @Min(10000000000)
   @Max(999999999999999)
   phoneNumber?: number;
+
+  @ApiPropertyOptional({ enum: UserOccupation, description: 'Self-selected profession' })
+  @IsOptional()
+  @IsEnum(UserOccupation)
+  occupation?: UserOccupation;
 }

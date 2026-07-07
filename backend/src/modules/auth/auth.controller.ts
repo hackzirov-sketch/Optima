@@ -28,6 +28,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -76,9 +77,20 @@ export class AuthController {
   @Post('verify-email')
   @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 60, blockSeconds: 1800 })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify email address with 6-digit code' })
+  @ApiOperation({ summary: 'Verify email address with verifyToken + 6-digit code' })
   async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto) {
     const result = await this.authService.verifyEmail(dto);
+    await req.clearRateLimit?.();
+    return result;
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @AuthRateLimit({ action: 'resend-verification', maxAttempts: 5, windowSeconds: 3600, blockSeconds: 3600 })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend the email verification code' })
+  async resendVerification(@Req() req, @Body() dto: ResendVerificationDto) {
+    const result = await this.authService.resendVerification(dto);
     await req.clearRateLimit?.();
     return result;
   }

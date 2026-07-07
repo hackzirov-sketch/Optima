@@ -123,13 +123,14 @@ export class UsersService {
     const rows: User[] = await this.dataSource.query(
       `INSERT INTO users
          (first_name, last_name, username, email, phone_number, password_hash,
-          avatar_url, language, timezone, theme, is_active, is_verified,
+          avatar_url, language, timezone, theme, occupation, is_active, is_verified,
           providers, needs_password_setup)
        VALUES
          ($1, $2, $3, $4, $5, $6, $7,
           COALESCE($8, 'en')::users_language_enum, COALESCE($9, 'UTC'),
           COALESCE($10, 'system')::users_theme_enum,
-          COALESCE($11, true), COALESCE($12, false), $13, COALESCE($14, false))
+          $11::users_occupation_enum,
+          COALESCE($12, true), COALESCE($13, false), $14, COALESCE($15, false))
        RETURNING ${USER_COLUMNS_SQL}`,
       [
         data.firstName,
@@ -142,6 +143,7 @@ export class UsersService {
         data.language ?? null,
         data.timezone ?? null,
         data.theme ?? null,
+        data.occupation ?? null,
         data.isActive ?? null,
         data.isVerified ?? null,
         serializeProviders(data.providers) ?? 'local',
@@ -159,6 +161,7 @@ export class UsersService {
     const { setClause, values } = buildUpdateSet(patch, 2, {
       language: 'users_language_enum',
       theme: 'users_theme_enum',
+      occupation: 'users_occupation_enum',
     });
     if (!setClause) return;
     await this.dataSource.query(

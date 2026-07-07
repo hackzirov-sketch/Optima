@@ -1,7 +1,7 @@
 export const USER_COLUMNS_SQL = `
   id, first_name AS "firstName", last_name AS "lastName", username, email,
   phone_number AS "phoneNumber",
-  avatar_url AS "avatarUrl", language, timezone, theme,
+  avatar_url AS "avatarUrl", language, timezone, theme, occupation,
   is_active AS "isActive", is_verified AS "isVerified", providers,
   needs_password_setup AS "needsPasswordSetup", last_seen AS "lastSeen",
   created_at AS "createdAt", updated_at AS "updatedAt",

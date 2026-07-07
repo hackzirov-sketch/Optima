@@ -11,7 +11,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 
-export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes';
+export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings';
 
 const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[] | null }> = {
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
@@ -39,6 +39,13 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
     ],
   },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
+  'meeting-recordings': {
+    // 1-hour hard cap is enforced server-side on duration (see MeetingsService),
+    // this is just a generous byte ceiling so a runaway/misbehaving client
+    // can't upload an unbounded blob.
+    maxBytes: 2560 * 1024 * 1024, // 2.5 GB
+    mimeTypes: ['video/webm', 'video/mp4'],
+  },
 };
 
 export interface CloudinarySignResult {

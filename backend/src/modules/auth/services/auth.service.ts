@@ -20,6 +20,7 @@ import { ContentFilterService } from '../../moderation/services/content-filter.s
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { VerifyEmailDto } from '../dto/verify-email.dto';
+import { ResendVerificationDto } from '../dto/resend-verification.dto';
 import { SetPasswordDto } from '../dto/set-password.dto';
 import { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import { ResetPasswordDto } from '../dto/reset-password.dto';
@@ -30,6 +31,10 @@ import { USER_COLUMNS_SQL, mapUserRow } from '../../users/users.sql';
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
+
+function generateVerificationCode(): string {
+  return crypto.randomInt(100000, 1000000).toString();
+}
 
 @Injectable()
 export class AuthService {
@@ -48,88 +53,28 @@ export class AuthService {
     private dataSource: DataSource,
   ) {}
 
-  async verifyEmail(dto: VerifyEmailDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  // ─────────────────────────────────────────────
+  //  Email verification (Redis-native)
+  // ─────────────────────────────────────────────
 
-    try {
-      const verificationRows: Array<{
-        id: string;
-        userId: string;
-        code: string;
-        expiresAt: Date;
-      }> = await queryRunner.query(
-        `SELECT id, user_id AS "userId", code, expires_at AS "expiresAt"
-         FROM user_verifications
-         WHERE code = $1
-         FOR UPDATE`,
-        [dto.code],
-      );
-      const verification = verificationRows[0];
+  /**
+   * Issues a fresh verification attempt: a long unguessable `token` (the
+   * actual lookup key — collision-proof at any scale) plus a short 6-digit
+   * `code` (what the user reads out of their inbox and types in). Stored in
+   * Redis with a 15-minute TTL. The email send is fire-and-forget: MailService
+   * already swallows its own errors, and awaiting SMTP here would block the
+   * HTTP response for as long as the mail server takes to answer (seconds to
+   * ~90s when it's slow/unreachable) — the user would sit on a spinner for no
+   * reason since the account is already created either way.
+   */
+  private async issueEmailVerification(userId: string, email: string): Promise<string> {
+    const token = crypto.randomBytes(32).toString('hex');
+    const code = generateVerificationCode();
 
-      if (!verification || verification.expiresAt < new Date()) {
-        throw new BadRequestException({
-          code: ErrorCode.TOKEN_INVALID,
-          message: 'Invalid or expired verification code',
-        });
-      }
+    await this.redisService.setEmailVerification(token, { userId, email, code });
+    void this.mailService.sendVerificationEmail(email, code);
 
-      const userRows: Array<User & { passwordHash: string | null }> = await queryRunner.query(
-        `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
-         FROM users WHERE id = $1 FOR UPDATE`,
-        [verification.userId],
-      );
-      const user = userRows[0] && mapUserRow(userRows[0]);
-      if (!user) {
-        throw new BadRequestException({
-          code: ErrorCode.TOKEN_INVALID,
-          message: 'Invalid or expired verification code',
-        });
-      }
-
-      let setupToken: string | undefined;
-      const needsPasswordSetup = !user.passwordHash;
-
-      await Promise.all([
-        queryRunner.query(
-          `UPDATE users SET is_verified = true, needs_password_setup = $2, updated_at = now() WHERE id = $1`,
-          [user.id, needsPasswordSetup],
-        ),
-        queryRunner.query(`DELETE FROM user_verifications WHERE user_id = $1`, [user.id]),
-      ]);
-
-      user.isVerified = true;
-      user.needsPasswordSetup = needsPasswordSetup;
-
-      if (needsPasswordSetup) {
-        setupToken = crypto.randomUUID();
-        await this.redisService.setPasswordResetToken(setupToken, user.id);
-      }
-
-      await queryRunner.commitTransaction();
-
-      const {
-        accessToken,
-        refreshToken,
-        user: authUser,
-      } = await this.tokenService.generateTokens(user);
-
-      return {
-        message: 'Email verified successfully',
-        redirect: !user.passwordHash ? '/set-password' : undefined,
-        requiresPasswordSetup: !user.passwordHash,
-        setupToken,
-        accessToken,
-        refreshToken,
-        user: authUser,
-      };
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
-    }
+    return token;
   }
 
   async register(dto: RegisterDto) {
@@ -169,8 +114,8 @@ export class AuthService {
       email: dto.email,
       passwordHash,
       phoneNumber: dto.phoneNumber ?? null,
-      // Email verification step removed — accounts are active immediately on signup.
-      isVerified: true,
+      occupation: dto.occupation ?? null,
+      isVerified: false,
       providers: ['local'],
       needsPasswordSetup: false,
     });
@@ -179,15 +124,134 @@ export class AuthService {
       this.logger.warn(err),
     );
 
-    const { accessToken, refreshToken, user: authUser } =
-      await this.tokenService.generateTokens(user, { provider: 'local' });
+    const verifyToken = await this.issueEmailVerification(user.id, user.email);
 
     return {
-      message: 'Registration successful.',
-      accessToken,
-      refreshToken,
-      user: authUser,
+      message: 'Registration successful. A verification code has been sent to your email.',
+      userId: user.id,
+      verifyToken,
     };
+  }
+
+  async verifyEmail(dto: VerifyEmailDto) {
+    const record = await this.redisService.getEmailVerification(dto.verifyToken);
+
+    if (!record) {
+      throw new BadRequestException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Invalid or expired verification token. Please request a new code.',
+      });
+    }
+
+    if (record.code !== dto.code) {
+      const attempts = await this.redisService.incrementEmailVerifyAttempts(dto.verifyToken);
+      throw new BadRequestException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: attempts >= 5
+          ? 'Too many incorrect attempts. Please request a new code.'
+          : 'Incorrect verification code.',
+      });
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const userRows: Array<User & { passwordHash: string | null }> = await queryRunner.query(
+        `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
+         FROM users WHERE id = $1 FOR UPDATE`,
+        [record.userId],
+      );
+      const user = userRows[0] && mapUserRow(userRows[0]);
+      if (!user) {
+        throw new BadRequestException({
+          code: ErrorCode.TOKEN_INVALID,
+          message: 'Invalid or expired verification token',
+        });
+      }
+
+      const needsPasswordSetup = !user.passwordHash;
+
+      await queryRunner.query(
+        `UPDATE users SET is_verified = true, needs_password_setup = $2, updated_at = now() WHERE id = $1`,
+        [user.id, needsPasswordSetup],
+      );
+
+      await queryRunner.commitTransaction();
+      await this.redisService.deleteEmailVerification(dto.verifyToken);
+
+      user.isVerified = true;
+      user.needsPasswordSetup = needsPasswordSetup;
+
+      let setupToken: string | undefined;
+      if (needsPasswordSetup) {
+        setupToken = crypto.randomUUID();
+        await this.redisService.setPasswordResetToken(setupToken, user.id);
+      }
+
+      const {
+        accessToken,
+        refreshToken,
+        user: authUser,
+      } = await this.tokenService.generateTokens(user);
+
+      return {
+        message: 'Email verified successfully',
+        redirect: needsPasswordSetup ? '/set-password' : undefined,
+        requiresPasswordSetup: needsPasswordSetup,
+        setupToken,
+        accessToken,
+        refreshToken,
+        user: authUser,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Rate limited two ways: a short cooldown between individual requests
+   * (prevents "spam the resend button") and a hard daily cap per account
+   * (prevents an attacker from running up email-provider costs / annoying a
+   * real inbox all day using someone else's address). Both checks live in
+   * Redis (see RedisService) and are independent of the per-IP AuthRateLimit
+   * guard already applied at the controller level — defense in depth.
+   */
+  async resendVerification(dto: ResendVerificationDto) {
+    const genericResponse = {
+      message: 'If that email is registered and not yet verified, a new code has been sent.',
+    };
+
+    const user = await this.usersService.findByEmail(dto.email);
+    // Same response whether or not the account exists / is already verified —
+    // avoids leaking which emails are registered.
+    if (!user || user.isVerified) {
+      return genericResponse;
+    }
+
+    const limitCheck = await this.redisService.checkEmailVerifyResendLimit(user.id);
+    if (limitCheck?.blocked) {
+      throw new HttpException(
+        {
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
+          message:
+            limitCheck.reason === 'daily_cap'
+              ? 'Daily resend limit reached. Please try again tomorrow or contact support.'
+              : `Please wait ${limitCheck.retryAfter}s before requesting another code.`,
+          retryAfter: limitCheck.retryAfter,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const verifyToken = await this.issueEmailVerification(user.id, user.email);
+    await this.redisService.markEmailVerifyResendSent(user.id);
+
+    return { ...genericResponse, verifyToken };
   }
 
   async login(
@@ -209,11 +273,12 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      void this.enqueueResendVerification(user.id, user.email);
+      const verifyToken = await this.issueEmailVerification(user.id, user.email);
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
         message: 'This account was created using Google/GitHub. Verification code sent.',
         requiresPasswordSetup: true,
+        verifyToken,
         redirect: '/verify',
       });
     }
@@ -242,7 +307,24 @@ export class AuthService {
       });
     }
 
-    // Email verification requirement removed — verified status no longer gates login.
+    if (!user.isVerified) {
+      // Rate-limited internally (checkEmailVerifyResendLimit) — a burst of
+      // failed logins against an unverified account won't spam their inbox.
+      const limitCheck = await this.redisService.checkEmailVerifyResendLimit(user.id);
+      let verifyToken: string | undefined;
+      if (!limitCheck?.blocked) {
+        verifyToken = await this.issueEmailVerification(user.id, user.email);
+        await this.redisService.markEmailVerifyResendSent(user.id);
+      }
+      throw new UnauthorizedException({
+        code: ErrorCode.PENDING_VERIFICATION,
+        message: verifyToken
+          ? 'Please verify your email address. A new code has been sent.'
+          : 'Please verify your email address. Use the code already sent, or try resending shortly.',
+        verifyToken,
+        redirect: '/verify',
+      });
+    }
 
     if (!user.isActive) {
       throw new UnauthorizedException({
@@ -314,7 +396,9 @@ export class AuthService {
       await this.redisService.setPasswordResetToken(token, user.id);
       const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
       const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
-      await this.mailService.sendPasswordResetEmail(dto.email, resetUrl);
+      // Fire-and-forget — same reasoning as issueEmailVerification: don't make
+      // the caller wait on SMTP, and the response is identical either way.
+      void this.mailService.sendPasswordResetEmail(dto.email, resetUrl);
     }
     return { message: 'If an account exists, a reset email has been sent.' };
   }
@@ -357,27 +441,6 @@ export class AuthService {
     } catch (error) {
       this.logger.warn(
         `BullMQ on-register failed: ${error instanceof Error ? error.message : error}`,
-      );
-    }
-  }
-
-  private async enqueueResendVerification(
-    userId: string,
-    email: string,
-  ): Promise<void> {
-    try {
-      await this.authQueue.add(
-        'resend-verification',
-        { userId, email },
-        {
-          jobId: `resend-verification_${userId}`,
-          removeOnComplete: true,
-          attempts: 2,
-        },
-      );
-    } catch (error) {
-      this.logger.warn(
-        `BullMQ resend-verification failed: ${error instanceof Error ? error.message : error}`,
       );
     }
   }
