@@ -181,7 +181,7 @@ export function WorkspaceBackendPanel({
             )}
             {!projectsLoading && projects.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <p className="text-sm text-muted-foreground">Loyiha yo'q</p>
+                <p className="text-sm text-muted-foreground">Loyiha yo&apos;q</p>
                 <button
                   type="button"
                   onClick={() => setShowCreateProject(true)}
@@ -226,7 +226,7 @@ export function WorkspaceBackendPanel({
             </ActionButton>
           </div>
           {!projects.length && (
-            <p className="mt-4 text-sm text-muted-foreground">Task qo'shish uchun avval loyiha yarating.</p>
+            <p className="mt-4 text-sm text-muted-foreground">Task qo&apos;shish uchun avval loyiha yarating.</p>
           )}
         </SurfaceCard>
 

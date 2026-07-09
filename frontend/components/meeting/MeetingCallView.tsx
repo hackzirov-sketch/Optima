@@ -41,7 +41,7 @@ interface MeetingCallViewProps {
   meetingCode?: string;
   title: string;
   participants: Participant[];
-  workspaceMembers?: any[];
+  workspaceMembers?: { userId: string; user: { firstName?: string; lastName?: string; email: string } }[];
   /** Current logged-in user's id — used to keep them out of their own invite list. */
   currentUserId?: string;
   onLeave: () => void;
@@ -479,7 +479,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                  </button>
                ))}
                {invitableMembers.length === 0 && (
-                 <div className="p-6 text-center text-gray-500 text-[13px] font-medium">Boshqa a'zolar topilmadi.</div>
+                 <div className="p-6 text-center text-gray-500 text-[13px] font-medium">Boshqa a&apos;zolar topilmadi.</div>
                )}
             </div>
           </div>
@@ -552,7 +552,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                   </div>
                 </div>
                 <p className="text-gray-300 text-sm leading-relaxed italic font-medium">
-                  "Hozirda biz yangi dizayn palitrasi va foydalanuvchi interfeysini takomillashtirish masalalarini ko'rib chiqyapmiz. Nigora Saidova prototip bo'yicha o'z fikrlarini bildirdi..."
+                  &quot;Hozirda biz yangi dizayn palitrasi va foydalanuvchi interfeysini takomillashtirish masalalarini ko&apos;rib chiqyapmiz. Nigora Saidova prototip bo&apos;yicha o&apos;z fikrlarini bildirdi...&quot;
                 </p>
               </div>
             </div>
@@ -565,7 +565,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                <div className="flex items-center gap-4 text-gray-400 font-medium text-[13px]">
                   <span>{timer}</span>
                   {activeParticipants.length > 1 && (
-                     <span>| {activeParticipants.length} a'zolar</span>
+                     <span>| {activeParticipants.length} a&apos;zolar</span>
                   )}
                </div>
 
@@ -819,7 +819,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                   <div className="text-center opacity-70 mt-8">
                     <Sparkles className="w-12 h-12 text-[#4361EE] mb-4 mx-auto" />
                     <p className="text-gray-300 text-sm font-medium">AI Meeting Assistant</p>
-                    <p className="text-gray-500 text-xs mt-2">Savol bering — xulosa, eslatma yoki tushuntirish so'rang.</p>
+                    <p className="text-gray-500 text-xs mt-2">Savol bering — xulosa, eslatma yoki tushuntirish so&apos;rang.</p>
                   </div>
                 )}
                 {aiMessages.map((m) => (

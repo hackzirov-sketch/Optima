@@ -170,7 +170,7 @@ export default function RegisterPage() {
 
           {usernameInvalid && (
             <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
-              <span>⚠</span> Username faqat harf, raqam, <code className="font-mono">_</code> va <code className="font-mono">-</code> dan iborat bo'lishi kerak.
+              <span>⚠</span> Username faqat harf, raqam, <code className="font-mono">_</code> va <code className="font-mono">-</code> dan iborat bo&apos;lishi kerak.
             </p>
           )}
 

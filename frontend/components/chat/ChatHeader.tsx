@@ -45,7 +45,7 @@ function RoomInviteModal({
     setLoadingCode(true);
     try {
       const res = await chatApi.getInviteCode(room.id);
-      const newCode = (res as any).data?.code ?? (res as any).code;
+      const newCode = res.data?.code;
       setCode(newCode);
       onRoomUpdated?.({ inviteCode: newCode });
     } finally {

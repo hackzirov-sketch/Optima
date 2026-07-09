@@ -24,7 +24,7 @@ export function TaskCompletionModal({ taskTitle, onConfirm, onCancel }: TaskComp
     >
       <div className="bg-background border border-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <h3 className="text-base font-semibold mb-1">Task bajarildi</h3>
-        <p className="text-sm text-muted-foreground mb-4 truncate">"{taskTitle}"</p>
+        <p className="text-sm text-muted-foreground mb-4 truncate">&quot;{taskTitle}&quot;</p>
 
         <label className="block text-sm font-medium mb-2">
           Nima qilindi? <span className="text-muted-foreground font-normal">(ixtiyoriy)</span>

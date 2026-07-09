@@ -24,7 +24,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useTasks } from "@/hooks/useTasks";
 import { meetingsApi } from "@/lib/api";
 
-function meetingStatus(meeting: any): 'live' | 'upcoming' | 'past' {
+function meetingStatus(meeting: { isActive?: boolean; startTime: string; endTime?: string }): 'live' | 'upcoming' | 'past' {
   const now = Date.now();
   const start = new Date(meeting.startTime).getTime();
   const end = meeting.endTime ? new Date(meeting.endTime).getTime() : start + 3600000;
@@ -70,7 +70,7 @@ export default function Page() {
   const callParticipants = useMemo(() => {
     const selfName = selfMember
       ? `${selfMember.user.firstName ?? ''} ${selfMember.user.lastName ?? ''}`.trim()
-      : backendUser?.firstName ?? "Me";
+      : "Me";
     
     const selfParticipant = {
       id: backendUser?.id ?? "local-user",
@@ -103,7 +103,7 @@ export default function Page() {
   const handleCreateMeeting = async () => {
     try {
       const res = await createMeeting({
-        title: `${backendUser?.firstName || 'User'}'s Meeting`,
+        title: `${backendUser?.email?.split('@')[0] || 'User'}'s Meeting`,
         startTime: new Date().toISOString(),
       });
       setActiveId(res.id);
@@ -149,7 +149,7 @@ export default function Page() {
               <div className="w-3 h-[2px] bg-[#4361EE]"></div> MEETINGS
             </div>
             <h1 className="text-[28px] font-bold tracking-tight mb-2.5 text-gray-100">
-              Jamoa va mijoz qo'ng'iroqlari uchun lux<br/>video uchrashuvlar
+              Jamoa va mijoz qo&apos;ng&apos;iroqlari uchun lux<br/>video uchrashuvlar
             </h1>
             <p className="text-gray-400 text-[13px] font-medium leading-relaxed max-w-[480px]">
               Instant call, rejalashtirilgan session, team sync va screen sharing — bittasi joyida.
@@ -185,7 +185,7 @@ export default function Page() {
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/20 px-3 py-1.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981]"></span>
-                        <span className="text-[11px] font-bold text-[#10B981]">Qo'shilishga tayyor</span>
+                        <span className="text-[11px] font-bold text-[#10B981]">Qo&apos;shilishga tayyor</span>
                       </div>
                       <div className="text-[11px] font-bold text-gray-500 tracking-wide">
                         15-iyun • 15:00
@@ -266,7 +266,7 @@ export default function Page() {
                   <div className="py-16 flex flex-col items-center justify-center text-center opacity-70">
                     <Calendar className="w-12 h-12 text-gray-600 mb-4" />
                     <h2 className="text-lg font-bold text-gray-400">Meetinglar topilmadi</h2>
-                    <p className="text-gray-500 text-[13px] mt-1.5 font-medium">Hozircha hech qanday reja yo'q.</p>
+                    <p className="text-gray-500 text-[13px] mt-1.5 font-medium">Hozircha hech qanday reja yo&apos;q.</p>
                   </div>
                 )}
               </div>
@@ -283,7 +283,7 @@ export default function Page() {
                      </div>
                      <div>
                        <div className="text-[13px] font-bold text-gray-200">Calendar view</div>
-                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Muddat bo'yicha tartiblangan</div>
+                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Muddat bo&apos;yicha tartiblangan</div>
                      </div>
                    </div>
                    <div className="bg-[#4361EE]/10 text-[#4361EE] px-2.5 py-1 rounded-full text-[10px] font-bold">
@@ -312,14 +312,14 @@ export default function Page() {
                      </div>
                      <div>
                        <div className="text-[13px] font-bold text-gray-200">Meeting → Tasks</div>
-                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Action item'larni vazifaga aylantirish</div>
+                       <div className="text-[10px] font-medium text-gray-500 mt-0.5">Action item&apos;larni vazifaga aylantirish</div>
                      </div>
                  </div>
 
                  <div className="flex flex-col items-center justify-center h-[72px] opacity-40">
                     <CheckSquare className="w-6 h-6 text-gray-500 mb-2" />
                     <p className="text-[11px] font-medium text-center text-gray-500 max-w-[200px]">
-                      Qo'ng'iroq tugagach, action item'lar shu yerda paydo bo'ladi.
+                      Qo&apos;ng&apos;iroq tugagach, action item&apos;lar shu yerda paydo bo&apos;ladi.
                     </p>
                  </div>
                </div>
@@ -340,7 +340,7 @@ export default function Page() {
                 </div>
                 <div>
                   <div className="text-[13px] font-bold text-gray-200">Join meeting</div>
-                  <div className="text-[10px] font-medium text-gray-500 mt-0.5">Kodni kiriting va darhol qo'shiling</div>
+                  <div className="text-[10px] font-medium text-gray-500 mt-0.5">Kodni kiriting va darhol qo&apos;shiling</div>
                 </div>
               </div>
 
@@ -379,14 +379,14 @@ export default function Page() {
 
               <div className="border border-dashed border-white/10 rounded-[16px] p-6 flex flex-col items-center justify-center mb-6">
                  <Calendar className="w-5 h-5 text-gray-600 mb-3 opacity-70" />
-                 <p className="text-[11px] font-medium text-gray-500 mb-2">Hozircha reja yo'q.</p>
+                 <p className="text-[11px] font-medium text-gray-500 mb-2">Hozircha reja yo&apos;q.</p>
                  <button className="text-[11px] font-bold text-[#4361EE] hover:text-[#4361EE]/80 transition-colors">
                    + Meeting rejalashtirish
                  </button>
               </div>
 
               <button className="text-[11px] font-bold text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1.5 mt-auto">
-                <span className="text-[9px] font-black opacity-70">&gt;</span> O'tgan meeting'lar ({pastMeetings.length})
+                <span className="text-[9px] font-black opacity-70">&gt;</span> O&apos;tgan meeting&apos;lar ({pastMeetings.length})
               </button>
             </div>
 

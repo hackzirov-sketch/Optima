@@ -837,7 +837,7 @@ export default function ChatPage() {
             {activeRoom.isMember === false && activeRoom.isPublic && (
               <div className="relative z-20 flex items-center gap-3 border-b border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-800 dark:bg-indigo-950/40">
                 <p className="flex-1 text-sm font-medium text-indigo-700 dark:text-indigo-300">
-                  Bu ommaviy xona. Xabarlarni ko'rish va yozish uchun qo'shiling.
+                  Bu ommaviy xona. Xabarlarni ko&apos;rish va yozish uchun qo&apos;shiling.
                 </p>
                 <button
                   type="button"
@@ -857,7 +857,7 @@ export default function ChatPage() {
                   }}
                   className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
                 >
-                  Qo'shilish
+                  Qo&apos;shilish
                 </button>
               </div>
             )}

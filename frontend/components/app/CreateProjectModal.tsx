@@ -176,19 +176,19 @@ export function CreateProjectModal({ workspaceId, members, onCreated, onClose }:
               <div className="rounded-xl bg-indigo-50/60 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 p-3 flex items-start gap-3">
                 <UserCog className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-600 dark:text-indigo-400" />
                 <p className="text-xs text-indigo-700 dark:text-indigo-300 leading-5">
-                  Loyiha menejerini tanlang. U loyihaga a'zo qo'shish, task berish va hisobotlarni ko'rish huquqiga ega bo'ladi.
-                  Bu qadam ixtiyoriy — keyinroq ham qo'shish mumkin.
+                  Loyiha menejerini tanlang. U loyihaga a&apos;zo qo&apos;shish, task berish va hisobotlarni ko&apos;rish huquqiga ega bo&apos;ladi.
+                  Bu qadam ixtiyoriy — keyinroq ham qo&apos;shish mumkin.
                 </p>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold">Jamoa a'zosi</label>
+                <label className="mb-1.5 block text-sm font-semibold">Jamoa a&apos;zosi</label>
                 <select
                   value={managerId}
                   onChange={(e) => setManagerId(e.target.value)}
                   className="w-full rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 transition-all"
                 >
-                  <option value="">— Hozircha o'tkazib yuborish —</option>
+                  <option value="">— Hozircha o&apos;tkazib yuborish —</option>
                   {nonOwnerMembers.map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {memberName(m)} ({m.role})
@@ -261,7 +261,7 @@ export function CreateProjectModal({ workspaceId, members, onCreated, onClose }:
                   disabled={saving}
                   className="rounded-xl border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
                 >
-                  O'tkazib yuborish
+                  O&apos;tkazib yuborish
                 </button>
               )}
               <button

@@ -183,7 +183,7 @@ function KanbanColumn({
         ))}
         {tasks.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground/40">
-            Task yo'q
+            Task yo&apos;q
           </div>
         )}
       </div>

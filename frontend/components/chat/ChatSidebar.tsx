@@ -177,7 +177,7 @@ export function ChatSidebar({
             <span className="truncate text-sm font-bold text-white">UPZ Workspace</span>
           </div>
           <p className="text-[11px] text-gray-500">
-            {totalMembers} a'zo · {onlineCount} online
+            {totalMembers} a&apos;zo · {onlineCount} online
           </p>
         </div>
       </div>
