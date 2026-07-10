@@ -200,11 +200,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [chatMsg, setChatMsg] = useState('');
-  const [chatMessages, setChatMessages] = useState<{ name: string; text: string; isSelf: boolean; time: string }[]>([
-    { name: 'Nigora Saidova', text: "Yangi dizayn prototipini ko'rib chiqdingizmi?", isSelf: false, time: '10:42' },
-    { name: 'Siz', text: "Ha, ko'rdim. Ranglar palitrasi ajoyib chiqqan!", isSelf: true, time: '10:45' },
-    { name: 'Jasur Akramov', text: "Kodni Github-ga yukladim, tekshirib ko'ringlar.", isSelf: false, time: '10:46' },
-  ]);
+  const [chatMessages, setChatMessages] = useState<{ name: string; text: string; isSelf: boolean; time: string }[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [activeUserIds, setActiveUserIds] = useState<string[]>([]);
@@ -264,10 +260,42 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
       ),
     [workspaceMembers, currentUserId, activeUserIds],
   );
-  const [showAiSummary, setShowAiSummary] = useState(true);
-  
+  const [showAiSummary, setShowAiSummary] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const generateSummary = async () => {
+    setIsGeneratingSummary(true);
+    setShowAiSummary(true);
+    setAiSummary(null);
+    try {
+      const historyText = chatMessages.length > 0 
+        ? chatMessages.map(m => `${m.name} (${m.time}): ${m.text}`).join('\n')
+        : "Chat bo'm-bo'sh.";
+        
+      const res = await fetch(`${API_BASE}/chat/ai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAccessToken() ?? ''}`,
+        },
+        body: JSON.stringify({
+          message: `[Uchrashuv: "${title}"] Ushbu uchrashuv chat tarixini qisqacha xulosa qilib bering:\n${historyText}`,
+          history: [],
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      setAiSummary(json?.data?.reply ?? json?.reply ?? "Xulosa tayyorlash imkoni yo'q. (API kalit kiritilmagan bo'lishi mumkin)");
+    } catch {
+      setAiSummary("Xulosa yaratishda xatolik yuz berdi.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
   const self = participants.find((p) => p.isSelf) ?? participants[0];
   const peersRef = useRef<Record<string, RTCPeerConnection>>({});
+  const chatChannelsRef = useRef<Record<string, RTCDataChannel>>({});
 
   const activeParticipants = useMemo(() => {
     const active = [...participants.filter(p => p.isSelf)];
@@ -337,6 +365,29 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
     if (localStream) {
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
     }
+    
+    // Encrypted Chat Channel
+    const chatChannel = pc.createDataChannel('chat');
+    chatChannelsRef.current[targetUserId] = chatChannel;
+    chatChannel.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        setChatMessages(prev => [...prev, { ...msg, isSelf: false }]);
+      } catch (err) {}
+    };
+
+    pc.ondatachannel = (event) => {
+      if (event.channel.label === 'chat') {
+        chatChannelsRef.current[targetUserId] = event.channel;
+        event.channel.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            setChatMessages(prev => [...prev, { ...msg, isSelf: false }]);
+          } catch (err) {}
+        };
+      }
+    };
+
     return pc;
   };
 
@@ -369,6 +420,10 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
     if (peersRef.current[userId]) {
       peersRef.current[userId].close();
       delete peersRef.current[userId];
+    }
+    if (chatChannelsRef.current[userId]) {
+      chatChannelsRef.current[userId].close();
+      delete chatChannelsRef.current[userId];
     }
     setRemoteStreams((prev) => {
       const copy = { ...prev };
@@ -458,7 +513,16 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
     if (!text) return;
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    setChatMessages((prev) => [...prev, { name: self?.name ?? 'Siz', text, isSelf: true, time }]);
+    const msg = { name: self?.name ?? 'User', text, time };
+    
+    const serializedMsg = JSON.stringify(msg);
+    Object.values(chatChannelsRef.current).forEach(channel => {
+      if (channel.readyState === 'open') {
+        channel.send(serializedMsg);
+      }
+    });
+
+    setChatMessages((prev) => [...prev, { ...msg, isSelf: true, name: 'Siz' }]);
     setChatMsg('');
   };
 
@@ -587,7 +651,11 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                   </div>
                 </div>
                 <p className="text-gray-300 text-sm leading-relaxed italic font-medium">
-                  &quot;Hozirda biz yangi dizayn palitrasi va foydalanuvchi interfeysini takomillashtirish masalalarini ko&apos;rib chiqyapmiz. Nigora Saidova prototip bo&apos;yicha o&apos;z fikrlarini bildirdi...&quot;
+                  {isGeneratingSummary ? (
+                    <span className="animate-pulse">Xulosa tayyorlanmoqda...</span>
+                  ) : (
+                    aiSummary || "Hozircha xulosa yo'q."
+                  )}
                 </p>
               </div>
             </div>
@@ -647,6 +715,12 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors text-left"
                      >
                        <UserPlus className="w-4 h-4" /> Taklif qilish
+                     </button>
+                     <button 
+                       onClick={() => { generateSummary(); setShowMoreMenu(false); }}
+                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors text-left text-[#4361EE] hover:text-[#4361EE]"
+                     >
+                       <Sparkles className="w-4 h-4" /> AI Xulosa
                      </button>
                   </div>
                 )}
