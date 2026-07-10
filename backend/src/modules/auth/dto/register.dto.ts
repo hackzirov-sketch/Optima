@@ -63,11 +63,11 @@ export class RegisterDto {
   phoneNumber?: number;
 
   @ApiPropertyOptional({
-    enum: UserOccupation,
-    example: UserOccupation.DEVELOPER,
+    example: 'developer',
     description: 'Self-selected profession — shown as a question during onboarding',
   })
   @IsOptional()
-  @IsEnum(UserOccupation)
-  occupation?: UserOccupation;
+  @IsString()
+  @MaxLength(100)
+  occupation?: string;
 }

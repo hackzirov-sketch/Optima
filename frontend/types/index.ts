@@ -1,4 +1,4 @@
-export type Profession = 'developer' | 'teacher' | 'student' | 'freelancer' | 'designer' | 'smm' | 'creator';
+export type Profession = string;
 export type Goal = 'learn' | 'find_work' | 'manage_team' | 'build_portfolio' | 'freelance';
 export type Experience = 'beginner' | 'intermediate' | 'advanced';
 export type Priority = 'low' | 'medium' | 'high';

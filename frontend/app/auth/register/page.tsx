@@ -29,7 +29,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
-  const [occupation, setOccupation] = useState<RegisterDto['occupation'] | ''>('');
+  const [occupation, setOccupation] = useState<string>('');
+  const [customOccupation, setCustomOccupation] = useState<string>('');
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -61,7 +62,9 @@ export default function RegisterPage() {
         lastName: fullName.split(' ').slice(1).join(' '),
       };
 
-      if (occupation) {
+      if (occupation === 'other' && customOccupation.trim().length > 0) {
+        registerPayload.occupation = customOccupation.trim();
+      } else if (occupation && occupation !== 'other') {
         registerPayload.occupation = occupation;
       }
 
@@ -157,7 +160,7 @@ export default function RegisterPage() {
             </span>
             <select
               value={occupation}
-              onChange={(e) => setOccupation(e.target.value as RegisterDto['occupation'] | '')}
+              onChange={(e) => setOccupation(e.target.value)}
               className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground outline-none transition-all focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900"
             >
               <option value="">Prefer not to say</option>
@@ -171,6 +174,16 @@ export default function RegisterPage() {
               <option value="student">Student</option>
               <option value="other">Other</option>
             </select>
+            {occupation === 'other' && (
+              <input
+                type="text"
+                autoFocus
+                placeholder="Type your profession..."
+                value={customOccupation}
+                onChange={(e) => setCustomOccupation(e.target.value)}
+                className="mt-2 w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground outline-none transition-all focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900"
+              />
+            )}
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">

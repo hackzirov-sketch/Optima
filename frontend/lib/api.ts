@@ -178,7 +178,7 @@ export interface RegisterDto {
   lastName: string
   username: string
   phoneNumber?: number
-  occupation?: 'developer' | 'designer' | 'freelancer' | 'project_manager' | 'qa_engineer' | 'devops_engineer' | 'product_manager' | 'student' | 'other'
+  occupation?: string;
 }
 export interface RegisterResponse {
   message: string;

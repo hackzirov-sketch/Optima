@@ -37,8 +37,8 @@ export class IpRateLimitGuard implements CanActivate {
     // exact attack this guard exists to stop.
     const actionType = (request.route as { path?: string } | undefined)?.path ?? request.path;
 
-    const maxAttempts = this.config.get<number>('moderation.ipMaxAttempts') ?? 3;
-    const windowHours = this.config.get<number>('moderation.ipWindowHours') ?? 24;
+    const maxAttempts = this.config.get<number>('moderation.ipMaxAttempts') ?? 100;
+    const windowHours = this.config.get<number>('moderation.ipWindowHours') ?? 1;
     const windowMs = windowHours * 60 * 60 * 1000;
 
     const now = new Date();

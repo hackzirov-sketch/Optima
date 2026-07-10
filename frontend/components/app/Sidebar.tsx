@@ -358,7 +358,7 @@ export function Sidebar({ user, onLogout, collapsed = false, onNavigate }: Sideb
                 <div className="min-w-0 flex-1 text-left">
                   <p className="min-w-0 truncate text-sm font-semibold text-foreground">{user.name}</p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession])}
+                    {t(`app.professions.${user.profession}`, PROFESSION_LABELS[user.profession] || user.profession)}
                   </p>
                 </div>
                 <ChevronUp

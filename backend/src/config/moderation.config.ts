@@ -6,6 +6,6 @@ export default registerAs('moderation', () => ({
   blockDurationsMinutes: [15, 30],
   permanentBlockThreshold: 3,
   // IP rate limit: max registrations per window
-  ipMaxAttempts: parseInt(process.env.IP_RATE_MAX_ATTEMPTS || '3', 10),
-  ipWindowHours: parseInt(process.env.IP_RATE_WINDOW_HOURS || '24', 10),
+  ipMaxAttempts: parseInt(process.env.IP_RATE_MAX_ATTEMPTS || '100', 10),
+  ipWindowHours: parseInt(process.env.IP_RATE_WINDOW_HOURS || '1', 10),
 }));
