@@ -65,11 +65,11 @@ export class User {
   isVerified: boolean;
 
   @Column({
-    type: 'enum',
-    enum: UserOccupation,
+    type: 'varchar',
+    length: 255,
     nullable: true,
   })
-  occupation: UserOccupation | null;
+  occupation: string | null;
 
   @Column({ type: 'simple-array', default: 'local' })
   providers: string[];
