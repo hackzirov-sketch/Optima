@@ -142,7 +142,7 @@ function MeetingInviteNotifRow({
   notification: ApiNotification;
   onDone: (id: string) => void;
 }) {
-  const joinCode = notification.metadata?.joinCode;
+  const joinCode = notification.metadata?.joinCode as string | undefined;
   
   const handleJoin = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -175,7 +175,7 @@ function MeetingInviteNotifRow({
             className="flex items-center gap-1 rounded-xl bg-[#4361EE] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#4361EE]/90"
           >
             <Video className="h-3 w-3" />
-            Qo'shilish
+            Qo&apos;shilish
           </Link>
           <button
             type="button"

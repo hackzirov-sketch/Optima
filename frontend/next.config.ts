@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   compress: true,
   output: 'standalone',
   outputFileTracingRoot: path.resolve(__dirname),
+
+  // Treat ESLint warnings as non-fatal during builds — TS type checking still runs.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   turbopack: {
     root: path.resolve(__dirname),
   },

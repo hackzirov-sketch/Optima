@@ -352,7 +352,7 @@ export default function ChatPage() {
     // Clear code from URL
     router.replace('/app/chat', { scroll: false });
     
-    chatApi.joinRoom(joinCode).then((res) => {
+    chatApi.joinByCode(joinCode).then((res) => {
       const created = res.data;
       const room: ChatRoom = {
         id: created.id,

@@ -198,6 +198,7 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   const [screenOn, setScreenOn] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'chat' | 'participants' | 'ai'>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [chatMsg, setChatMsg] = useState('');
   const [chatMessages, setChatMessages] = useState<{ name: string; text: string; isSelf: boolean; time: string }[]>([
     { name: 'Nigora Saidova', text: "Yangi dizayn prototipini ko'rib chiqdingizmi?", isSelf: false, time: '10:42' },
