@@ -122,6 +122,9 @@ export default function ChatPage() {
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomType, setNewRoomType] = useState<'group' | 'direct'>('group');
+  const [newRoomIsPublic, setNewRoomIsPublic] = useState(false);
+  const [dmTargetId, setDmTargetId] = useState<string>("");
   const [creatingRoom, setCreatingRoom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -654,11 +657,22 @@ export default function ChatPage() {
   };
 
   const handleCreateRoom = async () => {
-    const name = newRoomName.trim();
-    if (!activeWorkspace || !name || creatingRoom) return;
+    if (!activeWorkspace || creatingRoom) return;
     setCreatingRoom(true);
     try {
-      const res = await chatApi.createRoom(activeWorkspace.id, { type: "group", name });
+      let res;
+      if (newRoomType === 'direct') {
+        if (!dmTargetId) { setNotice("Foydalanuvchi tanlang"); setCreatingRoom(false); return; }
+        res = await chatApi.createRoom(activeWorkspace.id, { type: "direct", name: dmTargetId });
+      } else {
+        const name = newRoomName.trim();
+        if (!name) { setNotice("Kanal nomini kiriting"); setCreatingRoom(false); return; }
+        res = await chatApi.createRoom(activeWorkspace.id, { type: "group", name });
+        // Apply public/private setting if public
+        if (newRoomIsPublic && res.data?.id) {
+          await chatApi.updateRoomSettings(res.data.id, { isPublic: true });
+        }
+      }
       const created = res.data;
       const room: ChatRoom = {
         id: created.id,
@@ -668,12 +682,16 @@ export default function ChatPage() {
         messages: [],
         unread: 0,
         pinned: false,
+        isPublic: newRoomIsPublic,
+        isMember: true,
       };
       setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
       setActiveId(room.id);
       setMobilePane("chat");
       setCreateRoomOpen(false);
       setNewRoomName("");
+      setDmTargetId("");
+      setNewRoomIsPublic(false);
     } catch (err) {
       console.error(err);
       setNotice(t("app.chat.createRoomFailed", "Chat yaratilmadi"));
@@ -1026,34 +1044,114 @@ export default function ChatPage() {
               className="w-full max-w-md rounded-2xl border border-gray-200 bg-card p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
               onClick={(event) => event.stopPropagation()}
             >
-              <h2 className="text-lg font-semibold text-foreground">{t("app.chat.newChat", "Yangi guruh")}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t("app.chat.newChatDesc", "Jamoa chat xonasini yarating")}</p>
-              <input
-                value={newRoomName}
-                onChange={(event) => setNewRoomName(event.target.value)}
-                placeholder={t("app.chat.roomNamePlaceholder", "Masalan: Frontend jamoa")}
-                className="mt-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-indigo-300 dark:border-gray-600 dark:bg-gray-800"
-                autoFocus
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void handleCreateRoom();
-                }}
-              />
+              <h2 className="text-lg font-semibold text-foreground">Yangi chat</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Kanal yoki to&apos;g&apos;ridan-to&apos;g&apos;ri xabar yarating</p>
+
+              {/* Type tabs */}
+              <div className="mt-4 flex gap-1 rounded-xl bg-muted p-1">
+                <button
+                  type="button"
+                  onClick={() => setNewRoomType('group')}
+                  className={cn(
+                    "flex-1 rounded-lg py-1.5 text-sm font-semibold transition-colors",
+                    newRoomType === 'group' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  # Kanal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewRoomType('direct')}
+                  className={cn(
+                    "flex-1 rounded-lg py-1.5 text-sm font-semibold transition-colors",
+                    newRoomType === 'direct' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  💬 To&apos;g&apos;ri xabar
+                </button>
+              </div>
+
+              {newRoomType === 'group' ? (
+                <>
+                  <input
+                    value={newRoomName}
+                    onChange={(event) => setNewRoomName(event.target.value)}
+                    placeholder="Kanal nomi (masalan: frontend-jamoa)"
+                    className="mt-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-indigo-300 dark:border-gray-600 dark:bg-gray-800"
+                    autoFocus
+                    onKeyDown={(event) => { if (event.key === "Enter") void handleCreateRoom(); }}
+                  />
+                  {/* Public/Private toggle */}
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{newRoomIsPublic ? '🌐 Ochiq kanal' : '🔒 Yopiq kanal'}</p>
+                      <p className="text-xs text-muted-foreground">{newRoomIsPublic ? 'Barcha workspace a&apos;zolari ko&apos;radi va qo&apos;shila oladi' : 'Faqat qo&apos;shilganlar ko&apos;radi'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewRoomIsPublic(v => !v)}
+                      className={cn(
+                        "relative h-6 w-11 rounded-full transition-colors",
+                        newRoomIsPublic ? "bg-indigo-600" : "bg-gray-200 dark:bg-gray-600"
+                      )}
+                    >
+                      <span className={cn(
+                        "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                        newRoomIsPublic ? "translate-x-5" : "translate-x-0.5"
+                      )} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Foydalanuvchi tanlang</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-gray-200 bg-gray-50 p-2 dark:border-gray-600 dark:bg-gray-800">
+                    {members.filter(m => m.userId !== backendUser?.id).map((m, i) => (
+                      <button
+                        key={m.userId}
+                        type="button"
+                        onClick={() => setDmTargetId(m.userId)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors",
+                          dmTargetId === m.userId ? "bg-indigo-600/15 text-indigo-600 dark:text-indigo-400" : "hover:bg-white/60 dark:hover:bg-gray-700"
+                        )}
+                      >
+                        <div
+                          className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+                          style={{ background: ['#6366F1','#3B82F6','#10B981','#F59E0B','#EC4899'][i % 5] }}
+                        >
+                          {m.user.firstName?.[0]}{m.user.lastName?.[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{m.user.firstName} {m.user.lastName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{m.user.email}</p>
+                        </div>
+                        {dmTargetId === m.userId && <span className="ml-auto text-indigo-500">✓</span>}
+                      </button>
+                    ))}
+                    {members.filter(m => m.userId !== backendUser?.id).length === 0 && (
+                      <p className="py-4 text-center text-sm text-muted-foreground">Boshqa a&apos;zolar yo&apos;q</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
                   disabled={creatingRoom}
-                  onClick={() => setCreateRoomOpen(false)}
+                  onClick={() => { setCreateRoomOpen(false); setNewRoomName(""); setDmTargetId(""); }}
                   className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
                 >
-                  {t("common.cancel", "Bekor")}
+                  Bekor
                 </button>
                 <button
                   type="button"
-                  disabled={creatingRoom || !newRoomName.trim()}
+                  disabled={creatingRoom || (newRoomType === 'group' ? !newRoomName.trim() : !dmTargetId)}
                   onClick={() => void handleCreateRoom()}
                   className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {creatingRoom ? t("common.loading", "…") : t("common.create", "Yaratish")}
+                  {creatingRoom ? "…" : "Yaratish"}
                 </button>
               </div>
             </motion.div>

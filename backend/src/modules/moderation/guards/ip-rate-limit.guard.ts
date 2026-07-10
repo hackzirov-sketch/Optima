@@ -47,6 +47,8 @@ export class IpRateLimitGuard implements CanActivate {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let committed = false;
+
     try {
       const rows: IpRateLimitRow[] = await queryRunner.query(
         `SELECT id, ip, action_type AS "actionType", count, window_start AS "windowStart",
@@ -60,6 +62,9 @@ export class IpRateLimitGuard implements CanActivate {
         // Currently blocked
         if (record.blockedUntil && record.blockedUntil > now) {
           const retryAfter = Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
+          // Commit before throwing so the finally block doesn't try to rollback
+          await queryRunner.commitTransaction();
+          committed = true;
           throw new HttpException(
             {
               code: ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -92,6 +97,7 @@ export class IpRateLimitGuard implements CanActivate {
               [record.id, newCount, newWindowStart, newBlockedUntil],
             );
             await queryRunner.commitTransaction();
+            committed = true;
 
             throw new HttpException(
               {
@@ -116,9 +122,12 @@ export class IpRateLimitGuard implements CanActivate {
       }
 
       await queryRunner.commitTransaction();
+      committed = true;
       return true;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (!committed) {
+        await queryRunner.rollbackTransaction().catch(() => {});
+      }
       throw error;
     } finally {
       await queryRunner.release();
