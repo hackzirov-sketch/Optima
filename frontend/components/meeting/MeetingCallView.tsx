@@ -167,8 +167,9 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   const timer = useTimer(startedAt);
   const [copied, setCopied] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [invitingIds, setInvitingIds] = useState<Set<string>>(new Set());
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -176,12 +177,19 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   };
 
   const handleInvite = async (userId: string) => {
+    setInvitingIds(prev => new Set(prev).add(userId));
     try {
       await meetingsApi.inviteMembers(meetingId, [userId]);
-      showToast("Taklif yuborildi!");
-      setShowInvite(false);
+      showToast("Taklif yuborildi");
+      setInvitedIds(prev => new Set(prev).add(userId));
     } catch {
       showToast("Xatolik yuz berdi");
+    } finally {
+      setInvitingIds(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -493,8 +501,14 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
                        <div className="text-[14px] font-bold text-gray-200 truncate">{member.user.firstName} {member.user.lastName}</div>
                        <div className="text-[12px] font-medium text-gray-500 truncate">{member.user.email}</div>
                     </div>
-                    <div className="text-[#4361EE] opacity-0 group-hover:opacity-100 transition-opacity">
-                      <UserPlus className="w-4 h-4" />
+                    <div className="flex-shrink-0 transition-opacity">
+                      {invitedIds.has(member.userId) ? (
+                         <span className="text-[10px] uppercase tracking-wider font-bold text-green-400 bg-green-400/10 px-2 py-1 rounded">Yuborildi</span>
+                      ) : invitingIds.has(member.userId) ? (
+                         <span className="text-[10px] uppercase tracking-wider font-bold text-[#4361EE] animate-pulse">Kuting...</span>
+                      ) : (
+                         <UserPlus className="w-4 h-4 text-[#4361EE] opacity-0 group-hover:opacity-100" />
+                      )}
                     </div>
                  </button>
                ))}
