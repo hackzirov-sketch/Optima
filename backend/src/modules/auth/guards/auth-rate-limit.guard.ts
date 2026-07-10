@@ -32,6 +32,9 @@ export class AuthRateLimitGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
+    // TEMPORARY: Bypass all auth rate limits for team testing in production
+    return true;
+    /*
     if (!options) {
       return true;
     }
@@ -75,6 +78,7 @@ export class AuthRateLimitGuard implements CanActivate {
     };
 
     return true;
+    */
   }
 
   private extractIp(request: Request): string {
