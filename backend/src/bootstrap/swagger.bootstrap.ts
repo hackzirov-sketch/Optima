@@ -3,7 +3,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
 export function setupSwagger(app: INestApplication, config: ConfigService): void {
-  if (config.get('app.nodeEnv') === 'production') return;
+  // if (config.get('app.nodeEnv') === 'production') return;
 
   const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
 
