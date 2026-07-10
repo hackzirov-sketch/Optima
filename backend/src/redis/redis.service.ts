@@ -434,6 +434,8 @@ export class RedisService implements OnModuleDestroy {
 
   private readonly EMAIL_VERIFY_TTL_SECONDS = 15 * 60; // 15 minutes
   private readonly EMAIL_VERIFY_MAX_ATTEMPTS = 5;
+  private readonly EMAIL_VERIFY_ATTEMPT_COOLDOWN_THRESHOLD = 2; // after this many wrong tries, force a cooldown
+  private readonly EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS = 90;
   private readonly EMAIL_VERIFY_RESEND_COOLDOWN_SECONDS = 60;
   private readonly EMAIL_VERIFY_RESEND_DAILY_CAP = 5;
 
@@ -493,6 +495,14 @@ export class RedisService implements OnModuleDestroy {
       return attempts;
     }
 
+    // Anti-bruteforce: after N wrong guesses, force a cooldown before the
+    // next try is even allowed — makes scripted guessing of the 6-digit
+    // code (1M possible values) far too slow to be worth attempting,
+    // independent of the hard 5-attempt cap above.
+    if (attempts >= this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_THRESHOLD) {
+      await this.setEmailVerifyAttemptCooldown(token);
+    }
+
     const updated = JSON.stringify({ ...record, attempts });
     try {
       const client = this.getClient();
@@ -506,6 +516,37 @@ export class RedisService implements OnModuleDestroy {
     }
     this.memSet(key, updated, this.EMAIL_VERIFY_TTL_SECONDS);
     return attempts;
+  }
+
+  private async setEmailVerifyAttemptCooldown(token: string): Promise<void> {
+    const key = `upz:email_verify:cooldown:${token}`;
+    try {
+      const client = this.getClient();
+      if (client) {
+        await client.set(key, '1', 'EX', this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS);
+        return;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis setEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`);
+    }
+    this.memSet(key, '1', this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS);
+  }
+
+  /** Returns remaining cooldown seconds, or 0 if no cooldown is active. */
+  async getEmailVerifyAttemptCooldown(token: string): Promise<number> {
+    const key = `upz:email_verify:cooldown:${token}`;
+    try {
+      const client = this.getClient();
+      if (client) {
+        const ttl = await client.ttl(key);
+        return ttl > 0 ? ttl : 0;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis getEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`);
+    }
+    const entry = this.memStore.get(key);
+    if (!entry || Date.now() > entry.expiresAt) return 0;
+    return Math.ceil((entry.expiresAt - Date.now()) / 1000);
   }
 
   async deleteEmailVerification(token: string): Promise<void> {

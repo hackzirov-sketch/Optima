@@ -146,20 +146,34 @@ export class ChatMessageService {
    * Sliding window via Redis INCR + EX. Falls back to allow-through if Redis is down
    * (same fail-open posture as the rest of the chat pipeline when Redis is unavailable).
    */
-  private async assertNotFlooding(userId: string, roomId: string): Promise<void> {
+  /**
+   * 10 messages/second per user is the target ceiling — generous for any
+   * real client (typing + send simply can't sustain that), but tight enough
+   * to make scripted flooding pointless. Global per-user (not per-room), so
+   * spreading messages across multiple rooms doesn't bypass it.
+   *
+   * Two windows:
+   *  - 1s burst window: hard cap at 10 — absorbs legitimate short bursts
+   *    (e.g. pasting several lines that get sent as separate messages).
+   *  - 60s sustained window: cap at 120 (avg 2/s) — a client hammering
+   *    exactly 10/s nonstop for a minute straight is not a human, this
+   *    catches that pattern even though each individual second passes.
+   */
+  private async assertNotFlooding(userId: string): Promise<void> {
     const redisClient = this.redisService.getClient();
     if (!redisClient) return;
 
-    const WINDOW_SECONDS = 10;
-    const MAX_MESSAGES = 12; // ~1.2 msg/sec sustained is already very fast for a human typist
+    const burstKey = `flood:chat:1s:${userId}`;
+    const sustainedKey = `flood:chat:60s:${userId}`;
 
-    const key = `flood:chat:${userId}:${roomId}`;
-    const count = await redisClient.incr(key);
-    if (count === 1) {
-      await redisClient.expire(key, WINDOW_SECONDS);
-    }
+    const [burstCount, sustainedCount] = await Promise.all([
+      redisClient.incr(burstKey),
+      redisClient.incr(sustainedKey),
+    ]);
+    if (burstCount === 1) await redisClient.expire(burstKey, 1);
+    if (sustainedCount === 1) await redisClient.expire(sustainedKey, 60);
 
-    if (count > MAX_MESSAGES) {
+    if (burstCount > 10 || sustainedCount > 120) {
       await this.violationService.assertNotBlocked(userId);
       await this.violationService.recordViolation(userId, 'spam', 'message flood (too many messages in a short time)');
       throw new BadRequestException({
@@ -185,7 +199,7 @@ export class ChatMessageService {
       throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
     }
 
-    await this.assertNotFlooding(userId, roomId);
+    await this.assertNotFlooding(userId);
 
     if (dto.content?.trim()) {
       await this.contentFilter.filterText(dto.content, userId, 'chat');

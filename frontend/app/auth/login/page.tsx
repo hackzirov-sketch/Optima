@@ -15,7 +15,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { storage } from "@/utils/storage";
 import { AuthField, EyeToggle, ProviderButton, TabButton, PrimaryButton } from "../shared";
 import { IS_DEMO, DEMO_USER_PROFILE } from "@/lib/demoData";
 
@@ -48,9 +47,11 @@ export default function LoginPage() {
       }
 
       if (result.redirect) {
-        // Save credentials so verify page can auto-login after email verification
+        // Save email + verifyToken so the verify page can submit without another resend
         sessionStorage.setItem('pending_verify_email', signinId);
-        sessionStorage.setItem('pending_verify_password', signinPw);
+        if (result.verifyToken) {
+          sessionStorage.setItem('pending_verify_token', result.verifyToken);
+        }
         router.push(`/auth${result.redirect}`);
         return;
       }

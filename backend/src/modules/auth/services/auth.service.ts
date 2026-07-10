@@ -134,6 +134,18 @@ export class AuthService {
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
+    const cooldown = await this.redisService.getEmailVerifyAttemptCooldown(dto.verifyToken);
+    if (cooldown > 0) {
+      throw new HttpException(
+        {
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
+          message: `Too many incorrect attempts. Please wait ${cooldown}s before trying again.`,
+          retryAfter: cooldown,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const record = await this.redisService.getEmailVerification(dto.verifyToken);
 
     if (!record) {

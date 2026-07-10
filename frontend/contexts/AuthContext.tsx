@@ -8,7 +8,7 @@ import { authApi, setTokens, clearTokens } from '@/lib/api';
 import { mapApiUserToProfile } from '@/lib/userProfile';
 import { disconnectWebSocket } from '@/hooks/useWebSocket';
 
-type LoginResult = { success: boolean; redirect?: string; message?: string };
+type LoginResult = { success: boolean; redirect?: string; message?: string; verifyToken?: string };
 
 interface AuthState {
   user: UserProfile | null;
@@ -179,7 +179,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         redirect = '/verify';
       }
 
-      return { success: false, message: errorMessage, redirect };
+      const verifyToken = error?.verifyToken as string | undefined;
+
+      return { success: false, message: errorMessage, redirect, verifyToken };
     }
   };
 

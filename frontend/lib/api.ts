@@ -58,6 +58,8 @@ interface ApiErrorPayload {
   code?: string;
   redirect?: string;
   requiresPasswordSetup?: boolean;
+  verifyToken?: string;
+  retryAfter?: number;
   [key: string]: unknown;
 }
 
@@ -118,6 +120,8 @@ async function request<T = unknown>(
       code: errorObj?.code,
       redirect: errorObj?.redirect,
       requiresPasswordSetup: errorObj?.requiresPasswordSetup,
+      verifyToken: errorObj?.verifyToken,
+      retryAfter: errorObj?.retryAfter,
       ...err,
     };
 
@@ -174,6 +178,12 @@ export interface RegisterDto {
   lastName: string
   username: string
   phoneNumber?: number
+  occupation?: 'developer' | 'designer' | 'freelancer' | 'project_manager' | 'qa_engineer' | 'devops_engineer' | 'product_manager' | 'student' | 'other'
+}
+export interface RegisterResponse {
+  message: string;
+  userId: string;
+  verifyToken: string;
 }
 export interface ApiUserSettings {
   notificationsEnabled: boolean;
@@ -204,7 +214,7 @@ export const authApi = {
     request<{ data: AuthResponse }>('POST', '/auth/login', { body: dto, skipAuth: true }),
 
   register: (dto: RegisterDto) =>
-    request<{ data: AuthResponse }>('POST', '/auth/register', { body: dto, skipAuth: true }),
+    request<{ data: RegisterResponse }>('POST', '/auth/register', { body: dto, skipAuth: true }),
 
   refresh: (refreshToken: string) =>
     request<{ data: { accessToken: string; refreshToken: string } }>('POST', '/auth/refresh', {
@@ -216,8 +226,17 @@ export const authApi = {
 
   me: () => request<{ data: ApiUser }>('GET', '/users/me'),
 
-  verifyEmail: (code: string) =>
-    request<{ data: VerifyEmailResponse }>('POST', '/auth/verify-email', { body: { code }, skipAuth: true }),
+  verifyEmail: (verifyToken: string, code: string) =>
+    request<{ data: VerifyEmailResponse }>('POST', '/auth/verify-email', {
+      body: { verifyToken, code },
+      skipAuth: true,
+    }),
+
+  resendVerification: (email: string) =>
+    request<{ data: { message: string; verifyToken?: string } }>('POST', '/auth/resend-verification', {
+      body: { email },
+      skipAuth: true,
+    }),
 
   setPassword: (password: string) =>
     request('POST', '/auth/set-password', { body: { password } }),

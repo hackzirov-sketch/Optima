@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AtSign,
+  Briefcase,
   Check,
   Chrome,
   Github,
@@ -15,7 +16,6 @@ import {
   Phone,
   Sparkles,
   User,
-  Zap,
 } from "lucide-react";
 import { authApi, type RegisterDto } from "@/lib/api";
 import { AuthField, EyeToggle, ProviderButton, TabButton, PrimaryButton } from "../shared";
@@ -29,6 +29,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
+  const [occupation, setOccupation] = useState<RegisterDto['occupation'] | ''>('');
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -60,6 +61,10 @@ export default function RegisterPage() {
         lastName: fullName.split(' ').slice(1).join(' '),
       };
 
+      if (occupation) {
+        registerPayload.occupation = occupation;
+      }
+
       if (phone.trim().length > 0) {
         const phoneDigits = phone.replace(/\D/g, '');
         if (phoneDigits.length >= 10 && phoneDigits.length <= 15) {
@@ -67,9 +72,9 @@ export default function RegisterPage() {
         }
       }
 
-      await authApi.register(registerPayload);
+      const res = await authApi.register(registerPayload);
       sessionStorage.setItem('pending_verify_email', email);
-      sessionStorage.setItem('pending_verify_password', password);
+      sessionStorage.setItem('pending_verify_token', res.data.verifyToken);
       router.push("/auth/verify");
     } catch (err: unknown) {
       const e = err as Record<string, unknown>;
@@ -144,6 +149,29 @@ export default function RegisterPage() {
           </div>
 
           <AuthField icon={<AtSign className="h-4 w-4" />} label="Username" value={username} onChange={v => setUsername(v.replace(/^@+/, '').toLowerCase())} placeholder="jasur-karimov" autoComplete="username" />
+
+          <label className="block">
+            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <Briefcase className="h-3.5 w-3.5" />
+              What best describes you? <span className="font-normal normal-case text-slate-400">(optional)</span>
+            </span>
+            <select
+              value={occupation}
+              onChange={(e) => setOccupation(e.target.value as RegisterDto['occupation'] | '')}
+              className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground outline-none transition-all focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="">Prefer not to say</option>
+              <option value="developer">Developer</option>
+              <option value="designer">Designer</option>
+              <option value="freelancer">Freelancer</option>
+              <option value="project_manager">Project Manager</option>
+              <option value="product_manager">Product Manager</option>
+              <option value="qa_engineer">QA Engineer</option>
+              <option value="devops_engineer">DevOps Engineer</option>
+              <option value="student">Student</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <AuthField

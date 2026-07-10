@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Mail, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { authApi, setTokens } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthField, PrimaryButton } from "../shared";
@@ -12,66 +12,137 @@ export default function VerifyPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [code, setCode] = useState("");
+  const [email, setEmail] = useState("");
+  const [verifyToken, setVerifyToken] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const verifyReady = code.trim().length === 6;
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const storedEmail = sessionStorage.getItem('pending_verify_email') || '';
+    const storedToken = sessionStorage.getItem('pending_verify_token') || '';
+    setEmail(storedEmail);
+    setVerifyToken(storedToken);
+
+    // No email at all → nothing to verify, send back to register.
+    if (!storedEmail) {
+      router.replace('/auth/register');
+    }
+  }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  const startCooldown = (seconds: number) => {
+    setResendCooldown(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((s) => {
+        if (s <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  };
+
+  const verifyReady = code.trim().length === 6 && verifyToken.length > 0;
+
+  const finishLogin = async (payload: { accessToken: string; refreshToken: string; user?: { firstName: string; lastName: string; email: string; username?: string }; redirect?: string }) => {
+    setTokens(payload.accessToken, payload.refreshToken);
+
+    const apiUser = payload.user;
+    if (apiUser) {
+      login({
+        name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
+        profession: 'developer',
+        goal: 'build_portfolio',
+        experience: 'intermediate',
+        joinedAt: Date.now(),
+        email: apiUser.email,
+        username: apiUser.username,
+        authProvider: 'email',
+      });
+    } else {
+      try {
+        const meRes = await authApi.me();
+        if (meRes?.data) {
+          login({
+            name: `${meRes.data.firstName} ${meRes.data.lastName}`.trim(),
+            profession: 'developer',
+            goal: 'build_portfolio',
+            experience: 'intermediate',
+            joinedAt: Date.now(),
+            email: meRes.data.email,
+            username: meRes.data.username,
+            authProvider: 'email',
+          });
+        }
+      } catch {
+        // ignore — user will land on /app/home and refetch there
+      }
+    }
+
+    sessionStorage.removeItem('pending_verify_email');
+    sessionStorage.removeItem('pending_verify_token');
+
+    setSuccess(true);
+    const target = payload.redirect === '/set-password' ? '/auth/set-password' : '/app/home';
+    setTimeout(() => router.push(target), 1200);
+  };
 
   const handleVerify = async () => {
     if (!verifyReady) return;
     setLoading(true);
     setError("");
     try {
-      const res = await authApi.verifyEmail(code);
+      const res = await authApi.verifyEmail(verifyToken, code.trim());
       const payload = res?.data;
 
       if (payload?.accessToken && payload?.refreshToken) {
-        setTokens(payload.accessToken, payload.refreshToken);
-
-        const apiUser = payload.user;
-        if (apiUser) {
-          login({
-            name: `${apiUser.firstName} ${apiUser.lastName}`.trim(),
-            profession: 'developer',
-            goal: 'build_portfolio',
-            experience: 'intermediate',
-            joinedAt: Date.now(),
-            email: apiUser.email,
-            username: apiUser.username,
-            authProvider: 'email',
-          });
-        } else {
-          try {
-            const meRes = await authApi.me();
-            if (meRes?.data) {
-              login({
-                name: `${meRes.data.firstName} ${meRes.data.lastName}`.trim(),
-                profession: 'developer',
-                goal: 'build_portfolio',
-                experience: 'intermediate',
-                joinedAt: Date.now(),
-                email: meRes.data.email,
-                username: meRes.data.username,
-                authProvider: 'email',
-              });
-            }
-          } catch {
-            // ignore
-          }
-        }
-
-        setSuccess(true);
-        const target = payload.redirect === '/set-password' ? '/auth/set-password' : '/app/home';
-        setTimeout(() => router.push(target), 1200);
+        await finishLogin(payload);
       } else {
         setError('Verification failed. Please try again.');
       }
     } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr?.message ?? 'Invalid code or verification failed. Please try again.');
+      const apiErr = err as { message?: string; status?: number; retryAfter?: number };
+      if (apiErr?.status === 429) {
+        setError(apiErr?.message ?? 'Too many attempts. Please wait before trying again.');
+        if (apiErr?.retryAfter) startCooldown(apiErr.retryAfter);
+      } else {
+        setError(apiErr?.message ?? 'Incorrect code. Please check your email and try again.');
+      }
+      setCode("");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resending || !email) return;
+    setResending(true);
+    setError("");
+    try {
+      const res = await authApi.resendVerification(email);
+      if (res?.data?.verifyToken) {
+        setVerifyToken(res.data.verifyToken);
+        sessionStorage.setItem('pending_verify_token', res.data.verifyToken);
+      }
+      startCooldown(60);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string; status?: number; retryAfter?: number };
+      if (apiErr?.retryAfter) startCooldown(apiErr.retryAfter);
+      setError(apiErr?.message ?? 'Could not resend the code. Please try again shortly.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -133,7 +204,7 @@ export default function VerifyPage() {
 
             <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-sm font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
               <Mail className="h-4 w-4 text-indigo-500" />
-              Check the email you registered with
+              {email || 'Check the email you registered with'}
             </div>
           </div>
 
@@ -142,7 +213,7 @@ export default function VerifyPage() {
               icon={<ShieldCheck className="h-4 w-4" />}
               label="Verification Code"
               value={code}
-              onChange={setCode}
+              onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
               placeholder="123456"
               type="text"
             />
@@ -156,6 +227,20 @@ export default function VerifyPage() {
             <PrimaryButton onClick={handleVerify} disabled={!verifyReady || loading}>
               {loading ? "Verifying…" : <><span>Verify &amp; Continue</span> <ArrowRight className="h-4 w-4" /></>}
             </PrimaryButton>
+
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendCooldown > 0 || resending || !email}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-bold text-slate-500 transition-all hover:-translate-y-0.5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 ${resending ? 'animate-spin' : ''}`} />
+              {resendCooldown > 0
+                ? `Resend code in ${resendCooldown}s`
+                : resending
+                  ? 'Sending…'
+                  : 'Resend code'}
+            </button>
           </div>
         </>
       )}
