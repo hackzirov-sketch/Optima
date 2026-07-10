@@ -88,6 +88,7 @@ export class AuthRateLimitGuard implements CanActivate {
         return forwarded.split(',')[0].trim();
       }
     }
-    return (request as any).socket?.remoteAddress ?? request.ip ?? '0.0.0.0';
+    // Express request.ip correctly handles the trusted proxy if app.set('trust proxy', 1) is used
+    return request.ip ?? (request as any).socket?.remoteAddress ?? '0.0.0.0';
   }
 }

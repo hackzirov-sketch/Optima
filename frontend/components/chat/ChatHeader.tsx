@@ -39,7 +39,7 @@ function RoomInviteModal({
   const [copied, setCopied] = useState(false);
 
   const isCreator = room.createdById === currentUserId;
-  const inviteUrl = code ? `${window.location.origin}/chat/join/${code}` : null;
+  const inviteUrl = code ? `${window.location.origin}/app/chat?joinCode=${code}` : null;
 
   const handleGetCode = async () => {
     setLoadingCode(true);

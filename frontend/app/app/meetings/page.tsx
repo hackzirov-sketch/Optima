@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
   Calendar,
@@ -45,6 +46,34 @@ export default function Page() {
   const [joinCode, setJoinCode] = useState("");
   const [joiningCode, setJoiningCode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    const code = searchParams.get('joinCode');
+    if (code && !inCall && !joiningCode && !activeId) {
+      setJoinCode(code);
+      // Let's clear it from URL so we don't re-join automatically if user leaves and comes back
+      router.replace('/app/meetings', { scroll: false });
+      
+      const autoJoin = async () => {
+        setJoiningCode(true);
+        try {
+          const res = await meetingsApi.joinByCode(code);
+          addMeeting(res.data);
+          setActiveId(res.data.id);
+          setInCall(true);
+          showToast(`Joined: ${res.data.title}`);
+        } catch {
+          showToast("Meeting not found or expired");
+        } finally {
+          setJoiningCode(false);
+        }
+      };
+      autoJoin();
+    }
+  }, [searchParams, inCall, joiningCode, activeId, addMeeting, router]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);

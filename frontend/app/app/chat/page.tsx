@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckSquare, Pin, Search, Sparkles, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Toast } from "@/components/app/DesignSystem";
 import { ChatCallOverlay } from "@/components/chat/ChatCallOverlay";
 import { ChatHeader, type ChatCallMode, type ChatHeaderAction } from "@/components/chat/ChatHeader";
@@ -106,6 +106,7 @@ export default function ChatPage() {
     return [AI_USER, currentUser, ...memberUsers];
   }, [user, members, wsOnlineUsers]);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const navigate = (path: string) => router.push(path);
   const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
   const [activeId, setActiveId] = useState("r-ai");
@@ -342,6 +343,38 @@ export default function ChatPage() {
       }).catch(() => { /* ignore if endpoint unavailable */ });
     }).catch(console.error);
   }, [hasBackendSession, activeWorkspace]);
+
+  // Handle auto-join via invite code
+  useEffect(() => {
+    const joinCode = searchParams.get('joinCode');
+    if (!joinCode || !hasBackendSession) return;
+    
+    // Clear code from URL
+    router.replace('/app/chat', { scroll: false });
+    
+    chatApi.joinRoom(joinCode).then((res) => {
+      const created = res.data;
+      const room: ChatRoom = {
+        id: created.id,
+        name: created.name,
+        type: mapApiChatRoomType(created.type) as ChatRoom["type"],
+        memberIds: created.memberIds ?? [],
+        messages: [],
+        unread: 0,
+        pinned: false,
+        isMember: true,
+      };
+      setRooms((prev) => {
+        if (prev.some(r => r.id === room.id)) return prev;
+        return [room, ...prev];
+      });
+      setActiveId(room.id);
+      setMobilePane("chat");
+    }).catch(err => {
+      console.error(err);
+      setNotice(t("app.chat.joinRoomFailed", "Chatga qo'shilib bo'lmadi yoki kod yaroqsiz"));
+    });
+  }, [searchParams, hasBackendSession, router, t]);
 
   // Load messages for active room from API (roomsKey forces reload when workspace changes)
   useEffect(() => {

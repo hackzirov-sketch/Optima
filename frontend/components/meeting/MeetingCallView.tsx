@@ -260,7 +260,27 @@ export function MeetingCallView({ meetingId, meetingCode, title, participants, w
   const self = participants.find((p) => p.isSelf) ?? participants[0];
   const peersRef = useRef<Record<string, RTCPeerConnection>>({});
 
-  const activeParticipants = participants.filter(p => p.isSelf || activeUserIds.includes(p.id));
+  const activeParticipants = useMemo(() => {
+    const active = [...participants.filter(p => p.isSelf)];
+    
+    activeUserIds.forEach(id => {
+      if (active.some(p => p.id === id)) return;
+      const member = workspaceMembers?.find(m => m.userId === id);
+      const name = member 
+        ? `${member.user.firstName ?? ''} ${member.user.lastName ?? ''}`.trim() || 'User'
+        : 'User';
+        
+      active.push({
+        id,
+        name,
+        initials: name.charAt(0).toUpperCase(),
+        color: '#4361EE',
+        isSelf: false
+      });
+    });
+    
+    return active;
+  }, [participants, activeUserIds, workspaceMembers]);
 
   const mainParticipant = activeParticipants[0] || self;
   const thumbnailParticipants = activeParticipants.slice(1, 4);

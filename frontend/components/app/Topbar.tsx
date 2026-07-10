@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle2, Inbox, Loader2, PanelLeft, PanelLeftClose, XCircle } from "lucide-react";
+import { Bell, CheckCircle2, Inbox, Loader2, PanelLeft, PanelLeftClose, Video, XCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
@@ -135,6 +135,62 @@ function InviteNotifRow({
   );
 }
 
+function MeetingInviteNotifRow({
+  notification,
+  onDone,
+}: {
+  notification: ApiNotification;
+  onDone: (id: string) => void;
+}) {
+  const joinCode = notification.metadata?.joinCode;
+  
+  const handleJoin = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDone(notification.id);
+  };
+
+  const handleDecline = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDone(notification.id);
+  };
+
+  return (
+    <div className={cn(
+      "rounded-2xl px-3 py-2.5 transition-colors",
+      !notification.isRead && "bg-[var(--upz-nav-accent)]/70 dark:bg-blue-500/10",
+    )}>
+      <div className="flex items-center gap-2">
+        <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", !notification.isRead ? "bg-[var(--upz-nav-brand)]" : "bg-slate-200 dark:bg-slate-600")} />
+        <span className="flex-1 min-w-0">
+          <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#4361EE]">Meeting Invite</span>
+          <span className="block truncate text-sm font-semibold text-foreground">{notification.title}</span>
+          <span className="block text-xs leading-5 text-muted-foreground">{notification.body ?? notification.message}</span>
+        </span>
+      </div>
+      {joinCode && (
+        <div className="mt-2 flex gap-2 pl-4">
+          <Link
+            href={`/app/meetings?joinCode=${joinCode}`}
+            onClick={handleJoin}
+            className="flex items-center gap-1 rounded-xl bg-[#4361EE] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#4361EE]/90"
+          >
+            <Video className="h-3 w-3" />
+            Qo'shilish
+          </Link>
+          <button
+            type="button"
+            onClick={handleDecline}
+            className="flex items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+          >
+            <XCircle className="h-3 w-3" />
+            Bekor qilish
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -248,6 +304,12 @@ export function Topbar({ onToggleSidebar, sidebarCollapsed }: TopbarProps) {
                 {realNotifs.map((notification) =>
                   notification.type === 'workspace_invite' ? (
                     <InviteNotifRow
+                      key={notification.id}
+                      notification={notification}
+                      onDone={(id) => { markRead(id); refreshNotifs(); }}
+                    />
+                  ) : notification.type === 'meeting_invite' ? (
+                    <MeetingInviteNotifRow
                       key={notification.id}
                       notification={notification}
                       onDone={(id) => { markRead(id); refreshNotifs(); }}
