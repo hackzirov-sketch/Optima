@@ -9,8 +9,10 @@ import {
   Inbox,
   Loader2,
   UserPlus,
+  Video,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { ActionButton, PageHeader, PageShell, Pill, SectionTitle, SurfaceCard, Toast, cn } from "@/components/app/DesignSystem";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -105,6 +107,38 @@ function InviteActions({
         {busy === 'decline' ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
         Decline
       </ActionButton>
+    </div>
+  );
+}
+
+function MeetingInviteActions({
+  notification,
+  onDone,
+}: {
+  notification: ApiNotification;
+  onDone: (id: string) => void;
+}) {
+  const joinCode = (notification.metadata as Record<string, string> | null)?.joinCode;
+  if (!joinCode) return null;
+
+  return (
+    <div className="mt-3 flex gap-2">
+      <Link
+        href={`/app/meetings?joinCode=${joinCode}`}
+        onClick={() => onDone(notification.id)}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 transition-colors"
+      >
+        <Video className="h-3 w-3" />
+        Qo&apos;shilish
+      </Link>
+      <button
+        type="button"
+        onClick={() => onDone(notification.id)}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+      >
+        <XCircle className="h-3 w-3" />
+        Bekor qilish
+      </button>
     </div>
   );
 }
@@ -279,6 +313,9 @@ export default function InboxPage() {
                       {/* Invite actions */}
                       {n.type === 'workspace_invite' && !n.isRead && (
                         <InviteActions notification={n} onDone={handleInviteDone} />
+                      )}
+                      {n.type === 'meeting_invite' && !n.isRead && (
+                        <MeetingInviteActions notification={n} onDone={(id) => { markRead(id); refresh(); }} />
                       )}
                       {n.type === 'project_member_invite' && !n.isRead && (
                         <ProjectInviteActions notification={n} onDone={handleInviteDone} />
