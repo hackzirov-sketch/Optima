@@ -32,17 +32,19 @@ export class ChatAiService {
 Foydalanuvchilarga vazifalar, loyihalar, jamoa boshqaruvi, xabarlar va ish samaradorligi bo'yicha yordam berasan.
 Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).`;
 
-        const model = this.gemini.getGenerativeModel(
-          { 
-            model: this.modelName,
-            systemInstruction: systemInstructionText
-          },
-          { apiVersion: 'v1beta' },
-        );
+        const model = this.gemini.getGenerativeModel({ model: this.modelName });
 
         const geminiHistory = history
           .filter((h) => h.text?.trim())
           .map((h) => ({ role: h.role, parts: [{ text: h.text }] }));
+
+        // Universal fallback: Inject system prompt as the first chat history message.
+        // This guarantees 100% compatibility across all Google API versions and SDKs
+        // without worrying about "systemInstruction" vs "system_instruction" bugs.
+        geminiHistory.unshift(
+          { role: 'user', parts: [{ text: `[System Instruction - follow exactly]: ${systemInstructionText}` }] },
+          { role: 'model', parts: [{ text: "Tushundim. Tizim qoidalariga doim to'liq amal qilaman." }] }
+        );
 
         const chat = model.startChat({
           history: geminiHistory,
