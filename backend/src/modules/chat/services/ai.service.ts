@@ -1,13 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// gemini-1.5-flash (and every 1.0/1.5 model) has been fully shut down by
-// Google — every request returns 404, which the try/catch below silently
-// swallowed, so the assistant always looked "on" while actually running
-// the hardcoded fallback replies 100% of the time. gemini-2.5-flash is the
-// current stable GA replacement. Overridable via GEMINI_MODEL so the next
-// Google deprecation is a config change, not a code change.
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 @Injectable()
 export class ChatAiService {
@@ -34,21 +28,23 @@ export class ChatAiService {
 
     if (this.gemini) {
       try {
-        const model = this.gemini.getGenerativeModel(
-          { model: this.modelName },
-          { apiVersion: 'v1' },
-        );
-
-        const systemInstruction = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
+        const systemInstructionText = `Sen UPZ — aqlli jamoa boshqaruv platformasining AI yordamchisisisan.
 Foydalanuvchilarga vazifalar, loyihalar, jamoa boshqaruvi, xabarlar va ish samaradorligi bo'yicha yordam berasan.
 Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa tilda yozsa, o'sha tilda javob ber).`;
+
+        const model = this.gemini.getGenerativeModel(
+          { 
+            model: this.modelName,
+            systemInstruction: systemInstructionText
+          },
+          { apiVersion: 'v1' },
+        );
 
         const geminiHistory = history
           .filter((h) => h.text?.trim())
           .map((h) => ({ role: h.role, parts: [{ text: h.text }] }));
 
         const chat = model.startChat({
-          systemInstruction: { role: 'user', parts: [{ text: systemInstruction }] },
           history: geminiHistory,
         });
 
