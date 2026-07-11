@@ -37,7 +37,7 @@ Qisqa, aniq va foydali javob ber. Uzbek tilida gapir (agar foydalanuvchi boshqa 
             model: this.modelName,
             systemInstruction: systemInstructionText
           },
-          { apiVersion: 'v1' },
+          { apiVersion: 'v1beta' },
         );
 
         const geminiHistory = history
