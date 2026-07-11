@@ -32,6 +32,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyResetOtpDto } from './dto/verify-reset-otp.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
 import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard';
@@ -118,6 +119,17 @@ export class AuthController {
   @ApiOperation({ summary: 'Send password reset email' })
   async forgotPassword(@Req() req, @Body() dto: ForgotPasswordDto) {
     const result = await this.authService.forgotPassword(dto);
+    await req.clearRateLimit?.();
+    return result;
+  }
+
+  @Public()
+  @Post('verify-reset-otp')
+  @AuthRateLimit({ action: 'verify-reset-otp', maxAttempts: 10, windowSeconds: 600, blockSeconds: 900 })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify the OTP code sent to email for password reset' })
+  async verifyResetOtp(@Req() req, @Body() dto: VerifyResetOtpDto) {
+    const result = await this.authService.verifyResetOtp(dto.resetToken, dto.otp);
     await req.clearRateLimit?.();
     return result;
   }

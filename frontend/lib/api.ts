@@ -242,10 +242,13 @@ export const authApi = {
     request('POST', '/auth/set-password', { body: { password } }),
 
   forgotPassword: (email: string) =>
-    request('POST', '/auth/forgot-password', { body: { email }, skipAuth: true }),
+    request<{ data: { message: string; resetToken?: string } }>('POST', '/auth/forgot-password', { body: { email }, skipAuth: true }),
 
-  resetPassword: (token: string, password: string) =>
-    request('POST', '/auth/reset-password', { body: { token, password }, skipAuth: true }),
+  verifyResetOtp: (resetToken: string, otp: string) =>
+    request<{ data: { message: string; confirmedToken: string } }>('POST', '/auth/verify-reset-otp', { body: { resetToken, otp }, skipAuth: true }),
+
+  resetPassword: (confirmedToken: string, password: string) =>
+    request('POST', '/auth/reset-password', { body: { confirmedToken, password }, skipAuth: true }),
 
   getSessions: () =>
     request<{ data: ApiSession[] }>('GET', '/auth/sessions'),

@@ -178,6 +178,133 @@ export class RedisService implements OnModuleDestroy {
     this.memSet(key, userId, 900);
   }
 
+  // ─── Password Reset OTP ──────────────────────────────────────────────────────
+  // Flow: forgotPassword → setPasswordResetOtp (saves resetToken + otp + userId)
+  //       → verifyResetOtp checks OTP, if correct: issues short-lived confirmedToken
+  //       → resetPassword uses confirmedToken (one-time, 10 min TTL)
+
+  /**
+   * Stores a 6-digit OTP bound to a resetToken for 15 minutes.
+   * The resetToken is what the backend tracks internally; the frontend
+   * passes it back when verifying the OTP.
+   */
+  async setPasswordResetOtp(
+    resetToken: string,
+    userId: string,
+    otp: string,
+  ): Promise<void> {
+    const key = RedisKeys.pwdResetOtp(resetToken);
+    const payload = JSON.stringify({ userId, otp, attempts: 0 });
+    try {
+      const client = this.getClient();
+      if (client) {
+        await client.set(key, payload, 'EX', 900); // 15 min
+        return;
+      }
+    } catch (e) {
+      this.logger.warn(`Redis setPasswordResetOtp failed: ${e instanceof Error ? e.message : e}`);
+    }
+    this.memSet(key, payload, 900);
+  }
+
+  /**
+   * Verifies the OTP. On success: deletes the OTP record and creates a
+   * short-lived confirmedToken that authorises the actual password change.
+   * Returns { ok: true, confirmedToken } or { ok: false, reason, attemptsLeft? }
+   */
+  async verifyPasswordResetOtp(
+    resetToken: string,
+    otp: string,
+  ): Promise<
+    | { ok: true; confirmedToken: string }
+    | { ok: false; reason: 'invalid_token' | 'wrong_otp' | 'max_attempts'; attemptsLeft?: number }
+  > {
+    const key = RedisKeys.pwdResetOtp(resetToken);
+    let raw: string | null = null;
+    try {
+      const client = this.getClient();
+      if (client) raw = await client.get(key);
+    } catch (e) {
+      this.logger.warn(`Redis verifyPasswordResetOtp get failed: ${e instanceof Error ? e.message : e}`);
+    }
+    if (!raw) {
+      const mem = this.memStore.get(key);
+      if (mem && Date.now() < mem.expiresAt) raw = mem.value;
+    }
+    if (!raw) return { ok: false, reason: 'invalid_token' };
+
+    const record = JSON.parse(raw) as { userId: string; otp: string; attempts: number };
+    const MAX_ATTEMPTS = 5;
+
+    if (record.otp !== otp) {
+      record.attempts += 1;
+      if (record.attempts >= MAX_ATTEMPTS) {
+        // Burn the OTP record — force a fresh forgotPassword
+        try {
+          const client = this.getClient();
+          if (client) await client.del(key);
+        } catch { /* ignore */ }
+        this.memStore.delete(key);
+        return { ok: false, reason: 'max_attempts' };
+      }
+      // Persist incremented attempt count
+      const updated = JSON.stringify(record);
+      try {
+        const client = this.getClient();
+        if (client) {
+          const ttl = await client.ttl(key);
+          await client.set(key, updated, 'EX', ttl > 0 ? ttl : 900);
+        } else {
+          const mem = this.memStore.get(key);
+          this.memSet(key, updated, mem ? Math.ceil((mem.expiresAt - Date.now()) / 1000) : 900);
+        }
+      } catch (e) {
+        this.logger.warn(`Redis verifyPasswordResetOtp update failed: ${e instanceof Error ? e.message : e}`);
+      }
+      return { ok: false, reason: 'wrong_otp', attemptsLeft: MAX_ATTEMPTS - record.attempts };
+    }
+
+    // OTP correct — delete OTP record and issue confirmedToken (10 min, one-time-use)
+    try {
+      const client = this.getClient();
+      if (client) await client.del(key);
+    } catch { /* ignore */ }
+    this.memStore.delete(key);
+
+    const confirmedToken = require('crypto').randomUUID() as string;
+    const confirmKey = RedisKeys.pwdResetConfirmed(confirmedToken);
+    try {
+      const client = this.getClient();
+      if (client) {
+        await client.set(confirmKey, record.userId, 'EX', 600); // 10 min
+      } else {
+        this.memSet(confirmKey, record.userId, 600);
+      }
+    } catch (e) {
+      this.logger.warn(`Redis verifyPasswordResetOtp confirm set failed: ${e instanceof Error ? e.message : e}`);
+      this.memSet(confirmKey, record.userId, 600);
+    }
+    return { ok: true, confirmedToken };
+  }
+
+  /** One-time consume confirmedToken → returns userId (used by resetPassword). */
+  async getAndDeleteConfirmedResetToken(confirmedToken: string): Promise<string | null> {
+    const key = RedisKeys.pwdResetConfirmed(confirmedToken);
+    try {
+      const client = this.getClient();
+      if (client) {
+        const userId = await client.get(key);
+        if (userId) {
+          await client.del(key);
+          return userId;
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Redis getAndDeleteConfirmedResetToken failed: ${e instanceof Error ? e.message : e}`);
+    }
+    return this.memGetAndDelete(key);
+  }
+
   async getAndDeletePasswordResetToken(token: string): Promise<string | null> {
     const key = RedisKeys.pwdReset(token);
     try {

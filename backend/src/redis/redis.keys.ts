@@ -13,6 +13,10 @@ export const RedisKeys = {
   userBlock: (userId: string) => `upz:user_blocked:${userId}`,
   oauthCode: (code: string) => `upz:oauth:${code}`,
   pwdReset: (token: string) => `upz:pwd_reset:${token}`,
+  /** OTP code for password reset — stored separately so we can verify without consuming the reset token. */
+  pwdResetOtp: (resetToken: string) => `upz:pwd_reset_otp:${resetToken}`,
+  /** Confirmed reset token (after OTP verified) — used to authorize the actual password change. */
+  pwdResetConfirmed: (confirmedToken: string) => `upz:pwd_reset_confirmed:${confirmedToken}`,
   rateLimitFailures: (action: string, ip: string) => `upz:rl:fails:${action}:${ip}`,
   rateLimitBlocked: (action: string, ip: string) => `upz:rl:block:${action}:${ip}`,
   accountLockout: (userId: string) => `upz:account_lock:${userId}`,

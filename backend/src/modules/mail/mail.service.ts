@@ -76,6 +76,31 @@ export class MailService {
     }
   }
 
+  async sendPasswordResetOtpEmail(email: string, otp: string) {
+    try {
+      await this.transporter.sendMail({
+        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Password Reset Code — UPZ',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Reset your UPZ password</h2>
+            <p>Use the code below to reset your password. It expires in <strong>15 minutes</strong>.</p>
+            <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 8px; margin: 24px 0; border-radius: 8px;">
+              ${otp}
+            </div>
+            <p>If you didn't request a password reset, you can safely ignore this email.</p>
+            <p style="color: #888; font-size: 12px;">Do not share this code with anyone.</p>
+          </div>
+        `,
+      });
+      this.logger.log(`Password reset OTP email sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send reset OTP email to ${email}`, (error as Error).stack);
+    }
+  }
+
+  /** @deprecated Use sendPasswordResetOtpEmail instead — kept for backward compat. */
   async sendPasswordResetEmail(email: string, resetUrl: string) {
     try {
       await this.transporter.sendMail({

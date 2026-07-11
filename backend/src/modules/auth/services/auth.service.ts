@@ -404,23 +404,57 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.usersService.findByEmail(dto.email);
     if (user && user.isActive) {
-      const token = crypto.randomUUID();
-      await this.redisService.setPasswordResetToken(token, user.id);
-      const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
-      const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
-      // Fire-and-forget — same reasoning as issueEmailVerification: don't make
-      // the caller wait on SMTP, and the response is identical either way.
-      void this.mailService.sendPasswordResetEmail(dto.email, resetUrl);
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const otp = generateVerificationCode(); // 6-digit code
+      await this.redisService.setPasswordResetOtp(resetToken, user.id, otp);
+      // Fire-and-forget — same reasoning as issueEmailVerification
+      void this.mailService.sendPasswordResetOtpEmail(dto.email, otp);
+      // Return resetToken so the frontend can pass it back on OTP verification.
+      // This is NOT sensitive on its own — the OTP is required to use it.
+      return {
+        message: 'If an account exists, a reset code has been sent to your email.',
+        resetToken,
+      };
     }
-    return { message: 'If an account exists, a reset email has been sent.' };
+    // Generic response — don't leak whether an email is registered
+    return { message: 'If an account exists, a reset code has been sent to your email.' };
+  }
+
+  async verifyResetOtp(resetToken: string, otp: string) {
+    const result = await this.redisService.verifyPasswordResetOtp(resetToken, otp);
+    if (!result.ok) {
+      if (result.reason === 'max_attempts') {
+        throw new BadRequestException({
+          code: ErrorCode.TOKEN_INVALID,
+          message: 'Too many incorrect attempts. Please request a new reset code.',
+        });
+      }
+      if (result.reason === 'invalid_token') {
+        throw new BadRequestException({
+          code: ErrorCode.TOKEN_INVALID,
+          message: 'Invalid or expired reset code. Please request a new one.',
+        });
+      }
+      throw new BadRequestException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: result.attemptsLeft
+          ? `Incorrect code. ${result.attemptsLeft} attempt(s) remaining.`
+          : 'Incorrect code.',
+        attemptsLeft: result.attemptsLeft,
+      });
+    }
+    return {
+      message: 'OTP verified. You may now set a new password.',
+      confirmedToken: result.confirmedToken,
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const userId = await this.redisService.getAndDeletePasswordResetToken(dto.token);
+    const userId = await this.redisService.getAndDeleteConfirmedResetToken(dto.confirmedToken);
     if (!userId) {
       throw new BadRequestException({
         code: ErrorCode.TOKEN_INVALID,
-        message: 'Invalid or expired reset token',
+        message: 'Invalid or expired session. Please start the password reset again.',
       });
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
 import { authApi } from '@/lib/api';
@@ -9,8 +9,8 @@ import { AuthField, EyeToggle, PrimaryButton } from '../shared';
 
 function ResetPasswordContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get('token') ?? '';
+  const [confirmedToken, setConfirmedToken] = useState<string | null>(null);
+  const [tokenChecked, setTokenChecked] = useState(false);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,39 +20,56 @@ function ResetPasswordContent() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Read confirmedToken from sessionStorage (set by forgot-password after OTP verification)
+  useEffect(() => {
+    const token = sessionStorage.getItem('pwd_reset_confirmed_token');
+    setConfirmedToken(token);
+    setTokenChecked(true);
+  }, []);
+
   const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const ready = password.length >= 8 && passwordsMatch && !!token;
+  const ready = password.length >= 8 && passwordsMatch && !!confirmedToken;
 
   const handleReset = async () => {
-    if (!ready) return;
+    if (!ready || !confirmedToken) return;
     setError('');
     setLoading(true);
     try {
-      await authApi.resetPassword(token, password);
+      await authApi.resetPassword(confirmedToken, password);
+      sessionStorage.removeItem('pwd_reset_confirmed_token');
       setSuccess(true);
       setTimeout(() => router.push('/auth/login'), 2000);
     } catch (err: unknown) {
       const e = err as Record<string, unknown>;
-      setError((e?.message as string) || 'Reset failed. The link may have expired.');
+      setError((e?.message as string) || 'Reset failed. The session may have expired.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token) {
+  // Show spinner while reading sessionStorage (avoids flash of invalid state)
+  if (!tokenChecked) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!confirmedToken) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-4 py-4">
         <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-900/40 dark:bg-rose-500/10">
-          <p className="font-bold text-rose-600 dark:text-rose-400">Invalid reset link</p>
+          <p className="font-bold text-rose-600 dark:text-rose-400">Session expired or invalid</p>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            This password reset link is invalid or has expired.
+            Please request a new password reset code from the forgot password page.
           </p>
           <button
             type="button"
             onClick={() => router.push('/auth/forgot-password')}
             className="mt-4 text-sm font-bold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
           >
-            Request a new link
+            Request a new code
           </button>
         </div>
       </div>
@@ -85,7 +102,7 @@ function ResetPasswordContent() {
           Create a new password
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
-          Enter and confirm your new password below.
+          Your identity has been verified. Enter and confirm your new password below.
         </p>
       </div>
 
