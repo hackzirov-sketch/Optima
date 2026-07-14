@@ -56,7 +56,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
         // Only log slow queries in dev, not every query (logging: true kills performance)
         logging: false,
         // SSL always on — Neon requires it regardless of NODE_ENV
-        ssl: { rejectUnauthorized: false },
+        // ssl: { rejectUnauthorized: false },
         extra: {
           max: parseInt(config.get('DATABASE_POOL_SIZE') || '20', 10),
           // Keep connections alive — eliminates Neon cold-connect overhead on warm pool
