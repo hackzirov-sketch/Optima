@@ -75,7 +75,7 @@ Tekshiruv shuni ko'rsatdiki, **DB darajasida bu qaror qisman allaqachon amalga o
 
 Bu — aynan foydalanuvchi ta'kidlagan "logikani oldindan puxta o'ylab olish kerak" degan nuqta. To'rtta turli visibility enum bir xil tushunchani turlicha ifodalaydi — yangi funksiya qo'shilganda yana biri paydo bo'lishi tabiiy.
 
-### 3.4 Taklif qilinayotgan konsolidatsiya 🔧
+### 3.4 Konsolidatsiya — ✅ amalga oshirildi
 
 ```mermaid
 flowchart TD
@@ -104,7 +104,14 @@ export enum RoomScope {
 - `WorkspaceVisibility` va `ProjectVisibility` — **tegilmaydi**, ular boshqa kontekst (workspace/project o'zining ko'rinuvchanligi, bu bo'limdagi muammoga aloqasi yo'q).
 - Validatsiya qoidasi (servis darajasida, DB constraint emas — chunki PostgreSQL CHECK constraint bilan "agar scope=workspace_only bo'lsa, workspace_id NOT NULL" qoidasini yozish mumkin, lekin bu ishga migratsiya bosqichida alohida qaraladi): `scope === WORKSPACE_ONLY` bo'lsa `workspace_id` majburiy, aks holda ixtiyoriy.
 
-**Nega bu migratsiya kerak, DB constraint emas hozircha**: mavjud 24 ta chat xonasi va ularning `ChatVisibility`/`MeetingVisibility` qiymatlarini yangi 3-qiymatli enum'ga xavfsiz map qilish kerak (`invite_only`+`members_only` → `private`, `selected_users` → `private`, `workspace`→`workspace_only`). Bu backfill'ni CHECK constraint qo'shishdan oldin bajarish lozim.
+**Amalga oshirildi** ([1784300000000-ConsolidateRoomScope.ts](backend/src/database/migrations/1784300000000-ConsolidateRoomScope.ts)):
+- `RoomScope` enum qo'shildi ([common/enums/index.ts](backend/src/common/enums/index.ts)), `ChatVisibility`/`MeetingVisibility` o'chirildi.
+- `ChatRoomType`dan `PUBLIC`/`PRIVATE` qiymatlari olib tashlandi (ular hech qayerda ishlatilmagan edi) — endi faqat strukturaviy qiymatlar: `workspace/project/group/direct`.
+- `chat_rooms.visibility` va `meetings.visibility` ustunlari `scope`ga almashtirildi, mavjud qiymatlar xavfsiz backfill qilindi (`chat_rooms`: 24 ta `workspace_only`, 1 ta `private`; `meetings`: 35 ta `private`).
+- Ikkala jadvalga ham CHECK constraint qo'shildi: `scope != 'workspace_only' OR workspace_id IS NOT NULL`.
+- `room.service.ts::createRoom` va `meetings.service.ts::create` endi `workspaceId: string | null` qabul qiladi, `scope`ga qarab validatsiya qiladi (`WORKSPACE_ONLY` bo'lsa workspace majburiy, aks holda ixtiyoriy).
+- Yangi endpoint: `POST chat/rooms` (workspace'siz, standalone xona yaratish) — meetings'dagi `POST meetings` pattern'iga mos.
+- Yon-ta'sir sifatida tuzatilgan bug: `room.visibility` kodda o'qilardi, lekin SQL'da umuman SELECT qilinmagan edi (har doim `undefined` qaytargan) — endi `scope` to'g'ri select qilinadi.
 
 ## 4. Role va Group Type tizimi
 
@@ -189,7 +196,7 @@ Qo'shimcha mavjud (spec'da yo'q): `auth` queue, `chat` queue, `MEETING_RECORDING
 | Bo'lim | Holat | Ustuvorlik |
 |---|---|---|
 | Core domain (workspace/group/project/task) | ✅ to'liq | — |
-| Chat/Meeting workspace-optional | ✅ DB darajasida tayyor, ⚠️ visibility enum konsolidatsiyasi kerak | **Yuqori** — 3.4-bo'lim |
+| Chat/Meeting workspace-optional + scope konsolidatsiyasi | ✅ to'liq amalga oshirildi | — |
 | Push review pipeline (server) | ✅ 60-70% | O'rta |
 | CLI + git hooks | ❌ 0% | Past (alohida loyiha, MVP'dan tashqarida bo'lishi mumkin) |
 | WebSocket task-board eventlari | ❌ yo'q | O'rta — Kanban realtime uchun kerak |
@@ -199,10 +206,8 @@ Qo'shimcha mavjud (spec'da yo'q): `auth` queue, `chat` queue, `MEETING_RECORDING
 
 ## 13. Tavsiya qilinadigan navbat (keyingi qadamlar)
 
-Kod yozishdan oldin muhokama qilinishi kerak bo'lgan tartib — foydalanuvchi tasdiqlagandan keyin amalga oshiriladi:
-
-1. **`RoomScope` enum konsolidatsiyasi** (3.4-bo'lim) — `ChatVisibility` + `MeetingVisibility`ni bitta 3-qiymatli enum'ga birlashtirish, backfill migratsiyasi, create-endpoint'larda `scope===WORKSPACE_ONLY ⇒ workspace_id required` validatsiyasi.
-2. **Public scope uchun global qidiruv endpoint'i** — hozircha `public` xona/meeting'larni workspace'siz qidirish imkoniyati yo'q, buni ta'minlaydigan endpoint kerak.
+1. ~~`RoomScope` enum konsolidatsiyasi~~ — ✅ bajarildi (3.4-bo'lim).
+2. **Public scope uchun global qidiruv endpoint'i** — hozircha `public` xona/meeting'larni workspace'siz qidirish imkoniyati yo'q (`listPublicRooms` hali workspace-scoped), buni ta'minlaydigan endpoint kerak. **Navbatdagi qadam.**
 3. Task-board realtime eventlari (`task.moved` va h.k.) gateway'ga qo'shish.
 4. i18n xato xabarlari — bosqichma-bosqich, birinchi navbatda eng ko'p uchraydigan xatolardan boshlab.
 5. CLI — alohida loyiha sifatida keyinroq.

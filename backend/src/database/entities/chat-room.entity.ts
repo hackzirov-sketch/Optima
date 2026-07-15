@@ -8,7 +8,7 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { ChatRoomType, ChatVisibility } from '../../common/enums';
+import { ChatRoomType, RoomScope } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { Group } from './group.entity';
 import { Project } from './project.entity';
@@ -50,10 +50,10 @@ export class ChatRoom {
 
   @Column({
     type: 'enum',
-    enum: ChatVisibility,
-    default: ChatVisibility.MEMBERS_ONLY,
+    enum: RoomScope,
+    default: RoomScope.WORKSPACE_ONLY,
   })
-  visibility: ChatVisibility;
+  scope!: RoomScope;
 
   @Column({ length: 200, nullable: true })
   name: string;
@@ -69,9 +69,6 @@ export class ChatRoom {
 
   @Column({ name: 'is_read_only', default: false })
   isReadOnly: boolean;
-
-  // Removed isPublic, replaced by visibility
-
 
   @Column({ name: 'invite_code', type: 'varchar', length: 32, nullable: true, unique: true })
   inviteCode!: string | null;

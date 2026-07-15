@@ -17,7 +17,7 @@ import {
   MeetingStatus,
   MeetingParticipantRole,
 } from '../../common/enums/meeting.enum';
-import { NotificationType } from '../../common/enums';
+import { NotificationType, RoomScope } from '../../common/enums';
 import { MembersService } from '../workspaces/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
@@ -34,7 +34,7 @@ export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enfor
 
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
-  meeting_code AS "meetingCode", status, visibility, start_time AS "startTime", end_time AS "endTime",
+  meeting_code AS "meetingCode", status, scope, start_time AS "startTime", end_time AS "endTime",
   max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
@@ -279,6 +279,13 @@ export class MeetingsService {
     userId: string,
     dto: CreateMeetingDto,
   ) {
+    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'workspace_only meetings require a workspace',
+      });
+    }
     if (workspaceId) {
       await this.membersService.assertMember(workspaceId, userId);
     }
@@ -304,7 +311,7 @@ export class MeetingsService {
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
            (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
-            max_participants, is_recurring, agenda, visibility)
+            max_participants, is_recurring, agenda, scope)
          VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 100), COALESCE($9, false), $10, $11)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
@@ -318,7 +325,7 @@ export class MeetingsService {
           dto.maxParticipants ?? null,
           dto.isRecurring ?? null,
           dto.agenda ?? null,
-          dto.visibility ?? 'workspace',
+          scope,
         ],
       );
       saved = rows[0];

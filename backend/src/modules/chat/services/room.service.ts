@@ -8,7 +8,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
-import { ChatRoomType, ChatVisibility } from '../../../common/enums';
+import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
@@ -22,14 +22,14 @@ import {
 
 export interface ChatRoomDto {
   id: string;
-  workspaceId: string;
+  workspaceId: string | null;
   type: ChatRoomType;
   name: string | null;
   avatarUrl: string | null;
   description: string | null;
   isArchived: boolean;
   isReadOnly: boolean;
-  visibility: ChatVisibility;
+  scope: RoomScope;
   inviteCode: string | null;
   isMember: boolean;
   groupId: string | null;
@@ -119,7 +119,7 @@ export class ChatRoomService {
       description: room.description ?? null,
       isArchived: room.isArchived,
       isReadOnly: room.isReadOnly,
-      visibility: room.visibility,
+      scope: room.scope,
       inviteCode: room.inviteCode ?? null,
       groupId: room.groupId ?? null,
       projectId: room.projectId ?? null,
@@ -198,7 +198,7 @@ export class ChatRoomService {
         description: room.description ?? null,
         isArchived: room.isArchived,
         isReadOnly: room.isReadOnly,
-        visibility: room.visibility,
+        scope: room.scope,
         inviteCode: room.inviteCode ?? null,
         groupId: room.groupId ?? null,
         projectId: room.projectId ?? null,
@@ -240,7 +240,7 @@ export class ChatRoomService {
 
     const publicRooms: ChatRoom[] = await this.dataSource.query(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms
-       WHERE workspace_id = $1 AND visibility = 'public' AND is_archived = false`,
+       WHERE workspace_id = $1 AND scope = 'public' AND is_archived = false`,
       [workspaceId],
     );
 
@@ -254,7 +254,7 @@ export class ChatRoomService {
       name: r.name ?? null,
       avatarUrl: r.avatarUrl ?? null,
       description: r.description ?? null,
-      visibility: ChatVisibility.PUBLIC,
+      scope: RoomScope.PUBLIC,
       isArchived: false,
       isReadOnly: r.isReadOnly,
       groupId: r.groupId ?? null,
@@ -277,7 +277,7 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_FOUND,
         message: 'Room not found',
       });
-    if (room.visibility !== ChatVisibility.PUBLIC)
+    if (room.scope !== RoomScope.PUBLIC)
       throw new ForbiddenException({
         code: ErrorCode.ROOM_NOT_PUBLIC,
         message: 'Room is not public',
@@ -303,7 +303,7 @@ export class ChatRoomService {
   async updateRoomSettings(
     roomId: string,
     userId: string,
-    dto: { visibility?: ChatVisibility; name?: string; description?: string },
+    dto: { scope?: RoomScope; name?: string; description?: string },
   ) {
     const room = await this.findRoomById(roomId);
     if (!room)
@@ -336,11 +336,26 @@ export class ChatRoomService {
   }
 
   async createRoom(
-    workspaceId: string,
+    workspaceId: string | null,
     userId: string,
     dto: CreateChatRoomDto,
   ) {
-    await this.wsMembersService.assertMember(workspaceId, userId);
+    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'workspace_only rooms require a workspace',
+      });
+    }
+    if ((dto.groupId || dto.projectId) && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Group/project rooms require a workspace',
+      });
+    }
+    if (workspaceId) {
+      await this.wsMembersService.assertMember(workspaceId, userId);
+    }
 
     if (dto.type === ChatRoomType.DIRECT) {
       if (!dto.targetUserId)
@@ -360,7 +375,7 @@ export class ChatRoomService {
          FROM chat_rooms r
          JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $2 AND cm1.left_at IS NULL
          JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $3 AND cm2.left_at IS NULL
-         WHERE r.workspace_id = $1 AND r.type = $4`,
+         WHERE r.workspace_id IS NOT DISTINCT FROM $1 AND r.type = $4`,
         [workspaceId, userId, dto.targetUserId, ChatRoomType.DIRECT],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
@@ -402,13 +417,13 @@ export class ChatRoomService {
           : dto.type;
 
     const savedRows: ChatRoom[] = await this.dataSource.query(
-      `INSERT INTO chat_rooms (workspace_id, type, visibility, name, group_id, project_id, created_by)
+      `INSERT INTO chat_rooms (workspace_id, type, scope, name, group_id, project_id, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
       [
         workspaceId,
         derivedType,
-        dto.visibility ?? ChatVisibility.MEMBERS_ONLY,
+        scope,
         dto.name ?? null,
         dto.groupId ?? null,
         dto.projectId ?? null,

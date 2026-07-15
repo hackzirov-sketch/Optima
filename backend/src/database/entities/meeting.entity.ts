@@ -9,6 +9,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { MeetingStatus } from '../../common/enums/meeting.enum';
+import { RoomScope } from '../../common/enums';
 import { User } from './user.entity';
 import { Workspace } from './workspace.entity';
 
@@ -49,6 +50,13 @@ export class Meeting {
     default: MeetingStatus.SCHEDULED,
   })
   status: MeetingStatus;
+
+  @Column({
+    type: 'enum',
+    enum: RoomScope,
+    default: RoomScope.WORKSPACE_ONLY,
+  })
+  scope!: RoomScope;
 
   @Column({ name: 'start_time', type: 'timestamptz' })
   startTime: Date;

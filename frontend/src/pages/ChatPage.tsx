@@ -328,7 +328,7 @@ export function ChatPage() {
     try {
       const room = createMode === "direct"
         ? await api.chat.createRoom(workspace.id, { type: "direct", targetUserId: selectedMembers[0] })
-        : await api.chat.createRoom(workspace.id, { type: "group", visibility: "members_only", name: String(data.get("name") || "").trim(), memberIds: selectedMembers });
+        : await api.chat.createRoom(workspace.id, { type: "group", scope: "workspace_only", name: String(data.get("name") || "").trim(), memberIds: selectedMembers });
       await loadRooms(room.id);
       setCreateOpen(false);
       setSelectedMembers([]);

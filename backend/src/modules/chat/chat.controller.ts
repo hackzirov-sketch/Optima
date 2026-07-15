@@ -18,6 +18,7 @@ import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
+import { RoomScope } from '../../common/enums';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -41,9 +42,15 @@ export class ChatController {
   }
 
   @Post('workspaces/:workspaceId/chat/rooms')
-  @ApiOperation({ summary: 'Create chat room' })
+  @ApiOperation({ summary: 'Create chat room in a workspace' })
   createRoom(@Param('workspaceId') workspaceId: string, @CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
     return this.roomService.createRoom(workspaceId, userId, dto);
+  }
+
+  @Post('chat/rooms')
+  @ApiOperation({ summary: 'Create a standalone chat room (private/public, no workspace)' })
+  createStandaloneRoom(@CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
+    return this.roomService.createRoom(null, userId, dto);
   }
 
   @Get('chat/rooms/:roomId')
@@ -175,11 +182,11 @@ export class ChatController {
   }
 
   @Patch('chat/rooms/:roomId/settings')
-  @ApiOperation({ summary: 'Update room settings (isPublic, name, description)' })
+  @ApiOperation({ summary: 'Update room settings (scope, name, description)' })
   updateRoomSettings(
     @Param('roomId') roomId: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: { isPublic?: boolean; name?: string; description?: string },
+    @Body() dto: { scope?: RoomScope; name?: string; description?: string },
   ) {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
   }

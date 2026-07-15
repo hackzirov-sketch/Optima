@@ -58,9 +58,9 @@ export interface WorkspaceMember {
 
 export interface ChatRoom {
   id: string;
-  workspaceId: string;
-  type: "public" | "private" | "workspace" | "project" | "group" | "direct";
-  visibility: "public" | "invite_only" | "workspace_only" | "members_only";
+  workspaceId: string | null;
+  type: "workspace" | "project" | "group" | "direct";
+  scope: "workspace_only" | "private" | "public";
   name?: string | null;
   description?: string | null;
   avatarUrl?: string | null;

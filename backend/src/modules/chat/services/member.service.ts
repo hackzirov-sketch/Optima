@@ -143,7 +143,7 @@ export class ChatMemberService {
     const rows: any[] = await this.dataSource.query(
       `SELECT
          cm.room_id AS "roomId", r.name AS "roomName", r.type AS "roomType",
-         r.visibility, r.created_by AS "createdById",
+         r.scope, r.created_by AS "createdById",
          u.first_name AS "actorFirstName", u.last_name AS "actorLastName",
          u.avatar_url AS "actorAvatarUrl",
          cm.joined_at AS "invitedAt"

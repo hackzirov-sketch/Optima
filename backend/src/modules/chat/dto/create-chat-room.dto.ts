@@ -7,17 +7,22 @@ import {
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { ChatRoomType, ChatVisibility } from '../../../common/enums';
+import { ChatRoomType, RoomScope } from '../../../common/enums';
 
 export class CreateChatRoomDto {
   @ApiProperty({ enum: ChatRoomType, default: ChatRoomType.GROUP })
   @IsEnum(ChatRoomType)
   type: ChatRoomType;
 
-  @ApiPropertyOptional({ enum: ChatVisibility, default: ChatVisibility.MEMBERS_ONLY })
+  @ApiPropertyOptional({
+    enum: RoomScope,
+    default: RoomScope.WORKSPACE_ONLY,
+    description:
+      'workspace_only requires a workspace; private/public may be created without one',
+  })
   @IsOptional()
-  @IsEnum(ChatVisibility)
-  visibility?: ChatVisibility;
+  @IsEnum(RoomScope)
+  scope?: RoomScope;
 
   @ApiPropertyOptional()
   @IsOptional()
