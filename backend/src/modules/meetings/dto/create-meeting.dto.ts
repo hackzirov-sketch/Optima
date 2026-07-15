@@ -8,7 +8,9 @@ import {
   MaxLength,
   Min,
   Max,
+  IsEnum,
 } from 'class-validator';
+import { MeetingVisibility } from '../../../common/enums';
 
 export class CreateMeetingDto {
   @ApiProperty()
@@ -46,4 +48,9 @@ export class CreateMeetingDto {
   @IsOptional()
   @IsString()
   agenda?: string;
+
+  @ApiPropertyOptional({ enum: MeetingVisibility, default: MeetingVisibility.PRIVATE })
+  @IsOptional()
+  @IsEnum(MeetingVisibility)
+  visibility?: MeetingVisibility;
 }

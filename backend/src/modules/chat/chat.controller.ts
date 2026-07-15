@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { SkipThrottle } from '@nestjs/throttler';
 
 import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
@@ -44,18 +46,6 @@ export class ChatController {
     return this.roomService.createRoom(workspaceId, userId, dto);
   }
 
-  @Get('chat/rooms')
-  @ApiOperation({ summary: 'List all rooms the current user belongs to, across every workspace and independent of one' })
-  listMyRooms(@CurrentUser('id') userId: string) {
-    return this.roomService.listAllRoomsForUser(userId);
-  }
-
-  @Post('chat/rooms')
-  @ApiOperation({ summary: 'Create a chat room with no workspace context (direct message or standalone chat)' })
-  createIndependentRoom(@CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
-    return this.roomService.createRoom(null, userId, dto);
-  }
-
   @Get('chat/rooms/:roomId')
   @ApiOperation({ summary: 'Get chat room' })
   getRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
@@ -81,6 +71,7 @@ export class ChatController {
   }
 
   @Post('chat/rooms/:roomId/messages')
+  @SkipThrottle()
   @ApiOperation({ summary: 'Send message (REST fallback)' })
   sendMessage(@Param('roomId') roomId: string, @CurrentUser('id') userId: string, @Body() dto: SendMessageDto) {
     return this.messageService.sendMessage(roomId, userId, dto);
@@ -193,6 +184,16 @@ export class ChatController {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
   }
 
+  @Delete('chat/rooms/:roomId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a chat room (DM or group if creator)' })
+  async deleteRoom(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    await this.roomService.deleteRoom(roomId, userId);
+  }
+
   @Post('chat/ai')
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(
@@ -226,4 +227,42 @@ export class ChatController {
     await this.memberService.assertRoomMember(roomId, userId);
     return this.storageService.getPresignedUploadUrl('attachments', userId, dto.fileName, dto.mimeType, dto.fileSize);
   }
-} 
+
+  @Post('chat/rooms/:roomId/attachments/audio')
+  @ApiOperation({ summary: 'Upload a recorded voice message' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  async uploadAudio(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number },
+  ) {
+    await this.memberService.assertRoomMember(roomId, userId);
+    const mimeType = file?.mimetype?.split(';')[0];
+    const allowed = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav']);
+    if (!file?.buffer || !mimeType || !allowed.has(mimeType)) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid audio recording is required' });
+    }
+    return this.storageService.uploadChatAudio(file.buffer, userId, mimeType);
+  }
+
+  // ── Chat Invite Accept / Decline ──────────────────────────────────────────
+
+  @Get('chat/invites/pending')
+  @ApiOperation({ summary: 'List all pending chat invites for the current user' })
+  listPendingChatInvites(@CurrentUser('id') userId: string) {
+    return this.memberService.listPendingInvites(userId);
+  }
+
+  @Post('chat/rooms/:roomId/invite/accept')
+  @ApiOperation({ summary: 'Accept a pending DM / room invite' })
+  acceptChatInvite(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.memberService.acceptChatInvite(roomId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/invite/decline')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decline a pending DM / room invite' })
+  declineChatInvite(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.memberService.declineChatInvite(roomId, userId);
+  }
+}

@@ -45,7 +45,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 RUN addgroup -S -g 1001 nodejs \
-    && adduser -S -u 1001 nestjs
+    && adduser -S -u 1001 nestjs \
+    && mkdir -p /app/uploads \
+    && chown -R nestjs:nodejs /app/uploads
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

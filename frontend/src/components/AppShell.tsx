@@ -1,0 +1,88 @@
+import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Settings, UserRound, Video, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "../lib/auth";
+import { Avatar, Logo } from "./ui";
+
+const nav = [
+  { href: "/", label: "Bosh sahifa", icon: LayoutDashboard },
+  { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/meetings", label: "Meeting", icon: Video },
+  { href: "/profile", label: "Profil", icon: UserRound },
+];
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
+  const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
+
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
+        <div className="sidebar-brand">
+          <Logo />
+          <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label="Menyuni yopish"><X size={20} /></button>
+        </div>
+        <div className="workspace-switcher">
+          <button className="workspace-button" onClick={() => setWorkspaceOpen((value) => !value)} aria-expanded={workspaceOpen}>
+            <span className="workspace-avatar">{workspace?.name?.[0]?.toUpperCase() || "O"}</span>
+            <span><small>Workspace</small><strong>{workspace?.name || "Optima"}</strong></span>
+            <ChevronDown size={16} />
+          </button>
+          {workspaceOpen && (
+            <div className="workspace-menu">
+              {workspaces.map((item) => (
+                <button key={item.id} onClick={() => { selectWorkspace(item); setWorkspaceOpen(false); }} className={item.id === workspace?.id ? "selected" : ""}>
+                  <span className="workspace-avatar workspace-avatar-sm">{item.name[0]?.toUpperCase()}</span>
+                  <span>{item.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <nav className="main-nav" aria-label="Asosiy navigatsiya">
+          {nav.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} onClick={() => setMobileOpen(false)}>
+                <Icon size={19} strokeWidth={1.8} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="sidebar-status">
+          <span className="live-dot" />
+          <div><strong>Tizim ishlayapti</strong><small>Real-time ulangan</small></div>
+        </div>
+        <div className="sidebar-profile">
+          <Link href="/profile" className="profile-link">
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} />
+            <span><strong>{user?.firstName} {user?.lastName}</strong><small>@{user?.username}</small></span>
+          </Link>
+          <button className="icon-button" onClick={() => void logout()} aria-label="Chiqish" title="Chiqish"><LogOut size={18} /></button>
+        </div>
+      </aside>
+      {mobileOpen && <button className="sidebar-scrim" onClick={() => setMobileOpen(false)} aria-label="Menyuni yopish" />}
+      <div className="app-body">
+        <header className="topbar">
+          <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label="Menyuni ochish"><Menu size={21} /></button>
+          <div className="topbar-context"><strong>{nav.find((item) => active(item.href))?.label || "Optima"}</strong></div>
+          <div className="topbar-actions">
+            <button className="icon-button" aria-label="Bildirishnomalar" title="Bildirishnomalar"><Bell size={19} /></button>
+            <Link href="/profile" className="icon-button" aria-label="Sozlamalar" title="Sozlamalar"><Settings size={19} /></Link>
+          </div>
+        </header>
+        <main className="app-main">{children}</main>
+      </div>
+      <nav className="mobile-nav" aria-label="Mobil navigatsiya">
+        {nav.map((item) => {
+          const Icon = item.icon;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
+        })}
+      </nav>
+    </div>
+  );
+}

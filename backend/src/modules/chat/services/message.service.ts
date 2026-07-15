@@ -12,7 +12,6 @@ import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
 import { ChatReactionService } from './reaction.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
-import { ViolationService } from '../../moderation/services/violation.service';
 import { StorageService } from '../../storage/storage.service';
 import { RedisService } from '../../../redis/redis.service';
 import { SendMessageDto } from '../dto/send-message.dto';
@@ -28,7 +27,6 @@ export class ChatMessageService {
     private readonly chatMemberService: ChatMemberService,
     private readonly chatReactionService: ChatReactionService,
     private readonly contentFilter: ContentFilterService,
-    private readonly violationService: ViolationService,
     private readonly chatEncryption: ChatEncryptionService,
     private readonly storageService: StorageService,
     private readonly redisService: RedisService,
@@ -159,30 +157,6 @@ export class ChatMessageService {
    *    exactly 10/s nonstop for a minute straight is not a human, this
    *    catches that pattern even though each individual second passes.
    */
-  private async assertNotFlooding(userId: string): Promise<void> {
-    const redisClient = this.redisService.getClient();
-    if (!redisClient) return;
-
-    const burstKey = `flood:chat:1s:${userId}`;
-    const sustainedKey = `flood:chat:60s:${userId}`;
-
-    const [burstCount, sustainedCount] = await Promise.all([
-      redisClient.incr(burstKey),
-      redisClient.incr(sustainedKey),
-    ]);
-    if (burstCount === 1) await redisClient.expire(burstKey, 1);
-    if (sustainedCount === 1) await redisClient.expire(sustainedKey, 60);
-
-    if (burstCount > 10 || sustainedCount > 120) {
-      await this.violationService.assertNotBlocked(userId);
-      await this.violationService.recordViolation(userId, 'spam', 'message flood (too many messages in a short time)');
-      throw new BadRequestException({
-        code: ErrorCode.RATE_LIMIT_EXCEEDED,
-        message: 'You are sending messages too fast. Please slow down.',
-      });
-    }
-  }
-
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
     const roomRows: Array<{ id: string; isReadOnly: boolean }> = await this.dataSource.query(
       `SELECT id, is_read_only AS "isReadOnly" FROM chat_rooms WHERE id = $1`,
@@ -198,8 +172,6 @@ export class ChatMessageService {
     if (!dto.content?.trim() && !hasAttachments) {
       throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
     }
-
-    await this.assertNotFlooding(userId);
 
     if (dto.content?.trim()) {
       await this.contentFilter.filterText(dto.content, userId, 'chat');
@@ -337,8 +309,21 @@ export class ChatMessageService {
     const msg = rows[0];
     if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
     await this.chatMemberService.assertRoomMember(msg.roomId, userId);
-    if (msg.senderId !== userId)
-      throw new ForbiddenException({ code: ErrorCode.CANNOT_DELETE_MESSAGE, message: 'You can only delete your own messages' });
+
+    if (msg.senderId !== userId) {
+      // Non-senders may only delete a message if this is a group/channel room
+      // (not a 1-on-1 direct room) and they are the room owner/creator.
+      const roomRows: Array<{ type: string; createdById: string }> = await this.dataSource.query(
+        `SELECT type, created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
+        [msg.roomId],
+      );
+      const room = roomRows[0];
+      const isDirectRoom = room?.type === 'direct';
+      const isRoomOwner = room?.createdById === userId;
+      if (isDirectRoom || !isRoomOwner) {
+        throw new ForbiddenException({ code: ErrorCode.CANNOT_DELETE_MESSAGE, message: 'You can only delete your own messages' });
+      }
+    }
     await this.dataSource.query(`UPDATE chat_messages SET deleted_at = now() WHERE id = $1`, [messageId]);
   }
 

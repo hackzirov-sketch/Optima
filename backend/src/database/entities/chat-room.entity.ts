@@ -8,6 +8,7 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
+import { ChatRoomType, ChatVisibility } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { Group } from './group.entity';
 import { Project } from './project.entity';
@@ -19,14 +20,12 @@ export class ChatRoom {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // Nullable: a chat room no longer has to live inside a workspace — direct
-  // messages and standalone/independent chats have workspace_id = null.
   @Column({ name: 'workspace_id', nullable: true })
-  workspaceId: string | null;
+  workspaceId: string;
 
-  @ManyToOne(() => Workspace, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'workspace_id' })
-  workspace: Workspace | null;
+  workspace: Workspace;
 
   @Column({ name: 'group_id', nullable: true })
   groupId: string;
@@ -41,6 +40,20 @@ export class ChatRoom {
   @ManyToOne(() => Project, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'project_id' })
   project: Project;
+
+  @Column({
+    type: 'enum',
+    enum: ChatRoomType,
+    default: ChatRoomType.GROUP,
+  })
+  type: ChatRoomType;
+
+  @Column({
+    type: 'enum',
+    enum: ChatVisibility,
+    default: ChatVisibility.MEMBERS_ONLY,
+  })
+  visibility: ChatVisibility;
 
   @Column({ length: 200, nullable: true })
   name: string;
@@ -57,8 +70,8 @@ export class ChatRoom {
   @Column({ name: 'is_read_only', default: false })
   isReadOnly: boolean;
 
-  @Column({ name: 'is_public', default: false })
-  isPublic!: boolean;
+  // Removed isPublic, replaced by visibility
+
 
   @Column({ name: 'invite_code', type: 'varchar', length: 32, nullable: true, unique: true })
   inviteCode!: string | null;
@@ -76,10 +89,10 @@ export class ChatRoom {
   @Column({ name: 'message_seq', type: 'int', default: 0 })
   messageSeq: number;
 
-  @Column({ name: 'created_by' })
+  @Column({ name: 'created_by', nullable: true })
   createdById: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 

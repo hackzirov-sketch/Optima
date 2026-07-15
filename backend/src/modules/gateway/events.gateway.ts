@@ -392,6 +392,8 @@ export class EventsGateway
       id: saved.id,
       roomId: saved.roomId,
       senderId: saved.senderId,
+      sequence: saved.sequence,
+      clientMessageId: saved.clientMessageId,
       content: saved.content,
       contentType: saved.contentType ?? 'text',
       attachments: saved.attachments ?? [],
@@ -539,7 +541,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) return;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
 
     this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:offer', {
       meetingId: data.meetingId,
@@ -555,7 +557,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) return;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
 
     this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:answer', {
       meetingId: data.meetingId,
@@ -571,7 +573,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) return;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
 
     this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:ice-candidate', {
       meetingId: data.meetingId,
@@ -587,7 +589,7 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) return;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
 
     client.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
       meetingId: data.meetingId,

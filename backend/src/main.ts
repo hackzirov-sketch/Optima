@@ -27,7 +27,9 @@ async function bootstrap() {
   setupApp(app, config);
   setupRedisAndWebSockets(app, config);
   setupValidation(app, config);
-  setupSwagger(app, config);
+  if (!isProd) {
+    setupSwagger(app, config);
+  }
 
   const port = config.get<number>('app.port') || 3000;
   const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
@@ -38,4 +40,3 @@ async function bootstrap() {
   logger.log(`📖 Swagger docs: http://localhost:${port}/${prefix}/docs`);
 }
 bootstrap();
-

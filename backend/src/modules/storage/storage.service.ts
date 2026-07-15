@@ -10,6 +10,8 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
 export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings';
 
@@ -177,6 +179,20 @@ export class StorageService {
       }),
     );
     return { key, url: `${this.r2PublicUrl}/${key}` };
+  }
+
+  async uploadChatAudio(buffer: Buffer, userId: string, mimeType: string) {
+    const extensions: Record<string, string> = {
+      'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a',
+      'audio/mpeg': 'mp3', 'audio/wav': 'wav',
+    };
+    const extension = extensions[mimeType];
+    if (!extension) throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'Unsupported audio format' });
+    const directory = path.resolve(process.cwd(), 'uploads', 'audio');
+    await fs.mkdir(directory, { recursive: true });
+    const fileName = `${userId}-${uuidv4()}.${extension}`;
+    await fs.writeFile(path.join(directory, fileName), buffer, { mode: 0o600 });
+    return { storageKey: `audio/${fileName}`, storageUrl: `/uploads/audio/${fileName}`, fileName, fileSize: buffer.length, mimeType };
   }
 
   async uploadBase64(

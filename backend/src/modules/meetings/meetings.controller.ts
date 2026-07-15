@@ -52,9 +52,9 @@ export class MeetingsController {
   }
 
   @Post('workspaces/:workspaceId/meetings')
-  @ApiOperation({ summary: 'Create a meeting' })
+  @ApiOperation({ summary: 'Create a meeting in a workspace' })
   @ApiParam({ name: 'workspaceId', format: 'uuid' })
-  create(
+  createInWorkspace(
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateMeetingDto,
@@ -62,21 +62,27 @@ export class MeetingsController {
     return this.meetingsService.create(workspaceId, userId, dto);
   }
 
-  // ─── Standalone meetings (no workspace) ───────────────────────────────────
+  // ─── Global (User-centric) list/create ────────────────────────────────────
 
   @Get('meetings')
-  @ApiOperation({ summary: 'List meetings the current user hosts or participates in, across every workspace and independent of one' })
-  listMine(@CurrentUser('id') userId: string) {
+  @ApiOperation({ summary: 'List user meetings' })
+  listMyMeetings(@CurrentUser('id') userId: string) {
     return this.meetingsService.listForUser(userId);
   }
 
   @Post('meetings')
-  @ApiOperation({ summary: 'Create a standalone meeting with no workspace context (like a Google Meet call)' })
-  createStandalone(
+  @ApiOperation({ summary: 'Create a standalone meeting' })
+  create(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateMeetingDto,
   ) {
     return this.meetingsService.create(null, userId, dto);
+  }
+
+  @Get('meetings/ice-servers')
+  @ApiOperation({ summary: 'Get WebRTC STUN/TURN configuration' })
+  iceServers() {
+    return this.meetingsService.getIceServers();
   }
 
   // ─── Join by meeting code (workspace-agnostic) ────────────────────────────

@@ -46,6 +46,12 @@ export enum ProjectStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum ProjectVisibility {
+  PUBLIC = 'public',
+  WORKSPACE = 'workspace',
+  PRIVATE = 'private',
+}
+
 export enum PriorityLevel {
   CRITICAL = 'critical',
   HIGH = 'high',
@@ -96,6 +102,40 @@ export enum PushStatus {
   MERGED = 'merged',
 }
 
+export enum ChatRoomType {
+  PUBLIC = 'public',
+  PRIVATE = 'private',
+  WORKSPACE = 'workspace',
+  PROJECT = 'project',
+  GROUP = 'group',
+  DIRECT = 'direct',
+}
+
+export enum ChatMemberStatus {
+  PENDING = 'pending',
+  ACTIVE = 'active',
+}
+
+export enum ChatVisibility {
+  PUBLIC = 'public',
+  INVITE_ONLY = 'invite_only',
+  WORKSPACE_ONLY = 'workspace_only',
+  MEMBERS_ONLY = 'members_only',
+}
+
+export enum MeetingVisibility {
+  PUBLIC = 'public',
+  WORKSPACE = 'workspace',
+  PRIVATE = 'private',
+  SELECTED_USERS = 'selected_users',
+}
+
+export enum UserPresence {
+  ONLINE = 'online',
+  AWAY = 'away',
+  OFFLINE = 'offline',
+}
+
 export enum NotificationType {
   TASK_ASSIGNED = 'task_assigned',
   TASK_UPDATED = 'task_updated',
@@ -118,6 +158,9 @@ export enum NotificationType {
   PROJECT_MEMBER_ACCEPTED = 'project_member_accepted',
   PROJECT_MEMBER_DECLINED = 'project_member_declined',
   MEETING_INVITE = 'meeting_invite',
+  CHAT_INVITE = 'chat_invite',
+  CHAT_INVITE_ACCEPTED = 'chat_invite_accepted',
+  CHAT_INVITE_DECLINED = 'chat_invite_declined',
 }
 
 // ─── Notification Channel & Priority ──────────────────────────────────────────

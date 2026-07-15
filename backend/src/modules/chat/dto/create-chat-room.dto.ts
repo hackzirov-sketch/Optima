@@ -1,13 +1,24 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
 } from 'class-validator';
+import { ChatRoomType, ChatVisibility } from '../../../common/enums';
 
 export class CreateChatRoomDto {
+  @ApiProperty({ enum: ChatRoomType, default: ChatRoomType.GROUP })
+  @IsEnum(ChatRoomType)
+  type: ChatRoomType;
+
+  @ApiPropertyOptional({ enum: ChatVisibility, default: ChatVisibility.MEMBERS_ONLY })
+  @IsOptional()
+  @IsEnum(ChatVisibility)
+  visibility?: ChatVisibility;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

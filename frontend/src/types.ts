@@ -1,0 +1,158 @@
+export type UserTheme = "light" | "dark" | "system";
+export type UserLanguage = "uz" | "ru" | "en";
+
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string | null;
+  phoneNumber?: number | null;
+  occupation?: string | null;
+  language?: UserLanguage;
+  timezone?: string;
+  theme?: UserTheme;
+  isVerified?: boolean;
+  notificationsEnabled?: boolean;
+  emailNotifications?: boolean;
+  pushNotifications?: boolean;
+  notifyTaskAssigned?: boolean;
+  notifyPushReviewed?: boolean;
+  notifyPrEvents?: boolean;
+  notifyMentions?: boolean;
+}
+
+export interface AuthResult {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+  requiresPasswordSetup?: boolean;
+}
+
+export interface Workspace {
+  id: string;
+  ownerId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  visibility: "public" | "private";
+  maxMembers?: number;
+  maxProjects?: number;
+  createdAt?: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  role: string;
+  joinedAt?: string;
+  user?: User;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
+export interface ChatRoom {
+  id: string;
+  workspaceId: string;
+  type: "public" | "private" | "workspace" | "project" | "group" | "direct";
+  visibility: "public" | "invite_only" | "workspace_only" | "members_only";
+  name?: string | null;
+  description?: string | null;
+  avatarUrl?: string | null;
+  createdById: string;
+  memberIds: string[];
+  memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>;
+  memberCount: number;
+  unreadCount: number;
+  isReadOnly: boolean;
+  memberStatus?: "pending" | "active";
+  lastMessage?: {
+    id: string;
+    content: string;
+    senderId: string;
+    senderName?: string | null;
+    createdAt: string;
+  } | null;
+  createdAt: string;
+}
+
+export interface RoomInvite {
+  id: string;
+  roomId: string;
+  code: string;
+  createdById: string;
+  maxUses: number | null;
+  usesCount: number;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  isActive: boolean;
+}
+
+export interface GlobalSearchResult {
+  users: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>;
+  chats: Array<{ id: string; name?: string | null; type: string }>;
+  projects: Array<{ id: string; name: string }>;
+  workspaces: Array<{ id: string; name: string; slug: string }>;
+  meetings: Array<{ id: string; title: string }>;
+}
+
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  content: string;
+  contentType?: string;
+  attachments?: Array<{ id: string; fileName: string; fileSize: number; mimeType: string; url: string }>;
+  sequence?: number;
+  clientMessageId?: string;
+  replyToId?: string | null;
+  isEdited?: boolean;
+  editedAt?: string | null;
+  createdAt: string;
+  reactions?: Array<{ emoji: string; userIds: string[] }>;
+  sender?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+}
+
+export interface MeetingParticipant {
+  id: string;
+  userId: string;
+  role: "host" | "co_host" | "participant";
+  joinedAt: string;
+  leftAt?: string | null;
+  isMuted: boolean;
+  cameraEnabled: boolean;
+  screenSharing: boolean;
+}
+
+export interface Meeting {
+  id: string;
+  workspaceId?: string | null;
+  hostId: string;
+  host?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  title: string;
+  description?: string | null;
+  code: string;
+  status: "scheduled" | "live" | "ended" | "cancelled";
+  startTime: string;
+  endTime?: string | null;
+  maxParticipants: number;
+  participantCount: number;
+  participants: MeetingParticipant[];
+  agenda?: string | null;
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  createdAt: string;
+}
