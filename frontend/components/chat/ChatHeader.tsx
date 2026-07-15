@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
-import { BellOff, Check, Copy, Globe, Link2, Loader2, Lock, Menu, MoreVertical, Phone, Pin, Search, Trash, User, UserPlus, Video, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import type { ChatRoom, ChatUser } from "@/types";
-import { PremiumGradientBadge, PremiumStatusBadge, getPremiumStatusForUser } from "@/components/premium/PremiumAssets";
-import { Avatar, RoomGlyph, getLinkedTask, getRoomName, getRoomPeer, getUser } from "./chatShared";
-import { chatApi } from "@/lib/api";
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { AnimatePresence, motion } from "framer-motion"
+import { BellOff, Check, Copy, Globe, Link2, Loader2, Lock, Menu, MoreVertical, Phone, Pin, Search, Trash, User, UserPlus, Video, X } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { ChatRoom, ChatUser } from "@/types"
+import { useMembers } from '@/hooks/useMembers'
+import { PremiumGradientBadge, PremiumStatusBadge, getPremiumStatusForUser } from "@/components/premium/PremiumAssets"
+import { Avatar, RoomGlyph, getLinkedTask, getRoomName, getRoomPeer, getUser } from "./chatShared"
+import { chatApi } from "@/lib/api"
 
-export type ChatHeaderAction = "profile" | "search" | "mute" | "pin" | "clear" | "delete";
-export type ChatCallMode = "voice" | "video";
+export type ChatHeaderAction = "profile" | "search" | "mute" | "pin" | "clear" | "delete"
+export type ChatCallMode = "voice" | "video"
 
 interface ChatHeaderProps {
-  room: ChatRoom;
-  users: ChatUser[];
-  onBackToList: () => void;
-  onAction: (action: ChatHeaderAction) => void;
-  onStartCall: (mode: ChatCallMode) => void;
-  currentUserId?: string;
-  onRoomUpdated?: (updated: Partial<ChatRoom>) => void;
+  room: ChatRoom
+  users: ChatUser[]
+  onBackToList: () => void
+  onAction: (action: ChatHeaderAction) => void
+  onStartCall: (mode: ChatCallMode) => void
+  currentUserId?: string
+  onRoomUpdated?: (updated: Partial<ChatRoom>) => void
+  workspaceId?: string
 }
 
 function RoomInviteModal({
@@ -26,61 +28,66 @@ function RoomInviteModal({
   currentUserId,
   onClose,
   onRoomUpdated,
+  workspaceId,
 }: {
-  room: ChatRoom;
-  currentUserId?: string;
-  onClose: () => void;
-  onRoomUpdated?: (updated: Partial<ChatRoom>) => void;
+  room: ChatRoom
+  currentUserId?: string
+  onClose: () => void
+  onRoomUpdated?: (updated: Partial<ChatRoom>) => void
+  workspaceId?: string
 }) {
-  const [code, setCode] = useState<string | null>(room.inviteCode ?? null);
-  const [isPublic, setIsPublic] = useState(room.isPublic ?? false);
-  const [loadingCode, setLoadingCode] = useState(false);
-  const [loadingVisibility, setLoadingVisibility] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { members } = useMembers(workspaceId)
+  const [code, setCode] = useState<string | null>(room.inviteCode ?? null)
+  const [isPublic, setIsPublic] = useState(room.isPublic ?? false)
+  const [loadingCode, setLoadingCode] = useState(false)
+  const [loadingVisibility, setLoadingVisibility] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  const isCreator = room.createdById === currentUserId;
-  const inviteUrl = code ? `${window.location.origin}/app/chat?joinCode=${code}` : null;
+  const isCreator = room.createdById === currentUserId
+  const myMember = members.find((m) => m.userId === currentUserId)
+  const canManage = isCreator || (myMember && ['owner', 'admin', 'lead'].includes((myMember.role ?? '').toString()))
+  const inviteUrl = code ? `${window.location.origin}/app/chat?joinCode=${code}` : null
 
   const handleGetCode = async () => {
-    setLoadingCode(true);
+    setLoadingCode(true)
     try {
-      const res = await chatApi.getInviteCode(room.id);
-      const newCode = res.data?.code;
-      setCode(newCode);
-      onRoomUpdated?.({ inviteCode: newCode });
+      const res = await chatApi.getInviteCode(room.id)
+      const newCode = res.data?.code
+      setCode(newCode)
+      onRoomUpdated?.({ inviteCode: newCode })
     } finally {
-      setLoadingCode(false);
+      setLoadingCode(false)
     }
-  };
+  }
 
   const handleRevokeCode = async () => {
-    setLoadingCode(true);
+    setLoadingCode(true)
     try {
-      await chatApi.revokeInviteCode(room.id);
-      setCode(null);
-      onRoomUpdated?.({ inviteCode: null });
+      await chatApi.revokeInviteCode(room.id)
+      setCode(null)
+      onRoomUpdated?.({ inviteCode: null })
     } finally {
-      setLoadingCode(false);
+      setLoadingCode(false)
     }
-  };
+  }
 
   const handleTogglePublic = async () => {
-    setLoadingVisibility(true);
+    setLoadingVisibility(true)
     try {
-      await chatApi.updateRoomSettings(room.id, { isPublic: !isPublic });
-      setIsPublic((v) => !v);
-      onRoomUpdated?.({ isPublic: !isPublic });
+      await chatApi.updateRoomSettings(room.id, { isPublic: !isPublic })
+      setIsPublic((v) => !v)
+      onRoomUpdated?.({ isPublic: !isPublic })
     } finally {
-      setLoadingVisibility(false);
+      setLoadingVisibility(false)
     }
-  };
+  }
 
   const handleCopy = () => {
-    if (!inviteUrl) return;
-    navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
+    if (!inviteUrl) return
+    navigator.clipboard.writeText(inviteUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
+  }
 
   const content = (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -98,7 +105,7 @@ function RoomInviteModal({
           </button>
         </div>
 
-        {isCreator && (
+        {canManage && (
           <div className="mb-4 flex items-center justify-between rounded-2xl bg-muted px-4 py-3">
             <div className="flex items-center gap-2.5">
               {isPublic ? <Globe className="h-4 w-4 text-emerald-500" /> : <Lock className="h-4 w-4 text-gray-400" />}
@@ -138,7 +145,7 @@ function RoomInviteModal({
             <p className="text-sm text-muted-foreground">Hali link yaratilmagan.</p>
           )}
 
-          {isCreator && (
+          {canManage && (
             <div className="flex gap-2 pt-1">
               {!code ? (
                 <button
@@ -166,50 +173,50 @@ function RoomInviteModal({
         </div>
       </motion.div>
     </div>
-  );
+  )
 
-  if (typeof document === 'undefined') return null;
-  return createPortal(content, document.body);
+  if (typeof document === 'undefined') return null
+  return createPortal(content, document.body)
 }
 
 function roomStatus(room: ChatRoom, users: ChatUser[], t: (key: string, options?: Record<string, unknown>) => string) {
-  const peer = getRoomPeer(room, users);
-  if (room.type === "ai") return { label: t("app.chat.aiOnline", { defaultValue: "UPZ AI online" }) };
-  if (room.type === "saved") return { label: t("app.chat.savedPrivate", { defaultValue: "Private saved messages" }) };
+  const peer = getRoomPeer(room, users)
+  if (room.type === "ai") return { label: t("app.chat.aiOnline", { defaultValue: "UPZ AI online" }) }
+  if (room.type === "saved") return { label: t("app.chat.savedPrivate", { defaultValue: "Private saved messages" }) }
 
   if (room.type === "1on1") {
-    if (peer?.status === "online") return { label: t("app.chat.online") };
-    if (peer?.status === "away") return { label: t("app.chat.away") };
-    return { label: t("app.chat.lastSeen") };
+    if (peer?.status === "online") return { label: t("app.chat.online") }
+    if (peer?.status === "away") return { label: t("app.chat.away") }
+    return { label: t("app.chat.lastSeen") }
   }
 
-  const onlineCount = room.memberIds.filter((id) => getUser(id, users)?.status === "online").length;
-  return { label: t("app.chat.memberStatus", { members: room.memberIds.length, online: onlineCount }) };
+  const onlineCount = room.memberIds.filter((id) => getUser(id, users)?.status === "online").length
+  return { label: t("app.chat.memberStatus", { members: room.memberIds.length, online: onlineCount }) }
 }
 
 export function ChatHeader({ room, users, onBackToList, onAction, onStartCall, currentUserId, onRoomUpdated }: ChatHeaderProps) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const peer = getRoomPeer(room, users);
-  const status = roomStatus(room, users, t);
-  const memberPreview = room.memberIds.filter((id) => id !== "me").slice(0, 4);
-  const roomName = getRoomName(room, t);
-  const linkedTask = getLinkedTask(room, t);
-  const headerStatus = room.type === "1on1" ? getPremiumStatusForUser(peer) : room.type === "ai" ? "coding" : room.type === "saved" ? "focused" : room.type === "project" ? "building" : "meeting";
-  const canCall = room.type !== "ai" && room.type !== "saved";
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const peer = getRoomPeer(room, users)
+  const status = roomStatus(room, users, t)
+  const memberPreview = room.memberIds.filter((id) => id !== "me").slice(0, 4)
+  const roomName = getRoomName(room, t)
+  const linkedTask = getLinkedTask(room, t)
+  const headerStatus = room.type === "1on1" ? getPremiumStatusForUser(peer) : room.type === "ai" ? "coding" : room.type === "saved" ? "focused" : room.type === "project" ? "building" : "meeting"
+  const canCall = room.type !== "ai" && room.type !== "saved"
 
   useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [open]);
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener("click", close)
+    return () => window.removeEventListener("click", close)
+  }, [open])
 
   const runAction = (action: ChatHeaderAction) => {
-    setOpen(false);
-    onAction(action);
-  };
+    setOpen(false)
+    onAction(action)
+  }
 
   return (
     <header className="relative z-40 flex h-[72px] flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-3 backdrop-blur-xl dark:border-gray-700 dark:bg-gray-900 sm:px-5">
@@ -286,8 +293,8 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall, c
         <button
           type="button"
           onClick={(event) => {
-            event.stopPropagation();
-            setOpen((current) => !current);
+            event.stopPropagation()
+            setOpen((current) => !current)
           }}
           className="grid h-10 w-10 place-items-center rounded-full transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
           aria-label={t("app.chat.openMenu")}
@@ -346,5 +353,5 @@ export function ChatHeader({ room, users, onBackToList, onAction, onStartCall, c
         )}
       </AnimatePresence>
     </header>
-  );
+  )
 }

@@ -1,66 +1,66 @@
 import cookie from "js-cookie"
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1'
 
 // ─── Token management (both tokens in cookies) ────────────────────────────
 
-const IS_PROD = process.env.NODE_ENV === 'production';
-const COOKIE_OPTS = { secure: IS_PROD, sameSite: 'lax' as const, path: '/' };
+const IS_PROD = process.env.NODE_ENV === 'production'
+const COOKIE_OPTS = { secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
 
 export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') return null
   // Fallback: migrate old localStorage token on first load
-  const fromCookie = cookie.get('upz_access_token');
-  if (fromCookie) return fromCookie;
-  const fromLocal = localStorage.getItem('upz_access_token');
+  const fromCookie = cookie.get('upz_access_token')
+  if (fromCookie) return fromCookie
+  const fromLocal = localStorage.getItem('upz_access_token')
   if (fromLocal) {
-    cookie.set('upz_access_token', fromLocal, { ...COOKIE_OPTS, expires: 1 });
-    localStorage.removeItem('upz_access_token');
-    return fromLocal;
+    cookie.set('upz_access_token', fromLocal, { ...COOKIE_OPTS, expires: 1 })
+    localStorage.removeItem('upz_access_token')
+    return fromLocal
   }
-  return null;
+  return null
 }
 
 export function setTokens(accessToken: string, refreshToken: string) {
   // Access token: 1 day cookie (auto-refreshed every 25m by tryRefresh)
-  cookie.set('upz_access_token', accessToken, { ...COOKIE_OPTS, expires: 1 });
+  cookie.set('upz_access_token', accessToken, { ...COOKIE_OPTS, expires: 1 })
   // Refresh token: 30 day cookie — matches backend JWT_REFRESH_EXPIRES
-  cookie.set('upz_refresh_token', refreshToken, { ...COOKIE_OPTS, expires: 30 });
+  cookie.set('upz_refresh_token', refreshToken, { ...COOKIE_OPTS, expires: 30 })
 }
 
 export function clearTokens() {
-  cookie.remove('upz_access_token', { path: '/' });
-  cookie.remove('upz_refresh_token', { path: '/' });
+  cookie.remove('upz_access_token', { path: '/' })
+  cookie.remove('upz_refresh_token', { path: '/' })
   // Also clear old localStorage token if present
-  if (typeof window !== 'undefined') localStorage.removeItem('upz_access_token');
+  if (typeof window !== 'undefined') localStorage.removeItem('upz_access_token')
 }
 
 function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return cookie.get('upz_refresh_token') || null;
+  if (typeof window === 'undefined') return null
+  return cookie.get('upz_refresh_token') || null
 }
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
 interface RequestOptions {
-  body?: unknown;
-  params?: Record<string, string | number | boolean>;
-  skipAuth?: boolean;
+  body?: unknown
+  params?: Record<string, string | number | boolean>
+  skipAuth?: boolean
   /** @internal prevents refresh loop on retried request */
-  _isRetry?: boolean;
+  _isRetry?: boolean
 }
 
 interface ApiErrorPayload {
-  status: number;
-  message?: string;
-  code?: string;
-  redirect?: string;
-  requiresPasswordSetup?: boolean;
-  verifyToken?: string;
-  retryAfter?: number;
-  [key: string]: unknown;
+  status: number
+  message?: string
+  code?: string
+  redirect?: string
+  requiresPasswordSetup?: boolean
+  verifyToken?: string
+  retryAfter?: number
+  [key: string]: unknown
 }
 
 async function request<T = unknown>(
@@ -68,26 +68,26 @@ async function request<T = unknown>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { body, params, skipAuth, _isRetry } = options;
+  const { body, params, skipAuth, _isRetry } = options
 
-  let url = `${API_BASE}${path}`;
+  let url = `${API_BASE}${path}`
   if (params) {
     const qs = new URLSearchParams(
       Object.entries(params).reduce(
         (acc, [k, v]) => ({ ...acc, [k]: String(v) }),
         {} as Record<string, string>,
       ),
-    ).toString();
-    if (qs) url += `?${qs}`;
+    ).toString()
+    if (qs) url += `?${qs}`
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-  };
+  }
 
   if (!skipAuth) {
-    const token = getAccessToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const token = getAccessToken()
+    if (token) headers['Authorization'] = `Bearer ${token}`
   }
 
   const res = await fetch(url, {
@@ -96,24 +96,24 @@ async function request<T = unknown>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
     cache: 'no-store',
-  });
+  })
 
   // Auto-refresh on 401
   if (res.status === 401 && !skipAuth && !_isRetry) {
-    const refreshed = await tryRefresh();
+    const refreshed = await tryRefresh()
     if (refreshed) {
-      return request<T>(method, path, { ...options, _isRetry: true });
+      return request<T>(method, path, { ...options, _isRetry: true })
     }
-    clearTokens();
+    clearTokens()
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('upz:session-expired'));
+      window.dispatchEvent(new CustomEvent('upz:session-expired'))
     }
-    throw { status: 401, message: 'Session expired' };
+    throw { status: 401, message: 'Session expired' }
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const errorObj = err?.error && typeof err.error === 'object' ? err.error : null;
+    const err = await res.json().catch(() => ({}))
+    const errorObj = err?.error && typeof err.error === 'object' ? err.error : null
     const payload: ApiErrorPayload = {
       status: res.status,
       message: errorObj?.message || (typeof err?.message === 'string' ? err.message : undefined) || err?.msg,
@@ -123,49 +123,49 @@ async function request<T = unknown>(
       verifyToken: errorObj?.verifyToken,
       retryAfter: errorObj?.retryAfter,
       ...err,
-    };
+    }
 
     // 401/403 are expected in some guarded routes (permissions/session); avoid noisy console errors.
     if (res.status !== 401 && res.status !== 403) {
-      console.error(`[API] ${method} ${path} failed:`, res.status, err);
+      console.error(`[API] ${method} ${path} failed:`, res.status, err)
     }
 
-    throw payload;
+    throw payload
   }
 
-  if (res.status === 204) return null as T;
-  return res.json() as Promise<T>;
+  if (res.status === 204) return null as T
+  return res.json() as Promise<T>
 }
 
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: Promise<boolean> | null = null
 
 async function tryRefresh(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight;
+  if (refreshInFlight) return refreshInFlight
 
   refreshInFlight = (async () => {
-  const rt = getRefreshToken();
-  if (!rt) return false;
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: rt }),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    if (data?.data?.accessToken) {
-      setTokens(data.data.accessToken, data.data.refreshToken || rt);
-      return true;
+    const rt = getRefreshToken()
+    if (!rt) return false
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      if (data?.data?.accessToken) {
+        setTokens(data.data.accessToken, data.data.refreshToken || rt)
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      refreshInFlight = null
     }
-    return false;
-  } catch {
-    return false;
-  } finally {
-    refreshInFlight = null;
-  }
-  })();
+  })()
 
-  return refreshInFlight;
+  return refreshInFlight
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -178,33 +178,33 @@ export interface RegisterDto {
   lastName: string
   username: string
   phoneNumber?: number
-  occupation?: string;
+  occupation?: string
 }
 export interface RegisterResponse {
-  message: string;
-  userId: string;
-  verifyToken: string;
+  message: string
+  userId: string
+  verifyToken: string
 }
 export interface ApiUserSettings {
-  notificationsEnabled: boolean;
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  notifyTaskAssigned: boolean;
-  notifyPushReviewed: boolean;
-  notifyPrEvents: boolean;
-  notifyMentions: boolean;
+  notificationsEnabled: boolean
+  emailNotifications: boolean
+  pushNotifications: boolean
+  notifyTaskAssigned: boolean
+  notifyPushReviewed: boolean
+  notifyPrEvents: boolean
+  notifyMentions: boolean
 }
 
 export interface ApiUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  username?: string;
-  avatarUrl?: string;
-  role?: string;
-  createdAt: string;
-  settings?: ApiUserSettings;
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  username?: string
+  avatarUrl?: string
+  role?: string
+  createdAt: string
+  settings?: ApiUserSettings
 }
 export interface AuthResponse { accessToken: string; refreshToken: string; user: ApiUser }
 export interface VerifyEmailResponse extends AuthResponse { redirect?: string }
@@ -258,18 +258,18 @@ export const authApi = {
 
   deleteAllSessions: () =>
     request('DELETE', '/auth/sessions'),
-};
+}
 
 export interface ApiSession {
-  id: string;
-  deviceName?: string;
-  browser?: string;
-  os?: string;
-  ipAddress?: string;
-  location?: string;
-  provider?: string;
-  createdAt: string;
-  lastUsedAt?: string;
+  id: string
+  deviceName?: string
+  browser?: string
+  os?: string
+  ipAddress?: string
+  location?: string
+  provider?: string
+  createdAt: string
+  lastUsedAt?: string
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────
@@ -289,28 +289,29 @@ export const usersApi = {
   deleteMe: () => request('DELETE', '/users/me'),
 
   getById: (id: string) => request<{ data: ApiUser }>('GET', `/users/${id}`),
-};
+  search: (q: string, limit = 20) => request<{ data: { id: string; firstName: string; lastName: string; username?: string; avatarUrl?: string }[] }>('GET', `/users/search`, { params: { q, limit } }),
+}
 
 // ─── Workspaces ───────────────────────────────────────────────────────────
 
 export interface ApiWorkspace {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  avatarUrl?: string;
-  ownerId: string;
-  visibility?: string;
-  createdAt: string;
+  id: string
+  name: string
+  slug: string
+  description?: string
+  avatarUrl?: string
+  ownerId: string
+  visibility?: string
+  createdAt: string
 }
 
 export interface ApiMember {
-  id: string;
-  userId: string;
-  workspaceId: string;
-  role: string;
-  user: ApiUser;
-  joinedAt: string;
+  id: string
+  userId: string
+  workspaceId: string
+  role: string
+  user: ApiUser
+  joinedAt: string
 }
 
 export const workspacesApi = {
@@ -343,18 +344,18 @@ export const workspacesApi = {
 
   cancelInvitation: (wsId: string, id: string) =>
     request('DELETE', `/workspaces/${wsId}/invitations/${id}`),
-};
+}
 
 export interface ApiInvitation {
-  id: string;
-  email: string;
-  role: string;
-  token: string;
-  workspaceId: string;
-  createdAt: string;
-  expiresAt: string;
-  acceptedAt?: string | null;
-  declinedAt?: string | null;
+  id: string
+  email: string
+  role: string
+  token: string
+  workspaceId: string
+  createdAt: string
+  expiresAt: string
+  acceptedAt?: string | null
+  declinedAt?: string | null
 }
 
 export const invitationsApi = {
@@ -363,16 +364,16 @@ export const invitationsApi = {
 
   decline: (token: string) =>
     request('POST', `/invitations/${token}/decline`),
-};
+}
 
 // ─── Groups ───────────────────────────────────────────────────────────────
 
 export interface ApiGroup {
-  id: string;
-  name: string;
-  description?: string;
-  workspaceId: string;
-  createdAt: string;
+  id: string
+  name: string
+  description?: string
+  workspaceId: string
+  createdAt: string
 }
 
 export const groupsApi = {
@@ -384,8 +385,8 @@ export const groupsApi = {
   create: (data: { workspaceId: string; name: string; description?: string; slug?: string }) => {
     const slug =
       data.slug ??
-      `${data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`;
-    return request<{ data: ApiGroup }>('POST', '/groups', { body: { ...data, slug } });
+      `${data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${Date.now().toString(36)}`
+    return request<{ data: ApiGroup }>('POST', '/groups', { body: { ...data, slug } })
   },
 
   update: (id: string, data: { name?: string; description?: string }) =>
@@ -398,31 +399,31 @@ export const groupsApi = {
 
   removeMember: (id: string, userId: string) =>
     request('DELETE', `/groups/${id}/members/${userId}`),
-};
+}
 
 // ─── Projects ─────────────────────────────────────────────────────────────
 
 export interface ApiProject {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  workspaceId: string;
-  groupId?: string;
-  status: string;
-  priority?: string;
-  ownerId: string;
-  startDate?: string;
-  deadline?: string;
-  createdAt: string;
+  id: string
+  name: string
+  slug: string
+  description?: string
+  workspaceId: string
+  groupId?: string
+  status: string
+  priority?: string
+  ownerId: string
+  startDate?: string
+  deadline?: string
+  createdAt: string
 }
 
 export interface ApiColumn {
-  id: string;
-  name: string;
-  order: number;
-  projectId: string;
-  color?: string;
+  id: string
+  name: string
+  order: number
+  projectId: string
+  color?: string
 }
 
 export const projectsApi = {
@@ -432,15 +433,15 @@ export const projectsApi = {
   getById: (id: string) => request<{ data: ApiProject }>('GET', `/projects/${id}`),
 
   create: (data: {
-    workspaceId: string;
-    name: string;
-    slug: string;
-    description?: string;
-    groupId?: string;
-    status?: string;
-    priority?: string;
-    startDate?: string;
-    deadline?: string;
+    workspaceId: string
+    name: string
+    slug: string
+    description?: string
+    groupId?: string
+    status?: string
+    priority?: string
+    startDate?: string
+    deadline?: string
   }) => request<{ data: ApiProject }>('POST', '/projects', { body: data }),
 
   update: (id: string, data: Partial<Omit<ApiProject, 'id' | 'createdAt'>>) =>
@@ -472,65 +473,65 @@ export const projectsApi = {
 
   getMyProjectInvites: () =>
     request<{ id: string; projectId: string; projectName: string; role: string; invitedBy: string | null; invitedAt: string }[]>('GET', '/projects/my-invites'),
-};
+}
 
 // ─── Tasks ────────────────────────────────────────────────────────────────
 
-type ApiNestedList<T> = { data: T[]; total?: number };
+type ApiNestedList<T> = { data: T[]; total?: number }
 
 /** Backend may return `{ data: T[] }` or `{ data: { data: T[], total } }` after the global envelope. */
 export function unwrapApiList<T>(
   response: { data?: T[] | ApiNestedList<T> } | null | undefined,
 ): T[] {
-  const payload = response?.data;
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
-  if (typeof payload === 'object' && Array.isArray(payload.data)) return payload.data;
-  return [];
+  const payload = response?.data
+  if (!payload) return []
+  if (Array.isArray(payload)) return payload
+  if (typeof payload === 'object' && Array.isArray(payload.data)) return payload.data
+  return []
 }
 
 export interface ApiTask {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  type?: string;
-  priority: string;
-  assigneeId?: string;
-  reviewerId?: string;
-  creatorId?: string;
-  columnId?: string;
-  projectId: string;
-  workspaceId: string;
-  parentTaskId?: string;
-  storyPoints?: number;
-  estimatedHours?: number;
-  startDate?: string;
-  dueDate?: string;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  completionNote?: string | null;
-  createdAt: string;
-  updatedAt?: string;
-  assignee?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null;
-  creator?: { id: string; firstName: string | null; lastName: string | null } | null;
+  id: string
+  title: string
+  description?: string
+  status: string
+  type?: string
+  priority: string
+  assigneeId?: string
+  reviewerId?: string
+  creatorId?: string
+  columnId?: string
+  projectId: string
+  workspaceId: string
+  parentTaskId?: string
+  storyPoints?: number
+  estimatedHours?: number
+  startDate?: string
+  dueDate?: string
+  startedAt?: string | null
+  completedAt?: string | null
+  completionNote?: string | null
+  createdAt: string
+  updatedAt?: string
+  assignee?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null
+  creator?: { id: string; firstName: string | null; lastName: string | null } | null
 }
 
 export interface CreateTaskDto {
-  projectId: string;
-  workspaceId: string;
-  title: string;
-  description?: string;
-  columnId?: string;
-  assigneeId?: string;
-  reviewerId?: string;
-  priority?: string;
-  status?: string;
-  type?: string;
-  storyPoints?: number;
-  estimatedHours?: number;
-  startDate?: string;
-  dueDate?: string;
+  projectId: string
+  workspaceId: string
+  title: string
+  description?: string
+  columnId?: string
+  assigneeId?: string
+  reviewerId?: string
+  priority?: string
+  status?: string
+  type?: string
+  storyPoints?: number
+  estimatedHours?: number
+  startDate?: string
+  dueDate?: string
 }
 
 export const tasksApi = {
@@ -539,8 +540,8 @@ export const tasksApi = {
       'GET',
       `/projects/${projectId}/tasks`,
       { params },
-    );
-    return { data: unwrapApiList(res) };
+    )
+    return { data: unwrapApiList(res) }
   },
 
   listByWorkspace: async (
@@ -551,8 +552,8 @@ export const tasksApi = {
       'GET',
       `/workspaces/${workspaceId}/tasks`,
       { params: params as Record<string, string> },
-    );
-    return { data: unwrapApiList(res), total: res?.total };
+    )
+    return { data: unwrapApiList(res), total: res?.total }
   },
 
   getById: (taskId: string) =>
@@ -592,75 +593,75 @@ export const tasksApi = {
 
   removeTag: (taskId: string, tagId: string) =>
     request('DELETE', `/tasks/${taskId}/tags/${tagId}`),
-};
+}
 
 export interface ApiActivity {
-  id: string;
-  taskId: string;
-  userId: string;
-  type: string;
-  payload?: Record<string, unknown>;
-  createdAt: string;
+  id: string
+  taskId: string
+  userId: string
+  type: string
+  payload?: Record<string, unknown>
+  createdAt: string
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────────────
 
 export interface ApiChatRoom {
-  id: string;
-  name: string;
-  type: string;
-  workspaceId: string;
-  memberIds: string[];
-  lastMessage?: ApiChatMessage;
-  unreadCount?: number;
-  createdAt: string;
-  isPublic?: boolean;
-  inviteCode?: string | null;
-  isMember?: boolean;
-  createdById?: string;
-  description?: string | null;
+  id: string
+  name: string
+  type: string
+  workspaceId: string
+  memberIds: string[]
+  lastMessage?: ApiChatMessage
+  unreadCount?: number
+  createdAt: string
+  isPublic?: boolean
+  inviteCode?: string | null
+  isMember?: boolean
+  createdById?: string
+  description?: string | null
 }
 
 export interface ApiChatMessage {
-  id: string;
-  roomId: string;
-  userId: string;
-  text: string;
-  replyToId?: string;
-  timestamp: number;
-  edited?: boolean;
-  editedAt?: string | null;
-  reactions?: { emoji: string; userIds: string[] }[];
-  attachments?: { id: string; url: string; name: string; size: number }[];
+  id: string
+  roomId: string
+  userId: string
+  text: string
+  replyToId?: string
+  timestamp: number
+  edited?: boolean
+  editedAt?: string | null
+  reactions?: { emoji: string; userIds: string[] }[]
+  attachments?: { id: string; url: string; name: string; size: number }[]
 }
 
 /** Raw chat message shape from Nest (content, senderId, createdAt). */
 export type ApiChatMessageRaw = {
-  id: string;
-  roomId: string;
-  senderId?: string;
-  userId?: string;
-  content?: string;
-  text?: string;
-  replyToId?: string | null;
-  createdAt?: string;
-  timestamp?: number;
-  isEdited?: boolean;
-  edited?: boolean;
-  editedAt?: string | null;
-  reactions?: { emoji: string; userIds: string[] }[];
-  sender?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null;
-};
+  id: string
+  roomId: string
+  senderId?: string
+  userId?: string
+  content?: string
+  text?: string
+  replyToId?: string | null
+  createdAt?: string
+  timestamp?: number
+  isEdited?: boolean
+  edited?: boolean
+  editedAt?: string | null
+  reactions?: { emoji: string; userIds: string[] }[]
+  sender?: { id: string; firstName: string | null; lastName: string | null; avatarUrl: string | null } | null
+}
 
 export function mapApiChatMessage(raw: ApiChatMessageRaw, myUserId?: string): ApiChatMessage {
-  const senderId = raw.senderId ?? raw.userId ?? '';
-  const createdAt = raw.createdAt;
+  const senderId = raw.senderId ?? raw.userId ?? ''
+  const createdAt = raw.createdAt
   const timestamp =
     typeof raw.timestamp === 'number'
       ? raw.timestamp
       : createdAt
         ? new Date(createdAt).getTime()
-        : Date.now();
+        : Date.now()
 
   return {
     id: raw.id,
@@ -672,13 +673,13 @@ export function mapApiChatMessage(raw: ApiChatMessageRaw, myUserId?: string): Ap
     edited: raw.isEdited ?? raw.edited,
     editedAt: raw.editedAt ?? null,
     reactions: raw.reactions,
-  };
+  }
 }
 
 export function mapApiChatRoomType(type: string): string {
-  if (type === 'direct') return '1on1';
-  if (type === 'workspace') return 'team';
-  return type;
+  if (type === 'direct') return '1on1'
+  if (type === 'workspace') return 'team'
+  return type
 }
 
 export const chatApi = {
@@ -686,14 +687,14 @@ export const chatApi = {
     const res = await request<{ data: ApiChatRoom[] | ApiChatRoom }>(
       'GET',
       `/workspaces/${workspaceId}/chat/rooms`,
-    );
-    const rooms = unwrapApiList(res as { data?: ApiChatRoom[] | ApiNestedList<ApiChatRoom> });
-    return { data: rooms };
+    )
+    const rooms = unwrapApiList(res as { data?: ApiChatRoom[] | ApiNestedList<ApiChatRoom> })
+    return { data: rooms }
   },
 
   createRoom: (
     workspaceId: string,
-    data: { type: string; name?: string; groupId?: string; projectId?: string },
+    data: { name?: string; groupId?: string; projectId?: string; targetUserId?: string },
   ) =>
     request<{ data: ApiChatRoom }>('POST', `/workspaces/${workspaceId}/chat/rooms`, { body: data }),
 
@@ -705,23 +706,23 @@ export const chatApi = {
       'GET',
       `/chat/rooms/${roomId}/messages`,
       { params: { page, limit } },
-    );
-    const raw = unwrapApiList(res);
-    return { data: raw.map((m) => mapApiChatMessage(m, myUserId)) };
+    )
+    const raw = unwrapApiList(res)
+    return { data: raw.map((m) => mapApiChatMessage(m, myUserId)) }
   },
 
   sendMessage: async (roomId: string, text: string, replyToId?: string, myUserId?: string) => {
     const res = await request<{ data: ApiChatMessageRaw }>('POST', `/chat/rooms/${roomId}/messages`, {
       body: { content: text, replyToId },
-    });
-    return { data: mapApiChatMessage(res.data, myUserId) };
+    })
+    return { data: mapApiChatMessage(res.data, myUserId) }
   },
 
   editMessage: async (messageId: string, text: string, myUserId?: string) => {
     const res = await request<{ data: ApiChatMessageRaw }>('PATCH', `/chat/messages/${messageId}`, {
       body: { content: text },
-    });
-    return { data: mapApiChatMessage(res.data, myUserId) };
+    })
+    return { data: mapApiChatMessage(res.data, myUserId) }
   },
 
   deleteMessage: (messageId: string) =>
@@ -738,10 +739,10 @@ export const chatApi = {
       const res = await request<{ data: ApiChatRoom[] | ApiNestedList<ApiChatRoom> }>(
         'GET',
         `/workspaces/${workspaceId}/chat/public-rooms`,
-      );
-      return { data: unwrapApiList(res) };
+      )
+      return { data: unwrapApiList(res) }
     } catch {
-      return { data: [] as ApiChatRoom[] };
+      return { data: [] as ApiChatRoom[] }
     }
   },
 
@@ -759,26 +760,26 @@ export const chatApi = {
 
   updateRoomSettings: (roomId: string, dto: { isPublic?: boolean; name?: string; description?: string }) =>
     request<{ data: ApiChatRoom }>('PATCH', `/chat/rooms/${roomId}/settings`, { body: dto }),
-};
+}
 
 // ─── Notifications ────────────────────────────────────────────────────────
 
 export interface ApiNotification {
-  id: string;
-  type: string;
-  title: string;
-  body?: string;
-  message?: string;
-  isRead: boolean;
-  actorId?: string;
-  actor?: ApiUser;
-  entityType?: string;
-  entityId?: string;
-  actionUrl?: string;
-  resourceType?: string;
-  resourceId?: string;
-  metadata?: Record<string, unknown> | null;
-  createdAt: string;
+  id: string
+  type: string
+  title: string
+  body?: string
+  message?: string
+  isRead: boolean
+  actorId?: string
+  actor?: ApiUser
+  entityType?: string
+  entityId?: string
+  actionUrl?: string
+  resourceType?: string
+  resourceId?: string
+  metadata?: Record<string, unknown> | null
+  createdAt: string
 }
 
 export const notificationsApi = {
@@ -790,37 +791,37 @@ export const notificationsApi = {
   markRead: (id: string) => request('PATCH', `/notifications/${id}/read`),
 
   markAllRead: () => request('POST', '/notifications/read-all'),
-};
+}
 
 // ─── Earnings ─────────────────────────────────────────────────────────────
 
 export interface ApiEarningsSummary {
-  total: number;
-  thisMonth: number;
-  count: number;
-  currency: string;
+  total: number
+  thisMonth: number
+  count: number
+  currency: string
 }
 
 export interface ApiEarning {
-  id: string;
-  workspaceId: string;
-  userId: string;
-  amount: number;
-  currency: string;
-  description: string | null;
-  date: string;
-  sourceType: string | null;
-  sourceId: string | null;
-  createdAt: string;
+  id: string
+  workspaceId: string
+  userId: string
+  amount: number
+  currency: string
+  description: string | null
+  date: string
+  sourceType: string | null
+  sourceId: string | null
+  createdAt: string
 }
 
 export interface CreateEarningDto {
-  amount: number;
-  currency?: string;
-  description?: string;
-  date: string;
-  sourceType?: string;
-  sourceId?: string;
+  amount: number
+  currency?: string
+  description?: string
+  date: string
+  sourceType?: string
+  sourceId?: string
 }
 
 export const earningsApi = {
@@ -835,7 +836,7 @@ export const earningsApi = {
 
   remove: (workspaceId: string, earningId: string) =>
     request('DELETE', `/workspaces/${workspaceId}/earnings/${earningId}`),
-};
+}
 
 // ─── Analytics ────────────────────────────────────────────────────────────
 
@@ -851,59 +852,59 @@ export const analyticsApi = {
 
   getMyAnalytics: () =>
     request('GET', '/users/me/analytics'),
-};
+}
 
 export interface ApiWorkspaceAnalytics {
-  workspaceId?: string;
-  projectCount?: number;
-  memberCount?: number;
-  totalMembers?: number;
-  totalProjects?: number;
-  totalTasks?: number;
-  completedTasks?: number;
-  openTasks?: number;
-  taskByStatus?: { status: string; count: string | number }[];
+  workspaceId?: string
+  projectCount?: number
+  memberCount?: number
+  totalMembers?: number
+  totalProjects?: number
+  totalTasks?: number
+  completedTasks?: number
+  openTasks?: number
+  taskByStatus?: { status: string; count: string | number }[]
 }
 
 // ─── Pushes ───────────────────────────────────────────────────────────────
 
 export interface ApiPush {
-  id: string;
-  taskId: string;
-  userId: string;
-  repositoryId: string;
-  branchName: string;
-  status: string;
-  commitMessage: string;
-  commitSha?: string;
-  commitsCount?: number;
-  githubCommitSha?: string;
-  githubPrUrl?: string;
-  githubPrNumber?: number;
-  rejectedReason?: string | null;
-  createdAt: string;
+  id: string
+  taskId: string
+  userId: string
+  repositoryId: string
+  branchName: string
+  status: string
+  commitMessage: string
+  commitSha?: string
+  commitsCount?: number
+  githubCommitSha?: string
+  githubPrUrl?: string
+  githubPrNumber?: number
+  rejectedReason?: string | null
+  createdAt: string
 }
 
 export interface SubmitPushDto {
-  taskId: string;
-  repositoryId: string;
-  branchName: string;
-  commitMessage: string;
-  commitSha?: string;
-  commitsCount: number;
-  diffBundleBase64: string;
-  cliVersion?: string;
+  taskId: string
+  repositoryId: string
+  branchName: string
+  commitMessage: string
+  commitSha?: string
+  commitsCount: number
+  diffBundleBase64: string
+  cliVersion?: string
 }
 
 export interface ApiPushComment {
-  id: string;
-  pushId: string;
-  authorId: string;
-  content: string;
-  filePath?: string;
-  lineNumber?: number;
-  isResolved?: boolean;
-  createdAt: string;
+  id: string
+  pushId: string
+  authorId: string
+  content: string
+  filePath?: string
+  lineNumber?: number
+  isResolved?: boolean
+  createdAt: string
 }
 
 export const pushesApi = {
@@ -945,17 +946,17 @@ export const pushesApi = {
 
   resolveComment: (pushId: string, commentId: string) =>
     request('PATCH', `/pushes/${pushId}/comments/${commentId}/resolve`),
-};
+}
 
 // ─── Workspace Tags ───────────────────────────────────────────────────────
 
 export interface ApiTag {
-  id: string;
-  workspaceId: string;
-  name: string;
-  color: string;
-  createdById?: string;
-  createdAt: string;
+  id: string
+  workspaceId: string
+  name: string
+  color: string
+  createdById?: string
+  createdAt: string
 }
 
 export const tagsApi = {
@@ -970,20 +971,20 @@ export const tagsApi = {
 
   delete: (workspaceId: string, tagId: string) =>
     request('DELETE', `/workspaces/${workspaceId}/tags/${tagId}`),
-};
+}
 
 // ─── Storage / Cloudinary upload ─────────────────────────────────────────
 
-export type UploadFolder = 'avatars' | 'attachments' | 'workspace';
+export type UploadFolder = 'avatars' | 'attachments' | 'workspace'
 
 export interface CloudinarySignResult {
-  signature: string;
-  timestamp: number;
-  apiKey: string;
-  cloudName: string;
-  folder: string;
-  publicId: string;
-  maxBytes: number;
+  signature: string
+  timestamp: number
+  apiKey: string
+  cloudName: string
+  folder: string
+  publicId: string
+  maxBytes: number
 }
 
 export const storageApi = {
@@ -1001,23 +1002,23 @@ export const storageApi = {
     file: File,
     sign: CloudinarySignResult,
   ): Promise<{ secure_url: string; public_id: string }> => {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('api_key', sign.apiKey);
-    form.append('timestamp', String(sign.timestamp));
-    form.append('signature', sign.signature);
-    form.append('folder', sign.folder);
-    form.append('public_id', sign.publicId);
+    const form = new FormData()
+    form.append('file', file)
+    form.append('api_key', sign.apiKey)
+    form.append('timestamp', String(sign.timestamp))
+    form.append('signature', sign.signature)
+    form.append('folder', sign.folder)
+    form.append('public_id', sign.publicId)
 
     const res = await fetch(
       `https://api.cloudinary.com/v1_1/${sign.cloudName}/auto/upload`,
       { method: 'POST', body: form },
-    );
+    )
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw { status: res.status, message: err?.error?.message ?? 'Upload failed' };
+      const err = await res.json().catch(() => ({}))
+      throw { status: res.status, message: err?.error?.message ?? 'Upload failed' }
     }
-    return res.json();
+    return res.json()
   },
 
   /**
@@ -1025,48 +1026,56 @@ export const storageApi = {
    * Usage: const url = await storageApi.upload(file, 'avatars')
    */
   upload: async (file: File, folder: UploadFolder): Promise<string> => {
-    const { data: sign } = await storageApi.sign(folder, file.type);
+    const { data: sign } = await storageApi.sign(folder, file.type)
     if (file.size > sign.maxBytes) {
-      throw { status: 400, message: `File too large (max ${sign.maxBytes / 1024 / 1024} MB)` };
+      throw { status: 400, message: `File too large (max ${sign.maxBytes / 1024 / 1024} MB)` }
     }
-    const result = await storageApi.uploadToCloudinary(file, sign);
-    return result.secure_url;
+    const result = await storageApi.uploadToCloudinary(file, sign)
+    return result.secure_url
   },
 
   /** Delete a Cloudinary file (pass public_id). */
   deleteFile: (publicId: string) =>
     request('DELETE', `/storage/file?publicId=${encodeURIComponent(publicId)}`),
-};
+}
 
 // ─── Meetings API ────────────────────────────────────────────────────────────
 export interface ApiMeeting {
-  id: string;
-  workspaceId: string;
-  hostId: string;
-  title: string;
-  description?: string;
-  code: string;
-  startTime: string;
-  endTime?: string;
-  isActive: boolean;
-  isRecurring: boolean;
-  agenda?: string;
-  maxParticipants: number;
-  participantCount?: number;
-  createdAt: string;
+  id: string
+  workspaceId: string
+  hostId: string
+  title: string
+  description?: string
+  code: string
+  startTime: string
+  endTime?: string
+  isActive: boolean
+  isRecurring: boolean
+  agenda?: string
+  maxParticipants: number
+  participantCount?: number
+  createdAt: string
 }
 
 export const meetingsApi = {
   list: (workspaceId: string) =>
     request<{ data: ApiMeeting[] }>('GET', `/workspaces/${workspaceId}/meetings`),
   create: (workspaceId: string, dto: {
-    title: string;
-    description?: string;
-    startTime: string;
-    endTime?: string;
-    agenda?: string;
+    title: string
+    description?: string
+    startTime: string
+    endTime?: string
+    agenda?: string
   }) =>
     request<{ data: ApiMeeting }>('POST', `/workspaces/${workspaceId}/meetings`, { body: dto }),
+  createStandalone: (dto: {
+    title: string
+    description?: string
+    startTime: string
+    endTime?: string
+    agenda?: string
+  }) =>
+    request<{ data: ApiMeeting }>('POST', '/meetings', { body: dto }),
   joinByCode: (code: string) =>
     request<{ data: ApiMeeting }>('POST', '/meetings/join-by-code', { body: { code } }),
   getOne: (meetingId: string) =>
@@ -1079,8 +1088,9 @@ export const meetingsApi = {
     request('DELETE', `/meetings/${meetingId}`),
   inviteMembers: (meetingId: string, userIds: string[]) =>
     request('POST', `/meetings/${meetingId}/invite`, { body: { userIds } }),
-};
+}
 
+// ─── Users API ─────────────────────────────────────────────────────────────
 export default {
   auth: authApi,
   users: usersApi,
@@ -1097,4 +1107,4 @@ export default {
   tags: tagsApi,
   storage: storageApi,
   meetings: meetingsApi,
-};
+}

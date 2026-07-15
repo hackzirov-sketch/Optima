@@ -1,19 +1,13 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
-  IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { ChatRoomType } from '../../../common/enums';
 
 export class CreateChatRoomDto {
-  @ApiProperty({ enum: ChatRoomType, default: ChatRoomType.GROUP })
-  @IsEnum(ChatRoomType)
-  type: ChatRoomType;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

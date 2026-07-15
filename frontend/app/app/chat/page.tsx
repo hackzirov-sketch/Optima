@@ -1,38 +1,39 @@
-'use client';
+'use client'
 
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { CheckSquare, Pin, Search, Sparkles, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Toast } from "@/components/app/DesignSystem";
-import { ChatCallOverlay } from "@/components/chat/ChatCallOverlay";
-import { ChatHeader, type ChatCallMode, type ChatHeaderAction } from "@/components/chat/ChatHeader";
-import { ChatSidebar } from "@/components/chat/ChatSidebar";
-import { MessageBubble } from "@/components/chat/MessageBubble";
-import { MessageInput } from "@/components/chat/MessageInput";
-import { cn, getMessageText, getReplySnippet, getRoomName } from "@/components/chat/chatShared";
-import { normalizeReactionId } from "@/components/premium/PremiumAssets";
-import { SMART_TASKS } from "@/data/ecosystemData";
-import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types";
-import { storage } from "@/utils/storage";
-import { useAuth } from "@/hooks/useAuth";
-import { useWebSocket } from "@/hooks/useWebSocket";
-import { useMeeting, type MeetingMode } from "@/hooks/useMeeting";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useMembers } from "@/hooks/useMembers";
-import { chatApi, mapApiChatRoomType, getAccessToken, API_BASE } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { CheckSquare, Pin, Search, Sparkles, X } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Toast } from "@/components/app/DesignSystem"
+import { ChatCallOverlay } from "@/components/chat/ChatCallOverlay"
+import { ChatHeader, type ChatCallMode, type ChatHeaderAction } from "@/components/chat/ChatHeader"
+import { ChatSidebar } from "@/components/chat/ChatSidebar"
+import { MessageBubble } from "@/components/chat/MessageBubble"
+import { MessageInput } from "@/components/chat/MessageInput"
+import { cn, getMessageText, getReplySnippet, getRoomName } from "@/components/chat/chatShared"
+import { normalizeReactionId } from "@/components/premium/PremiumAssets"
+import { SMART_TASKS } from "@/data/ecosystemData"
+import type { ChatMessage, ChatReactionEmoji, ChatRoom, ChatUser } from "@/types"
+import { storage } from "@/utils/storage"
+import { useAuth } from "@/hooks/useAuth"
+import { useWebSocket } from "@/hooks/useWebSocket"
+import { useMeeting, type MeetingMode } from "@/hooks/useMeeting"
+import { useWorkspace } from "@/contexts/WorkspaceContext"
+import { useMembers } from "@/hooks/useMembers"
+import { chatApi, meetingsApi, usersApi, mapApiChatRoomType, getAccessToken, API_BASE } from "@/lib/api"
 
-const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6'];
-const AI_USER: ChatUser = { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' };
+const USER_COLORS = ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6']
+const AI_USER: ChatUser = { id: 'ai', name: 'UPZ AI', initials: 'AI', color: '#0EA5E9', status: 'online', role: 'AI Assistant' }
 
 
 
 interface ActiveCall {
-  roomId: string;
-  mode: ChatCallMode;
-  startedAt: number;
+  roomId: string
+  meetingId: string
+  mode: ChatCallMode
+  startedAt: number
 }
 
 const AI_ROOM: ChatRoom = {
@@ -43,58 +44,58 @@ const AI_ROOM: ChatRoom = {
   messages: [],
   unread: 0,
   pinned: false,
-};
+}
 
 function getInitialRooms(): ChatRoom[] {
-  return [AI_ROOM];
+  return [AI_ROOM]
 }
 
 function updateMessageReaction(message: ChatMessage, emoji: ChatReactionEmoji): ChatMessage {
-  const targetEmoji = normalizeReactionId(emoji);
+  const targetEmoji = normalizeReactionId(emoji)
   const reactions = (message.reactions ?? []).map((reaction) => ({
     ...reaction,
     emoji: normalizeReactionId(reaction.emoji),
     userIds: [...reaction.userIds],
-  }));
-  const existing = reactions.find((reaction) => reaction.emoji === targetEmoji);
+  }))
+  const existing = reactions.find((reaction) => reaction.emoji === targetEmoji)
 
   if (!existing) {
-    reactions.push({ emoji: targetEmoji, userIds: ["me"] });
+    reactions.push({ emoji: targetEmoji, userIds: ["me"] })
   } else if (existing.userIds.includes("me")) {
-    existing.userIds = existing.userIds.filter((userId) => userId !== "me");
+    existing.userIds = existing.userIds.filter((userId) => userId !== "me")
   } else {
-    existing.userIds.push("me");
+    existing.userIds.push("me")
   }
 
-  return { ...message, reactions: reactions.filter((reaction) => reaction.userIds.length > 0) };
+  return { ...message, reactions: reactions.filter((reaction) => reaction.userIds.length > 0) }
 }
 
 function isPersistedChatRoom(room: ChatRoom) {
-  return !room.id.startsWith("r-") && room.type !== "ai" && room.type !== "saved";
+  return !room.id.startsWith("r-") && room.type !== "ai" && room.type !== "saved"
 }
 
 export default function ChatPage() {
-  const { user, hasBackendSession, backendUser } = useAuth();
-  const { t } = useTranslation();
-  const { activeWorkspace } = useWorkspace();
-  const { members } = useMembers(activeWorkspace?.id);
+  const { user, hasBackendSession, backendUser } = useAuth()
+  const { t } = useTranslation()
+  const { activeWorkspace } = useWorkspace()
+  const { members } = useMembers(activeWorkspace?.id)
 
   // WS is initialized below; onlineUsers updated via onUserOnline/Offline callbacks
-  const [wsOnlineUsers, setWsOnlineUsers] = useState<string[]>([]);
+  const [wsOnlineUsers, setWsOnlineUsers] = useState<string[]>([])
   // roomId → userId[] currently typing
-  const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({});
+  const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({})
 
   // Build real users list: current user + workspace members + AI
   // Status comes from WS online presence
   const chatUsers: ChatUser[] = useMemo(() => {
-    const onlineSet = new Set(wsOnlineUsers);
+    const onlineSet = new Set(wsOnlineUsers)
     const currentUser: ChatUser = {
       id: 'me',
       name: user?.name ?? 'Me',
       initials: (user?.name ?? 'M').slice(0, 2).toUpperCase(),
       color: '#6366F1',
       status: 'online',
-    };
+    }
     const memberUsers: ChatUser[] = members.map((m, i) => ({
       id: m.userId,
       name: `${m.user.firstName} ${m.user.lastName}`.trim(),
@@ -102,51 +103,55 @@ export default function ChatPage() {
       color: USER_COLORS[i % USER_COLORS.length],
       status: onlineSet.has(m.userId) ? ('online' as const) : ('offline' as const),
       role: m.role,
-    }));
-    return [AI_USER, currentUser, ...memberUsers];
-  }, [user, members, wsOnlineUsers]);
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const navigate = (path: string) => router.push(path);
-  const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms);
-  const [activeId, setActiveId] = useState("r-ai");
-  const [roomsKey, setRoomsKey] = useState(0); // increments when rooms reload, forces messages refetch
-  const [searchQuery, setSearchQuery] = useState("");
-  const [draft, setDraft] = useState("");
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-  const [mobilePane, setMobilePane] = useState<"list" | "chat">("list");
-  const [notice, setNotice] = useState<string | null>(null);
-  const [chatSearchOpen, setChatSearchOpen] = useState(false);
-  const [chatSearchQuery, setChatSearchQuery] = useState("");
-  const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
-  const [createRoomOpen, setCreateRoomOpen] = useState(false);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [newRoomType, setNewRoomType] = useState<'group' | 'direct'>('group');
-  const [newRoomIsPublic, setNewRoomIsPublic] = useState(false);
-  const [dmTargetId, setDmTargetId] = useState<string>("");
-  const [creatingRoom, setCreatingRoom] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+    }))
+    return [AI_USER, currentUser, ...memberUsers]
+  }, [user, members, wsOnlineUsers])
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const navigate = (path: string) => router.push(path)
+  const [rooms, setRooms] = useState<ChatRoom[]>(getInitialRooms)
+  const [activeId, setActiveId] = useState("r-ai")
+  const [roomsKey, setRoomsKey] = useState(0) // increments when rooms reload, forces messages refetch
+  const [searchQuery, setSearchQuery] = useState("")
+  const [draft, setDraft] = useState("")
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null)
+  const [mobilePane, setMobilePane] = useState<"list" | "chat">("list")
+  const [notice, setNotice] = useState<string | null>(null)
+  const [chatSearchOpen, setChatSearchOpen] = useState(false)
+  const [chatSearchQuery, setChatSearchQuery] = useState("")
+  const [activeCall, setActiveCall] = useState<ActiveCall | null>(null)
+  const [startingCall, setStartingCall] = useState(false)
+  const [createRoomOpen, setCreateRoomOpen] = useState(false)
+  const [newRoomName, setNewRoomName] = useState("")
+  const [newRoomType, setNewRoomType] = useState<'group' | 'direct'>('group')
+  const [newRoomIsPublic, setNewRoomIsPublic] = useState(false)
+  const [dmTargetId, setDmTargetId] = useState<string>("")
+  const [creatingRoom, setCreatingRoom] = useState(false)
+  const [userQuery, setUserQuery] = useState('')
+  const [userSearchResults, setUserSearchResults] = useState<Array<{ id: string; firstName: string; lastName: string; username?: string; avatarUrl?: string }>>([])
+  const [searchingUsers, setSearchingUsers] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // ── WebSocket integration ────────────────────────────────────────────────
   // Only join real backend rooms (never mock r-* IDs — backend validates membership)
   const realRoomIds = useMemo(
     () => rooms.filter((r) => !r.id.startsWith("r-") && r.isMember !== false).map((r) => r.id),
     [rooms],
-  );
+  )
 
   // Meeting: ref-based forward-declaration to break circular dep (WS↔meeting)
   const meetingWsRef = useRef({
-    meetingJoin: (_id: string) => {},
-    meetingLeave: (_id: string) => {},
-    meetingOffer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => {},
-    meetingAnswer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => {},
-    meetingIce: (_id: string, _t: string, _c: RTCIceCandidateInit) => {},
-    meetingToggle: (_id: string, _k: 'audio'|'video'|'screen', _on: boolean) => {},
-  });
+    meetingJoin: (_id: string) => { },
+    meetingLeave: (_id: string) => { },
+    meetingOffer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => { },
+    meetingAnswer: (_id: string, _t: string, _sdp: RTCSessionDescriptionInit) => { },
+    meetingIce: (_id: string, _t: string, _c: RTCIceCandidateInit) => { },
+    meetingToggle: (_id: string, _k: 'audio' | 'video' | 'screen', _on: boolean) => { },
+  })
 
   const meeting = useMeeting({
-    meetingId: activeCall?.roomId ?? null,
+    meetingId: activeCall?.meetingId ?? null,
     mode: (activeCall?.mode as MeetingMode) ?? 'voice',
     enabled: !!activeCall,
     currentUserId: backendUser?.id ?? null,
@@ -156,7 +161,7 @@ export default function ChatPage() {
     meetingAnswer: (id, t, sdp) => meetingWsRef.current.meetingAnswer(id, t, sdp),
     meetingIce: (id, t, c) => meetingWsRef.current.meetingIce(id, t, c),
     meetingToggle: (id, k, on) => meetingWsRef.current.meetingToggle(id, k, on),
-  });
+  })
 
   const {
     isConnected, sendMessage: wsSend, sendTyping, addReaction: wsReaction,
@@ -168,11 +173,11 @@ export default function ChatPage() {
     onNewMessage: (msg) => {
       setRooms((current) =>
         current.map((room) => {
-          if (room.id !== msg.roomId) return room;
-          if (room.messages.some((m) => m.id === msg.id)) return room;
+          if (room.id !== msg.roomId) return room
+          if (room.messages.some((m) => m.id === msg.id)) return room
 
-          const isMyMsg = !!(backendUser?.id && msg.userId === backendUser.id);
-          const senderId = isMyMsg ? "me" : msg.userId;
+          const isMyMsg = !!(backendUser?.id && msg.userId === backendUser.id)
+          const senderId = isMyMsg ? "me" : msg.userId
           const newMsg: ChatMessage = {
             id: msg.id,
             userId: senderId,
@@ -182,17 +187,17 @@ export default function ChatPage() {
             reactions: (msg.reactions ?? []) as ChatMessage["reactions"],
             edited: false,
             editedAt: null,
-          };
+          }
 
           // Replace optimistic placeholder sent by this user
           if (isMyMsg) {
             const optIdx = room.messages.findIndex(
               (m) => m.id.startsWith("opt-") && m.userId === "me" && m.text === msg.text,
-            );
+            )
             if (optIdx !== -1) {
-              const msgs = [...room.messages];
-              msgs[optIdx] = newMsg;
-              return { ...room, messages: msgs };
+              const msgs = [...room.messages]
+              msgs[optIdx] = newMsg
+              return { ...room, messages: msgs }
             }
           }
 
@@ -200,84 +205,84 @@ export default function ChatPage() {
           setTypingByRoom((prev) => ({
             ...prev,
             [msg.roomId]: (prev[msg.roomId] ?? []).filter((id) => id !== msg.userId),
-          }));
+          }))
 
           return {
             ...room,
             messages: [...room.messages, newMsg],
             unread: senderId !== "me" ? (room.unread ?? 0) + 1 : room.unread,
-          };
+          }
         }),
-      );
+      )
     },
     onTyping: ({ userId, roomId, typing }) => {
-      if (userId === backendUser?.id) return;
+      if (userId === backendUser?.id) return
       setTypingByRoom((prev) => {
-        const current = prev[roomId] ?? [];
+        const current = prev[roomId] ?? []
         if (typing) {
-          return { ...prev, [roomId]: [...new Set([...current, userId])] };
+          return { ...prev, [roomId]: [...new Set([...current, userId])] }
         }
-        return { ...prev, [roomId]: current.filter((id) => id !== userId) };
-      });
+        return { ...prev, [roomId]: current.filter((id) => id !== userId) }
+      })
     },
     onReactionUpdated: (evt) => {
       setRooms((current) =>
         current.map((room) => {
-          if (room.id !== evt.roomId) return room;
+          if (room.id !== evt.roomId) return room
           return {
             ...room,
             messages: room.messages.map((msg) => {
-              if (msg.id !== evt.messageId) return msg;
-              return updateMessageReaction(msg, evt.emoji as ChatReactionEmoji);
+              if (msg.id !== evt.messageId) return msg
+              return updateMessageReaction(msg, evt.emoji as ChatReactionEmoji)
             }),
-          };
+          }
         }),
-      );
+      )
     },
     onUserOnline: (userId) => setWsOnlineUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId])),
     onUserOffline: (userId) => setWsOnlineUsers((prev) => prev.filter((id) => id !== userId)),
-  });
+  })
 
   // Update WS emitters ref so useMeeting can call them
   useEffect(() => {
-    meetingWsRef.current = { meetingJoin, meetingLeave, meetingOffer, meetingAnswer, meetingIce, meetingToggle };
-  });
+    meetingWsRef.current = { meetingJoin, meetingLeave, meetingOffer, meetingAnswer, meetingIce, meetingToggle }
+  })
   // ────────────────────────────────────────────────────────────────────────
 
-  const activeRoom = useMemo(() => rooms.find((room) => room.id === activeId) ?? rooms[0], [activeId, rooms]);
+  const activeRoom = useMemo(() => rooms.find((room) => room.id === activeId) ?? rooms[0], [activeId, rooms])
   const callRoom = useMemo(
     () => (activeCall ? rooms.find((room) => room.id === activeCall.roomId) : undefined),
     [activeCall, rooms],
-  );
+  )
   const pinnedMessage = activeRoom?.pinnedMessageId
     ? activeRoom.messages.find((message) => message.id === activeRoom.pinnedMessageId)
-    : undefined;
-  const normalizedChatSearch = chatSearchQuery.trim().toLowerCase();
+    : undefined
+  const normalizedChatSearch = chatSearchQuery.trim().toLowerCase()
   const displayedMessages = useMemo(() => {
 
-    if (!activeRoom) return [];
-    if (!normalizedChatSearch) return activeRoom.messages;
+    if (!activeRoom) return []
+    if (!normalizedChatSearch) return activeRoom.messages
     return activeRoom.messages.filter((message) => {
-      const sender = chatUsers.find((candidate) => candidate.id === message.userId)?.name ?? "";
-      return `${sender} ${getMessageText(message, t)}`.toLowerCase().includes(normalizedChatSearch);
-    });
-  }, [activeRoom, normalizedChatSearch, t]);
+      const sender = chatUsers.find((candidate) => candidate.id === message.userId)?.name ?? ""
+      return `${sender} ${getMessageText(message, t)}`.toLowerCase().includes(normalizedChatSearch)
+    })
+  }, [activeRoom, normalizedChatSearch, t])
 
   // Load real chat rooms when connected; auto-seed #general if none exist
   useEffect(() => {
-    if (!hasBackendSession || !activeWorkspace) return;
+    if (!hasBackendSession || !activeWorkspace) return
 
     const mergeRooms = (apiRooms: ChatRoom[]) => {
       setRooms((prev) => {
-        const localRooms = prev.filter((r) => r.id === "r-ai");
-        const realIds = new Set(apiRooms.map((r) => r.id));
-        const filtered = localRooms.filter((r) => !realIds.has(r.id));
-        return [...apiRooms, ...filtered];
-      });
-      setActiveId((cur) => cur === "r-ai" ? (apiRooms[0]?.id ?? cur) : cur);
+        const localRooms = prev.filter((r) => r.id === "r-ai")
+        const realIds = new Set(apiRooms.map((r) => r.id))
+        const filtered = localRooms.filter((r) => !realIds.has(r.id))
+        return [...apiRooms, ...filtered]
+      })
+      setActiveId((cur) => cur === "r-ai" ? (apiRooms[0]?.id ?? cur) : cur)
       // Force messages to reload even if activeId didn't change
-      setRoomsKey((k) => k + 1);
-    };
+      setRoomsKey((k) => k + 1)
+    }
 
     chatApi.listRooms(activeWorkspace.id).then(async (res) => {
       let apiRooms: ChatRoom[] = (res?.data ?? []).map((r) => ({
@@ -293,15 +298,14 @@ export default function ChatPage() {
         isMember: r.isMember ?? true,
         createdById: r.createdById,
         description: r.description ?? undefined,
-      }));
+      }))
 
       // First visit: auto-create #general workspace channel
       if (apiRooms.length === 0) {
         try {
           const created = await chatApi.createRoom(activeWorkspace.id, {
-            type: "workspace",
             name: "general",
-          });
+          })
           apiRooms = [
             {
               id: created.data.id,
@@ -312,13 +316,13 @@ export default function ChatPage() {
               unread: 0,
               pinned: false,
             },
-          ];
+          ]
         } catch {
           // Seed failed silently — user can create manually via "+"
         }
       }
 
-      if (apiRooms.length > 0) mergeRooms(apiRooms);
+      if (apiRooms.length > 0) mergeRooms(apiRooms)
 
       // Also load public rooms user hasn't joined yet
       chatApi.listPublicRooms(activeWorkspace.id).then((pubRes) => {
@@ -335,28 +339,28 @@ export default function ChatPage() {
           isMember: false,
           createdById: r.createdById,
           description: r.description ?? undefined,
-        }));
+        }))
         if (pubRooms.length > 0) {
           setRooms((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id));
-            const newOnes = pubRooms.filter((r) => !existingIds.has(r.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-          });
+            const existingIds = new Set(prev.map((r) => r.id))
+            const newOnes = pubRooms.filter((r) => !existingIds.has(r.id))
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev
+          })
         }
-      }).catch(() => { /* ignore if endpoint unavailable */ });
-    }).catch(console.error);
-  }, [hasBackendSession, activeWorkspace]);
+      }).catch(() => { /* ignore if endpoint unavailable */ })
+    }).catch(console.error)
+  }, [hasBackendSession, activeWorkspace])
 
   // Handle auto-join via invite code
   useEffect(() => {
-    const joinCode = searchParams.get('joinCode');
-    if (!joinCode || !hasBackendSession) return;
-    
+    const joinCode = searchParams.get('joinCode')
+    if (!joinCode || !hasBackendSession) return
+
     // Clear code from URL
-    router.replace('/app/chat', { scroll: false });
-    
+    router.replace('/app/chat', { scroll: false })
+
     chatApi.joinByCode(joinCode).then((res) => {
-      const created = res.data;
+      const created = res.data
       const room: ChatRoom = {
         id: created.id,
         name: created.name,
@@ -366,23 +370,23 @@ export default function ChatPage() {
         unread: 0,
         pinned: false,
         isMember: true,
-      };
+      }
       setRooms((prev) => {
-        if (prev.some(r => r.id === room.id)) return prev;
-        return [room, ...prev];
-      });
-      setActiveId(room.id);
-      setMobilePane("chat");
+        if (prev.some(r => r.id === room.id)) return prev
+        return [room, ...prev]
+      })
+      setActiveId(room.id)
+      setMobilePane("chat")
     }).catch(err => {
-      console.error(err);
-      setNotice(t("app.chat.joinRoomFailed", "Chatga qo'shilib bo'lmadi yoki kod yaroqsiz"));
-    });
-  }, [searchParams, hasBackendSession, router, t]);
+      console.error(err)
+      setNotice(t("app.chat.joinRoomFailed", "Chatga qo'shilib bo'lmadi yoki kod yaroqsiz"))
+    })
+  }, [searchParams, hasBackendSession, router, t])
 
   // Load messages for active room from API (roomsKey forces reload when workspace changes)
   useEffect(() => {
-    if (!hasBackendSession || !activeId) return;
-    if (activeId.startsWith("r-")) return;
+    if (!hasBackendSession || !activeId) return
+    if (activeId.startsWith("r-")) return
     chatApi.getMessages(activeId, 1, 50, backendUser?.id).then((res) => {
       const apiMessages: ChatMessage[] = (res?.data ?? [])
         .map((m) => ({
@@ -394,50 +398,50 @@ export default function ChatPage() {
           edited: m.edited,
           reactions: m.reactions ?? [],
         }))
-        .reverse();
+        .reverse()
       setRooms((prev) => prev.map((r) =>
         r.id === activeId ? { ...r, messages: apiMessages } : r,
-      ));
-    }).catch(console.error);
-  }, [hasBackendSession, activeId, backendUser?.id, roomsKey]);
+      ))
+    }).catch(console.error)
+  }, [hasBackendSession, activeId, backendUser?.id, roomsKey])
 
   useEffect(() => {
-    storage.saveChatRooms(rooms);
-  }, [rooms]);
+    storage.saveChatRooms(rooms)
+  }, [rooms])
 
   useEffect(() => {
     if (activeRoom && activeRoom.id !== activeId) {
-      setActiveId(activeRoom.id);
+      setActiveId(activeRoom.id)
     }
-  }, [activeId, activeRoom]);
+  }, [activeId, activeRoom])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [activeRoom?.id, activeRoom?.messages.length]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [activeRoom?.id, activeRoom?.messages.length])
 
   useEffect(() => {
-    if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(null), 2400);
-    return () => window.clearTimeout(timeout);
-  }, [notice]);
+    if (!notice) return
+    const timeout = window.setTimeout(() => setNotice(null), 2400)
+    return () => window.clearTimeout(timeout)
+  }, [notice])
 
   const updateActiveRoom = (updater: (room: ChatRoom) => ChatRoom) => {
-    if (!activeRoom) return;
-    setRooms((currentRooms) => currentRooms.map((room) => (room.id === activeRoom.id ? updater(room) : room)));
-  };
+    if (!activeRoom) return
+    setRooms((currentRooms) => currentRooms.map((room) => (room.id === activeRoom.id ? updater(room) : room)))
+  }
 
   const handleSelectRoom = (roomId: string) => {
-    setActiveId(roomId);
-    setMobilePane("chat");
-    setReplyTo(null);
-    setEditingMessage(null);
-    setChatSearchQuery("");
-    setRooms((currentRooms) => currentRooms.map((room) => (room.id === roomId ? { ...room, unread: 0 } : room)));
-  };
+    setActiveId(roomId)
+    setMobilePane("chat")
+    setReplyTo(null)
+    setEditingMessage(null)
+    setChatSearchQuery("")
+    setRooms((currentRooms) => currentRooms.map((room) => (room.id === roomId ? { ...room, unread: 0 } : room)))
+  }
 
   const handleSend = () => {
-    const text = draft.trim();
-    if (!text || !activeRoom) return;
+    const text = draft.trim()
+    if (!text || !activeRoom) return
 
     if (editingMessage) {
       const applyEdit = () => {
@@ -448,27 +452,27 @@ export default function ChatPage() {
               ? { ...message, text, edited: true, editedAt: new Date().toISOString(), timestamp: Date.now() }
               : message,
           ),
-        }));
-        setEditingMessage(null);
-        setDraft("");
-      };
+        }))
+        setEditingMessage(null)
+        setDraft("")
+      }
 
       if (isPersistedChatRoom(activeRoom) && !editingMessage.id.startsWith("m-")) {
         chatApi
           .editMessage(editingMessage.id, text, backendUser?.id)
           .then(applyEdit)
           .catch((err) => {
-            console.error(err);
-            setNotice(t("app.chat.saveFailed", "Saqlashda xatolik"));
-          });
-        return;
+            console.error(err)
+            setNotice(t("app.chat.saveFailed", "Saqlashda xatolik"))
+          })
+        return
       }
 
-      applyEdit();
-      return;
+      applyEdit()
+      return
     }
 
-    const persisted = isPersistedChatRoom(activeRoom);
+    const persisted = isPersistedChatRoom(activeRoom)
 
     if (persisted) {
       if (isConnected) {
@@ -480,13 +484,13 @@ export default function ChatPage() {
           timestamp: Date.now(),
           replyToId: replyTo?.id,
           reactions: [],
-        };
+        }
         updateActiveRoom((room) => ({
           ...room,
           unread: 0,
           messages: [...room.messages, optimistic],
-        }));
-        wsSend(activeRoom.id, text, replyTo?.id);
+        }))
+        wsSend(activeRoom.id, text, replyTo?.id)
       } else {
         chatApi
           .sendMessage(activeRoom.id, text, replyTo?.id, backendUser?.id)
@@ -498,21 +502,21 @@ export default function ChatPage() {
               timestamp: data.timestamp,
               read: true,
               replyToId: data.replyToId,
-            };
+            }
             updateActiveRoom((room) => ({
               ...room,
               unread: 0,
               messages: [...room.messages, newMessage],
-            }));
+            }))
           })
           .catch((err) => {
-            console.error(err);
-            setNotice(t("app.chat.sendFailed", "Xabar yuborilmadi"));
-          });
+            console.error(err)
+            setNotice(t("app.chat.sendFailed", "Xabar yuborilmadi"))
+          })
       }
-      setDraft("");
-      setReplyTo(null);
-      return;
+      setDraft("")
+      setReplyTo(null)
+      return
     }
 
     const userMsg: ChatMessage = {
@@ -522,13 +526,13 @@ export default function ChatPage() {
       timestamp: Date.now(),
       read: true,
       replyToId: replyTo?.id,
-    };
+    }
 
     if (activeRoom.type === "ai") {
       // Show user message immediately
-      updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }));
-      setDraft("");
-      setReplyTo(null);
+      updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }))
+      setDraft("")
+      setReplyTo(null)
 
       // Build JSON history for multi-turn Gemini context (last 30 messages)
       const history = activeRoom.messages
@@ -537,13 +541,13 @@ export default function ChatPage() {
         .map((m) => ({
           role: m.userId === 'ai' ? ('model' as const) : ('user' as const),
           text: m.text,
-        }));
+        }))
 
-      const thinkingId = `m-ai-thinking-${Date.now()}`;
+      const thinkingId = `m-ai-thinking-${Date.now()}`
       updateActiveRoom((room) => ({
         ...room,
         messages: [...room.messages, { id: thinkingId, userId: "ai", text: "…", timestamp: Date.now() + 1, read: true }],
-      }));
+      }))
 
       fetch(`${API_BASE}/chat/ai`, {
         method: 'POST',
@@ -555,13 +559,13 @@ export default function ChatPage() {
       })
         .then((r) => r.json())
         .then((res: { data?: { reply?: string } }) => {
-          const reply = res?.data?.reply ?? "Hozircha javob bera olmayapman.";
+          const reply = res?.data?.reply ?? "Hozircha javob bera olmayapman."
           updateActiveRoom((room) => ({
             ...room,
             messages: room.messages.map((m) =>
               m.id === thinkingId ? { ...m, text: reply } : m,
             ),
-          }));
+          }))
         })
         .catch(() => {
           updateActiveRoom((room) => ({
@@ -569,15 +573,15 @@ export default function ChatPage() {
             messages: room.messages.map((m) =>
               m.id === thinkingId ? { ...m, text: "Tarmoq xatosi. Qayta urinib ko'ring." } : m,
             ),
-          }));
-        });
-      return;
+          }))
+        })
+      return
     }
 
-    updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }));
-    setDraft("");
-    setReplyTo(null);
-  };
+    updateActiveRoom((room) => ({ ...room, unread: 0, messages: [...room.messages, userMsg] }))
+    setDraft("")
+    setReplyTo(null)
+  }
 
   const handleDeleteMessage = (messageId: string) => {
     const removeLocal = () => {
@@ -585,95 +589,95 @@ export default function ChatPage() {
         ...room,
         pinnedMessageId: room.pinnedMessageId === messageId ? undefined : room.pinnedMessageId,
         messages: room.messages.filter((message) => message.id !== messageId),
-      }));
-      if (replyTo?.id === messageId) setReplyTo(null);
+      }))
+      if (replyTo?.id === messageId) setReplyTo(null)
       if (editingMessage?.id === messageId) {
-        setEditingMessage(null);
-        setDraft("");
+        setEditingMessage(null)
+        setDraft("")
       }
-    };
+    }
 
     if (activeRoom && isPersistedChatRoom(activeRoom) && !messageId.startsWith("m-")) {
       chatApi.deleteMessage(messageId).then(removeLocal).catch((err) => {
-        console.error(err);
-        setNotice(t("app.chat.deleteFailed", "O'chirib bo'lmadi"));
-      });
-      return;
+        console.error(err)
+        setNotice(t("app.chat.deleteFailed", "O'chirib bo'lmadi"))
+      })
+      return
     }
 
-    removeLocal();
-  };
+    removeLocal()
+  }
 
   const handleReply = (message: ChatMessage) => {
-    setReplyTo(message);
-    setEditingMessage(null);
-  };
+    setReplyTo(message)
+    setEditingMessage(null)
+  }
 
   const handleEdit = (message: ChatMessage) => {
-    setEditingMessage(message);
-    setReplyTo(null);
-    setDraft(getMessageText(message, t));
-  };
+    setEditingMessage(message)
+    setReplyTo(null)
+    setDraft(getMessageText(message, t))
+  }
 
   const handleForward = (message: ChatMessage) => {
-    setEditingMessage(null);
-    setReplyTo(null);
-    setDraft(t("app.chat.forwarded", { text: getMessageText(message, t) }));
-    setNotice(t("app.chat.forwardComposer"));
-  };
+    setEditingMessage(null)
+    setReplyTo(null)
+    setDraft(t("app.chat.forwarded", { text: getMessageText(message, t) }))
+    setNotice(t("app.chat.forwardComposer"))
+  }
 
   const handlePinMessage = (messageId: string) => {
     updateActiveRoom((room) => ({
       ...room,
       pinnedMessageId: room.pinnedMessageId === messageId ? undefined : messageId,
-    }));
-  };
+    }))
+  }
 
   const handleToggleReaction = (messageId: string, emoji: ChatReactionEmoji) => {
-    const targetEmoji = normalizeReactionId(emoji);
-    const message = activeRoom?.messages.find((item) => item.id === messageId);
-    const existing = message?.reactions?.find((reaction) => normalizeReactionId(reaction.emoji) === targetEmoji);
-    const removing = existing?.userIds.includes("me");
+    const targetEmoji = normalizeReactionId(emoji)
+    const message = activeRoom?.messages.find((item) => item.id === messageId)
+    const existing = message?.reactions?.find((reaction) => normalizeReactionId(reaction.emoji) === targetEmoji)
+    const removing = existing?.userIds.includes("me")
 
     updateActiveRoom((room) => ({
       ...room,
       messages: room.messages.map((item) => (item.id === messageId ? updateMessageReaction(item, emoji) : item)),
-    }));
+    }))
 
     if (!activeRoom || !isPersistedChatRoom(activeRoom) || messageId.startsWith("m-")) {
       if (isConnected && activeRoom && activeRoom.type !== "ai" && activeRoom.type !== "saved") {
-        wsReaction(activeRoom.id, messageId, emoji);
+        wsReaction(activeRoom.id, messageId, emoji)
       }
-      return;
+      return
     }
 
     const apiCall = removing
       ? chatApi.removeReaction(messageId, targetEmoji)
-      : chatApi.addReaction(messageId, targetEmoji);
+      : chatApi.addReaction(messageId, targetEmoji)
     apiCall.catch((err) => {
-      console.error(err);
-      setNotice(t("app.chat.reactionFailed", "Reaksiya saqlanmadi"));
-    });
-  };
+      console.error(err)
+      setNotice(t("app.chat.reactionFailed", "Reaksiya saqlanmadi"))
+    })
+  }
 
   const handleCreateRoom = async () => {
-    if (!activeWorkspace || creatingRoom) return;
-    setCreatingRoom(true);
+    if (!activeWorkspace || creatingRoom) return
+    setCreatingRoom(true)
     try {
-      let res;
+      let res
       if (newRoomType === 'direct') {
-        if (!dmTargetId) { setNotice("Foydalanuvchi tanlang"); setCreatingRoom(false); return; }
-        res = await chatApi.createRoom(activeWorkspace.id, { type: "direct", name: dmTargetId });
+        if (!dmTargetId) { setNotice("Foydalanuvchi tanlang"); setCreatingRoom(false); return }
+        res = await chatApi.createRoom(activeWorkspace.id, { targetUserId: dmTargetId })
       } else {
-        const name = newRoomName.trim();
-        if (!name) { setNotice("Kanal nomini kiriting"); setCreatingRoom(false); return; }
-        res = await chatApi.createRoom(activeWorkspace.id, { type: "group", name });
+        const name = newRoomName.trim()
+        if (!name) { setNotice("Kanal nomini kiriting"); setCreatingRoom(false); return }
+        res = await chatApi.createRoom(activeWorkspace.id, { name })
         // Apply public/private setting if public
         if (newRoomIsPublic && res.data?.id) {
-          await chatApi.updateRoomSettings(res.data.id, { isPublic: true });
+          await chatApi.updateRoomSettings(res.data.id, { isPublic: true })
         }
       }
-      const created = res.data;
+      const created = res.data
       const room: ChatRoom = {
         id: created.id,
         name: created.name,
@@ -684,76 +688,89 @@ export default function ChatPage() {
         pinned: false,
         isPublic: newRoomIsPublic,
         isMember: true,
-      };
-      setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
-      setActiveId(room.id);
-      setMobilePane("chat");
-      setCreateRoomOpen(false);
-      setNewRoomName("");
-      setDmTargetId("");
-      setNewRoomIsPublic(false);
+      }
+      setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)])
+      setActiveId(room.id)
+      setMobilePane("chat")
+      setCreateRoomOpen(false)
+      setNewRoomName("")
+      setDmTargetId("")
+      setNewRoomIsPublic(false)
     } catch (err) {
-      console.error(err);
-      setNotice(t("app.chat.createRoomFailed", "Chat yaratilmadi"));
+      console.error(err)
+      setNotice(t("app.chat.createRoomFailed", "Chat yaratilmadi"))
     } finally {
-      setCreatingRoom(false);
+      setCreatingRoom(false)
     }
-  };
+  }
 
-  const handleStartCall = (mode: ChatCallMode) => {
-    if (!activeRoom) return;
-    setActiveCall({ roomId: activeRoom.id, mode, startedAt: Date.now() });
-    setMobilePane("chat");
-  };
+  const handleStartCall = async (mode: ChatCallMode) => {
+    if (!activeRoom || !activeWorkspace || startingCall) return
+    setStartingCall(true)
+    try {
+      const title = activeRoom.name ?? 'Chat call'
+      const res = await meetingsApi.create(activeWorkspace.id, {
+        title,
+        startTime: new Date().toISOString(),
+      })
+      setActiveCall({ roomId: activeRoom.id, meetingId: res.data.id, mode, startedAt: Date.now() })
+      setMobilePane('chat')
+    } catch (err) {
+      console.error(err)
+      setNotice(t('app.chat.callStartFailed', 'Call could not be started'))
+    } finally {
+      setStartingCall(false)
+    }
+  }
 
   const handleHeaderAction = (action: ChatHeaderAction) => {
-    if (!activeRoom) return;
+    if (!activeRoom) return
 
     if (action === "profile") {
-      setNotice(t("app.chat.profilePlaceholder", { name: getRoomName(activeRoom, t) }));
-      return;
+      setNotice(t("app.chat.profilePlaceholder", { name: getRoomName(activeRoom, t) }))
+      return
     }
 
     if (action === "search") {
-      setChatSearchOpen((current) => !current);
-      return;
+      setChatSearchOpen((current) => !current)
+      return
     }
 
     if (action === "mute") {
-      updateActiveRoom((room) => ({ ...room, muted: !room.muted }));
-      return;
+      updateActiveRoom((room) => ({ ...room, muted: !room.muted }))
+      return
     }
 
     if (action === "pin") {
-      updateActiveRoom((room) => ({ ...room, pinned: !room.pinned }));
-      return;
+      updateActiveRoom((room) => ({ ...room, pinned: !room.pinned }))
+      return
     }
 
     if (action === "clear") {
-      updateActiveRoom((room) => ({ ...room, messages: [], pinnedMessageId: undefined, unread: 0 }));
-      setReplyTo(null);
-      setEditingMessage(null);
-      setDraft("");
-      return;
+      updateActiveRoom((room) => ({ ...room, messages: [], pinnedMessageId: undefined, unread: 0 }))
+      setReplyTo(null)
+      setEditingMessage(null)
+      setDraft("")
+      return
     }
 
     if (action === "delete") {
       setRooms((currentRooms) => {
-        const remainingRooms = currentRooms.filter((room) => room.id !== activeRoom.id);
-        setActiveId(remainingRooms[0]?.id ?? "");
-        setMobilePane(remainingRooms.length > 0 ? "list" : "chat");
-        return remainingRooms;
-      });
-      setActiveCall((currentCall) => (currentCall?.roomId === activeRoom.id ? null : currentCall));
-      setReplyTo(null);
-      setEditingMessage(null);
-      setDraft("");
+        const remainingRooms = currentRooms.filter((room) => room.id !== activeRoom.id)
+        setActiveId(remainingRooms[0]?.id ?? "")
+        setMobilePane(remainingRooms.length > 0 ? "list" : "chat")
+        return remainingRooms
+      })
+      setActiveCall((currentCall) => (currentCall?.roomId === activeRoom.id ? null : currentCall))
+      setReplyTo(null)
+      setEditingMessage(null)
+      setDraft("")
     }
-  };
+  }
 
   const handleBackToApp = () => {
-    navigate("/app/home");
-  };
+    navigate("/app/home")
+  }
 
   return (
     <div
@@ -787,6 +804,7 @@ export default function ChatPage() {
               onAction={handleHeaderAction}
               onStartCall={handleStartCall}
               currentUserId={backendUser?.id}
+              workspaceId={activeWorkspace?.id}
               onRoomUpdated={(updated) =>
                 setRooms((prev) => prev.map((r) => r.id === activeRoom.id ? { ...r, ...updated } : r))
               }
@@ -832,7 +850,7 @@ export default function ChatPage() {
                   users={chatUsers}
                   mode={activeCall.mode}
                   startedAt={activeCall.startedAt}
-                  onClose={() => { meeting.leave(); setActiveCall(null); }}
+                  onClose={() => { meeting.leave(); setActiveCall(null) }}
                   onSwitchMode={(mode) => setActiveCall((currentCall) => (currentCall ? { ...currentCall, mode } : currentCall))}
                   localStream={meeting.localStream}
                   peerStreams={meeting.peerStreams}
@@ -872,8 +890,8 @@ export default function ChatPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setChatSearchOpen(false);
-                        setChatSearchQuery("");
+                        setChatSearchOpen(false)
+                        setChatSearchQuery("")
                       }}
                       className="rounded-xl p-1 text-muted-foreground hover:bg-card hover:text-foreground"
                       aria-label={t("app.chat.closeSearch")}
@@ -894,16 +912,16 @@ export default function ChatPage() {
                   type="button"
                   onClick={async () => {
                     try {
-                      const res = await chatApi.joinPublicRoom(activeRoom.id);
-                      const joined = res.data;
+                      const res = await chatApi.joinPublicRoom(activeRoom.id)
+                      const joined = res.data
                       setRooms((prev) => prev.map((r) =>
                         r.id === activeRoom.id
                           ? { ...r, isMember: true, memberIds: joined.memberIds ?? r.memberIds }
                           : r,
-                      ));
-                      setNotice("Xonaga qo'shildingiz!");
+                      ))
+                      setNotice("Xonaga qo'shildingiz!")
                     } catch {
-                      setNotice("Qo'shilishda xatolik");
+                      setNotice("Qo'shilishda xatolik")
                     }
                   }}
                   className="shrink-0 rounded-2xl bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
@@ -1005,16 +1023,16 @@ export default function ChatPage() {
               replyTo={replyTo}
               editingMessage={editingMessage}
               onChange={(val) => {
-                setDraft(val);
+                setDraft(val)
                 if (isConnected && activeRoom && activeRoom.type !== "ai") {
-                  sendTyping(activeRoom.id, val.length > 0);
+                  sendTyping(activeRoom.id, val.length > 0)
                 }
               }}
               onSend={handleSend}
               onCancelReply={() => setReplyTo(null)}
               onCancelEdit={() => {
-                setEditingMessage(null);
-                setDraft("");
+                setEditingMessage(null)
+                setDraft("")
               }}
             />
           </section>
@@ -1079,7 +1097,7 @@ export default function ChatPage() {
                     placeholder="Kanal nomi (masalan: frontend-jamoa)"
                     className="mt-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-indigo-300 dark:border-gray-600 dark:bg-gray-800"
                     autoFocus
-                    onKeyDown={(event) => { if (event.key === "Enter") void handleCreateRoom(); }}
+                    onKeyDown={(event) => { if (event.key === "Enter") void handleCreateRoom() }}
                   />
                   {/* Public/Private toggle */}
                   <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800">
@@ -1104,8 +1122,32 @@ export default function ChatPage() {
                 </>
               ) : (
                 <div className="mt-4">
+                  <input
+                    value={userQuery}
+                    onChange={async (e) => {
+                      const v = e.target.value
+                      setUserQuery(v)
+                      if (v.trim().length >= 2) {
+                        setSearchingUsers(true)
+                        try {
+                          const res = await usersApi.search(v.trim(), 20)
+                          setUserSearchResults(res.data ?? [])
+                        } catch (err) {
+                          setUserSearchResults([])
+                        } finally {
+                          setSearchingUsers(false)
+                        }
+                      } else {
+                        setUserSearchResults([])
+                      }
+                    }}
+                    placeholder="Foydalanuvchi qidirish (ismi yoki username)"
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-300 dark:border-gray-600 dark:bg-gray-800"
+                  />
+                  <div className="mt-2" />
                   <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Foydalanuvchi tanlang</p>
                   <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-gray-200 bg-gray-50 p-2 dark:border-gray-600 dark:bg-gray-800">
+                    {/* Workspace members first */}
                     {members.filter(m => m.userId !== backendUser?.id).map((m, i) => (
                       <button
                         key={m.userId}
@@ -1118,7 +1160,7 @@ export default function ChatPage() {
                       >
                         <div
                           className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                          style={{ background: ['#6366F1','#3B82F6','#10B981','#F59E0B','#EC4899'][i % 5] }}
+                          style={{ background: ['#6366F1', '#3B82F6', '#10B981', '#F59E0B', '#EC4899'][i % 5] }}
                         >
                           {m.user.firstName?.[0]}{m.user.lastName?.[0]}
                         </div>
@@ -1129,7 +1171,35 @@ export default function ChatPage() {
                         {dmTargetId === m.userId && <span className="ml-auto text-indigo-500">✓</span>}
                       </button>
                     ))}
-                    {members.filter(m => m.userId !== backendUser?.id).length === 0 && (
+
+                    {/* Then global search results (exclude current user and workspace members) */}
+                    {userSearchResults.length > 0 && (
+                      <div className="pt-2">
+                        <div className="px-2 text-xs font-semibold text-muted-foreground">Qidiruv natijalari</div>
+                        {userSearchResults.filter(u => u.id !== backendUser?.id && !members.some(m => m.userId === u.id)).map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => setDmTargetId(u.id)}
+                            className={cn(
+                              "w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors",
+                              dmTargetId === u.id ? "bg-indigo-600/15 text-indigo-600 dark:text-indigo-400" : "hover:bg-white/60 dark:hover:bg-gray-700"
+                            )}
+                          >
+                            <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: '#8B5CF6' }}>
+                              {(u.firstName?.[0] ?? u.username?.[0] ?? '?').toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">{u.firstName} {u.lastName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{u.username ?? ''}</p>
+                            </div>
+                            {dmTargetId === u.id && <span className="ml-auto text-indigo-500">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {members.filter(m => m.userId !== backendUser?.id).length === 0 && userSearchResults.length === 0 && (
                       <p className="py-4 text-center text-sm text-muted-foreground">Boshqa a&apos;zolar yo&apos;q</p>
                     )}
                   </div>
@@ -1140,7 +1210,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   disabled={creatingRoom}
-                  onClick={() => { setCreateRoomOpen(false); setNewRoomName(""); setDmTargetId(""); }}
+                  onClick={() => { setCreateRoomOpen(false); setNewRoomName(""); setDmTargetId("") }}
                   className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
                 >
                   Bekor
@@ -1160,5 +1230,5 @@ export default function ChatPage() {
         <Toast key="chat-toast" message={notice} />
       </AnimatePresence>
     </div>
-  );
+  )
 }

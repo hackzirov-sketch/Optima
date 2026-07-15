@@ -10,7 +10,6 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
 import { InviteMemberDto } from './dto/invite-member.dto';
-import { ChatRoomType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { MailService } from '../mail/mail.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -209,10 +208,13 @@ export class InvitationsService {
       );
       const savedMember = savedMemberRows[0];
 
-      // Auto-join all workspace-scoped channels (e.g. #general)
+      // Auto-join all workspace-wide public channels (e.g. #general). A room
+      // no longer has a `type`; "workspace-wide" is: belongs to this
+      // workspace, not scoped to a specific group/project, and public.
       const wsRooms: Array<{ id: string }> = await queryRunner.query(
-        `SELECT id FROM chat_rooms WHERE workspace_id = $1 AND type = $2`,
-        [invitation.workspaceId, ChatRoomType.WORKSPACE],
+        `SELECT id FROM chat_rooms
+         WHERE workspace_id = $1 AND group_id IS NULL AND project_id IS NULL AND is_public = true`,
+        [invitation.workspaceId],
       );
       for (const room of wsRooms) {
         await queryRunner.query(

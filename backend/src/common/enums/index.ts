@@ -96,14 +96,6 @@ export enum PushStatus {
   MERGED = 'merged',
 }
 
-export enum ChatRoomType {
-  WORKSPACE = 'workspace',
-  GROUP = 'group',
-  PROJECT = 'project',
-  DIRECT = 'direct',
-  MEETING = 'meeting',
-}
-
 export enum NotificationType {
   TASK_ASSIGNED = 'task_assigned',
   TASK_UPDATED = 'task_updated',

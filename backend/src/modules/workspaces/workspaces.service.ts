@@ -12,7 +12,7 @@ import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
-import { WorkspaceRole, ChatRoomType } from '../../common/enums';
+import { WorkspaceRole } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { isActiveEntity, isSoftDeleted } from '../../common/utils/soft-delete';
 import { PermissionService } from '../../common/services/permission.service';
@@ -81,10 +81,13 @@ export class WorkspacesService {
         [savedWorkspace.id, userId, WorkspaceRole.OWNER],
       );
 
-      // Create default #general workspace channel
+      // Create default #general workspace channel. Marked is_public so new
+      // members auto-join it (see invitations.service.ts) — chat_rooms no
+      // longer has a `type` column, so "the workspace-wide channel" is
+      // identified as: this workspace, not scoped to a group/project, public.
       const savedRoomRows: Array<{ id: string }> = await queryRunner.query(
-        `INSERT INTO chat_rooms (workspace_id, type, name, created_by) VALUES ($1, $2, $3, $4) RETURNING id`,
-        [savedWorkspace.id, ChatRoomType.WORKSPACE, 'general', userId],
+        `INSERT INTO chat_rooms (workspace_id, name, is_public, created_by) VALUES ($1, $2, true, $3) RETURNING id`,
+        [savedWorkspace.id, 'general', userId],
       );
 
       // Add owner to the channel

@@ -1,16 +1,25 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { lookup } from 'dns';
+import { Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import * as nodemailer from 'nodemailer'
+import { lookup } from 'dns'
 
 @Injectable()
 export class MailService {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter
   private readonly logger = new Logger(MailService.name);
 
   constructor(private configService: ConfigService) {
-    const port = this.configService.get<number>('SMTP_PORT') || 587;
-    const secure = port === 465;
+    const port = this.configService.get<number>('SMTP_PORT') || 587
+    const secure = port === 465
+    const user = this.configService.get<string>('SMTP_USER')
+    const pass = this.configService.get<string>('SMTP_PASS')
+    if (!user || !pass) {
+      this.logger.warn('SMTP_USER or SMTP_PASS not configured — email sending disabled')
+      // create a stub transporter that throws a friendly error when used
+      this.transporter = null as any
+      return
+    }
+
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
       port,
@@ -22,14 +31,15 @@ export class MailService {
       // Force IPv4: Render blocks IPv6 outbound, Gmail DNS returns IPv6 by default
       lookup: (hostname, options, callback) => lookup(hostname, { ...options, family: 4 }, callback),
       auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
+        user,
+        pass,
       },
-    } as any);
+    } as any)
   }
 
   async sendVerificationEmail(email: string, code: string) {
     try {
+      if (!this.transporter) { this.logger.warn('Skipping sendVerificationEmail — transporter not configured'); return }
       await this.transporter.sendMail({
         from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
         to: email,
@@ -45,15 +55,16 @@ export class MailService {
             <p>If you didn't create an account, you can safely ignore this email.</p>
           </div>
         `,
-      });
-      this.logger.log(`Verification email sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send email to ${email}`, error.stack);
+      })
+      this.logger.log(`Verification email sent to ${email}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to send email to ${email}`, error?.stack || String(error))
     }
   }
 
   async sendInvitationEmail(email: string, token: string, workspaceName: string) {
     try {
+      if (!this.transporter) { this.logger.warn('Skipping sendInvitationEmail — transporter not configured'); return }
       await this.transporter.sendMail({
         from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
         to: email,
@@ -69,15 +80,16 @@ export class MailService {
             <p>This invitation expires in 5 days. If you didn't expect this, you can ignore it.</p>
           </div>
         `,
-      });
-      this.logger.log(`Invitation email sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send invitation email to ${email}`, (error as Error).stack);
+      })
+      this.logger.log(`Invitation email sent to ${email}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to send invitation email to ${email}`, error?.stack || String(error))
     }
   }
 
   async sendPasswordResetOtpEmail(email: string, otp: string) {
     try {
+      if (!this.transporter) { this.logger.warn('Skipping sendPasswordResetOtpEmail — transporter not configured'); return }
       await this.transporter.sendMail({
         from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
         to: email,
@@ -93,16 +105,17 @@ export class MailService {
             <p style="color: #888; font-size: 12px;">Do not share this code with anyone.</p>
           </div>
         `,
-      });
-      this.logger.log(`Password reset OTP email sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send reset OTP email to ${email}`, (error as Error).stack);
+      })
+      this.logger.log(`Password reset OTP email sent to ${email}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to send reset OTP email to ${email}`, error?.stack || String(error))
     }
   }
 
   /** @deprecated Use sendPasswordResetOtpEmail instead — kept for backward compat. */
   async sendPasswordResetEmail(email: string, resetUrl: string) {
     try {
+      if (!this.transporter) { this.logger.warn('Skipping sendPasswordResetEmail — transporter not configured'); return }
       await this.transporter.sendMail({
         from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
         to: email,
@@ -117,10 +130,10 @@ export class MailService {
             <p>If you didn't request a password reset, you can safely ignore this email.</p>
           </div>
         `,
-      });
-      this.logger.log(`Password reset email sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send reset email to ${email}`, error.stack);
+      })
+      this.logger.log(`Password reset email sent to ${email}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to send reset email to ${email}`, error?.stack || String(error))
     }
   }
 
@@ -131,6 +144,7 @@ export class MailService {
     message: string,
   ): Promise<void> {
     try {
+      if (!this.transporter) { this.logger.warn('Skipping sendNotificationEmail — transporter not configured'); return }
       await this.transporter.sendMail({
         from: `"UPZ" <${this.configService.get('SMTP_USER')}>`,
         to: email,
@@ -152,10 +166,10 @@ export class MailService {
             </div>
           </div>
         `,
-      });
-    } catch (error) {
-      this.logger.error(`Failed to send notification email to ${email}`, error.stack);
-      throw error;
+      })
+    } catch (error: any) {
+      this.logger.error(`Failed to send notification email to ${email}`, error?.stack || String(error))
+      throw error
     }
   }
 }

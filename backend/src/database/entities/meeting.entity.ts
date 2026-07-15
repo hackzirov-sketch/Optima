@@ -17,12 +17,15 @@ export class Meeting {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'workspace_id' })
-  workspaceId: string;
+  // Nullable: a meeting no longer has to belong to a workspace — like
+  // Google Meet, a standalone meeting can be created and joined by link/code
+  // with no workspace context at all.
+  @Column({ name: 'workspace_id', nullable: true })
+  workspaceId: string | null;
 
-  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Workspace, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'workspace_id' })
-  workspace: Workspace;
+  workspace: Workspace | null;
 
   @Column({ name: 'host_id' })
   hostId: string;

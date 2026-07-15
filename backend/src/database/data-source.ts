@@ -35,6 +35,7 @@ import { AuditLog } from './entities/audit-log.entity';
 import { UserIpLog } from './entities/user-ip-log.entity';
 import { UserVerification } from './entities/user-verification.entity';
 import { Earning } from './entities/earning.entity';
+import { Note } from './entities/note.entity';
 
 dotenv.config();
 
@@ -77,6 +78,7 @@ export default new DataSource({
     UserIpLog,
     UserVerification,
     Earning,
+    Note,
   ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

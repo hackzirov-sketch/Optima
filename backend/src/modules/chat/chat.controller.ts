@@ -44,6 +44,18 @@ export class ChatController {
     return this.roomService.createRoom(workspaceId, userId, dto);
   }
 
+  @Get('chat/rooms')
+  @ApiOperation({ summary: 'List all rooms the current user belongs to, across every workspace and independent of one' })
+  listMyRooms(@CurrentUser('id') userId: string) {
+    return this.roomService.listAllRoomsForUser(userId);
+  }
+
+  @Post('chat/rooms')
+  @ApiOperation({ summary: 'Create a chat room with no workspace context (direct message or standalone chat)' })
+  createIndependentRoom(@CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
+    return this.roomService.createRoom(null, userId, dto);
+  }
+
   @Get('chat/rooms/:roomId')
   @ApiOperation({ summary: 'Get chat room' })
   getRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {

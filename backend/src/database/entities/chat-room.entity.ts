@@ -8,7 +8,6 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { ChatRoomType } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { Group } from './group.entity';
 import { Project } from './project.entity';
@@ -20,12 +19,14 @@ export class ChatRoom {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'workspace_id' })
-  workspaceId: string;
+  // Nullable: a chat room no longer has to live inside a workspace — direct
+  // messages and standalone/independent chats have workspace_id = null.
+  @Column({ name: 'workspace_id', nullable: true })
+  workspaceId: string | null;
 
-  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Workspace, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'workspace_id' })
-  workspace: Workspace;
+  workspace: Workspace | null;
 
   @Column({ name: 'group_id', nullable: true })
   groupId: string;
@@ -40,13 +41,6 @@ export class ChatRoom {
   @ManyToOne(() => Project, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'project_id' })
   project: Project;
-
-  @Column({
-    type: 'enum',
-    enum: ChatRoomType,
-    default: ChatRoomType.GROUP,
-  })
-  type: ChatRoomType;
 
   @Column({ length: 200, nullable: true })
   name: string;

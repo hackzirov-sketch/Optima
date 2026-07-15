@@ -62,6 +62,23 @@ export class MeetingsController {
     return this.meetingsService.create(workspaceId, userId, dto);
   }
 
+  // ─── Standalone meetings (no workspace) ───────────────────────────────────
+
+  @Get('meetings')
+  @ApiOperation({ summary: 'List meetings the current user hosts or participates in, across every workspace and independent of one' })
+  listMine(@CurrentUser('id') userId: string) {
+    return this.meetingsService.listForUser(userId);
+  }
+
+  @Post('meetings')
+  @ApiOperation({ summary: 'Create a standalone meeting with no workspace context (like a Google Meet call)' })
+  createStandalone(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateMeetingDto,
+  ) {
+    return this.meetingsService.create(null, userId, dto);
+  }
+
   // ─── Join by meeting code (workspace-agnostic) ────────────────────────────
 
   @Post('meetings/join-by-code')
