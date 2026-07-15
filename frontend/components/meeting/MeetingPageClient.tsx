@@ -21,7 +21,7 @@ export default function MeetingPageClient({ meetingId }: { meetingId: string }) 
 	useWebSocket({
 		onMeetingParticipants: (evt) => {
 			if (evt.meetingId !== meetingId) return
-			setMeeting((m) => {
+			setMeeting((m: any) => {
 				if (!m) return m
 				const existing = new Set((m.participants ?? []).map((p: any) => p.userId))
 				const additions = evt.userIds.filter((id) => !existing.has(id)).map((id) => ({ userId: id }))
@@ -31,7 +31,7 @@ export default function MeetingPageClient({ meetingId }: { meetingId: string }) 
 		},
 		onMeetingUserJoined: (evt) => {
 			if (evt.meetingId !== meetingId) return
-			setMeeting((m) => {
+			setMeeting((m: any) => {
 				if (!m) return m
 				const exists = (m.participants ?? []).some((p: any) => p.userId === evt.userId && !p.leftAt)
 				if (exists) return m
@@ -40,7 +40,7 @@ export default function MeetingPageClient({ meetingId }: { meetingId: string }) 
 		},
 		onMeetingUserLeft: (evt) => {
 			if (evt.meetingId !== meetingId) return
-			setMeeting((m) => {
+			setMeeting((m: any) => {
 				if (!m) return m
 				return { ...m, participants: (m.participants ?? []).map((p: any) => p.userId === evt.userId ? { ...p, leftAt: new Date().toISOString() } : p) }
 			})
@@ -73,14 +73,14 @@ export default function MeetingPageClient({ meetingId }: { meetingId: string }) 
 		let mounted = true
 		const loadProfiles = async () => {
 			if (!meeting) return
-			const ids = Array.from(new Set((meeting.participants ?? []).map((p: any) => p.userId)))
-			const missing = ids.filter((id) => !(members ?? []).some((m: any) => m.userId === id))
+			const ids = Array.from(new Set<string>((meeting.participants ?? []).map((p: any) => String(p.userId))))
+			const missing = ids.filter((id: string) => !(members ?? []).some((m: any) => m.userId === id))
 			if (missing.length === 0) {
 				if (mounted) setExternalProfiles([])
 				return
 			}
 			try {
-				const profiles = await Promise.all(missing.map((id) => usersApi.getById(id).then(r => ({ userId: id, user: r.data })).catch(() => null)))
+				const profiles = await Promise.all(missing.map((id: string) => usersApi.getById(id).then(r => ({ userId: id, user: r.data })).catch(() => null)))
 				if (!mounted) return
 				setExternalProfiles(profiles.filter(Boolean))
 			} catch (err) {
