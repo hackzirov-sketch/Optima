@@ -25,8 +25,11 @@ export class User {
   @Column({ name: 'last_name', length: 50 })
   lastName: string;
 
-  @Column({ unique: true, length: 50 })
-  username: string;
+  @Column({ type: 'varchar', unique: true, length: 50, nullable: true })
+  username: string | null;
+
+  @Column({ name: 'public_id', type: 'bigint', unique: true, update: false })
+  publicId: string;
 
   @Column({ unique: true, length: 255 })
   email: string;

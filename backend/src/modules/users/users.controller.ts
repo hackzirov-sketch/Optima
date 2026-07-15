@@ -17,6 +17,7 @@ import { User } from '../../database/entities/user.entity'
 import { UpdateProfileDto } from './dto/update-profile.dto'
 import { UpdateSettingsDto } from './dto/update-settings.dto'
 import { UpdateAvatarDto } from './dto/update-avatar.dto'
+import { Public } from '../../common/decorators/public.decorator'
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -62,6 +63,13 @@ export class UsersController {
   @ApiParam({ name: 'id', format: 'uuid' })
   getById(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findPublicById(id)
+  }
+
+  @Get('profile/:identifier')
+  @Public()
+  @ApiOperation({ summary: 'Get public profile by username or public user ID' })
+  getPublicProfile(@Param('identifier') identifier: string) {
+    return this.usersService.findPublic(identifier)
   }
 
   @Delete('me')

@@ -9,17 +9,20 @@ export default defineConfig({
     allowedHosts: [".trycloudflare.com"],
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: "https://api.honeymedia.uz",
         changeOrigin: true,
+        secure: true,
       },
       "/socket.io": {
-        target: "http://localhost:3000",
+        target: "https://api.honeymedia.uz",
         changeOrigin: true,
+        secure: true,
         ws: true,
       },
       "/uploads": {
-        target: "http://localhost:3000",
+        target: "https://api.honeymedia.uz",
         changeOrigin: true,
+        secure: true,
       },
     },
   },

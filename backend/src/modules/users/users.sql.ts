@@ -1,5 +1,5 @@
 export const USER_COLUMNS_SQL = `
-  id, first_name AS "firstName", last_name AS "lastName", username, email,
+  id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, email,
   phone_number AS "phoneNumber",
   avatar_url AS "avatarUrl", language, timezone, theme, occupation,
   is_active AS "isActive", is_verified AS "isVerified", providers,
@@ -9,7 +9,7 @@ export const USER_COLUMNS_SQL = `
 `;
 
 export const USER_AUTH_COLUMNS_SQL = `
-  id, email, password_hash AS "passwordHash", is_verified AS "isVerified",
+  id, public_id::text AS "publicId", email, password_hash AS "passwordHash", is_verified AS "isVerified",
   is_active AS "isActive", deleted_at AS "deletedAt", providers,
   needs_password_setup AS "needsPasswordSetup", first_name AS "firstName",
   last_name AS "lastName", username, avatar_url AS "avatarUrl"

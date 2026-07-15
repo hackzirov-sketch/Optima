@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectDataSource } from '@nestjs/typeorm'
 import { DataSource } from 'typeorm'
 import { ConfigService } from '@nestjs/config'
@@ -56,7 +56,7 @@ export class UsersService {
 
   async findPublicById(id: string): Promise<PublicUserDto> {
     const rows: PublicUserDto[] = await this.dataSource.query(
-      `SELECT id, first_name AS "firstName", last_name AS "lastName", username,
+      `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username,
               avatar_url AS "avatarUrl", last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
@@ -108,7 +108,7 @@ export class UsersService {
     const isEmail = q.includes('@')
     const rows: any[] = isEmail
       ? await this.dataSource.query(
-        `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
+        `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
            WHERE deleted_at IS NULL AND (email ILIKE $1 OR first_name ILIKE $2 OR last_name ILIKE $2 OR username ILIKE $2)
            ORDER BY CASE WHEN email ILIKE $1 THEN 0 WHEN username ILIKE $2 THEN 1 ELSE 2 END, last_name ASC
@@ -116,12 +116,12 @@ export class UsersService {
         [q, term, limit],
       )
       : await this.dataSource.query(
-        `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
+        `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
-           WHERE deleted_at IS NULL AND (first_name ILIKE $1 OR last_name ILIKE $1 OR username ILIKE $1)
-           ORDER BY CASE WHEN username ILIKE $1 THEN 0 ELSE 1 END, last_name ASC
-           LIMIT $2`,
-        [term, limit],
+           WHERE deleted_at IS NULL AND (first_name ILIKE $1 OR last_name ILIKE $1 OR username ILIKE $1 OR public_id::text = $2)
+           ORDER BY CASE WHEN public_id::text = $2 THEN 0 WHEN username ILIKE $1 THEN 1 ELSE 2 END, last_name ASC
+           LIMIT $3`,
+        [term, q, limit],
       )
     return rows
   }
@@ -141,6 +141,18 @@ export class UsersService {
       [username],
     )
     return rows[0] ? mapUserRow(rows[0]) : null
+  }
+
+  async findPublic(identifier: string): Promise<PublicUserDto> {
+    const normalized = identifier.replace(/^@/, '')
+    const rows: PublicUserDto[] = await this.dataSource.query(
+      `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
+              username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+       FROM users WHERE deleted_at IS NULL AND (lower(username) = lower($1) OR public_id::text = $1) LIMIT 1`,
+      [normalized],
+    )
+    if (!rows[0]) throw new NotFoundException({ code: ErrorCode.USER_NOT_FOUND, message: 'User not found' })
+    return rows[0]
   }
 
   async create(data: Partial<User>): Promise<User> {
@@ -205,6 +217,16 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
+    if (dto.username !== undefined) {
+      const username = dto.username?.trim() || null
+      if (username) {
+        const existing = await this.findByUsername(username)
+        if (existing && existing.id !== userId) {
+          throw new ConflictException({ code: ErrorCode.USERNAME_ALREADY_EXISTS, message: 'Username already taken' })
+        }
+      }
+      dto.username = username
+    }
     const texts = [dto.firstName, dto.lastName].filter(Boolean) as string[]
     for (const t of texts) {
       await this.contentFilter.filterText(t, userId, 'profile')

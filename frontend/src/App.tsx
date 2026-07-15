@@ -11,6 +11,7 @@ import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
 import { WorkspaceSetupPage } from "./pages/WorkspaceSetupPage";
+import { PublicProfilePage } from "./pages/PublicProfilePage";
 
 function LoadingScreen() {
   return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Workspace yuklanmoqda</span></div>;
@@ -20,6 +21,8 @@ export function App() {
   const { ready, user, workspace } = useAuth();
   const [location] = useLocation();
   if (!ready) return <LoadingScreen />;
+  const publicProfileMatch = location.match(/^\/(?:u|user)\/([^/?#]+)$/);
+  if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
   if (!user) return <AuthPage />;
 
   const chatInviteMatch = location.match(/^\/join\/chat\/([^/?#]+)$/);

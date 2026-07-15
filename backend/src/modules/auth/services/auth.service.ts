@@ -81,7 +81,7 @@ export class AuthService {
     // Parallel: DB uniqueness checks + bcrypt hashing + content filter
     const [existingUser, existingUsername, passwordHash] = await Promise.all([
       this.usersService.findByEmail(dto.email),
-      this.usersService.findByUsername(dto.username),
+      dto.username ? this.usersService.findByUsername(dto.username) : Promise.resolve(null),
       this.securityService.hashPassword(dto.password),
     ]);
 
@@ -99,7 +99,7 @@ export class AuthService {
     }
 
     await Promise.all([
-      this.contentFilter.filterText(dto.username, undefined, 'username'),
+      ...(dto.username ? [this.contentFilter.filterText(dto.username, undefined, 'username')] : []),
       this.contentFilter.filterText(
         [dto.firstName, dto.lastName].filter(Boolean).join(' '),
         undefined,

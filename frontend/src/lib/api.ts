@@ -169,6 +169,7 @@ export const api = {
     revokeAllSessions: () => apiFetch("/auth/sessions", { method: "DELETE" }),
   },
   users: {
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">>(`/users/profile/${encodeURIComponent(identifier)}`),
     me: () => apiFetch<User>("/users/me"),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
@@ -198,6 +199,8 @@ export const api = {
     global: (query: string) => apiFetch<GlobalSearchResult>(`/search?q=${encodeURIComponent(query)}`),
   },
   chat: {
+    community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
+    mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
     rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
     createRoom: (workspaceId: string, data: Record<string, unknown>) =>
       apiFetch<ChatRoom>(`/workspaces/${workspaceId}/chat/rooms`, {
@@ -206,10 +209,23 @@ export const api = {
       }),
     messages: (roomId: string) =>
       apiFetch<{ data: ChatMessage[]; total: number }>(`/chat/rooms/${roomId}/messages?limit=80`),
-    send: (roomId: string, content: string, clientMessageId: string) =>
+    send: (roomId: string, content: string, clientMessageId: string, replyToId?: string) =>
       apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, clientMessageId }),
+        body: JSON.stringify({ content, clientMessageId, replyToId }),
+      }),
+    editMessage: (messageId: string, content: string) =>
+      apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
+    deleteMessage: (messageId: string) =>
+      apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
+    addReaction: (messageId: string, emoji: string) =>
+      apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
+    removeReaction: (messageId: string, emoji: string) =>
+      apiFetch<void>(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: "DELETE" }),
+    presignAttachment: (roomId: string, file: File) =>
+      apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string; expiresIn: number }>(`/chat/rooms/${roomId}/attachments/presign`, {
+        method: "POST",
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type || "application/octet-stream", fileSize: file.size }),
       }),
     uploadAudio: (roomId: string, blob: Blob) => {
       const body = new FormData();
@@ -227,6 +243,8 @@ export const api = {
       apiFetch<void>(`/chat/rooms/${roomId}/invites/${inviteId}`, { method: "DELETE" }),
     joinByCode: (code: string) =>
       apiFetch<ChatRoom>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+    discussion: (messageId: string) =>
+      apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),

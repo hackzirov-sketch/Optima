@@ -27,15 +27,15 @@ export class RegisterDto {
   @MaxLength(50)
   lastName: string;
 
-  @ApiProperty({ example: 'johndoe' })
+  @ApiPropertyOptional({ example: 'johndoe' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MinLength(3)
   @MaxLength(50)
   @Matches(/^[a-zA-Z0-9_-]+$/, {
     message: 'Username can only contain letters, numbers, underscores and hyphens',
   })
-  username: string;
+  username?: string;
 
   @ApiProperty({ example: 'john@example.com' })
   @IsEmail()

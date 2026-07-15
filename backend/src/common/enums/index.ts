@@ -103,6 +103,7 @@ export enum PushStatus {
 }
 
 export enum ChatRoomType {
+  CHANNEL = 'channel',
   PUBLIC = 'public',
   PRIVATE = 'private',
   WORKSPACE = 'workspace',

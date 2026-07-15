@@ -6,6 +6,7 @@ import {
   Min,
   Max,
   MaxLength,
+  Matches,
   IsEnum,
   IsUrl,
 } from 'class-validator';
@@ -23,6 +24,13 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(50)
   lastName?: string;
+
+  @ApiPropertyOptional({ example: 'johndoe', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Matches(/^[a-zA-Z0-9_-]+$/, { message: 'Username can only contain letters, numbers, underscores and hyphens' })
+  username?: string | null;
 
   @ApiPropertyOptional({ example: 'https://example.com/avatar.jpg' })
   @IsOptional()

@@ -3,8 +3,9 @@ export type UserLanguage = "uz" | "ru" | "en";
 
 export interface User {
   id: string;
+  publicId?: string;
   email: string;
-  username: string;
+  username: string | null;
   firstName: string;
   lastName: string;
   avatarUrl?: string | null;
@@ -59,7 +60,7 @@ export interface WorkspaceMember {
 export interface ChatRoom {
   id: string;
   workspaceId: string;
-  type: "public" | "private" | "workspace" | "project" | "group" | "direct";
+  type: "public" | "private" | "workspace" | "project" | "group" | "direct" | "channel";
   visibility: "public" | "invite_only" | "workspace_only" | "members_only";
   name?: string | null;
   description?: string | null;
@@ -79,6 +80,13 @@ export interface ChatRoom {
     createdAt: string;
   } | null;
   createdAt: string;
+  slug?: string | null;
+  isSystem?: boolean;
+  membershipLocked?: boolean;
+  postingMode?: "members" | "admins_only";
+  linkedRoomId?: string | null;
+  myRole?: "member" | "admin" | "owner";
+  isMuted?: boolean;
 }
 
 export interface RoomInvite {
@@ -117,6 +125,10 @@ export interface ChatMessage {
   createdAt: string;
   reactions?: Array<{ emoji: string; userIds: string[] }>;
   sender?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  sourceChannelMessageId?: string | null;
+  discussionRootMessageId?: string | null;
+  isPinned?: boolean;
+  viewCount?: number;
 }
 
 export interface MeetingParticipant {

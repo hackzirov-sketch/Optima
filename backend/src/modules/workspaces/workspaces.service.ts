@@ -81,21 +81,6 @@ export class WorkspacesService {
         [savedWorkspace.id, userId, WorkspaceRole.OWNER],
       );
 
-      // Create default #general workspace channel. Marked is_public so new
-      // members auto-join it (see invitations.service.ts) — chat_rooms no
-      // longer has a `type` column, so "the workspace-wide channel" is
-      // identified as: this workspace, not scoped to a group/project, public.
-      const savedRoomRows: Array<{ id: string }> = await queryRunner.query(
-        `INSERT INTO chat_rooms (workspace_id, name, is_public, created_by) VALUES ($1, $2, true, $3) RETURNING id`,
-        [savedWorkspace.id, 'general', userId],
-      );
-
-      // Add owner to the channel
-      await queryRunner.query(
-        `INSERT INTO chat_members (room_id, user_id) VALUES ($1, $2)`,
-        [savedRoomRows[0].id, userId],
-      );
-
       await queryRunner.commitTransaction();
       return savedWorkspace;
     } catch (error) {

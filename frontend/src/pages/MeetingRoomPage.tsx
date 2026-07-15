@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Link2, LoaderCircle, Mic, MicOff, MonitorUp, PhoneOff, UsersRound, Video } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Settings2, Signal, Smile, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -10,13 +10,14 @@ import type { Meeting, User, WorkspaceMember } from "../types";
 
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-function VideoTile({ stream, muted, mirrored = false, label, avatar }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl"> }) {
+function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
   return (
     <article className={`video-tile ${mirrored ? "video-tile-mirrored" : ""}`}>
       {stream?.getVideoTracks().some((track) => track.enabled) ? <video ref={ref} autoPlay playsInline muted={muted} /> : <div className="video-placeholder"><Avatar firstName={avatar?.firstName || label} lastName={avatar?.lastName} url={avatar?.avatarUrl} size="xl" /></div>}
       <span className="video-label">{label}</span>
+      {!microphoneOn && <span className="tile-muted" aria-label="Mikrofon o‘chirilgan"><MicOff size={15} /></span>}
     </article>
   );
 }
@@ -30,9 +31,16 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [camera, setCamera] = useState(true);
+  const [camera, setCamera] = useState(() => sessionStorage.getItem(`optima:meeting-camera:${meetingId}`) !== "off");
   const [microphone, setMicrophone] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [previewStream, setPreviewStream] = useState<MediaStream>();
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [cameraDevice, setCameraDevice] = useState("");
+  const [microphoneDevice, setMicrophoneDevice] = useState("");
+  const [permissionError, setPermissionError] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidePanel, setSidePanel] = useState<"participants" | "info" | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "offline">("connecting");
@@ -42,6 +50,26 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const rtcConfig = useRef<RTCConfiguration>(RTC_CONFIG);
   const reconnectAttempts = useRef(new Map<string, number>());
   const sendOfferRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+
+  useEffect(() => {
+    if (entered || (!camera && !microphone)) {
+      previewStream?.getTracks().forEach((track) => track.stop());
+      setPreviewStream(undefined);
+      return;
+    }
+    let cancelled = false;
+    navigator.mediaDevices.getUserMedia({
+      video: camera ? { deviceId: cameraDevice ? { exact: cameraDevice } : undefined } : false,
+      audio: microphone ? { deviceId: microphoneDevice ? { exact: microphoneDevice } : undefined } : false,
+    }).then(async (stream) => {
+      if (cancelled) { stream.getTracks().forEach((track) => track.stop()); return; }
+      setPermissionError("");
+      setPreviewStream((current) => { current?.getTracks().forEach((track) => track.stop()); return stream; });
+      setDevices(await navigator.mediaDevices.enumerateDevices());
+    }).catch(() => setPermissionError("Kamera yoki mikrofon ruxsati berilmadi. Brauzer sozlamalarini tekshiring."));
+    return () => { cancelled = true; };
+  // Device selection intentionally restarts preview.
+  }, [entered, camera, microphone, cameraDevice, microphoneDevice]);
 
   useEffect(() => {
     Promise.all([api.meetings.one(meetingId), workspace ? api.workspaces.members(workspace.id).catch(() => []) : Promise.resolve([])])
@@ -179,14 +207,16 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: kind === "audio",
-      video: kind === "video",
+      audio: kind === "audio" ? { deviceId: microphoneDevice ? { exact: microphoneDevice } : undefined } : false,
+      video: kind === "video" ? { deviceId: cameraDevice ? { exact: cameraDevice } : undefined } : false,
     });
     return stream.getTracks().find((track) => track.kind === kind);
   }
 
   async function enterMeeting() {
     setJoining(true);
+    previewStream?.getTracks().forEach((track) => track.stop());
+    setPreviewStream(undefined);
     try {
       rtcConfig.current = { iceServers: await api.meetings.iceServers() };
     } catch {
@@ -292,10 +322,14 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
 
   if (!entered) return (
     <div className="meeting-lobby">
-      <header><button className="icon-button" onClick={() => navigate("/meetings")} aria-label="Orqaga"><ArrowLeft size={20} /></button><span>Meeting oldidan tekshiruv</span></header>
+      <header><button className="icon-button" onClick={() => navigate("/meetings")} aria-label="Orqaga"><ArrowLeft size={20} /></button><span className="lobby-brand">Optima Meet</span><span className="lobby-secure"><Signal size={15} /> Himoyalangan aloqa</span></header>
       <main>
-        <section className="lobby-preview"><div className="video-placeholder"><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="xl" /></div><div className="lobby-preview-controls"><button className={microphone ? "active" : ""} onClick={() => setMicrophone((value) => !value)} aria-label="Mikrofon">{microphone ? <Mic size={20} /> : <MicOff size={20} />}</button><button className={camera ? "active" : ""} onClick={() => setCamera((value) => !value)} aria-label="Kamera">{camera ? <Camera size={20} /> : <CameraOff size={20} />}</button></div></section>
-        <section className="lobby-details"><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" ? "Jonli" : "Tayyor"}</span><h1>{meeting.title}</h1><p>{meeting.description || "Meetingga qo‘shilishdan oldin kamera va mikrofonni tekshiring."}</p><dl><div><dt>Meeting kodi</dt><dd><code>{meeting.code}</code><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeetingLink()} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button></dd></div><div><dt>Qatnashchilar</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl><Button loading={joining} onClick={() => void enterMeeting()} icon={<Video size={18} />}>Meetingga kirish</Button><small><Check size={14} /> Kirgandan keyin media boshqaruvini o‘zgartira olasiz.</small></section>
+        <section className="lobby-media-column">
+          <div className="lobby-preview"><VideoTile stream={previewStream} muted mirrored label="Siz" avatar={user || undefined} microphoneOn={microphone} /><div className="lobby-preview-controls"><button className={microphone ? "active" : "off"} onClick={() => setMicrophone((value) => !value)} aria-label="Mikrofon">{microphone ? <Mic size={20} /> : <MicOff size={20} />}</button><button className={camera ? "active" : "off"} onClick={() => setCamera((value) => !value)} aria-label="Kamera">{camera ? <Camera size={20} /> : <CameraOff size={20} />}</button><button onClick={() => setSettingsOpen((value) => !value)} aria-label="Qurilma sozlamalari" aria-expanded={settingsOpen}><Settings2 size={20} /></button></div></div>
+          {permissionError && <div className="permission-notice" role="alert"><CameraOff size={18} /><span>{permissionError}</span></div>}
+          {settingsOpen && <div className="device-settings"><label>Kamera<select value={cameraDevice} onChange={(event) => setCameraDevice(event.target.value)}><option value="">Standart kamera</option>{devices.filter((device) => device.kind === "videoinput").map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || "Kamera"}</option>)}</select></label><label>Mikrofon<select value={microphoneDevice} onChange={(event) => setMicrophoneDevice(event.target.value)}><option value="">Standart mikrofon</option>{devices.filter((device) => device.kind === "audioinput").map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || "Mikrofon"}</option>)}</select></label></div>}
+        </section>
+        <section className="lobby-details"><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" ? "Jonli" : "Tayyor"}</span><h1>{meeting.title}</h1><p>{meeting.description || "Meetingga qo‘shilishdan oldin kamera va mikrofonni tekshiring."}</p><div className="lobby-meta"><span><UsersRound size={17} /> {meeting.participantCount} qatnashchi</span><button onClick={() => void shareMeetingLink()}><Link2 size={17} /> Havolani ulashish</button></div><Button loading={joining} onClick={() => void enterMeeting()} icon={<Video size={18} />}>Hozir qo‘shilish</Button><small><Check size={14} /> Kamera va mikrofon holati siz tanlagandek saqlanadi.</small></section>
       </main>
     </div>
   );
@@ -303,13 +337,16 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const remoteEntries = Object.entries(remoteStreams);
   return (
     <div className="meeting-room">
-      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{meeting.code}</small></span></div><div><UsersRound size={17} /><span>{remoteEntries.length + 1}</span></div></header>
+      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
-        <VideoTile stream={localStream} muted mirrored label="Siz" avatar={user || undefined} />
+        <VideoTile stream={localStream} muted mirrored label="Siz" avatar={user || undefined} microphoneOn={microphone} />
         {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); return <VideoTile key={remoteUserId} stream={stream} label={remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"} avatar={remote} />; })}
-        {remoteEntries.length === 0 && <article className="waiting-tile"><UsersRound size={30} /><h2>Boshqalarni kutyapmiz</h2><p>Meeting kodini jamoangizga yuboring.</p><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><code>{meeting.code}</code><Copy size={16} /></button></article>}
+        {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
       </main>
-      <footer className="meeting-controls"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></footer>
+      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? "Qatnashchilar" : "Meeting ma’lumoti"}</strong><small>{sidePanel === "participants" ? `${remoteEntries.length + 1} kishi` : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label="Panelni yopish"><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName} (siz)</strong><small>{meeting.hostId === user?.id ? "Host" : "Qatnashchi"}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : "Qatnashchi"}</strong><small>Meetingda</small></span><MoreVertical size={16} /></div>; })}</div> : <div className="meeting-info-panel"><p>{meeting.description || "Jamoa video suhbati"}</p><label>Meeting kodi<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>Havolani ulashish</Button></div>}</aside>}
+      </div>
+      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button disabled title="Backend ulanishi kutilmoqda" aria-label="Qo‘l ko‘tarish hozircha mavjud emas"><Hand size={21} /></button><button disabled title="Backend ulanishi kutilmoqda" aria-label="Reaksiyalar hozircha mavjud emas"><Smile size={21} /></button><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button><LayoutGrid size={20} /></button><button disabled title="Backend ulanishi kutilmoqda"><MessageSquare size={20} /></button><button><MoreVertical size={20} /></button></div></footer>
     </div>
   );
 }

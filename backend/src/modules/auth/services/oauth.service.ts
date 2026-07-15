@@ -74,13 +74,11 @@ export class OAuthService {
 
     if (!user) {
       const baseUsername = googleUser.email.split('@')[0];
-      const username = await this.generateUniqueUsername(baseUsername);
-
       user = await this.usersService.create({
         email: googleUser.email,
         firstName: googleUser.firstName || baseUsername,
         lastName: googleUser.lastName || '',
-        username,
+        username: null,
         avatarUrl: googleUser.picture,
         isVerified: true,
         passwordHash: null,
@@ -139,12 +137,11 @@ export class OAuthService {
       user = await this.usersService.findByEmail(email);
 
       if (!user) {
-        const username = await this.generateUniqueUsername(githubUser.username || `github_user_${githubUser.githubId}`);
         user = await this.usersService.create({
           email,
-          firstName: githubUser.firstName || username,
+          firstName: githubUser.firstName || githubUser.username || 'GitHub user',
           lastName: githubUser.lastName || '',
-          username,
+          username: null,
           avatarUrl: githubUser.avatarUrl,
           isVerified: true,
           passwordHash: null,

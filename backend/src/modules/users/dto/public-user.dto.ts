@@ -5,13 +5,16 @@ export class PublicUserDto {
   id: string;
 
   @ApiProperty()
+  publicId: string;
+
+  @ApiProperty()
   firstName: string;
 
   @ApiProperty()
   lastName: string;
 
   @ApiProperty()
-  username: string;
+  username: string | null;
 
   @ApiProperty({ nullable: true })
   avatarUrl: string | null;

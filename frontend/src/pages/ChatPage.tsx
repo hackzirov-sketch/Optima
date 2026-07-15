@@ -1,5 +1,6 @@
-import { ArrowLeft, Check, CheckCheck, Copy, Hash, Link2, LoaderCircle, MailPlus, MessageCircle, Mic, Plus, Search, Send, Smile, Square, Trash2, UserPlus, UserRound, UsersRound, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, Mic, MoreVertical, Paperclip, Pencil, Phone, Pin, Plus, Reply, Search, Send, Smile, Square, Trash2, UserPlus, UserRound, UsersRound, Video, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
@@ -34,11 +35,17 @@ const quickEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👏", "✅", "�
 export function ChatPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
+  const [, navigate] = useLocation();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
   const [search, setSearch] = useState("");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [startingCall, setStartingCall] = useState<"audio" | "video" | null>(null);
+  const [catalog, setCatalog] = useState<"all" | "direct" | "group" | "channel" | "bot">("all");
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -47,6 +54,11 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"group" | "direct">("group");
@@ -63,6 +75,8 @@ export function ChatPage() {
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
+  const messageList = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
@@ -95,12 +109,18 @@ export function ChatPage() {
 
   async function loadRooms(preferredId?: string) {
     if (!workspace) return;
-    const [nextRooms, nextMembers] = await Promise.all([api.chat.rooms(workspace.id), api.workspaces.members(workspace.id)]);
-    setRooms(nextRooms);
+    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(workspace.id), api.workspaces.members(workspace.id), api.chat.community()]);
+    const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
+      ...room!, memberIds: room!.memberIds || [], memberProfiles: room!.memberProfiles || [],
+      unreadCount: room!.unreadCount || 0, memberCount: room!.memberCount || 0,
+      isReadOnly: room!.isReadOnly || false, memberStatus: "active" as const,
+    }));
+    const mergedRooms = [...systemRooms, ...nextRooms.filter((room) => !systemRooms.some((system) => system.id === room.id))];
+    setRooms(mergedRooms);
     setMembers(nextMembers);
     const target = preferredId || selectedId;
-    if (target && nextRooms.some((room) => room.id === target)) setSelectedId(target);
-    else if (nextRooms[0]) chooseRoom(nextRooms[0].id);
+    if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
+    else if (mergedRooms[0]) chooseRoom(mergedRooms[0].id);
     setLoadingRooms(false);
   }
 
@@ -155,6 +175,20 @@ export function ChatPage() {
       if (data.roomId !== selectedId || data.userId === user?.id) return;
       setTypingUsers((current) => data.typing ? [...new Set([...current, data.userId])] : current.filter((id) => id !== data.userId));
     };
+    const onReaction = (data: { roomId: string; messageId: string; emoji: string; userId: string; action: "added" | "removed" }) => {
+      if (data.roomId !== selectedId) return;
+      setMessages((current) => current.map((item) => {
+        if (item.id !== data.messageId) return item;
+        const reactions = [...(item.reactions || [])];
+        const index = reactions.findIndex((reaction) => reaction.emoji === data.emoji);
+        const userIds = index >= 0 ? reactions[index].userIds : [];
+        const nextIds = data.action === "added" ? [...new Set([...userIds, data.userId])] : userIds.filter((id) => id !== data.userId);
+        if (!nextIds.length && index >= 0) reactions.splice(index, 1);
+        else if (index >= 0) reactions[index] = { emoji: data.emoji, userIds: nextIds };
+        else reactions.push({ emoji: data.emoji, userIds: nextIds });
+        return { ...item, reactions };
+      }));
+    };
     const onError = (data: { code?: string; message?: string }) => {
       if (data?.code) show(data.message || "Real-time xatolik", "error");
     };
@@ -162,6 +196,7 @@ export function ChatPage() {
     socket.on("disconnect", onDisconnect);
     socket.on("new_message", onMessage);
     socket.on("typing", onTyping);
+    socket.on("reaction_updated", onReaction);
     socket.on("error", onError);
     if (socket.connected) onConnect();
     return () => {
@@ -169,6 +204,7 @@ export function ChatPage() {
       socket.off("disconnect", onDisconnect);
       socket.off("new_message", onMessage);
       socket.off("typing", onTyping);
+      socket.off("reaction_updated", onReaction);
       socket.off("error", onError);
     };
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -214,6 +250,17 @@ export function ChatPage() {
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !selectedRoom) return;
+    if (editing) {
+      try {
+        const updated = await api.chat.editMessage(editing.id, content);
+        setMessages((current) => current.map((item) => item.id === editing.id ? updated : item));
+        setDraft("");
+        setEditing(null);
+      } catch (error) {
+        show(error instanceof Error ? error.message : "Xabar tahrirlanmadi", "error");
+      }
+      return;
+    }
     setDraft("");
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
@@ -221,6 +268,7 @@ export function ChatPage() {
       roomId: selectedRoom.id,
       senderId: user!.id,
       content,
+      replyToId: replyingTo?.id || null,
       clientMessageId,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -232,21 +280,82 @@ export function ChatPage() {
     try {
       if (socket.connected) {
         await new Promise<void>((resolve, reject) => {
-          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId }, (error: Error | null) => error ? reject(error) : resolve());
+          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve());
         });
       } else {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       }
     } catch {
       try {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
         setMessages((current) => current.filter((item) => item.clientMessageId !== clientMessageId));
         setDraft(content);
         show(error instanceof Error ? error.message : "Xabar yuborilmadi", "error");
       }
+    }
+    setReplyingTo(null);
+  }
+
+  async function deleteMessage(message: ChatMessage) {
+    setActiveMenu(null);
+    try {
+      await api.chat.deleteMessage(message.id);
+      setMessages((current) => current.filter((item) => item.id !== message.id));
+      show("Xabar o‘chirildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Xabar o‘chirilmadi", "error");
+    }
+  }
+
+  async function reactToMessage(message: ChatMessage, emoji: string) {
+    setActiveMenu(null);
+    try {
+      const socket = getSocket();
+      if (!socket.connected) throw new Error("Real-time aloqa mavjud emas");
+      socket.emit("add_reaction", { roomId: message.roomId, messageId: message.id, emoji });
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Reaction qo‘shilmadi", "error");
+    }
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!selectedRoom || uploading) return;
+    setUploading(true);
+    try {
+      const signed = await api.chat.presignAttachment(selectedRoom.id, file);
+      const upload = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
+      if (!upload.ok) throw new Error("Fayl yuklanmadi");
+      const attachment = { storageKey: signed.storageKey, storageUrl: signed.storageUrl, fileName: file.name, fileSize: file.size, mimeType: file.type || "application/octet-stream" };
+      const socket = getSocket();
+      await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId: crypto.randomUUID(), attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
+      setDraft("");
+      setReplyingTo(null);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Fayl yuborilmadi", "error");
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function startCall(kind: "audio" | "video") {
+    if (!workspace || !selectedRoom || startingCall) return;
+    setStartingCall(kind);
+    try {
+      const meeting = await api.meetings.create(workspace.id, {
+        title: roomTitle(selectedRoom),
+        description: `${roomTitle(selectedRoom)} suhbati`,
+        startTime: new Date().toISOString(),
+        maxParticipants: Math.max(2, selectedRoom.memberCount + 2),
+      });
+      sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
+      navigate(`/meetings/${meeting.id}`);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Qo‘ng‘iroq boshlanmadi", "error");
+      setStartingCall(null);
     }
   }
 
@@ -424,7 +533,41 @@ export function ChatPage() {
     }
   }
 
-  const filteredRooms = rooms.filter((room) => roomTitle(room).toLowerCase().includes(search.toLowerCase()));
+  const roomCatalog = (room: ChatRoom) => {
+    if (room.type === "direct") return "direct";
+    if (room.type === "group" || room.type === "private") return "group";
+    return "channel";
+  };
+  async function openDiscussion(messageId: string) {
+    try {
+      const discussion = await api.chat.discussion(messageId);
+      chooseRoom(discussion.roomId);
+      window.setTimeout(() => document.getElementById(`message-${discussion.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Muhokama ochilmadi", "error");
+    }
+  }
+  async function toggleChannelMute() {
+    if (!selectedRoom) return;
+    try {
+      const result = await api.chat.mute(selectedRoom.id, !selectedRoom.isMuted);
+      setRooms((current) => current.map((room) => room.id === selectedRoom.id ? { ...room, isMuted: result.isMuted } : room));
+      show(result.isMuted ? "Kanal ovozsiz qilindi" : "Kanal ovozi yoqildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Sozlama saqlanmadi", "error");
+    }
+  }
+  const catalogItems = [
+    { id: "all" as const, label: "Barchasi", icon: MessageCircle, count: rooms.length },
+    { id: "direct" as const, label: "Shaxsiy", icon: UserRound, count: rooms.filter((room) => roomCatalog(room) === "direct").length },
+    { id: "group" as const, label: "Guruhlar", icon: UsersRound, count: rooms.filter((room) => roomCatalog(room) === "group").length },
+    { id: "channel" as const, label: "Kanallar", icon: Megaphone, count: rooms.filter((room) => roomCatalog(room) === "channel").length },
+    { id: "bot" as const, label: "Botlar", icon: Bot, count: 0 },
+  ];
+  const filteredRooms = rooms.filter((room) => (catalog === "all" || roomCatalog(room) === catalog) && roomTitle(room).toLowerCase().includes(search.toLowerCase()));
+  const visibleMessages = messageSearch.trim()
+    ? messages.filter((message) => `${message.content} ${message.attachments?.map((attachment) => attachment.fileName).join(" ") || ""}`.toLowerCase().includes(messageSearch.trim().toLowerCase()))
+    : messages;
   const availableMembers = members.map(memberUser).filter((member) => member.id !== user?.id);
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
@@ -435,14 +578,17 @@ export function ChatPage() {
       <aside className="chat-sidebar">
         <header className="chat-sidebar-header"><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
+        <nav className="chat-catalog" aria-label="Chat kataloglari">
+          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
+        </nav>
         <div className="room-list">
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-          {!loadingRooms && filteredRooms.length === 0 && <div className="sidebar-empty"><MessageCircle size={22} /><p>Suhbat topilmadi</p><button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button></div>}
+          {!loadingRooms && filteredRooms.length === 0 && <div className="sidebar-empty">{catalog === "bot" ? <Bot size={22} /> : catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "bot" ? "Botlar hali ulanmagan" : catalog === "channel" ? "Kanal topilmadi" : "Suhbat topilmadi"}</p>{catalog !== "bot" && <button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button>}</div>}
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
               <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)}>
-                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : <span className="room-avatar"><Hash size={17} /></span>}
+                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : <span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : <Hash size={17} />}</span>}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? "Taklif kutilmoqda" : "Hali xabar yo‘q")}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
@@ -457,36 +603,45 @@ export function ChatPage() {
           <>
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish"><ArrowLeft size={20} /></button>
-              <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : <Hash size={16} />}</span>
-              <div><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : `${selectedRoom.memberCount} a’zo`}</p></div>
-              {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (
-                <button className="icon-button" onClick={() => void openRoomInvites()} aria-label="Guruh taklif havolalari" title="Guruhga taklif"><UserPlus size={19} /></button>
-              )}
+              <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>
+              <div className="conversation-title"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></div>
+              <div className="conversation-tools">
+                <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
+                <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall)} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
+                <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall)} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button></div>}</div>}
+              </div>
             </header>
+            {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}
             {selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>Suhbatga taklif</h3><p>Yozishishni boshlash uchun taklifni qabul qiling.</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>Qabul qilish</Button></div>
             ) : (
               <>
-                <div className="message-list" aria-live="polite">
+                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 220); }}>
                   {loadingMessages && <div className="center-loader"><LoaderCircle className="spin" size={24} /></div>}
-                  {!loadingMessages && messages.length === 0 && <div className="message-empty"><span><MessageCircle size={24} /></span><h3>Suhbatni boshlang</h3><p>Birinchi xabarni yuboring.</p></div>}
-                  {messages.map((message, index) => {
+                  {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? "Xabar topilmadi" : "Suhbatni boshlang"}</h3><p>{messageSearch ? "Boshqa so‘z bilan qidirib ko‘ring." : "Birinchi xabarni yuboring."}</p></div>}
+                  {visibleMessages.map((message, index) => {
                     const mine = message.senderId === user?.id;
                     const sender = message.sender || memberMap.get(message.senderId);
-                    const previous = messages[index - 1];
+                    const previous = visibleMessages[index - 1];
                     const showDay = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
                     const grouped = previous?.senderId === message.senderId && !showDay;
                     return (
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
-                        <div className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`}>
+                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`}>
                           {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
+                            {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || "Javob berilgan xabar"}</span></button>}
                             {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : "Jamoa a’zosi"}</strong>}
                             {message.content && <p>{message.content}</p>}
-                            {message.attachments?.filter((attachment) => attachment.mimeType.startsWith("audio/")).map((attachment) => <audio key={attachment.id || attachment.url} className="voice-message" controls preload="metadata" src={attachment.url} aria-label="Audio xabar" />)}
-                            <span><time>{formatTime(message.createdAt)}</time>{mine && <CheckCheck size={14} />}</span>
+                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <audio key={attachment.id || attachment.url} className="voice-message" controls preload="metadata" src={attachment.url} aria-label="Audio xabar" /> : attachment.mimeType.startsWith("image/") ? <a className="message-image" key={attachment.id || attachment.url} href={attachment.url} target="_blank" rel="noreferrer"><img src={attachment.url} alt={attachment.fileName} /></a> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB</small></span><Download size={17} /></a>)}
+                            {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
+                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
+                            {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}
+                            <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label="Xabar amallari" aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
+                            {activeMenu === message.id && <div className="message-context-menu" role="menu"><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
                           </div>
                         </div>
                       </div>
@@ -494,12 +649,16 @@ export function ChatPage() {
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
+                  {showScrollButton && <button className="scroll-bottom" onClick={() => messagesEnd.current?.scrollIntoView({ behavior: "smooth" })} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
                 </div>
-                <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                {selectedRoom.slug === "otima-community" && user?.publicId !== "100000003" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? "Unmute" : "Mute"}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
                   <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
+                  <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
+                  {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label="Fayl biriktirish">{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
                   {recording ? <div className="recording-status"><i /><strong>Audio yozilmoqda</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label="Yozuvni bekor qilish"><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder="Xabar yozing" rows={1} maxLength={1500} aria-label="Xabar matni" />}
                   {draft.trim() && !recording ? <button className="send-button" onClick={() => void sendMessage()} disabled={sending} aria-label="Xabarni yuborish">{sending ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> : <button className={`send-button voice-button ${recording ? "recording" : ""}`} onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending} aria-label={recording ? "Audio xabarni yuborish" : "Audio xabar yozish"}>{sending ? <LoaderCircle className="spin" size={19} /> : recording ? <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
-                </div>
+                </div>}
               </>
             )}
           </>

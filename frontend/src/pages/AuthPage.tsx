@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Crown, Eye, EyeOff, Github, LoaderCircle, LockKeyhole, Mail, PlayCircle, ShieldCheck, UsersRound, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Github, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UsersRound, Video } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, oauthStartUrl, type OAuthProvider } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -53,24 +53,6 @@ export function AuthPage() {
   const { login, completeAuth, completeOAuth } = useAuth();
   const { show } = useToast();
   const callbackStarted = useRef(false);
-  const showDemoAccess = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO === "true";
-
-  async function enterDemo(kind: "demo" | "premium") {
-    if (loading) return;
-    setLoading(true);
-    setError("");
-    try {
-      const email = kind === "premium"
-        ? "premium-demo-1783843698@optima.local"
-        : "realtime-qa@optima.local";
-      await login(email, "OptimaDemo9!");
-      show(kind === "premium" ? "Premium demo ochildi" : "Demo ochildi");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Demo ochilmadi");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
     if (window.location.pathname !== "/auth/callback" || callbackStarted.current) return;
@@ -152,7 +134,7 @@ export function AuthPage() {
       const result = await api.auth.register({
         firstName: String(data.get("firstName") || "").trim(),
         lastName: String(data.get("lastName") || "").trim(),
-        username: String(data.get("username") || "").trim(),
+        ...(String(data.get("username") || "").trim() ? { username: String(data.get("username") || "").trim() } : {}),
         email,
         password,
         occupation: String(data.get("occupation") || "other"),
@@ -295,18 +277,6 @@ export function AuthPage() {
 
           {mode === "login" && (
             <form className="auth-form" onSubmit={submitLogin}>
-              {showDemoAccess && (
-                <div className="demo-access" aria-label="Demo ko‘rinishlar">
-                  <button type="button" onClick={() => void enterDemo("demo")} disabled={loading}>
-                    <PlayCircle size={18} aria-hidden="true" />
-                    <span><strong>Demo</strong><small>Asosiy MVP</small></span>
-                  </button>
-                  <button type="button" className="premium" onClick={() => void enterDemo("premium")} disabled={loading}>
-                    <Crown size={18} aria-hidden="true" />
-                    <span><strong>Premium demo</strong><small>To‘liq ma’lumotlar</small></span>
-                  </button>
-                </div>
-              )}
               <SocialAuthButtons disabled={loading} />
               <div className="auth-divider"><span>yoki</span></div>
               <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
@@ -322,7 +292,7 @@ export function AuthPage() {
               <SocialAuthButtons disabled={loading} />
               <div className="auth-divider"><span>yoki</span></div>
               <div className="form-grid-2"><label>Ism<input name="firstName" autoComplete="given-name" required maxLength={50} /></label><label>Familiya<input name="lastName" autoComplete="family-name" required maxLength={50} /></label></div>
-              <label>Username<input name="username" autoComplete="username" placeholder="ahmad_dev" pattern="[A-Za-z0-9_-]{3,50}" required /></label>
+              <label>Username <small>Ixtiyoriy</small><input name="username" autoComplete="username" placeholder="ahmad_dev" pattern="[A-Za-z0-9_-]{3,50}" /></label>
               <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
               <label>Kasbingiz<select name="occupation" defaultValue="developer"><option value="developer">Dasturchi</option><option value="designer">Dizayner</option><option value="project_manager">Project manager</option><option value="freelancer">Freelancer</option><option value="student">Talaba</option><option value="other">Boshqa</option></select></label>
               <label>Parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} placeholder="Kamida 8 belgi" required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Parolni ko‘rsatish"><Eye size={18} /></button></span><small>1 katta harf, 1 kichik harf, raqam va maxsus belgi.</small></label>

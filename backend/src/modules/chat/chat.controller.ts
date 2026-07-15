@@ -18,6 +18,7 @@ import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
+import { CommunityService } from './services/community.service';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -31,7 +32,61 @@ export class ChatController {
     private readonly roomInviteService: ChatRoomInviteService,
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
+    private readonly communityService: CommunityService,
   ) {}
+
+  @Get('chat/community')
+  @ApiOperation({ summary: 'Get mandatory OTIMA community channel and discussion group' })
+  community(@CurrentUser('id') userId: string) {
+    return this.communityService.overview(userId);
+  }
+
+  @Patch('chat/rooms/:roomId/mute')
+  @ApiOperation({ summary: 'Mute or unmute room notifications' })
+  muteRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string, @Body('muted') muted: boolean) {
+    return this.memberService.setMuted(roomId, userId, Boolean(muted));
+  }
+
+  @Get('chat/rooms/:roomId/members')
+  @ApiOperation({ summary: 'List room members with privacy-safe profile fields' })
+  roomMembers(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('q') query?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.listMembers(roomId, userId, query, Number(page) || 1, Number(limit) || 30);
+  }
+
+  @Get('chat/rooms/:roomId/shared')
+  @ApiOperation({ summary: 'List server-filtered shared content' })
+  sharedContent(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.shared(roomId, userId, kind, cursor, Number(limit) || 30);
+  }
+
+  @Post('chat/community/posts/:messageId/discussion')
+  @ApiOperation({ summary: 'Open or create the unique group discussion for a channel post' })
+  postDiscussion(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    return this.communityService.getOrCreateDiscussion(messageId, userId);
+  }
+
+  @Patch('chat/system/:roomId/members/:username/role')
+  @ApiOperation({ summary: 'Change a system channel/group member role (admin only)' })
+  systemMemberRole(
+    @Param('roomId') roomId: string,
+    @Param('username') username: string,
+    @CurrentUser('id') userId: string,
+    @Body('role') role: 'member' | 'admin',
+  ) {
+    return this.communityService.updateMemberRole(roomId, username, role, userId);
+  }
 
   @Get('workspaces/:workspaceId/chat/rooms')
   @ApiOperation({ summary: 'List chat rooms for workspace (membership)' })

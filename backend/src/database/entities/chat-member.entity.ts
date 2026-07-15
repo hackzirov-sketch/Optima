@@ -30,6 +30,15 @@ export class ChatMember {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ length: 20, default: 'member' })
+  role: 'member' | 'admin' | 'owner';
+
+  @Column({ name: 'is_banned', default: false })
+  isBanned: boolean;
+
+  @Column({ name: 'banned_until', type: 'timestamptz', nullable: true })
+  bannedUntil: Date | null;
+
   @Column({ name: 'is_muted', default: false })
   isMuted: boolean;
 

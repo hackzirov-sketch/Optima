@@ -48,6 +48,21 @@ export class ChatRoom {
   })
   type: ChatRoomType;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  slug: string | null;
+
+  @Column({ name: 'is_system', default: false })
+  isSystem: boolean;
+
+  @Column({ name: 'membership_locked', default: false })
+  membershipLocked: boolean;
+
+  @Column({ name: 'posting_mode', length: 20, default: 'members' })
+  postingMode: 'members' | 'admins_only';
+
+  @Column({ name: 'linked_room_id', type: 'uuid', nullable: true })
+  linkedRoomId: string | null;
+
   @Column({
     type: 'enum',
     enum: ChatVisibility,

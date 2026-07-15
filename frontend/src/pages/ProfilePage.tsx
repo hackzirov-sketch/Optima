@@ -1,4 +1,4 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Laptop, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Copy, Globe2, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -55,6 +55,7 @@ export function ProfilePage() {
       await api.users.update({
         firstName: String(data.get("firstName") || "").trim(),
         lastName: String(data.get("lastName") || "").trim(),
+        username: String(data.get("username") || "").trim() || null,
         occupation: String(data.get("occupation") || "other"),
         language: String(data.get("language") || "uz") as "uz" | "ru" | "en",
         timezone: String(data.get("timezone") || "Asia/Tashkent"),
@@ -68,6 +69,17 @@ export function ProfilePage() {
       setSaving(false);
     }
   }
+
+  async function copyProfileValue(value: string, success: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      show(success);
+    } catch {
+      show("Nusxalab bo‘lmadi", "error");
+    }
+  }
+
+  const profilePath = user?.username ? `/u/${user.username}` : `/user/${user?.publicId || ""}`;
 
   async function uploadAvatar(file?: File) {
     if (!file) return;
@@ -117,7 +129,8 @@ export function ProfilePage() {
           <div className="profile-cover"><span>{workspace?.name}</span></div>
           <div className="profile-avatar-wrap"><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="xl" /><span className="presence-badge" /></div>
           <h2>{user?.firstName} {user?.lastName}</h2>
-          <p>@{user?.username}</p>
+          <p>{user?.username ? `@${user.username}` : "Username o‘rnatilmagan"}</p>
+          <div className="public-id-block"><span>ID: <strong>{user?.publicId}</strong></span><button className="icon-button" onClick={() => user?.publicId && void copyProfileValue(user.publicId, "ID nusxalandi")} aria-label="User ID ni nusxalash"><Copy size={16} /></button><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), "Profil havolasi nusxalandi")} aria-label="Profil havolasini nusxalash"><Link2 size={16} /></button></div>
           <span className="role-badge">{user?.occupation?.replace(/_/g, " ") || "Jamoa a’zosi"}</span>
           <dl className="profile-meta"><div><Mail size={16} /><span><small>Email</small><strong>{user?.email}</strong></span></div><div><MapPin size={16} /><span><small>Vaqt hududi</small><strong>{user?.timezone || "Asia/Tashkent"}</strong></span></div><div><ShieldCheck size={16} /><span><small>Hisob</small><strong>Tasdiqlangan</strong></span></div></dl>
           <Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>Hisobdan chiqish</Button>
@@ -137,6 +150,7 @@ export function ProfilePage() {
                 </label>
               </div>
               <div className="form-grid-2"><label>Ism<input name="firstName" defaultValue={user?.firstName} maxLength={50} required /></label><label>Familiya<input name="lastName" defaultValue={user?.lastName} maxLength={50} required /></label></div>
+              <label>Username <small>Ixtiyoriy, keyin o‘zgartirish mumkin</small><input name="username" defaultValue={user?.username || ""} placeholder="ahmadjon" pattern="[A-Za-z0-9_-]{3,50}" /></label>
               <div className="form-grid-2"><label>Kasb<select name="occupation" defaultValue={user?.occupation || "other"}>{occupationOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Telefon<input name="phoneNumber" inputMode="numeric" defaultValue={user?.phoneNumber || ""} placeholder="998901234567" /></label></div>
               <div className="form-grid-2"><label>Til<select name="language" defaultValue={user?.language || "uz"}><option value="uz">O‘zbekcha</option><option value="ru">Русский</option><option value="en">English</option></select></label><label>Vaqt hududi<select name="timezone" defaultValue={user?.timezone || "Asia/Tashkent"}><option value="Asia/Tashkent">Tashkent (UTC+5)</option><option value="Asia/Almaty">Almaty (UTC+5)</option><option value="Europe/Moscow">Moscow (UTC+3)</option><option value="UTC">UTC</option></select></label></div>
               <div className="settings-actions"><Button type="submit" loading={saving} icon={<Save size={17} />}>O‘zgarishlarni saqlash</Button></div>

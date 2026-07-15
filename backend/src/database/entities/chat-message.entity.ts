@@ -80,4 +80,16 @@ export class ChatMessage {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata!: any;
+
+  @Column({ name: 'source_channel_message_id', type: 'uuid', nullable: true })
+  sourceChannelMessageId!: string | null;
+
+  @Column({ name: 'discussion_root_message_id', type: 'uuid', nullable: true })
+  discussionRootMessageId!: string | null;
+
+  @Column({ name: 'is_pinned', default: false })
+  isPinned!: boolean;
+
+  @Column({ name: 'view_count', type: 'int', default: 0 })
+  viewCount!: number;
 }
