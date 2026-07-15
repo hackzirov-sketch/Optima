@@ -389,13 +389,25 @@ export class ChatRoomService {
         });
     }
 
+    // Derive type from the scoping fields where it's unambiguous, rather than
+    // trusting dto.type outright — group_id/project_id/targetUserId are the
+    // real source of truth, so a client sending a mismatched type can't drift
+    // the stored value away from what the room actually is.
+    const derivedType = dto.targetUserId
+      ? ChatRoomType.DIRECT
+      : dto.groupId
+        ? ChatRoomType.GROUP
+        : dto.projectId
+          ? ChatRoomType.PROJECT
+          : dto.type;
+
     const savedRows: ChatRoom[] = await this.dataSource.query(
       `INSERT INTO chat_rooms (workspace_id, type, visibility, name, group_id, project_id, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
       [
         workspaceId,
-        dto.type,
+        derivedType,
         dto.visibility ?? ChatVisibility.MEMBERS_ONLY,
         dto.name ?? null,
         dto.groupId ?? null,

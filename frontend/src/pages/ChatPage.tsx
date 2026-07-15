@@ -2,7 +2,7 @@ import { ArrowLeft, Check, CheckCheck, Copy, Hash, Link2, LoaderCircle, MailPlus
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
@@ -362,7 +362,11 @@ export function ChatPage() {
       setWorkspaceInviteOpen(false);
       show("Workspace taklifi emailga yuborildi");
     } catch (error) {
-      show(error instanceof Error ? error.message : "Taklif yuborilmadi", "error");
+      if (error instanceof ApiError && error.code === "ALREADY_MEMBER") {
+        show("Bu foydalanuvchi allaqachon workspace a'zosi", "error");
+      } else {
+        show(error instanceof Error ? error.message : "Taklif yuborilmadi", "error");
+      }
     } finally {
       setInvitingWorkspace(false);
     }
