@@ -46,7 +46,7 @@ export function App() {
 
   return (
     <AppShell>
-      <div className="route-transition" key={location}>
+      <div className="route-transition">
         <Switch>
           <Route path="/" component={DashboardPage} />
           <Route path="/chat" component={ChatPage} />
