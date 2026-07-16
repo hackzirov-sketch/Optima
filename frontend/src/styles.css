@@ -1174,3 +1174,14 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .message { max-width: 88%; }
   .chat-home-back { display: grid; }
 }
+
+:root[data-theme="dark"] .chat-catalog button.active,
+:root[data-theme="dark"] .chat-catalog button:hover {
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme="dark"] .chat-catalog .catalog-indicator {
+  border-color: rgba(186,198,234,.18);
+  background: color-mix(in srgb, #7387C8 68%, #182238);
+  box-shadow: 0 8px 20px rgba(0,0,0,.22);
+}
