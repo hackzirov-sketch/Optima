@@ -107,6 +107,7 @@ export function ChatPage() {
 
   function chooseRoom(id: string) {
     setSelectedId(id);
+    setRooms((current) => current.map((room) => room.id === id ? { ...room, unreadCount: 0 } : room));
     window.history.replaceState({}, "", `/chat?room=${id}`);
   }
 
@@ -263,6 +264,15 @@ export function ChatPage() {
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: messages.length > 10 ? "smooth" : "auto" });
   }, [messages, typingUsers]);
+
+  useEffect(() => {
+    if (!selectedId || !messages.length) return;
+    const latest = messages[messages.length - 1];
+    if (latest.id.startsWith("optimistic:")) return;
+    setRooms((current) => current.map((room) => room.id === selectedId ? { ...room, unreadCount: 0 } : room));
+    const socket = getSocket();
+    if (socket.connected) socket.emit("message_read", { roomId: selectedId, messageId: latest.id });
+  }, [messages, selectedId]);
 
   useEffect(() => {
     const query = memberSearch.trim();

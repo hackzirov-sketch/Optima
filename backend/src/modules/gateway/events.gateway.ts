@@ -443,13 +443,26 @@ export class EventsGateway
 
   // ─── Message read receipt ────────────────────────────
   @SubscribeMessage('message_read')
-  handleMessageRead(
+  async handleMessageRead(
     @MessageBody() data: { roomId: string; messageId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
     if (!client.rooms.has(`room:${data.roomId}`)) return;
+
+    const updated = await this.dataSource.query(
+      `UPDATE chat_members cm
+       SET last_read_seq = GREATEST(cm.last_read_seq, m.sequence),
+           last_read_message_id = m.id::text,
+           last_read_at = now()
+       FROM chat_messages m
+       WHERE cm.room_id = $1 AND cm.user_id = $2
+         AND cm.left_at IS NULL AND m.id = $3 AND m.room_id = $1
+       RETURNING cm.last_read_seq AS "lastReadSeq"`,
+      [data.roomId, userId, data.messageId],
+    );
+    if (!updated.length) return;
 
     client.to(`room:${data.roomId}`).emit('message_read', {
       userId,
