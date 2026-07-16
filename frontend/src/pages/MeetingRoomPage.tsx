@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Settings2, Signal, Smile, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Pin, Settings2, Signal, Smile, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -10,13 +10,15 @@ import type { Meeting, User, WorkspaceMember } from "../types";
 
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean }) {
+function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, pinned = false, handRaised = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; pinned?: boolean; handRaised?: boolean; onPin?: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
   return (
-    <article className={`video-tile ${mirrored ? "video-tile-mirrored" : ""}`}>
+    <article className={`video-tile ${mirrored ? "video-tile-mirrored" : ""} ${pinned ? "video-tile-pinned" : ""}`}>
       {stream?.getVideoTracks().some((track) => track.enabled) ? <video ref={ref} autoPlay playsInline muted={muted} /> : <div className="video-placeholder"><Avatar firstName={avatar?.firstName || label} lastName={avatar?.lastName} url={avatar?.avatarUrl} size="xl" /></div>}
       <span className="video-label">{label}</span>
+      {handRaised && <span className="tile-hand" title="Qo'l ko'tarilgan"><Hand size={16} /></span>}
+      {onPin && <button className={`tile-pin ${pinned ? "active" : ""}`} onClick={onPin} aria-label={pinned ? "Videoni bo'shatish" : "Videoni mahkamlash"}><Pin size={15} /></button>}
       {!microphoneOn && <span className="tile-muted" aria-label="Mikrofon o‘chirilgan"><MicOff size={15} /></span>}
     </article>
   );
@@ -42,6 +44,11 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const [permissionError, setPermissionError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidePanel, setSidePanel] = useState<"participants" | "info" | null>(null);
+  const [handRaised, setHandRaised] = useState(false);
+  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
+  const [reactionOpen, setReactionOpen] = useState(false);
+  const [reactions, setReactions] = useState<Array<{ id: string; userId: string; emoji: string }>>([]);
+  const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "offline">("connecting");
@@ -183,6 +190,11 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       else iceQueue.current.set(fromUserId, [...(iceQueue.current.get(fromUserId) || []), candidate]);
     };
     const onLeft = ({ userId }: { userId: string }) => closePeer(userId);
+    const onHand = ({ userId, raised }: { userId: string; raised: boolean }) => setRaisedHands((current) => { const next = new Set(current); if (raised) next.add(userId); else next.delete(userId); return next; });
+    const onReaction = (reaction: { id: string; userId: string; emoji: string }) => {
+      setReactions((current) => [...current, reaction]);
+      window.setTimeout(() => setReactions((current) => current.filter((item) => item.id !== reaction.id)), 3200);
+    };
     const onMeetingError = ({ message }: { message: string }) => { show(message || "Meetingga qo‘shilib bo‘lmadi", "error"); setEntered(false); };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -192,6 +204,8 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     socket.on("meeting:answer", onAnswer);
     socket.on("meeting:ice-candidate", onIce);
     socket.on("meeting:user-left", onLeft);
+    socket.on("meeting:hand", onHand);
+    socket.on("meeting:reaction", onReaction);
     socket.on("meeting:error", onMeetingError);
     if (socket.connected) onConnect();
     return () => {
@@ -203,6 +217,8 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       socket.off("meeting:answer", onAnswer);
       socket.off("meeting:ice-candidate", onIce);
       socket.off("meeting:user-left", onLeft);
+      socket.off("meeting:hand", onHand);
+      socket.off("meeting:reaction", onReaction);
       socket.off("meeting:error", onMeetingError);
     };
   }, [entered, meetingId, sendOffer, createPeer, flushIce, closePeer, show]);
@@ -342,6 +358,18 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     navigate("/meetings");
   }
 
+  function toggleHand() {
+    const raised = !handRaised;
+    setHandRaised(raised);
+    setRaisedHands((current) => { const next = new Set(current); if (user?.id) { if (raised) next.add(user.id); else next.delete(user.id); } return next; });
+    getSocket().emit("meeting:hand", { meetingId, raised });
+  }
+
+  function sendReaction(emoji: string) {
+    setReactionOpen(false);
+    getSocket().emit("meeting:reaction", { meetingId, emoji });
+  }
+
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
 
   if (loading) return <div className="meeting-room-loading"><LoaderCircle className="spin" size={26} /><p>Meeting tayyorlanmoqda...</p></div>;
@@ -367,13 +395,14 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
-        <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} />
-        {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); return <VideoTile key={remoteUserId} stream={stream} label={remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"} avatar={remote} />; })}
+        <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => setPinnedUserId((current) => current === user?.id ? null : user?.id || null)} />
+        {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); return <VideoTile key={remoteUserId} stream={stream} label={remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"} avatar={remote} pinned={pinnedUserId === remoteUserId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
         {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
       </main>
       {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? "Qatnashchilar" : "Meeting ma’lumoti"}</strong><small>{sidePanel === "participants" ? `${remoteEntries.length + 1} kishi` : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label="Panelni yopish"><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName} (siz)</strong><small>{meeting.hostId === user?.id ? "Host" : "Qatnashchi"}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : "Qatnashchi"}</strong><small>Meetingda</small></span><MoreVertical size={16} /></div>; })}</div> : <div className="meeting-info-panel"><p>{meeting.description || "Jamoa video suhbati"}</p><label>Meeting kodi<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>Havolani ulashish</Button></div>}</aside>}
       </div>
-      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button disabled title="Backend ulanishi kutilmoqda" aria-label="Qo‘l ko‘tarish hozircha mavjud emas"><Hand size={21} /></button><button disabled title="Backend ulanishi kutilmoqda" aria-label="Reaksiyalar hozircha mavjud emas"><Smile size={21} /></button><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button><LayoutGrid size={20} /></button><button disabled title="Backend ulanishi kutilmoqda"><MessageSquare size={20} /></button><button><MoreVertical size={20} /></button></div></footer>
+      <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
+      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? "Qo'lni tushirish" : "Qo'l ko'tarish"}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label="Reaksiya yuborish"><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button><LayoutGrid size={20} /></button><button disabled title="Backend ulanishi kutilmoqda"><MessageSquare size={20} /></button><button><MoreVertical size={20} /></button></div></footer>
     </div>
   );
 }

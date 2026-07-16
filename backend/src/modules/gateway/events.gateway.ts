@@ -17,6 +17,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import * as crypto from 'crypto';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
@@ -68,6 +69,8 @@ export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sd
 export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
 export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
 export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
+export interface MeetingHandDto    { meetingId: string; raised: boolean; }
+export interface MeetingReactionDto { meetingId: string; emoji: string; }
 
 @Injectable()
 @WebSocketGateway({
@@ -609,6 +612,36 @@ export class EventsGateway
       userId,
       kind: data.kind,
       enabled: data.enabled,
+    });
+  }
+
+  @SubscribeMessage('meeting:hand')
+  handleMeetingHand(
+    @MessageBody() data: MeetingHandDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:hand', {
+      meetingId: data.meetingId,
+      userId,
+      raised: Boolean(data.raised),
+    });
+  }
+
+  @SubscribeMessage('meeting:reaction')
+  handleMeetingReaction(
+    @MessageBody() data: MeetingReactionDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    const allowed = new Set(['👍', '❤️', '🎉', '👏', '😂', '😮']);
+    if (!userId || !allowed.has(data.emoji) || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:reaction', {
+      meetingId: data.meetingId,
+      userId,
+      emoji: data.emoji,
+      id: crypto.randomUUID(),
     });
   }
 
