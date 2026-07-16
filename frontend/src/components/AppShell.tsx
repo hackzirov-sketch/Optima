@@ -1,5 +1,5 @@
 import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { Avatar, Logo } from "./ui";
@@ -12,12 +12,28 @@ const nav = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+  const [routeLoading, setRouteLoading] = useState(false);
+  const routeTimers = useRef<number[]>([]);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
+
+  useEffect(() => () => routeTimers.current.forEach(window.clearTimeout), []);
+
+  function openSection(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    if (active(href) || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    routeTimers.current.forEach(window.clearTimeout);
+    setMobileOpen(false);
+    setRouteLoading(true);
+    routeTimers.current = [
+      window.setTimeout(() => navigate(href), 260),
+      window.setTimeout(() => setRouteLoading(false), 520),
+    ];
+  }
 
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
@@ -89,15 +105,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="desktop-dock" aria-label="Asosiy navigatsiya">
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={item.label} aria-label={item.label}><Icon size={21} strokeWidth={1.9} /></Link>;
+          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""} data-label={item.label} aria-label={item.label}><Icon size={21} strokeWidth={1.9} /></Link>;
         })}
       </nav>
       <nav className="mobile-nav" aria-label="Mobil navigatsiya">
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
+          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
         })}
       </nav>
+      {routeLoading && <div className="route-loader" role="status" aria-label="Sahifa ochilmoqda"><div className="route-loader-mark" aria-hidden="true"><i /><i /><i /></div><strong>OPTIMA</strong></div>}
     </div>
   );
 }
