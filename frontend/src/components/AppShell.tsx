@@ -17,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   const [routeLoading, setRouteLoading] = useState(false);
+  const [mobilePulse, setMobilePulse] = useState<string | null>(null);
   const routeTimers = useRef<number[]>([]);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
@@ -29,8 +30,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     routeTimers.current.forEach(window.clearTimeout);
     setMobileOpen(false);
     setRouteLoading(true);
+    if (window.innerWidth <= 820) setMobilePulse(href);
     routeTimers.current = [
       window.setTimeout(() => navigate(href), 260),
+      window.setTimeout(() => setMobilePulse(null), 380),
       window.setTimeout(() => setRouteLoading(false), 520),
     ];
   }
@@ -111,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="mobile-nav" aria-label="Mobil navigatsiya">
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
+          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={`${active(item.href) ? "active" : ""} ${mobilePulse === item.href ? "tap-pulse" : ""}`}><Icon size={20} /><span>{item.label}</span></Link>;
         })}
       </nav>
       {routeLoading && <div className="route-loader" role="status" aria-label="Sahifa ochilmoqda"><div className="route-loader-mark" aria-hidden="true"><i /><i /><i /></div><strong>OPTIMA</strong></div>}
