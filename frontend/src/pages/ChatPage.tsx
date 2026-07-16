@@ -75,8 +75,11 @@ export function ChatPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
   const [detailsLoading, setDetailsLoading] = useState(false);
-  const [detailMembers, setDetailMembers] = useState<Array<{ firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
+  const [detailMembers, setDetailMembers] = useState<Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
   const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
+  const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
+  const [forwarding, setForwarding] = useState(false);
   const [roomInvites, setRoomInvites] = useState<RoomInvite[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
@@ -634,6 +637,26 @@ export function ChatPage() {
       show(error instanceof Error ? error.message : "Sozlama saqlanmadi", "error");
     }
   }
+  async function forwardMessage(targetRoomId: string) {
+    if (!forwardingMessage || forwarding) return;
+    setForwarding(true);
+    try {
+      const attachments = forwardingMessage.attachments?.map((attachment) => ({
+        storageKey: `forwarded/${attachment.id}`,
+        storageUrl: attachment.url,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        mimeType: attachment.mimeType,
+      }));
+      await api.chat.send(targetRoomId, forwardingMessage.content, crypto.randomUUID(), undefined, attachments);
+      setForwardingMessage(null);
+      show("Xabar yuborildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Xabar yuborilmadi", "error");
+    } finally {
+      setForwarding(false);
+    }
+  }
   const catalogItems = [
     { id: "all" as const, label: "Barchasi", icon: MessagesSquare, count: rooms.reduce((sum, room) => sum + room.unreadCount, 0) },
     { id: "direct" as const, label: "Shaxsiy", icon: UserIcon, count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0) },
@@ -652,6 +675,7 @@ export function ChatPage() {
 
   return (
     <div className={`chat-page ${selectedRoom ? "chat-room-open" : ""}`}>
+      {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label="Rasmni yuklab olish"><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label="Yopish"><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
         <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />Suhbatni ochish</button>
         <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />Kategoriyada ko‘rsatish</button>
@@ -720,12 +744,12 @@ export function ChatPage() {
                             {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || "Javob berilgan xabar"}</span></button>}
                             {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : "Jamoa a’zosi"}</strong>}
                             {message.content && <p>{message.content}</p>}
-                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <a className="message-image" key={attachment.id || attachment.url} href={attachment.url} target="_blank" rel="noreferrer"><img src={attachment.url} alt={attachment.fileName} /></a> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB · Yuklab olish</small></span><Download size={17} /></a>)}
+                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB · Yuklab olish</small></span><Download size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
                             {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}
                             <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label="Xabar amallari" aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
+                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />Boshqa chatga yuborish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
                           </div>
                         </div>
                       </div>
@@ -755,11 +779,16 @@ export function ChatPage() {
           <nav className="chat-details-tabs">{(["members", "media", "files", "links", "music", "voice"] as const).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: "A'zolar", media: "Media", files: "Fayllar", links: "Linklar", music: "Musiqa", voice: "Voice" })[tab]}</button>)}</nav>
           <div className="chat-details-content">
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={`${member.username}-${member.firstName}`}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : "Username yo'q"} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></div>)}
-            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); return <a className="shared-item" key={item.id || item.messageId} href={href || undefined} target={href ? "_blank" : undefined} rel="noreferrer"><span>{detailsTab === "media" && item.mimeType?.startsWith("image/") && href ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</a>; })}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <button className="detail-member" key={member.publicId} onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button>)}
+            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
             {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>Hozircha bo'sh</strong><small>Ulashilgan kontent shu yerda ko'rinadi.</small></span></div>}
           </div>
         </div>
+      </Modal>
+
+      <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)} title="Xabarni yuborish" description="Qabul qiluvchi chatni tanlang" width="md">
+        <div className="forward-preview"><Reply size={16} /><span><strong>{forwardingMessage?.content || forwardingMessage?.attachments?.[0]?.fileName || "Media xabar"}</strong><small>{forwardingMessage?.attachments?.length ? `${forwardingMessage.attachments.length} ta biriktirma` : "Matnli xabar"}</small></span></div>
+        <div className="forward-room-list">{rooms.filter((room) => room.memberStatus !== "pending").map((room) => <button key={room.id} disabled={forwarding} onClick={() => void forwardMessage(room.id)}><span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : room.type === "direct" ? <UserRound size={17} /> : <Hash size={17} />}</span><span><strong>{roomTitle(room)}</strong><small>{room.type === "direct" ? "Shaxsiy suhbat" : `${room.memberCount} a'zo`}</small></span>{forwarding ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
       </Modal>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Yangi suhbat" description="Guruh oching yoki jamoa a’zosi bilan shaxsiy yozishing.">
