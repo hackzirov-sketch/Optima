@@ -364,10 +364,7 @@ export function ChatPage() {
     if (!selectedRoom || uploading) return;
     setUploading(true);
     try {
-      const signed = await api.chat.presignAttachment(selectedRoom.id, file);
-      const upload = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
-      if (!upload.ok) throw new Error("Fayl yuklanmadi");
-      const attachment = { storageKey: signed.storageKey, storageUrl: signed.storageUrl, fileName: file.name, fileSize: file.size, mimeType: file.type || "application/octet-stream" };
+      const attachment = await api.chat.uploadFile(selectedRoom.id, file);
       const socket = getSocket();
       const clientMessageId = crypto.randomUUID();
       if (socket.connected) await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId, attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));

@@ -230,11 +230,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ fileName: file.name, mimeType: file.type || "application/octet-stream", fileSize: file.size }),
       }),
-    uploadAudio: (roomId: string, blob: Blob) => {
+      uploadAudio: (roomId: string, blob: Blob) => {
       const body = new FormData();
       body.append("file", blob, `voice-${Date.now()}.webm`);
-      return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/audio`, { method: "POST", body });
-    },
+        return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/audio`, { method: "POST", body });
+      },
+      uploadFile: (roomId: string, file: File) => {
+        const body = new FormData();
+        body.append("file", file, file.name);
+        return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/file`, { method: "POST", body });
+      },
     acceptInvite: (roomId: string) => apiFetch(`/chat/rooms/${roomId}/invite/accept`, { method: "POST" }),
     createInvite: (roomId: string, data: { maxUses?: number; expiresInHours?: number }) =>
       apiFetch<RoomInvite>(`/chat/rooms/${roomId}/invites`, {

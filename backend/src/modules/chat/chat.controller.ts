@@ -300,6 +300,22 @@ export class ChatController {
     return this.storageService.uploadChatAudio(file.buffer, userId, mimeType);
   }
 
+  @Post('chat/rooms/:roomId/attachments/file')
+  @ApiOperation({ summary: 'Upload a chat file through the API' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  async uploadFile(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    await this.memberService.assertRoomMember(roomId, userId);
+    if (!file?.buffer || !file.originalname) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid file is required' });
+    }
+    const mimeType = file.mimetype?.split(';')[0] || 'application/octet-stream';
+    return this.storageService.uploadChatAttachment(file.buffer, userId, file.originalname, mimeType);
+  }
+
   // ── Chat Invite Accept / Decline ──────────────────────────────────────────
 
   @Get('chat/invites/pending')

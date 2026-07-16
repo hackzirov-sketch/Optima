@@ -26,6 +26,7 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
       'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
       // documents
       'application/pdf',
+      'application/octet-stream',
       'text/plain', 'text/csv',
       'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/x-7z-compressed',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -193,6 +194,28 @@ export class StorageService {
     const fileName = `${userId}-${uuidv4()}.${extension}`;
     await fs.writeFile(path.join(directory, fileName), buffer, { mode: 0o600 });
     return { storageKey: `audio/${fileName}`, storageUrl: `/uploads/audio/${fileName}`, fileName, fileSize: buffer.length, mimeType };
+  }
+
+  async uploadChatAttachment(buffer: Buffer, userId: string, fileName: string, mimeType: string) {
+    const limits = FOLDER_LIMITS.attachments;
+    if (buffer.length > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Chat files must be 100 MB or smaller' });
+    }
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'This file type is not supported' });
+    }
+    const extension = path.extname(fileName).replace(/[^.a-zA-Z0-9]/g, '').slice(0, 12);
+    const storedName = `${userId}-${uuidv4()}${extension}`;
+    const directory = path.resolve(process.cwd(), 'uploads', 'attachments');
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, storedName), buffer, { mode: 0o600 });
+    return {
+      storageKey: `attachments/${storedName}`,
+      storageUrl: `/uploads/attachments/${storedName}`,
+      fileName,
+      fileSize: buffer.length,
+      mimeType,
+    };
   }
 
   async uploadBase64(
