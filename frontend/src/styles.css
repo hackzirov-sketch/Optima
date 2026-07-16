@@ -1158,6 +1158,10 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .message-bubble > p { min-width: 0; font-size: 14px; line-height: 1.5; }
 .message-mine .message-bubble > span small, .message-mine .message-bubble > span time, .message-mine .message-bubble > span svg { color: rgba(255,255,255,.82); }
 .message-context-menu { width: 232px; padding: 8px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 18px 46px rgba(50,66,112,.2); }
+.message-menu-trigger { top: 8px; right: -34px; background: color-mix(in srgb, var(--card) 88%, transparent); box-shadow: 0 4px 12px rgba(50,66,112,.12); }
+.message-mine .message-menu-trigger { right: auto; left: -34px; }
+.message-menu-trigger:hover, .message-menu-trigger[aria-expanded="true"] { background: var(--card); color: var(--brand-700); }
+.message-mine .message-context-menu { right: auto; left: 4px; }
 .message-context-menu > button { min-height: 40px; border-radius: var(--radius-md); }
 .message-context-menu > button:hover:not(:disabled) { background: color-mix(in srgb, #BAC6EA 30%, var(--surface)); transform: translateX(2px); }
 .room-context-menu { position: fixed; z-index: 90; width: 236px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 20px 50px rgba(50,66,112,.22); animation: premium-menu-in 180ms var(--easing-standard); }
