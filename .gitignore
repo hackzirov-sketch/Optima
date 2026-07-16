@@ -1,3 +1,4 @@
 .claude
 /backend/.env
 /frontend/.env
+/docker-compose.override.yml
