@@ -347,9 +347,10 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .desktop-dock a { position: relative; isolation: isolate; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--text-soft); transition: color var(--motion-normal) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), box-shadow var(--motion-normal) var(--easing-standard); }
 .desktop-dock a::before { content: attr(data-label); position: absolute; z-index: 2; left: 50%; bottom: calc(100% + 11px); padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--card); color: var(--text); box-shadow: var(--shadow-md); font-size: 11px; font-weight: 750; white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-50%, 7px) scale(.92); transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring); }
 .desktop-dock a::after { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: 50% 50% 46% 46%; background: var(--surface-muted); transform: scale(.72); opacity: 0; transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), border-radius var(--motion-normal) var(--easing-standard); }
-.desktop-dock a:hover, .desktop-dock a:focus-visible, .desktop-dock a.active { color: #fff; transform: translateY(-13px) scale(1.06); filter: drop-shadow(0 9px 12px rgba(94,114,178,.24)); }
-.desktop-dock a:hover::before, .desktop-dock a:focus-visible::before, .desktop-dock a.active::before { opacity: 1; transform: translate(-50%, 0) scale(1); }
-.desktop-dock a:hover::after, .desktop-dock a:focus-visible::after, .desktop-dock a.active::after { opacity: 1; border-radius: 52% 52% 48% 48% / 58% 58% 42% 42%; background: var(--gradient-primary); transform: scale(1); }
+.desktop-dock a.active { color: var(--brand-700); background: var(--brand-100); box-shadow: inset 0 0 0 1px rgba(94,114,178,.12); }
+.desktop-dock a:hover, .desktop-dock a:focus-visible { color: #fff; transform: translateY(-13px) scale(1.06); filter: drop-shadow(0 9px 12px rgba(94,114,178,.24)); }
+.desktop-dock a:hover::before, .desktop-dock a:focus-visible::before { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.desktop-dock a:hover::after, .desktop-dock a:focus-visible::after { opacity: 1; border-radius: 52% 52% 48% 48% / 58% 58% 42% 42%; background: var(--gradient-primary); transform: scale(1); }
 .desktop-dock a svg { position: relative; z-index: 1; }
 .topbar-context { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .topbar-context .brand { flex: 0 0 auto; }
