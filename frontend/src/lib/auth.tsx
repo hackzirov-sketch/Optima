@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthResult, User, Workspace } from "../types";
-import { api, ApiError } from "./api";
+import { api, ApiError, refreshSession } from "./api";
 import { session } from "./session";
 
 interface AuthContextValue {
@@ -67,6 +67,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (session.refreshToken()) void refreshSession();
+    };
+    const timer = window.setInterval(refresh, 12 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     const syncSession = () => {

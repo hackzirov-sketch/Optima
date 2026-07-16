@@ -76,6 +76,13 @@ async function renewSession(): Promise<boolean> {
   }
 }
 
+export async function refreshSession(): Promise<boolean> {
+  refreshPromise ??= renewSession().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -86,10 +93,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
-    refreshPromise ??= renewSession().finally(() => {
-      refreshPromise = null;
-    });
-    if (await refreshPromise) return apiFetch<T>(path, { ...options, retry: false });
+    if (await refreshSession()) return apiFetch<T>(path, { ...options, retry: false });
     session.clear();
   }
 
