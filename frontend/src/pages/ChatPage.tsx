@@ -205,7 +205,11 @@ export function ChatPage() {
       }
       setMessages((current) => {
         if (message.clientMessageId && current.some((item) => item.clientMessageId === message.clientMessageId)) {
-          return current.map((item) => item.clientMessageId === message.clientMessageId ? message : item);
+          return current.map((item) => item.clientMessageId === message.clientMessageId ? {
+            ...message,
+            content: message.content || item.content,
+            attachments: message.attachments?.length ? message.attachments : item.attachments,
+          } : item);
         }
         return current.some((item) => item.id === message.id) ? current : [...current, message];
       });
@@ -687,7 +691,7 @@ export function ChatPage() {
                             <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
                             {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}
                             <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label="Xabar amallari" aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu"><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
+                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
                           </div>
                         </div>
                       </div>
