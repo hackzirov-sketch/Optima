@@ -1,6 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ChatMember } from '../../../database/entities/chat-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { CHAT_MEMBER_COLUMNS_SQL } from '../chat.sql';
@@ -8,8 +7,7 @@ import { CHAT_MEMBER_COLUMNS_SQL } from '../chat.sql';
 @Injectable()
 export class ChatMemberService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
   ) {}
 
   async assertRoomMember(roomId: string, userId: string): Promise<ChatMember> {

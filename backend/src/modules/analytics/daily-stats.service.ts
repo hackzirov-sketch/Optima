@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 
 type Increments = Partial<{
   tasksCompleted: number;
@@ -33,8 +32,7 @@ const INCREMENT_COLUMNS: Record<keyof Increments, string> = {
 @Injectable()
 export class DailyStatsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
   ) {}
 
   async increment(

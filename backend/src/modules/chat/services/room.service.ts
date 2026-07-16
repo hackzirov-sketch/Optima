@@ -4,15 +4,14 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
 import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
-import { MembersService } from '../../workspaces/members.service';
+import { MembersService } from '../../workspaces/services/members.service';
 import { CreateChatRoomDto } from '../dto/create-chat-room.dto';
 import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_COLUMNS_SQL_R } from '../chat.sql';
 import {
@@ -52,7 +51,7 @@ export interface ChatRoomDto {
 @Injectable()
 export class ChatRoomService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly wsMembersService: MembersService,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatEncryption: ChatEncryptionService,

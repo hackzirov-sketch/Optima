@@ -8,29 +8,27 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DataSource } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as crypto from 'crypto';
 
-import { UsersService } from '../../users/users.service';
+import { UsersService } from '../../users/services/users.service';
 import { MailService } from '../../mail/mail.service';
 import { RedisService } from '../../../redis/redis.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
-import { RegisterDto } from '../dto/register.dto';
-import { LoginDto } from '../dto/login.dto';
-import { VerifyEmailDto } from '../dto/verify-email.dto';
-import { ResendVerificationDto } from '../dto/resend-verification.dto';
-import { SetPasswordDto } from '../dto/set-password.dto';
-import { ForgotPasswordDto } from '../dto/forgot-password.dto';
-import { ResetPasswordDto } from '../dto/reset-password.dto';
+import { RegisterDto } from '../schemas/register.schema';
+import { LoginDto } from '../schemas/login.schema';
+import { VerifyEmailDto } from '../schemas/verify-email.schema';
+import { ResendVerificationDto } from '../schemas/resend-verification.schema';
+import { SetPasswordDto } from '../schemas/set-password.schema';
+import { ForgotPasswordDto } from '../schemas/forgot-password.schema';
+import { ResetPasswordDto } from '../schemas/reset-password.schema';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { User } from '../../../database/entities/user.entity';
-import { USER_COLUMNS_SQL, mapUserRow } from '../../users/users.sql';
 
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
+import { AuthRepository } from '../repositories/auth.repository';
 
 function generateVerificationCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
@@ -50,7 +48,7 @@ export class AuthService {
     private tokenService: TokenService,
     private deviceService: DeviceService,
     @InjectQueue('auth') private authQueue: Queue,
-    private dataSource: DataSource,
+    private authRepository: AuthRepository,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -165,64 +163,36 @@ export class AuthService {
       });
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const { user, needsPasswordSetup } = await this.authRepository.verifyAndActivateUser(
+      record.userId,
+    );
 
-    try {
-      const userRows: Array<User & { passwordHash: string | null }> = await queryRunner.query(
-        `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
-         FROM users WHERE id = $1 FOR UPDATE`,
-        [record.userId],
-      );
-      const user = userRows[0] && mapUserRow(userRows[0]);
-      if (!user) {
-        throw new BadRequestException({
-          code: ErrorCode.TOKEN_INVALID,
-          message: 'Invalid or expired verification token',
-        });
-      }
+    await this.redisService.deleteEmailVerification(dto.verifyToken);
 
-      const needsPasswordSetup = !user.passwordHash;
+    user.isVerified = true;
+    user.needsPasswordSetup = needsPasswordSetup;
 
-      await queryRunner.query(
-        `UPDATE users SET is_verified = true, needs_password_setup = $2, updated_at = now() WHERE id = $1`,
-        [user.id, needsPasswordSetup],
-      );
-
-      await queryRunner.commitTransaction();
-      await this.redisService.deleteEmailVerification(dto.verifyToken);
-
-      user.isVerified = true;
-      user.needsPasswordSetup = needsPasswordSetup;
-
-      let setupToken: string | undefined;
-      if (needsPasswordSetup) {
-        setupToken = crypto.randomUUID();
-        await this.redisService.setPasswordResetToken(setupToken, user.id);
-      }
-
-      const {
-        accessToken,
-        refreshToken,
-        user: authUser,
-      } = await this.tokenService.generateTokens(user);
-
-      return {
-        message: 'Email verified successfully',
-        redirect: needsPasswordSetup ? '/set-password' : undefined,
-        requiresPasswordSetup: needsPasswordSetup,
-        setupToken,
-        accessToken,
-        refreshToken,
-        user: authUser,
-      };
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
+    let setupToken: string | undefined;
+    if (needsPasswordSetup) {
+      setupToken = crypto.randomUUID();
+      await this.redisService.setPasswordResetToken(setupToken, user.id);
     }
+
+    const {
+      accessToken,
+      refreshToken,
+      user: authUser,
+    } = await this.tokenService.generateTokens(user);
+
+    return {
+      message: 'Email verified successfully',
+      redirect: needsPasswordSetup ? '/set-password' : undefined,
+      requiresPasswordSetup: needsPasswordSetup,
+      setupToken,
+      accessToken,
+      refreshToken,
+      user: authUser,
+    };
   }
 
   /**

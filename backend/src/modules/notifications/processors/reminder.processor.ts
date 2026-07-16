@@ -1,8 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import {
   NotificationCategory,
@@ -29,8 +28,7 @@ export class ReminderProcessor extends WorkerHost {
   private readonly logger = new Logger(ReminderProcessor.name);
 
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notifService: NotificationsService,
     private readonly dispatcher: NotificationDispatcherService,

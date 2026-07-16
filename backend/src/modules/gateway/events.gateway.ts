@@ -11,8 +11,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -92,8 +91,7 @@ export class EventsGateway
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly violationService: ViolationService,
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => MeetingsService))
     private readonly meetingsService: MeetingsService,
   ) {}

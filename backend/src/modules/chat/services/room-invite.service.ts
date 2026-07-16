@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
@@ -39,7 +38,7 @@ interface ChatRoomInviteRow {
 @Injectable()
 export class ChatRoomInviteService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly permission: PermissionService,
     private readonly chatMemberService: ChatMemberService,
     private readonly roomService: ChatRoomService,
@@ -164,8 +163,8 @@ export class ChatRoomInviteService {
   }
 
   async joinByCode(code: string, userId: string) {
-    const room = await this.dataSource.transaction(async (manager) => {
-      const inviteRows: ChatRoomInviteRow[] = await manager.query(
+    const room = await this.dataSource.withTransaction(async (query) => {
+      const inviteRows: ChatRoomInviteRow[] = await query(
         `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites
          WHERE code = $1 AND revoked_at IS NULL FOR UPDATE`,
         [code],
@@ -176,20 +175,20 @@ export class ChatRoomInviteService {
         throw new BadRequestException({ code: ErrorCode.INVITE_CODE_EXPIRED, message: 'This invite link has expired' });
       }
 
-      const roomRows: ChatRoom[] = await manager.query(
+      const roomRows: ChatRoom[] = await query(
         `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE id = $1`,
         [invite.roomId],
       );
       const lockedRoom = roomRows[0];
       if (!lockedRoom) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
 
-      const existingRows = await manager.query(
+      const existingRows = await query(
         `SELECT id, status FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
         [lockedRoom.id, userId],
       );
       if (existingRows[0]) {
         if (existingRows[0].status === 'pending') {
-          await manager.query(`UPDATE chat_members SET status = 'active' WHERE id = $1`, [existingRows[0].id]);
+          await query(`UPDATE chat_members SET status = 'active' WHERE id = $1`, [existingRows[0].id]);
         }
         return lockedRoom;
       }
@@ -197,13 +196,13 @@ export class ChatRoomInviteService {
       if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
         throw new BadRequestException({ code: ErrorCode.INVITE_CODE_EXHAUSTED, message: 'This invite link has reached its usage limit' });
       }
-      await manager.query(
+      await query(
         `INSERT INTO workspace_members (workspace_id, user_id, role)
          VALUES ($1, $2, 'junior') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
         [lockedRoom.workspaceId, userId],
       );
-      await manager.query(`INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`, [lockedRoom.id, userId]);
-      await manager.query(`UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`, [invite.id]);
+      await query(`INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`, [lockedRoom.id, userId]);
+      await query(`UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`, [invite.id]);
       return lockedRoom;
     });
 

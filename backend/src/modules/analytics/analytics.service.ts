@@ -1,15 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 
-import { MembersService } from '../workspaces/members.service';
+import { MembersService } from '../workspaces/services/members.service';
 
 @Injectable()
 export class AnalyticsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly membersService: MembersService,
   ) {}
 

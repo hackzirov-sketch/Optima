@@ -16,13 +16,35 @@ UPZ — developer-centric collaboration platform. GitHub'ni almashtirmaydi, unin
 
 | Qatlam | Spec | Hozirgi holat | Status |
 |---|---|---|---|
-| Backend | NestJS + TypeORM + PostgreSQL | NestJS ^11 + TypeORM `DataSource` (raw SQL) + PostgreSQL (Neon) | ✅ |
+| Backend | NestJS + TypeORM + PostgreSQL | NestJS ^11 + plain `pg.Pool` (raw SQL, no ORM) + PostgreSQL | ⚠️ TypeORM to'liq olib tashlandi 2026-07-16 — pastga qarang |
 | Cache/Queue | Redis + BullMQ | Redis (Upstash) + BullMQ | ✅ |
 | Realtime | Socket.IO + Redis Adapter | Socket.IO + `@socket.io/redis-adapter` | ✅ |
 | **Frontend** | **Next.js** + TypeScript + Tailwind | **React 19 + Vite** + TypeScript, router: `wouter` | ⚠️ **Next.js emas** — qayta yozish katta xarajat, faqat yangi loyiha boshlansa mantiqiy. Hozirgi Vite+React stack'ni davom ettirish tavsiya etiladi, spec shu joyi yangilanishi kerak. |
 | Storage | Cloudflare R2 / S3-compatible | R2/S3 (`@aws-sdk/client-s3`) + Cloudinary | ✅ |
 | Git integratsiya | GitHub App + Webhooks + OAuth | GitHub App, webhook controller, OAuth (Passport) | ✅ |
 | CLI | `npm install -g upz`, git hook injection | **Yo'q** | ❌ (14-bo'lim) |
+
+### 2.1 TypeORM'dan to'liq voz kechish (2026-07-16)
+
+Loyiha allaqachon 100% raw SQL bilan ishlagani uchun (TypeORM faqat connection pool va migration runner sifatida ishlatilardi), TypeORM butunlay olib tashlandi:
+
+- **`DataSource` → `DatabaseService`** ([database/database.service.ts](backend/src/database/database.service.ts)) — plain `pg.Pool`ni o'raydigan yengil servis, `dataSource.query(sql, params)` bilan **bir xil signatura va qaytish shakli** (tekis massiv), shuning uchun ~36 fayldagi barcha SQL chaqiruvlar o'zgarmadi — faqat inject qilinadigan tur o'zgardi.
+- **Tranzaksiyalar** — `queryRunner.connect()/startTransaction()/commit/rollback/release` o'rniga `dataSource.withTransaction(async (query) => {...})` — avtomatik commit/rollback/release. 9 ta joyda qo'llanildi (workspace/project/task/group yaratish, invitation qabul qilish, ownership transfer, violation tracking).
+- **45 ta entity** — decorator'li TypeORM class'laridan (`@Entity`, `@Column` va h.k.) oddiy TypeScript interfeyslariga aylantirildi — hali ham SQL natijalarini tiplashda ishlatiladi, lekin runtime'da hech qanday ORM metadata yo'q.
+- **30+ migratsiya fayli o'chirildi**, o'rniga bitta [backend/docker/postgres/init.sql](backend/docker/postgres/init.sql) — joriy to'liq schema'ning bir martalik dump'i. **Kelajakda schema o'zgarishi kerak bo'lsa, shu faylni qo'lda tahrirlash kerak** — versiyalangan migration tizimi endi yo'q. Bu tezkorlik uchun ongli tanlov, ammo katta jamoa/production uchun xavf-foyda nisbatini alohida baholash tavsiya etiladi.
+- **Ikki xil docker-compose**: [docker-compose.yml](docker-compose.yml) (ildizda, production-uslub, multi-stage build, to'liq stack: postgres+redis+coturn+backend+frontend) va [backend/docker-compose.yaml](backend/docker-compose.yaml) (backend ichida, dev-uslub, bind-mount + `npm run dev`, faqat backend+postgres+redis).
+
+### 2.2 Modul strukturasini qayta qurish: controllers/services/repositories/schemas (2026-07-16, davom etmoqda)
+
+Har bir modul quyidagi ichki strukturaga o'tkazilmoqda: `controllers/`, `services/`, `repositories/` (SQL shu yerda, service faqat biznes-logika), `schemas/` (Zod, `class-validator`ning o'rnida), `guards/`, `strategies/`.
+
+**Holat**: `auth`, `users`, `workspaces`, `groups` — to'liq o'tkazildi va end-to-end tekshirildi (register→login→workspace→group). Global validatsiya `nestjs-zod`ning `ZodValidationPipe`siga o'tkazildi ([validation.bootstrap.ts](backend/src/bootstrap/validation.bootstrap.ts)), xato formatlash Zod issue'larini `VALIDATION_ERROR` kodiga moslab qaytaradi ([all-exceptions.filter.ts](backend/src/common/filters/all-exceptions.filter.ts)).
+
+**Qolgan modullar** (hali eski strukturada, `class-validator` bilan): `projects`, `tasks`, `chat`, `meetings`, `notifications`, `github`, `storage`, `analytics`, `moderation`, `earnings`, `notes`, `pushes`, `gateway` — jami ~11 000 qator. Bu modullar ishlab turibdi (typecheck toza, runtime test o'tgan), faqat eski (`dto/` + class-validator, SQL service ichida) strukturada qolgan.
+
+**Loyiha vaqtincha i
+
+kki xil DTO konvensiyasini parallel qo'llab-quvvatlaydi** (Zod — yangi 4 modul, class-validator — qolgan 13 modul). Buni xavfsiz qilish uchun [validation.bootstrap.ts](backend/src/bootstrap/validation.bootstrap.ts)da **`DualValidationPipe`** yozildi — har bir DTO uchun `metatype.isZodDto` belgisiga qarab kerakli pipe'ga yo'naltiradi. (Birinchi urinish — ikkala pipe'ni ketma-ket ishlatish — xato edi: class-validator'ning `whitelist:true` Zod DTO'larning BARCHA maydonlarini "notanish" deb hisoblab, so'rovni butunlay rad etardi; darhol topilib, to'g'irlandi va ikkala turdagi endpoint alohida-alohida qayta tekshirildi.) Loyiha barcha modullar Zod'ga o'tkazilgach, bu vaqtinchalik pipe olib tashlanishi va `class-validator`/`class-transformer` paketlari butunlay o'chirilishi kerak.
 
 ## 3. Domain hierarchy va workspace-optional dizayn qarori
 

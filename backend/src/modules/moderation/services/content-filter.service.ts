@@ -1,6 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { BannedContent } from '../../../database/entities/banned-content.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ViolationService } from './violation.service';
@@ -18,8 +17,7 @@ export class ContentFilterService {
   private cacheExpiry = 0;
 
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly violationService: ViolationService,
   ) {}
 

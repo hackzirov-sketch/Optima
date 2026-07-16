@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
-import { MembersService } from '../workspaces/members.service';
+import { DatabaseService } from '../../database/database.service';
+import { MembersService } from '../workspaces/services/members.service';
 import { CreateEarningDto } from './dto/create-earning.dto';
 
 const EARNING_COLUMNS_SQL = `
@@ -13,8 +12,7 @@ const EARNING_COLUMNS_SQL = `
 @Injectable()
 export class EarningsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly membersService: MembersService,
   ) {}
 

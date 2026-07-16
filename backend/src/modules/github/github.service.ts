@@ -1,8 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import * as crypto from 'crypto';
 
 import { PushStatus } from '../../common/enums';
@@ -15,8 +14,7 @@ export class GithubService {
 
   constructor(
     private readonly configService: ConfigService,
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
   ) {}
 
   verifyWebhookSignature(

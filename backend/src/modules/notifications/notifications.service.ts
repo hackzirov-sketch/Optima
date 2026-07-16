@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
@@ -54,8 +53,7 @@ export interface CreateNotificationInput {
 @Injectable()
 export class NotificationsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
     private readonly dispatcher: NotificationDispatcherService,

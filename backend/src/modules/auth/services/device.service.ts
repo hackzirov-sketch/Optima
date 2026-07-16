@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { UAParser } from 'ua-parser-js';
 
 @Injectable()
 export class DeviceService {
   constructor(
-    @InjectDataSource()
-    private dataSource: DataSource,
+    private dataSource: DatabaseService,
   ) {}
 
   async logIpAddress(

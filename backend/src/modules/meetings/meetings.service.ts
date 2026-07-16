@@ -7,8 +7,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -18,7 +17,7 @@ import {
   MeetingParticipantRole,
 } from '../../common/enums/meeting.enum';
 import { NotificationType, RoomScope } from '../../common/enums';
-import { MembersService } from '../workspaces/members.service';
+import { MembersService } from '../workspaces/services/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { StorageService } from '../storage/storage.service';
@@ -64,8 +63,7 @@ function generateMeetingCode(): string {
 @Injectable()
 export class MeetingsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
     // MeetingsService -> NotificationsService -> EventsGateway -> MeetingsService

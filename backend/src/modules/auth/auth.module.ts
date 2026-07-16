@@ -10,7 +10,8 @@ import { TokenService } from './services/token.service';
 import { SessionService } from './services/session.service';
 import { DeviceService } from './services/device.service';
 import { SecurityService } from './services/security.service';
-import { AuthController } from './auth.controller';
+import { AuthController } from './controllers/auth.controller';
+import { AuthRepository } from './repositories/auth.repository';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -46,6 +47,7 @@ import { ModerationModule } from '../moderation/moderation.module';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthRepository,
     OAuthService,
     TokenService,
     SessionService,

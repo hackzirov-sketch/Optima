@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 
 import { UserNotificationPrefs } from '../../database/entities/user-notification-prefs.entity';
@@ -65,8 +64,7 @@ export class NotificationDispatcherService {
   private readonly frontendUrl: string;
 
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly redis: RedisService,
     private readonly telegram: TelegramChannelService,
     private readonly sms: SmsChannelService,

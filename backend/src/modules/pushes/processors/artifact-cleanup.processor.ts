@@ -1,8 +1,7 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import { PushStatus } from '../../../common/enums';
 import { StorageService } from '../../storage/storage.service';
@@ -29,8 +28,7 @@ export class ArtifactCleanupProcessor extends WorkerHost implements OnModuleInit
   constructor(
     @InjectQueue(ARTIFACT_CLEANUP_QUEUE)
     private readonly queue: Queue,
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly storage: StorageService,
   ) {
     super();

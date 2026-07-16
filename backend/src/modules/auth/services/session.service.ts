@@ -1,11 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { mapUserRow } from '../../users/users.sql';
+import { mapUserRow } from '../../users/repositories/users.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
 
 interface TokenContext {
@@ -27,8 +26,7 @@ export class SessionService {
   private readonly maxSessions: number;
 
   constructor(
-    @InjectDataSource()
-    private dataSource: DataSource,
+    private dataSource: DatabaseService,
     private configService: ConfigService,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;

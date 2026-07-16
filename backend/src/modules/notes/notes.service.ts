@@ -1,9 +1,8 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import { MembersService } from '../workspaces/members.service';
+import { MembersService } from '../workspaces/services/members.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { NOTE_COLUMNS_SQL } from './notes.sql';
@@ -24,7 +23,7 @@ export interface NoteDto {
 @Injectable()
 export class NotesService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly membersService: MembersService,
   ) {}
 

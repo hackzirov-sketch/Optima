@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
@@ -33,8 +32,7 @@ const TASK_ENUM_CASTS = {
 @Injectable()
 export class TasksService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly gateway: EventsGateway,
     private readonly permission: PermissionService,
     private readonly notifications: NotificationsService,
@@ -262,13 +260,9 @@ export class TasksService {
       if (!col[0]) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found in this project' });
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
+    const saved = await this.dataSource.withTransaction(async (query) => {
       // Compute board position (append to end of column/project)
-      const maxPosRows: Array<{ max: number | null }> = await queryRunner.query(
+      const maxPosRows: Array<{ max: number | null }> = await query(
         `SELECT MAX(position) AS max FROM tasks WHERE project_id = $1 AND deleted_at IS NULL`,
         [dto.projectId],
       );
@@ -277,7 +271,7 @@ export class TasksService {
       // NOTE: task_number is assigned automatically by the `trg_task_number`
       // DB trigger (assign_task_number()) on insert — do NOT compute/set it
       // here, doing so would double-increment task_sequences.
-      const savedRows: Task[] = await queryRunner.query(
+      const savedRows: Task[] = await query(
         `INSERT INTO tasks
            (workspace_id, project_id, column_id, parent_task_id, assignee_id, reviewer_id,
             title, description, type, priority, status, story_points, estimated_hours,
@@ -308,48 +302,41 @@ export class TasksService {
           position,
         ],
       );
-      const saved = savedRows[0];
+      return savedRows[0];
+    });
 
-      await queryRunner.commitTransaction();
+    await this.logActivity(
+      saved.id,
+      userId,
+      'task_created',
+      `Task UPZ-${saved.taskNumber} created`,
+    );
+    const full = await this.findById(saved.id, userId);
+    this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
+    await this.syncProjectStatusWithProgress(dto.projectId);
 
-      await this.logActivity(
-        saved.id,
-        userId,
-        'task_created',
-        `Task UPZ-${saved.taskNumber} created`,
+    // Notify assignee (if assigned and not self)
+    if (dto.assigneeId && dto.assigneeId !== userId) {
+      const actorRows = await this.dataSource.query(
+        `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
+        [userId],
       );
-      const full = await this.findById(saved.id, userId);
-      this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
-      await this.syncProjectStatusWithProgress(dto.projectId);
-
-      // Notify assignee (if assigned and not self)
-      if (dto.assigneeId && dto.assigneeId !== userId) {
-        const actorRows = await this.dataSource.query(
-          `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
-          [userId],
-        );
-        const actor = actorRows[0];
-        const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
-        await this.notifications.create({
-          userId: dto.assigneeId,
-          actorId: userId,
-          type: NotificationType.TASK_ASSIGNED,
-          title: `Sizga yangi task berildi`,
-          message: `${actorName}: "${full.title}"${full.dueDate ? ` · Muddat: ${full.dueDate}` : ''}`,
-          entityType: 'task',
-          entityId: full.id,
-          actionUrl: `/app/tasks/${full.id}`,
-          metadata: { taskId: full.id, taskTitle: full.title, dueDate: full.dueDate ?? null },
-        });
-      }
-
-      return full;
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
+      const actor = actorRows[0];
+      const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
+      await this.notifications.create({
+        userId: dto.assigneeId,
+        actorId: userId,
+        type: NotificationType.TASK_ASSIGNED,
+        title: `Sizga yangi task berildi`,
+        message: `${actorName}: "${full.title}"${full.dueDate ? ` · Muddat: ${full.dueDate}` : ''}`,
+        entityType: 'task',
+        entityId: full.id,
+        actionUrl: `/app/tasks/${full.id}`,
+        metadata: { taskId: full.id, taskTitle: full.title, dueDate: full.dueDate ?? null },
+      });
     }
+
+    return full;
   }
 
   private buildTaskFilters(dto: FilterTasksDto, params: unknown[], startIndex: number): string {

@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -23,7 +22,7 @@ import { normalizeReturning } from '../../../common/utils/sql.util';
 @Injectable()
 export class ChatMessageService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatReactionService: ChatReactionService,
     private readonly contentFilter: ContentFilterService,
