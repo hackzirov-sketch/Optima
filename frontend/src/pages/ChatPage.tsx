@@ -75,6 +75,8 @@ export function ChatPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailMemberSearch, setDetailMemberSearch] = useState("");
+  const [detailMemberTotal, setDetailMemberTotal] = useState(0);
   const [detailMembers, setDetailMembers] = useState<Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
   const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
@@ -103,6 +105,9 @@ export function ChatPage() {
     globalUsers.forEach((profile) => result.set(profile.id, profile));
     return result;
   }, [members, rooms, globalUsers]);
+  const detailPeer = selectedRoom?.type === "direct"
+    ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
+    : null;
 
   function roomTitle(room: ChatRoom) {
     if (room.name) return room.name;
@@ -282,10 +287,10 @@ export function ChatPage() {
     if (!detailsOpen || !selectedId) return;
     setDetailsLoading(true);
     const request = detailsTab === "members"
-      ? api.chat.roomMembers(selectedId).then((result) => { setDetailMembers(result.items); setSharedItems([]); })
+      ? api.chat.roomMembers(selectedId, detailMemberSearch.trim()).then((result) => { setDetailMembers(result.items); setDetailMemberTotal(result.total); setSharedItems([]); })
       : api.chat.shared(selectedId, detailsTab).then((items) => { setSharedItems(items); setDetailMembers([]); });
     void request.catch((error) => show(error instanceof Error ? error.message : "Ma'lumot yuklanmadi", "error")).finally(() => setDetailsLoading(false));
-  }, [detailsOpen, detailsTab, selectedId, show]);
+  }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
 
   useEffect(() => {
     if (!selectedId || !messages.length) return;
@@ -778,11 +783,22 @@ export function ChatPage() {
         )}
       </section>
 
-      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom ? roomTitle(selectedRoom) : "Suhbat ma'lumoti"} description={selectedRoom?.description || `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
-        <div className="chat-details">
-          <div className="chat-details-hero"><span className="room-avatar">{selectedRoom?.type === "channel" ? <Megaphone size={22} /> : selectedRoom?.type === "direct" ? <UserRound size={22} /> : <Hash size={22} />}</span><div><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{selectedRoom?.isMuted ? "Ovozsiz" : "Xabarnomalar yoqilgan"}</small></div><button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={18} /> : <BellOff size={18} />}{selectedRoom?.isMuted ? "Unmute" : "Mute"}</button></div>
-          <nav className="chat-details-tabs">{(["members", "media", "files", "links", "music", "voice"] as const).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: "A'zolar", media: "Media", files: "Fayllar", links: "Linklar", music: "Musiqa", voice: "Voice" })[tab]}</button>)}</nav>
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? "Profil" : selectedRoom?.type === "channel" ? "Kanal ma'lumoti" : "Guruh ma'lumoti"} description={selectedRoom?.type === "direct" ? "Foydalanuvchi ma'lumotlari" : selectedRoom?.type === "channel" ? `${selectedRoom?.memberCount || 0} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
+        <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
+          <section className="chat-details-hero">
+            {detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="lg" /> : <span className="room-avatar">{selectedRoom?.type === "channel" ? <Megaphone size={28} /> : <Hash size={28} />}</span>}
+            <div className="details-identity"><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? "Username o'rnatilmagan" : selectedRoom?.type === "channel" ? `${selectedRoom.memberCount} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`}</small>{selectedRoom?.description && <p>{selectedRoom.description}</p>}</div>
+            <span className="details-kind">{selectedRoom?.type === "direct" ? "DM" : selectedRoom?.type === "channel" ? "KANAL" : "GURUH"}</span>
+          </section>
+          <div className="chat-details-actions">
+            {selectedRoom?.type === "direct" && <><button onClick={() => setDetailsOpen(false)}><MessageCircle size={19} /><span>Xabar</span></button><button onClick={() => void startCall("audio")}><Phone size={19} /><span>Audio</span></button><button onClick={() => void startCall("video")}><Video size={19} /><span>Video</span></button></>}
+            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={19} /><span>Taklif</span></button>}
+            <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>Qidirish</span></button>
+            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? "Unmute" : "Mute"}</span></button>
+          </div>
+          <nav className="chat-details-tabs">{(["members", "media", "files", "links", "music", "voice"] as const).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: selectedRoom?.type === "direct" ? "Profil" : selectedRoom?.type === "channel" ? "Obunachilar" : "A'zolar", media: "Media", files: "Fayllar", links: "Linklar", music: "Musiqa", voice: "Voice" })[tab]}</button>)}</nav>
           <div className="chat-details-content">
+            {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? "Obunachilarni qidirish" : "A'zolarni qidirish"} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
             {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <button className="detail-member" key={member.publicId} onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
