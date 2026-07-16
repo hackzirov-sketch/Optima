@@ -4,6 +4,7 @@ import type {
   ChatRoom,
   GlobalSearchResult,
   Meeting,
+  MeetingFile,
   NotificationItem,
   RoomInvite,
   User,
@@ -281,6 +282,20 @@ export const api = {
       apiFetch<Meeting>("/meetings/join-by-code", { method: "POST", body: JSON.stringify({ code }) }),
       leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
       remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
+      files: (meetingId: string) => apiFetch<MeetingFile[]>(`/meetings/${meetingId}/files`),
+      shareFile: async (meetingId: string, file: File) => {
+        const mimeType = file.type || "application/octet-stream";
+        const signed = await apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string }>(`/meetings/${meetingId}/files/presign`, {
+          method: "POST",
+          body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size }),
+        });
+        const uploaded = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
+        if (!uploaded.ok) throw new ApiError("Fayl bulutga yuklanmadi", uploaded.status);
+        return apiFetch<MeetingFile>(`/meetings/${meetingId}/files`, {
+          method: "POST",
+          body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size, storageKey: signed.storageKey, storageUrl: signed.storageUrl }),
+        });
+      },
   },
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),

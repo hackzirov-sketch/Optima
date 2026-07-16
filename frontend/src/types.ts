@@ -160,6 +160,19 @@ export interface Meeting {
   createdAt: string;
 }
 
+export interface MeetingFile {
+  id: string;
+  meetingId: string;
+  sharedBy: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: string;
+  storageUrl: string;
+  createdAt: string;
+  firstName?: string;
+  lastName?: string;
+}
+
 export interface NotificationItem {
   id: string;
   title: string;

@@ -721,6 +721,10 @@ export class EventsGateway
     this.server?.to(`room:${roomId}`)?.emit(event, payload);
   }
 
+  broadcastToMeeting(meetingId: string, event: string, payload: unknown) {
+    this.server?.to(`meeting:${meetingId}`)?.emit(event, payload);
+  }
+
   /** Broadcast an event to all sockets in a workspace room */
   broadcastToWorkspace(workspaceId: string, event: string, payload: unknown) {
     this.server?.to(`workspace:${workspaceId}`)?.emit(event, payload);

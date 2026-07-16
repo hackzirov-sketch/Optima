@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
-export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings';
+export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings' | 'meeting-files';
 
 const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[] | null }> = {
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
@@ -42,6 +42,20 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
     ],
   },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
+  'meeting-files': {
+    maxBytes: 100 * 1024 * 1024,
+    mimeTypes: [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf', 'application/octet-stream', 'text/plain', 'text/csv',
+      'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/x-7z-compressed',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+      'video/mp4', 'video/webm', 'video/quicktime',
+      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/x-m4a',
+    ],
+  },
   'meeting-recordings': {
     // 1-hour hard cap is enforced server-side on duration (see MeetingsService),
     // this is just a generous byte ceiling so a runaway/misbehaving client

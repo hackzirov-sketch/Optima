@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Pin, Settings2, ShieldCheck, Signal, Smile, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Info, LayoutGrid, Link2, LoaderCircle, Mic, MicOff, MonitorUp, MoreVertical, Paperclip, PhoneOff, Pin, Settings2, ShieldCheck, Signal, Smile, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -6,10 +6,17 @@ import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
-import type { Meeting, User, WorkspaceMember } from "../types";
+import type { Meeting, MeetingFile, User, WorkspaceMember } from "../types";
 
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 const SECURITY_EMOJIS = ["🍏", "🐳", "🌙", "⭐", "🍀", "🌊", "🎈", "🎧", "🚀", "🔑", "🧊", "☕", "🌻", "🎸", "🧩", "💎", "🦋", "🍒", "🏀", "🛡️", "📚", "🎯", "🪐", "🌈", "⚡", "🎲", "🍉", "🧭", "🎨", "🏔️", "🕊️", "🔔"];
+
+function fileSize(value: string) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function dtlsFingerprints(peer: RTCPeerConnection) {
   const values = `${peer.localDescription?.sdp || ""}\n${peer.remoteDescription?.sdp || ""}`
@@ -52,7 +59,10 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const [microphoneDevice, setMicrophoneDevice] = useState("");
   const [permissionError, setPermissionError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sidePanel, setSidePanel] = useState<"participants" | "info" | null>(null);
+  const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | null>(null);
+  const [files, setFiles] = useState<MeetingFile[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const meetingFileInput = useRef<HTMLInputElement>(null);
   const [handRaised, setHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
   const [reactionOpen, setReactionOpen] = useState(false);
@@ -280,6 +290,9 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
         },
       }));
     };
+    const onFileShared = ({ file }: { file: MeetingFile }) => {
+      setFiles((current) => current.some((item) => item.id === file.id) ? current : [file, ...current]);
+    };
     const onMeetingError = ({ message }: { message: string }) => { show(message || "Meetingga qo‘shilib bo‘lmadi", "error"); setEntered(false); };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -293,6 +306,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     socket.on("meeting:hand", onHand);
     socket.on("meeting:reaction", onReaction);
     socket.on("meeting:toggled", onToggle);
+    socket.on("meeting:file-shared", onFileShared);
     socket.on("meeting:error", onMeetingError);
     if (socket.connected) onConnect();
     return () => {
@@ -308,6 +322,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       socket.off("meeting:hand", onHand);
       socket.off("meeting:reaction", onReaction);
       socket.off("meeting:toggled", onToggle);
+      socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
     };
   }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
@@ -467,6 +482,32 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     getSocket().emit("meeting:reaction", { meetingId, emoji });
   }
 
+  useEffect(() => {
+    if (sidePanel !== "files" || !entered) return;
+    void api.meetings.files(meetingId)
+      .then(setFiles)
+      .catch((error) => show(error instanceof Error ? error.message : "Fayllar ochilmadi", "error"));
+  }, [sidePanel, entered, meetingId, show]);
+
+  async function uploadMeetingFile(file: File) {
+    if (file.size > 100 * 1024 * 1024) {
+      show("Fayl hajmi 100 MB dan oshmasligi kerak", "error");
+      return;
+    }
+    setUploadingFile(true);
+    try {
+      const shared = await api.meetings.shareFile(meetingId, file);
+      setFiles((current) => current.some((item) => item.id === shared.id) ? current : [shared, ...current]);
+      setSidePanel("files");
+      show("Fayl qatnashchilarga ulashildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Fayl ulashilmadi", "error");
+    } finally {
+      setUploadingFile(false);
+      if (meetingFileInput.current) meetingFileInput.current.value = "";
+    }
+  }
+
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
 
   if (loading) return <div className="meeting-room-loading"><LoaderCircle className="spin" size={26} /><p>Meeting tayyorlanmoqda...</p></div>;
@@ -490,7 +531,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const securityCode = Object.values(securityCodes)[0];
   return (
     <div className={`meeting-room ${directMode ? "direct-call-room" : ""}`}>
-      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label="Shifrlash kalitini tekshirish"><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>Kalitni solishtiring</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
@@ -498,10 +539,11 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
         {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"}${media?.screen ? " · ekran" : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
         {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
       </main>
-      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? "Qatnashchilar" : "Meeting ma’lumoti"}</strong><small>{sidePanel === "participants" ? `${remoteEntries.length + 1} kishi` : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label="Panelni yopish"><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName} (siz)</strong><small>{meeting.hostId === user?.id ? "Host" : "Qatnashchi"}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : "Qatnashchi"}</strong><small>Meetingda</small></span><MoreVertical size={16} /></div>; })}</div> : <div className="meeting-info-panel"><p>{meeting.description || "Jamoa video suhbati"}</p><label>Meeting kodi<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>Havolani ulashish</Button></div>}</aside>}
+      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? "Qatnashchilar" : sidePanel === "files" ? "Ulashilgan fayllar" : "Meeting ma’lumoti"}</strong><small>{sidePanel === "participants" ? `${remoteEntries.length + 1} kishi` : sidePanel === "files" ? `${files.length} ta fayl` : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label="Panelni yopish"><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName} (siz)</strong><small>{meeting.hostId === user?.id ? "Host" : "Qatnashchi"}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : "Qatnashchi"}</strong><small>{media?.screen ? "Ekran ulashmoqda" : "Meetingda"}</small></span>{media?.audio === false ? <MicOff size={16} /> : <Mic size={16} />}</div>; })}</div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? "Yuklanmoqda..." : "Fayl ulashish"}</strong><small>PDF, hujjat, rasm yoki arxiv · 100 MB gacha</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>Hozircha fayl yo‘q</strong><small>Birinchi faylni meeting qatnashchilariga ulashing.</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || "Qatnashchi"}</small></span><Download size={17} /></a>)}</div>}</div> : <div className="meeting-info-panel"><p>{meeting.description || "Jamoa video suhbati"}</p><label>Meeting kodi<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>Havolani ulashish</Button></div>}</aside>}
       </div>
       <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
-      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? "Qo'lni tushirish" : "Qo'l ko'tarish"}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label="Reaksiya yuborish"><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button><LayoutGrid size={20} /></button><button disabled title="Backend ulanishi kutilmoqda"><MessageSquare size={20} /></button><button><MoreVertical size={20} /></button></div></footer>
+      <input ref={meetingFileInput} className="sr-only" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMeetingFile(file); }} />
+      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile} aria-label="Fayl ulashish">{uploadingFile ? <LoaderCircle className="spin" size={20} /> : <Paperclip size={20} />}</button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? "Qo'lni tushirish" : "Qo'l ko'tarish"}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label="Reaksiya yuborish"><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button aria-label="Grid ko‘rinishi"><LayoutGrid size={20} /></button><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={20} /></button><button aria-label="Qo‘shimcha amallar"><MoreVertical size={20} /></button></div></footer>
     </div>
   );
 }
