@@ -1187,14 +1187,21 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 }
 
 @media (max-width: 820px) {
-  .mobile-nav { overflow: visible; }
+  .mobile-nav { overflow: visible; border-color: rgba(115,135,200,.14); background: color-mix(in srgb, #FFF6E9 94%, transparent); box-shadow: 0 -8px 24px rgba(50,66,112,.08); }
   .mobile-nav a { position: relative; isolation: isolate; }
   .mobile-nav a::before { content: ""; position: absolute; z-index: -1; width: 46px; height: 46px; border-radius: 52% 52% 46% 46% / 58% 58% 42% 42%; background: var(--gradient-primary); box-shadow: 0 10px 24px rgba(94,114,178,.22); opacity: 0; transform: scale(.65); }
-  .mobile-nav a.tap-pulse { color: #fff; animation: mobile-nav-pop 380ms var(--easing-spring) both; }
-  .mobile-nav a.tap-pulse::before { animation: mobile-drop-pop 380ms var(--easing-spring) both; }
-  @keyframes mobile-nav-pop { 0% { transform: translateY(0) scale(1); } 48% { transform: translateY(-14px) scale(1.06); } 100% { transform: translateY(0) scale(1); } }
-  @keyframes mobile-drop-pop { 0% { opacity: 0; transform: scale(.65); } 42% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.78); } }
+  .mobile-nav a { color: #7E8AA6; }
+  .mobile-nav a.active { color: var(--brand-700); }
+  .mobile-nav a.active svg { filter: drop-shadow(0 3px 7px rgba(94,114,178,.18)); }
+  .mobile-nav a.tap-pulse { color: #fff; animation: mobile-nav-pop 680ms var(--easing-standard) both; }
+  .mobile-nav a.tap-pulse::before { animation: mobile-drop-pop 680ms var(--easing-standard) both; }
+  @keyframes mobile-nav-pop { 0% { transform: translateY(0) scale(1); } 38% { transform: translateY(-13px) scale(1.05); } 66% { transform: translateY(-10px) scale(1.03); } 100% { transform: translateY(0) scale(1); } }
+  @keyframes mobile-drop-pop { 0% { opacity: 0; transform: scale(.65); } 32% { opacity: 1; transform: scale(1); } 68% { opacity: .9; transform: scale(.96); } 100% { opacity: 0; transform: scale(.78); } }
 }
+
+:root[data-theme="dark"] .mobile-nav { border-color: rgba(186,198,234,.1); background: rgba(17,24,39,.96); box-shadow: 0 -8px 24px rgba(0,0,0,.2); }
+:root[data-theme="dark"] .mobile-nav a { color: #8997B5; }
+:root[data-theme="dark"] .mobile-nav a.active { color: #BAC6EA; }
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-nav a.tap-pulse, .mobile-nav a.tap-pulse::before { animation: none; }

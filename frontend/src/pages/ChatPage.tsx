@@ -157,7 +157,8 @@ export function ChatPage() {
     setMembers(nextMembers);
     const target = preferredId || selectedId;
     if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
-    else if (mergedRooms[0]) chooseRoom(mergedRooms[0].id);
+    else if (mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
+    else setSelectedId(null);
     setLoadingRooms(false);
   }
 
@@ -646,7 +647,7 @@ export function ChatPage() {
         {selectedRoom && (
           <>
             <header className="conversation-header">
-              <button className="icon-button chat-back" onClick={() => navigate("/")} aria-label="Bosh sahifaga qaytish" title="Bosh sahifa"><ArrowLeft size={20} /></button>
+              <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
               <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>
               <div className="conversation-title"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></div>
               <div className="conversation-tools">

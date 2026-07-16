@@ -30,11 +30,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     routeTimers.current.forEach(window.clearTimeout);
     setMobileOpen(false);
     setRouteLoading(true);
-    if (window.innerWidth <= 820) setMobilePulse(href);
+    const mobile = window.innerWidth <= 820;
+    if (mobile) setMobilePulse(href);
     routeTimers.current = [
-      window.setTimeout(() => navigate(href), 260),
-      window.setTimeout(() => setMobilePulse(null), 380),
-      window.setTimeout(() => setRouteLoading(false), 520),
+      window.setTimeout(() => navigate(href), mobile ? 620 : 260),
+      window.setTimeout(() => setMobilePulse(null), mobile ? 680 : 380),
+      window.setTimeout(() => setRouteLoading(false), mobile ? 820 : 520),
     ];
   }
 
