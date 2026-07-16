@@ -34,6 +34,24 @@ function formatDay(value: string) {
 
 const quickEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👏", "✅", "🙏"];
 
+type AiConversationMessage = {
+  id: string;
+  role: "user" | "model";
+  text: string;
+  createdAt: string;
+  sources?: Array<{ title: string; url: string }>;
+};
+
+function loadAiConversation(userId?: string): AiConversationMessage[] {
+  try {
+    if (!userId) return [];
+    const value = JSON.parse(localStorage.getItem(`optima-ai-conversation:${userId}`) || "[]");
+    return Array.isArray(value) ? value.slice(-40) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function ChatPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
@@ -52,6 +70,10 @@ export function ChatPage() {
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
+  const [aiDraft, setAiDraft] = useState("");
+  const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [draft, setDraft] = useState("");
@@ -130,9 +152,38 @@ export function ChatPage() {
   }
 
   function chooseRoom(id: string) {
+    setAiOpen(false);
     setSelectedId(id);
     setRooms((current) => current.map((room) => room.id === id ? { ...room, unreadCount: 0 } : room));
     window.history.replaceState({}, "", `/chat?room=${id}`);
+  }
+
+  function chooseAi() {
+    setAiOpen(true);
+    setSelectedId(null);
+    setCatalog("bot");
+    window.history.replaceState({}, "", "/chat?bot=optima-ai");
+  }
+
+  async function sendAiMessage() {
+    const prompt = aiDraft.trim();
+    if (!prompt || aiThinking) return;
+    const userMessage: AiConversationMessage = { id: crypto.randomUUID(), role: "user", text: prompt, createdAt: new Date().toISOString() };
+    const next = [...aiMessages, userMessage].slice(-40);
+    setAiMessages(next);
+    setAiDraft("");
+    setAiThinking(true);
+    try {
+      const history = next.slice(-12, -1).map(({ role, text }) => ({ role, text }));
+      const result = await api.chat.ai(prompt, history);
+      const completed = [...next, { id: crypto.randomUUID(), role: "model" as const, text: result.reply, createdAt: new Date().toISOString(), sources: result.sources }].slice(-40);
+      setAiMessages(completed);
+      if (user?.id) localStorage.setItem(`optima-ai-conversation:${user.id}`, JSON.stringify(completed));
+    } catch (error) {
+      show(error instanceof Error ? error.message : "AI javob bermadi", "error");
+    } finally {
+      setAiThinking(false);
+    }
   }
 
   function showRoomContext(event: MouseEvent, room: ChatRoom) {
@@ -341,6 +392,20 @@ export function ChatPage() {
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !selectedRoom) return;
+    if (/^\/ai(?:\s|$)/i.test(content)) {
+      const prompt = content.replace(/^\/ai\s*/i, "").trim();
+      if (!prompt || aiThinking) return;
+      setDraft(""); setAiThinking(true);
+      setMessages((current) => [...current, { id: `ai-user:${crypto.randomUUID()}`, roomId: selectedRoom.id, senderId: user!.id, content: prompt, contentType: "ai-prompt", createdAt: new Date().toISOString(), reactions: [], sender: user }]);
+      try {
+        const history = messages.filter((item) => item.contentType === "ai-prompt" || item.contentType === "ai-reply").slice(-12).map((item) => ({ role: item.contentType === "ai-reply" ? "model" as const : "user" as const, text: item.content }));
+        const result = await api.chat.ai(prompt, history);
+        const sources = result.sources.length ? `\n\nManbalar:\n${result.sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join("\n")}` : "";
+        setMessages((current) => [...current, { id: `ai-reply:${crypto.randomUUID()}`, roomId: selectedRoom.id, senderId: "optima-ai", content: `${result.reply}${sources}`, contentType: "ai-reply", createdAt: new Date().toISOString(), reactions: [], sender: { id: "optima-ai", firstName: "OPTIMA", lastName: "AI", avatarUrl: null } }]);
+      } catch (error) { show(error instanceof Error ? error.message : "AI javob bermadi", "error"); }
+      finally { setAiThinking(false); }
+      return;
+    }
     if (editing) {
       try {
         const updated = await api.chat.editMessage(editing.id, content);
@@ -713,7 +778,7 @@ export function ChatPage() {
   const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
 
   return (
-    <div className={`chat-page ${selectedRoom ? "chat-room-open" : ""}`}>
+    <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
       {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label="Rasmni yuklab olish"><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label="Yopish"><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
         <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />Suhbatni ochish</button>
@@ -730,7 +795,8 @@ export function ChatPage() {
         </nav>
         <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-          {!loadingRooms && filteredRooms.length === 0 && <div className="sidebar-empty">{catalog === "bot" ? <Bot size={22} /> : catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "bot" ? "Botlar hali ulanmagan" : catalog === "channel" ? "Kanal topilmadi" : "Suhbat topilmadi"}</p>{catalog !== "bot" && <button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button>}</div>}
+          {!loadingRooms && catalog === "bot" && <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span className="room-avatar"><Bot size={18} /></span><span className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>Gemini va Groq yordamchisi</small></span></span></button>}
+          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "channel" ? "Kanal topilmadi" : "Suhbat topilmadi"}</p><button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button></div>}
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
@@ -745,7 +811,16 @@ export function ChatPage() {
       </aside>
 
       <section className="conversation">
-        {!selectedRoom && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title="Suhbatni tanlang" description="Guruh yoki jamoa a’zosi bilan yozishishni boshlang." action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Yangi suhbat</Button>} />}
+        {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title="Suhbatni tanlang" description="Guruh yoki jamoa a’zosi bilan yozishishni boshlang." action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Yangi suhbat</Button>} />}
+        {aiOpen && <div className="ai-conversation">
+          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label="Botlar ro'yxatiga qaytish"><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? "javob tayyorlamoqda..." : "onlayn yordamchi"}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> xavfsiz</span></header>
+          <div className="message-list ai-message-list" aria-live="polite">
+            {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>Savol bering, matn yozdiring yoki yangi ma'lumotni tekshirtiring.</p></div>}
+            {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>Manbalar</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
+            {aiThinking && <div className="typing-bubble ai-typing"><Bot size={16} /><i /><i /><i /></div>}
+          </div>
+          <div className="composer ai-composer"><textarea value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiMessage(); } }} placeholder="OPTIMA AI ga yozing" rows={1} maxLength={6000} aria-label="AI uchun savol" /><button className="send-button" onClick={() => void sendAiMessage()} disabled={!aiDraft.trim() || aiThinking} aria-label="Savolni yuborish">{aiThinking ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button></div>
+        </div>}
         {selectedRoom && (
           <>
             <header className="conversation-header">
@@ -794,7 +869,7 @@ export function ChatPage() {
                       </div>
                     );
                   })}
-                  {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
+                  {(typingUsers.length > 0 || aiThinking) && <div className={`typing-bubble ${aiThinking ? "ai-typing" : ""}`}>{aiThinking && <Bot size={16} />}<i /><i /><i /></div>}
                   <div ref={messagesEnd} />
                   {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
                 </div>

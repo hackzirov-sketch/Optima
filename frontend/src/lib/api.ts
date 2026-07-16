@@ -260,6 +260,8 @@ export const api = {
         apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
       deleteRoom: (roomId: string) =>
         apiFetch<void>(`/chat/rooms/${roomId}`, { method: "DELETE" }),
+      ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>
+        apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history }) }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),

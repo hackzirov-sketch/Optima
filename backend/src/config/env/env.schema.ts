@@ -157,6 +157,14 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  GROQ_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  GROQ_MODEL?: string;
+
+  @IsString()
+  @IsOptional()
   GOOGLE_VISION_API_KEY?: string;
 
   @IsNumber()

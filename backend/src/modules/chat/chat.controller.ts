@@ -7,6 +7,8 @@ import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
+import { AiRequestDto } from './dto/ai-request.dto';
+import { Throttle } from '@nestjs/throttler';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatMemberService } from './services/member.service';
 import { StorageService } from '../storage/storage.service';
@@ -250,13 +252,13 @@ export class ChatController {
   }
 
   @Post('chat/ai')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 12, ttl: 60000 } })
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(
-    @Body('message') message: string,
-    @Body('history') history: { role: 'user' | 'model'; text: string }[] | undefined,
+    @Body() dto: AiRequestDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.aiService.generateAiReply(message, history ?? [], userId);
+    return this.aiService.generateAiReply(dto.message, dto.history ?? [], userId);
   }
 
   // ── Media attachment upload ────────────────────────────────────────────────
