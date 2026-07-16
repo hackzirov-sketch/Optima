@@ -165,7 +165,7 @@ export class UsersService {
          ($1, $2, $3, $4, $5, $6, $7,
           COALESCE($8, 'en')::users_language_enum, COALESCE($9, 'UTC'),
           COALESCE($10, 'system')::users_theme_enum,
-          $11::users_occupation_enum,
+          $11,
           COALESCE($12, true), COALESCE($13, false), $14, COALESCE($15, false))
        RETURNING ${USER_COLUMNS_SQL}`,
       [
@@ -197,7 +197,6 @@ export class UsersService {
     const { setClause, values } = buildUpdateSet(patch, 2, {
       language: 'users_language_enum',
       theme: 'users_theme_enum',
-      occupation: 'users_occupation_enum',
     })
     if (!setClause) return
     await this.dataSource.query(

@@ -62,6 +62,7 @@ services:
 
   coturn:
     image: coturn/coturn:4.6-alpine
+    profiles: ["managed-turn"]
     restart: unless-stopped
     command:
       - -n
