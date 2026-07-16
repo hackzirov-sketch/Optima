@@ -1,4 +1,5 @@
 import { LoaderCircle } from "lucide-react";
+import { useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/ui";
@@ -20,6 +21,13 @@ function LoadingScreen() {
 export function App() {
   const { ready, user, workspace } = useAuth();
   const [location] = useLocation();
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => document.documentElement.dataset.theme = user?.theme === "dark" || (user?.theme !== "light" && media.matches) ? "dark" : "light";
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [user?.theme]);
   if (!ready) return <LoadingScreen />;
   const publicProfileMatch = location.match(/^\/(?:u|user)\/([^/?#]+)$/);
   if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
