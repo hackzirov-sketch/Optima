@@ -1503,6 +1503,23 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .ai-composer { min-height: 72px; grid-template-columns: minmax(0, 1fr) auto; padding-inline: max(18px, calc((100% - 900px) / 2)); }
 .ai-composer textarea { min-height: 46px; padding-inline: 15px; }
 .ai-typing { display: flex; align-items: center; gap: 5px; }
+.composer-ai-assist { position: absolute; z-index: 12; left: max(14px, calc((100% - 760px) / 2)); right: max(14px, calc((100% - 760px) / 2)); bottom: calc(100% + 8px); padding: 12px; display: grid; gap: 10px; border: 1px solid color-mix(in srgb, var(--brand-500) 22%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--surface) 96%, var(--brand-100)); box-shadow: 0 18px 46px rgba(50,66,112,.18); animation: premium-menu-in var(--motion-normal) var(--easing-standard); }
+.composer-ai-assist header { min-height: 34px; display: grid; grid-template-columns: 34px minmax(0,1fr) 32px; align-items: center; gap: 9px; }
+.composer-ai-assist header > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: var(--gradient-primary); color: #fff; }
+.composer-ai-assist header > div { min-width: 0; display: grid; gap: 1px; }
+.composer-ai-assist header strong { color: var(--text); font-size: 13px; }
+.composer-ai-assist header small { color: var(--muted); font-size: 10px; }
+.composer-ai-assist header > button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.composer-ai-assist header > button:hover { background: var(--surface-muted); color: var(--text); }
+.ai-assist-suggestions { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.ai-assist-suggestions::-webkit-scrollbar { display: none; }
+.ai-assist-suggestions button { flex: 0 0 auto; min-height: 30px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); color: var(--brand-700); font-size: 10px; font-weight: 700; }
+.ai-assist-suggestions button:hover { border-color: var(--brand-300); background: var(--brand-100); transform: translateY(-1px); }
+.ai-assist-input { display: grid; grid-template-columns: minmax(0,1fr) 40px; align-items: end; gap: 7px; }
+.ai-assist-input textarea { width: 100%; min-height: 78px; max-height: 160px; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 12px; line-height: 1.45; outline: none; }
+.ai-assist-input textarea:focus { border-color: var(--brand-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-400) 20%, transparent); }
+.ai-assist-input > button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 13px; background: var(--gradient-primary); color: #fff; box-shadow: var(--shadow-sm); }
+.ai-assist-input > button:disabled { opacity: .45; box-shadow: none; }
 
 @media (max-width: 720px) {
   .ai-provider-badge { padding: 6px; font-size: 0; }
@@ -1510,4 +1527,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .ai-message-list .message { max-width: 88%; }
   .ai-message-list .message-bubble { padding: 10px 12px 7px; }
   .ai-composer { padding-inline: 10px; }
+  .composer-ai-assist { left: 8px; right: 8px; bottom: calc(100% + 5px); padding: 10px; border-radius: 16px; }
+  .composer-ai-assist header small { display: block; }
+  .ai-assist-input textarea { min-height: 70px; }
 }

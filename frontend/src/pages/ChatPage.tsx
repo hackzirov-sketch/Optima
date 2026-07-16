@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Smile, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
@@ -71,6 +71,7 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
+  const [aiAssistPrompt, setAiAssistPrompt] = useState("");
   const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
   const [aiDraft, setAiDraft] = useState("");
   const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
@@ -405,21 +406,26 @@ export function ChatPage() {
     typingTimer.current = window.setTimeout(() => socket.emit("typing", { roomId: selectedId, typing: false }), 1200);
   }
 
+  async function runComposerAi() {
+    const prompt = aiAssistPrompt.trim() || draft.replace(/^\/ai\s*/i, "").trim();
+    if (!prompt || aiThinking) return;
+    setAiThinking(true);
+    try {
+      const result = await api.chat.ai(`Chatga yuborish uchun tayyor matn yarat. Faqat tayyor matnning o'zini qaytar, izoh va sarlavha qo'shma. Vazifa: ${prompt}`, []);
+      setDraft(result.reply);
+      setAiAssistPrompt("");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "AI matnni tayyorlamadi", "error");
+    } finally {
+      setAiThinking(false);
+    }
+  }
+
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !selectedRoom) return;
     if (/^\/ai(?:\s|$)/i.test(content)) {
-      const prompt = content.replace(/^\/ai\s*/i, "").trim();
-      if (!prompt || aiThinking) return;
-      setDraft(""); setAiThinking(true);
-      setMessages((current) => [...current, { id: `ai-user:${crypto.randomUUID()}`, roomId: selectedRoom.id, senderId: user!.id, content: prompt, contentType: "ai-prompt", createdAt: new Date().toISOString(), reactions: [], sender: user }]);
-      try {
-        const history = messages.filter((item) => item.contentType === "ai-prompt" || item.contentType === "ai-reply").slice(-12).map((item) => ({ role: item.contentType === "ai-reply" ? "model" as const : "user" as const, text: item.content }));
-        const result = await api.chat.ai(prompt, history);
-        const sources = result.sources.length ? `\n\nManbalar:\n${result.sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join("\n")}` : "";
-        setMessages((current) => [...current, { id: `ai-reply:${crypto.randomUUID()}`, roomId: selectedRoom.id, senderId: "optima-ai", content: `${result.reply}${sources}`, contentType: "ai-reply", createdAt: new Date().toISOString(), reactions: [], sender: { id: "optima-ai", firstName: "OPTIMA", lastName: "AI", avatarUrl: null } }]);
-      } catch (error) { show(error instanceof Error ? error.message : "AI javob bermadi", "error"); }
-      finally { setAiThinking(false); }
+      await runComposerAi();
       return;
     }
     if (editing) {
@@ -885,11 +891,12 @@ export function ChatPage() {
                       </div>
                     );
                   })}
-                  {(typingUsers.length > 0 || aiThinking) && <div className={`typing-bubble ${aiThinking ? "ai-typing" : ""}`}>{aiThinking && <Bot size={16} />}<i /><i /><i /></div>}
+                  {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
                   {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
                 </div>
                 {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? "Unmute" : "Mute"}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { setDraft(""); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
                   {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
                   <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
                   <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
