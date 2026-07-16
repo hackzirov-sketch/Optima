@@ -202,7 +202,7 @@ export class ChatMessageService {
     }
 
     // Database-backed sequence survives Redis/container restarts and is atomic per room.
-    const sequenceRows: Array<{ messageSeq: number }> = await this.dataSource.query(
+    const sequenceResult = await this.dataSource.query(
       `UPDATE chat_rooms
        SET message_seq = GREATEST(
          COALESCE(message_seq, 0),
@@ -212,6 +212,7 @@ export class ChatMessageService {
        RETURNING message_seq AS "messageSeq"`,
       [roomId],
     );
+    const sequenceRows = normalizeReturning<{ messageSeq: number }>(sequenceResult);
     const sequence = Number(sequenceRows[0]?.messageSeq ?? 1);
 
     const plainText = (dto.content ?? '').trim();

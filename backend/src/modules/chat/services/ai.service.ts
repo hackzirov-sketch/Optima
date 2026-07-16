@@ -46,8 +46,11 @@ export class ChatAiService {
     const text = message.trim();
     if (!text) return { reply: "Savolingizni yozing — yordam beraman.", provider: this.groq ? 'groq' : 'gemini', grounded: false, sources: [] };
     const fresh = this.needsFreshFacts(text);
-    const providers = fresh ? [() => this.askGemini(text, history, true), () => this.askGroq(text, history)] : [() => this.askGroq(text, history), () => this.askGemini(text, history, false)];
+    const providers = fresh
+      ? [this.gemini && (() => this.askGemini(text, history, true)), this.groq && (() => this.askGroq(text, history))]
+      : [this.groq && (() => this.askGroq(text, history)), this.gemini && (() => this.askGemini(text, history, false))];
     for (const provider of providers) {
+      if (!provider) continue;
       try { return await provider(); } catch (error) { this.logger.warn(`AI provider failed for user ${userId}: ${error instanceof Error ? error.message : 'unknown'}`); }
     }
     throw new ServiceUnavailableException('AI xizmatlari vaqtincha band. Birozdan keyin qayta urinib ko‘ring.');
