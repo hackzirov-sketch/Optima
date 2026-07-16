@@ -76,8 +76,8 @@ export function AuthPage() {
   }, [completeOAuth]);
 
   const title = useMemo(() => ({
-    login: "Qaytganingiz yaxshi",
-    register: "Jamoangizni boshlang",
+    login: "Xush kelibsiz",
+    register: "Yangi hisob yarating",
     verify: "Emailni tasdiqlang",
     forgot: "Parolni tiklash",
     resetCode: "Kodni kiriting",
@@ -246,25 +246,25 @@ export function AuthPage() {
       <section className="auth-story" aria-label="Optima haqida">
         <Logo />
         <div className="auth-story-copy">
-          <p className="eyebrow">Bir joyda ishlang</p>
-          <h1>Jamoa ishi,<br />ortiqcha shovqinsiz.</h1>
-          <p>Chat, meeting va vazifalar bir workspace ichida. Kim nima qilayotgani doim aniq.</p>
+          <p className="eyebrow">Birgalikda oson ishlang</p>
+          <h1>Suhbat va uchrashuvlar,<br />barchasi bir joyda.</h1>
+          <p>Jamoangiz bilan yozing, video uchrashuvlar o‘tkazing va ishlarni tartibli boshqaring.</p>
         </div>
         <div className="auth-proof">
           <span><UsersRound size={18} /> Guruh va shaxsiy chat</span>
-          <span><Video size={18} /> Real meeting</span>
-          <span><ShieldCheck size={18} /> Himoyalangan sessiya</span>
+          <span><Video size={18} /> Jonli video uchrashuv</span>
+          <span><ShieldCheck size={18} /> Xavfsiz kirish</span>
         </div>
       </section>
       <section className="auth-panel">
         <div className="auth-card">
           {mode !== "login" && <button className="back-button" onClick={() => switchMode("login")}><ArrowLeft size={17} /> Kirishga qaytish</button>}
           <header className="auth-heading">
-            <span className="auth-kicker">OPTIMA WORKSPACE</span>
+            <span className="auth-kicker">OPTIMA</span>
             <h2>{title}</h2>
             <p>
-              {mode === "login" && "Workspace’ingizga kirish uchun ma’lumotlarni kiriting."}
-              {mode === "register" && "Bir daqiqada hisob va birinchi workspace yarating."}
+              {mode === "login" && "Hisobingizga kirish uchun ma’lumotlaringizni kiriting."}
+              {mode === "register" && "Bir necha qadamda Optima hisobingizni yarating."}
               {mode === "verify" && <>{verificationEmail} manziliga yuborilgan 6 xonali kodni kiriting.</>}
               {mode === "forgot" && "Emailni kiriting. Tiklash kodi shu manzilga yuboriladi."}
               {mode === "resetCode" && "Emailga yuborilgan 6 xonali kodni kiriting."}
@@ -282,7 +282,7 @@ export function AuthPage() {
               <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
               <label>Parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Parolingiz" required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
               <button type="button" className="text-button auth-forgot" onClick={() => switchMode("forgot")}>Parol esdan chiqdimi?</button>
-              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Workspace’ga kirish</Button>
+              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Kirish</Button>
               <p className="auth-switch">Hisobingiz yo‘qmi? <button type="button" onClick={() => switchMode("register")}>Ro‘yxatdan o‘ting</button></p>
             </form>
           )}

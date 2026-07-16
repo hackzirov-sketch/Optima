@@ -22,12 +22,10 @@ export function App() {
   const { ready, user, workspace } = useAuth();
   const [location] = useLocation();
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => document.documentElement.dataset.theme = user?.theme === "dark" || (user?.theme !== "light" && media.matches) ? "dark" : "light";
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [user?.theme]);
+    document.documentElement.dataset.theme = user
+      ? localStorage.getItem("optima-theme") === "dark" ? "dark" : "light"
+      : "light";
+  }, [user]);
   if (!ready) return <LoadingScreen />;
   const publicProfileMatch = location.match(/^\/(?:u|user)\/([^/?#]+)$/);
   if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;

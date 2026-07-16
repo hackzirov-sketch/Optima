@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Settings, UserRound, Video, X } from "lucide-react";
+import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -15,8 +15,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
+
+  function toggleTheme() {
+    const next = theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("optima-theme", next);
+    setTheme(next);
+  }
 
   return (
     <div className="app-shell">
@@ -71,6 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label="Menyuni ochish"><Menu size={21} /></button>
           <div className="topbar-context"><strong>{nav.find((item) => active(item.href))?.label || "Optima"}</strong></div>
           <div className="topbar-actions">
+            <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={theme === "light" ? "Dark theme’ga o‘tish" : "Light theme’ga o‘tish"} title={theme === "light" ? "Dark theme" : "Light theme"}>{theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
             <button className="icon-button" aria-label="Bildirishnomalar" title="Bildirishnomalar"><Bell size={19} /></button>
             <Link href="/profile" className="icon-button" aria-label="Sozlamalar" title="Sozlamalar"><Settings size={19} /></Link>
           </div>
