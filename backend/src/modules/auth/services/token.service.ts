@@ -56,9 +56,7 @@ export class TokenService {
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
     // ASYNC: persist session — does not block login response
-    this.sessionService
-      .persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo)
-      .catch((err) => this.logger.error(`persistRefreshToken failed: ${err?.message ?? err}`));
+    await this.sessionService.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
 
     // SECURITY: raw-SQL rows are plain objects, not User class instances, so the
     // @Exclude() on User.passwordHash is NOT applied by ClassSerializerInterceptor.

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthResult, User, Workspace } from "../types";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { session } from "./session";
 
 interface AuthContextValue {
@@ -52,11 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       await Promise.all([refreshUser(), refreshWorkspaces()]);
-    } catch {
-      session.clear();
-      setUser(null);
-      setWorkspaces([]);
-      setWorkspace(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        session.clear();
+        setUser(null);
+        setWorkspaces([]);
+        setWorkspace(null);
+      }
     } finally {
       setReady(true);
     }

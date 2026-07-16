@@ -66,7 +66,10 @@ async function renewSession(): Promise<boolean> {
       const latestToken = session.refreshToken();
       return Boolean(latestToken && latestToken !== refreshToken);
     }
-    session.save((await response.json()) as AuthResult);
+    const payload = await response.json() as AuthResult | { success?: boolean; data?: AuthResult };
+    const result = "data" in payload && payload.data ? payload.data : payload as AuthResult;
+    if (!result.accessToken || !result.refreshToken || !result.user) return false;
+    session.save(result);
     return true;
   } catch {
     return false;
