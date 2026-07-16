@@ -46,13 +46,15 @@ export function App() {
 
   return (
     <AppShell>
-      <Switch>
-        <Route path="/" component={DashboardPage} />
-        <Route path="/chat" component={ChatPage} />
-        <Route path="/meetings" component={MeetingsPage} />
-        <Route path="/profile" component={ProfilePage} />
-        <Route><DashboardPage /></Route>
-      </Switch>
+      <div className="route-transition" key={location}>
+        <Switch>
+          <Route path="/" component={DashboardPage} />
+          <Route path="/chat" component={ChatPage} />
+          <Route path="/meetings" component={MeetingsPage} />
+          <Route path="/profile" component={ProfilePage} />
+          <Route><DashboardPage /></Route>
+        </Switch>
+      </div>
     </AppShell>
   );
 }

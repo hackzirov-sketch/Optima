@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, Mic, MoreVertical, Paperclip, Pencil, Phone, Pin, Plus, Reply, Search, Send, Smile, Square, Trash2, UserPlus, UserRound, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, Pin, Plus, RadioTower, Reply, Search, Send, Smile, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
@@ -574,10 +574,10 @@ export function ChatPage() {
     }
   }
   const catalogItems = [
-    { id: "all" as const, label: "Barchasi", icon: MessageCircle, count: rooms.length },
-    { id: "direct" as const, label: "Shaxsiy", icon: UserRound, count: rooms.filter((room) => roomCatalog(room) === "direct").length },
-    { id: "group" as const, label: "Guruhlar", icon: UsersRound, count: rooms.filter((room) => roomCatalog(room) === "group").length },
-    { id: "channel" as const, label: "Kanallar", icon: Megaphone, count: rooms.filter((room) => roomCatalog(room) === "channel").length },
+    { id: "all" as const, label: "Barchasi", icon: MessagesSquare, count: rooms.reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "direct" as const, label: "Shaxsiy", icon: UserIcon, count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "group" as const, label: "Guruhlar", icon: Users, count: rooms.filter((room) => roomCatalog(room) === "group").reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "channel" as const, label: "Kanallar", icon: RadioTower, count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0) },
     { id: "bot" as const, label: "Botlar", icon: Bot, count: 0 },
   ];
   const filteredRooms = rooms.filter((room) => (catalog === "all" || roomCatalog(room) === catalog) && roomTitle(room).toLowerCase().includes(search.toLowerCase()));
@@ -595,9 +595,10 @@ export function ChatPage() {
         <header className="chat-sidebar-header"><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
         <nav className="chat-catalog" aria-label="Chat kataloglari">
+          <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
           {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
         </nav>
-        <div className="room-list">
+        <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
           {!loadingRooms && filteredRooms.length === 0 && <div className="sidebar-empty">{catalog === "bot" ? <Bot size={22} /> : catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "bot" ? "Botlar hali ulanmagan" : catalog === "channel" ? "Kanal topilmadi" : "Suhbat topilmadi"}</p>{catalog !== "bot" && <button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button>}</div>}
           {filteredRooms.map((room) => {

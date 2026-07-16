@@ -1105,3 +1105,26 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 }
 :root[data-theme="dark"] .composer textarea::placeholder,
 :root[data-theme="dark"] .search-field input::placeholder { color: #8997B5; }
+
+/* Smooth navigation and chat category motion */
+.route-transition { min-height: inherit; animation: route-enter 240ms var(--easing-standard) both; }
+.chat-catalog { position: relative; isolation: isolate; }
+.chat-catalog .catalog-indicator { position: absolute; z-index: 0; top: 4px; bottom: 12px; left: 12px; width: calc((100% - 24px) / 5); border: 1px solid rgba(115,135,200,.18); border-radius: 46% 46% 42% 42% / 55% 55% 45% 45%; background: color-mix(in srgb, #BAC6EA 58%, var(--surface)); box-shadow: 0 8px 18px rgba(94,114,178,.16); transition: transform 300ms var(--easing-spring), border-radius 300ms var(--easing-standard), box-shadow 300ms var(--easing-standard); }
+.chat-catalog .catalog-direct { transform: translateX(100%); }
+.chat-catalog .catalog-group { transform: translateX(200%); }
+.chat-catalog .catalog-channel { transform: translateX(300%); }
+.chat-catalog .catalog-bot { transform: translateX(400%); }
+.chat-catalog button { z-index: 1; min-width: 0; overflow: visible; }
+.chat-catalog button:hover { background: transparent; transform: translateY(-2px); }
+.chat-catalog button.active { background: transparent; box-shadow: none; color: var(--brand-700); }
+.chat-catalog button svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.chat-catalog button > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-catalog button b { z-index: 2; top: 2px; right: 3px; background: var(--brand-600); color: #fff; box-shadow: 0 4px 10px rgba(94,114,178,.22); }
+.room-list-transition { animation: catalog-content-enter 230ms var(--easing-standard) both; }
+@keyframes route-enter { from { opacity: .25; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes catalog-content-enter { from { opacity: .35; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .route-transition, .room-list-transition { animation: none; }
+  .chat-catalog .catalog-indicator { transition: none; }
+}
