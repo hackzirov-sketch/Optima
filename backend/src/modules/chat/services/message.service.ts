@@ -196,7 +196,10 @@ export class ChatMessageService {
           `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = $1`,
           [existing.id],
         );
-        return this.mapToResponse(existing, existing.content ?? '', existingAttachments);
+        const existingContent = existing.contentType === 'document'
+          ? existing.content ?? ''
+          : this.chatEncryption.safeDecrypt(existing.contentJson, existing.content ?? '');
+        return this.mapToResponse(existing, existingContent, existingAttachments);
       }
     }
 
