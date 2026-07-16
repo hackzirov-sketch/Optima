@@ -463,8 +463,10 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .message-mine .message-bubble { border-color: #ccddd2; border-radius: 18px 18px 6px 18px; background: #e2eee6; }
 .conversation-title-button { min-width: 0; padding: 4px 8px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; }
 .conversation-title-button:hover { background: var(--surface-muted); }
-.discuss-button { width: 100%; margin-top: 7px; padding: 8px 0 2px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid rgba(40,96,71,.14); background: transparent; color: var(--accent); font-weight: 750; }
-.discuss-button:hover { color: var(--accent-hover); }
+.discuss-button { width: 100%; margin-top: 7px; padding: 8px 8px 4px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid color-mix(in srgb, var(--brand-700) 24%, transparent); border-radius: 0 0 10px 10px; background: color-mix(in srgb, var(--brand-100) 42%, transparent); color: var(--brand-700); font-weight: 800; }
+.discuss-button:hover { background: color-mix(in srgb, var(--brand-100) 70%, transparent); color: var(--brand-900); }
+.message-mine .discuss-button { border-top-color: rgba(255,255,255,.28); background: rgba(255,255,255,.12); color: #fff; }
+.message-mine .discuss-button:hover { background: rgba(255,255,255,.22); color: #fff; }
 .channel-subscribe-bar { min-height: 66px; padding: 10px 18px; display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--line); background: var(--surface); }
 .channel-subscribe-bar button { min-width: 180px; min-height: 44px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-ink); font-weight: 800; }
 .channel-subscribe-bar button:hover { transform: translateY(-1px); background: #d8e9df; }
