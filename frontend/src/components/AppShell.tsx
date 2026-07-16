@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-body">
         <header className="topbar">
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label="Menyuni ochish"><Menu size={21} /></button>
-          <div className="topbar-context"><strong>{nav.find((item) => active(item.href))?.label || "Optima"}</strong></div>
+          <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{nav.find((item) => active(item.href))?.label || "Optima"}</strong><small>{workspace?.name}</small></div>
           <div className="topbar-actions">
             <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={theme === "light" ? "Dark theme’ga o‘tish" : "Light theme’ga o‘tish"} title={theme === "light" ? "Dark theme" : "Light theme"}>{theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
             <button className="icon-button" aria-label="Bildirishnomalar" title="Bildirishnomalar"><Bell size={19} /></button>
@@ -86,6 +86,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="app-main">{children}</main>
       </div>
+      <nav className="desktop-dock" aria-label="Asosiy navigatsiya">
+        {nav.map((item) => {
+          const Icon = item.icon;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={item.label} aria-label={item.label}><Icon size={21} strokeWidth={1.9} /></Link>;
+        })}
+      </nav>
       <nav className="mobile-nav" aria-label="Mobil navigatsiya">
         {nav.map((item) => {
           const Icon = item.icon;
