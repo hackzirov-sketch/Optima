@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Pin, Settings2, Signal, Smile, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Copy, Hand, Info, LayoutGrid, Link2, LoaderCircle, MessageSquare, Mic, MicOff, MonitorUp, MoreVertical, PhoneOff, Pin, Settings2, ShieldCheck, Signal, Smile, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -9,6 +9,13 @@ import { getSocket } from "../lib/socket";
 import type { Meeting, User, WorkspaceMember } from "../types";
 
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+const SECURITY_EMOJIS = ["🍏", "🐳", "🌙", "⭐", "🍀", "🌊", "🎈", "🎧", "🚀", "🔑", "🧊", "☕", "🌻", "🎸", "🧩", "💎", "🦋", "🍒", "🏀", "🛡️", "📚", "🎯", "🪐", "🌈", "⚡", "🎲", "🍉", "🧭", "🎨", "🏔️", "🕊️", "🔔"];
+
+function dtlsFingerprints(peer: RTCPeerConnection) {
+  const values = `${peer.localDescription?.sdp || ""}\n${peer.remoteDescription?.sdp || ""}`
+    .match(/a=fingerprint:[^\r\n]+/g) || [];
+  return values.sort().join("|");
+}
 
 function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, pinned = false, handRaised = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; pinned?: boolean; handRaised?: boolean; onPin?: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -58,7 +65,36 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const screenTrack = useRef<MediaStreamTrack | null>(null);
   const rtcConfig = useRef<RTCConfiguration>(RTC_CONFIG);
   const reconnectAttempts = useRef(new Map<string, number>());
+  const securityKeyPair = useRef<Promise<CryptoKeyPair> | null>(null);
+  const remoteSecurityKeys = useRef(new Map<string, JsonWebKey>());
+  const [securityCodes, setSecurityCodes] = useState<Record<string, string[]>>({});
   const sendOfferRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+
+  const ensureSecurityKey = useCallback(() => {
+    securityKeyPair.current ||= crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+    return securityKeyPair.current;
+  }, []);
+
+  const sendSecurityKey = useCallback(async (targetUserId: string) => {
+    const pair = await ensureSecurityKey();
+    const publicKey = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    getSocket().emit("meeting:key", { meetingId, targetUserId, publicKey });
+  }, [ensureSecurityKey, meetingId]);
+
+  const updateSecurityCode = useCallback(async (targetUserId: string, peer: RTCPeerConnection) => {
+    const remoteJwk = remoteSecurityKeys.current.get(targetUserId);
+    const fingerprints = dtlsFingerprints(peer);
+    if (!remoteJwk || !fingerprints || !peer.localDescription || !peer.remoteDescription) return;
+    const pair = await ensureSecurityKey();
+    const remoteKey = await crypto.subtle.importKey("jwk", remoteJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
+    const shared = await crypto.subtle.deriveBits({ name: "ECDH", public: remoteKey }, pair.privateKey, 256);
+    const context = new TextEncoder().encode(`${meetingId}|${fingerprints}`);
+    const input = new Uint8Array(shared.byteLength + context.byteLength);
+    input.set(new Uint8Array(shared)); input.set(context, shared.byteLength);
+    const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
+    const emojis = [0, 2, 4, 6].map((offset) => SECURITY_EMOJIS[((hash[offset] << 8) | hash[offset + 1]) % SECURITY_EMOJIS.length]);
+    setSecurityCodes((current) => ({ ...current, [targetUserId]: emojis }));
+  }, [ensureSecurityKey, meetingId]);
 
   useEffect(() => {
     if (entered || (!camera && !microphone)) {
@@ -162,10 +198,12 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     const onDisconnect = () => setConnectionState("offline");
     const onParticipants = async ({ userIds }: { userIds: string[] }) => {
       for (const targetUserId of userIds) {
+        await sendSecurityKey(targetUserId);
         await sendOffer(targetUserId);
       }
     };
     const onUserJoined = ({ userId: joinedUserId }: { userId: string }) => {
+      void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
         if (!peers.current.has(joinedUserId)) void sendOffer(joinedUserId);
       }, 800);
@@ -177,12 +215,21 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       socket.emit("meeting:answer", { meetingId, targetUserId: fromUserId, sdp: answer });
+      await updateSecurityCode(fromUserId, peer);
     };
     const onAnswer = async ({ fromUserId, sdp }: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
       const peer = peers.current.get(fromUserId);
       if (!peer) return;
       await peer.setRemoteDescription(sdp);
       await flushIce(fromUserId, peer);
+      await updateSecurityCode(fromUserId, peer);
+    };
+    const onSecurityKey = async ({ fromUserId, publicKey }: { fromUserId: string; publicKey: JsonWebKey }) => {
+      const firstKey = !remoteSecurityKeys.current.has(fromUserId);
+      remoteSecurityKeys.current.set(fromUserId, publicKey);
+      if (firstKey) await sendSecurityKey(fromUserId);
+      const peer = peers.current.get(fromUserId);
+      if (peer) await updateSecurityCode(fromUserId, peer);
     };
     const onIce = async ({ fromUserId, candidate }: { fromUserId: string; candidate: RTCIceCandidateInit }) => {
       const peer = peers.current.get(fromUserId);
@@ -202,6 +249,7 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     socket.on("meeting:user-joined", onUserJoined);
     socket.on("meeting:offer", onOffer);
     socket.on("meeting:answer", onAnswer);
+    socket.on("meeting:key", onSecurityKey);
     socket.on("meeting:ice-candidate", onIce);
     socket.on("meeting:user-left", onLeft);
     socket.on("meeting:hand", onHand);
@@ -215,13 +263,14 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       socket.off("meeting:user-joined", onUserJoined);
       socket.off("meeting:offer", onOffer);
       socket.off("meeting:answer", onAnswer);
+      socket.off("meeting:key", onSecurityKey);
       socket.off("meeting:ice-candidate", onIce);
       socket.off("meeting:user-left", onLeft);
       socket.off("meeting:hand", onHand);
       socket.off("meeting:reaction", onReaction);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, sendOffer, createPeer, flushIce, closePeer, show]);
+  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -390,9 +439,11 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   );
 
   const remoteEntries = Object.entries(remoteStreams);
+  const securityCode = Object.values(securityCodes)[0];
   return (
     <div className="meeting-room">
       <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label="Shifrlash kalitini tekshirish"><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>Kalitni solishtiring</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
         <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => setPinnedUserId((current) => current === user?.id ? null : user?.id || null)} />

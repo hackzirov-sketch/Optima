@@ -66,6 +66,7 @@ export interface AddReactionWsDto {
 export interface MeetingJoinDto    { meetingId: string; }
 export interface MeetingLeaveDto   { meetingId: string; }
 export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
+export interface MeetingKeyDto     { meetingId: string; targetUserId: string; publicKey: JsonWebKey; }
 export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
 export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
 export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
@@ -579,6 +580,20 @@ export class EventsGateway
       meetingId: data.meetingId,
       fromUserId: userId,
       sdp: data.sdp,
+    });
+  }
+
+  @SubscribeMessage('meeting:key')
+  handleMeetingKey(
+    @MessageBody() data: MeetingKeyDto,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:key', {
+      meetingId: data.meetingId,
+      fromUserId: userId,
+      publicKey: data.publicKey,
     });
   }
 
