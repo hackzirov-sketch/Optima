@@ -276,6 +276,9 @@ export const api = {
       leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
       remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
   },
+  library: {
+    read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
+  },
   notifications: {
     list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),
     readAll: () => apiFetch("/notifications/read-all", { method: "POST" }),

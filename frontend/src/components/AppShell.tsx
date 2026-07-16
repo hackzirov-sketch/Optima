@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
+import { Bell, BookOpen, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -8,6 +8,7 @@ const nav = [
   { href: "/", label: "Bosh sahifa", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageCircle },
   { href: "/meetings", label: "Meeting", icon: Video },
+  { href: "/library", label: "Library", icon: BookOpen },
   { href: "/profile", label: "Profil", icon: UserRound },
 ];
 

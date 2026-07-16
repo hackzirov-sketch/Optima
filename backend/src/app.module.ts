@@ -32,6 +32,7 @@ import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { EarningsModule } from './modules/earnings/earnings.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { LibraryModule } from './modules/library/library.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -124,6 +125,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ModerationModule,
     EarningsModule,
     NotesModule,
+    LibraryModule,
   ],
   providers: [
     {

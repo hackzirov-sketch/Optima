@@ -13,6 +13,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
 import { WorkspaceSetupPage } from "./pages/WorkspaceSetupPage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
+import { LibraryPage } from "./pages/LibraryPage";
 
 function LoadingScreen() {
   return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Workspace yuklanmoqda</span></div>;
@@ -51,6 +52,7 @@ export function App() {
           <Route path="/" component={DashboardPage} />
           <Route path="/chat" component={ChatPage} />
           <Route path="/meetings" component={MeetingsPage} />
+          <Route path="/library" component={LibraryPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route><DashboardPage /></Route>
         </Switch>
