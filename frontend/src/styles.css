@@ -899,6 +899,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .video-grid { min-height: 0; height: 100%; padding: 0; gap: 8px; background: transparent; }
 .video-tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid #3a403c; border-radius: 8px; background: #2b302d; }
 .video-tile video { width: 100%; height: 100%; object-fit: cover; }
+.video-tile video.video-audio-only { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .video-tile-mirrored video { transform: scaleX(-1); }
 .video-placeholder { width: 100%; height: 100%; display: grid; place-items: center; background: #292f2b; }
 .video-placeholder .avatar-xl { width: 86px; height: 86px; font-size: 1.6rem; }

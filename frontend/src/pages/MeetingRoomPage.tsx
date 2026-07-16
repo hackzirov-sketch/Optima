@@ -17,12 +17,14 @@ function dtlsFingerprints(peer: RTCPeerConnection) {
   return values.sort().join("|");
 }
 
-function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, pinned = false, handRaised = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; pinned?: boolean; handRaised?: boolean; onPin?: () => void }) {
+function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, videoOn = true, pinned = false, handRaised = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; videoOn?: boolean; pinned?: boolean; handRaised?: boolean; onPin?: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
+  const hasVideo = videoOn && Boolean(stream?.getVideoTracks().some((track) => track.readyState === "live" && track.enabled));
   return (
     <article className={`video-tile ${mirrored ? "video-tile-mirrored" : ""} ${pinned ? "video-tile-pinned" : ""}`}>
-      {stream?.getVideoTracks().some((track) => track.enabled) ? <video ref={ref} autoPlay playsInline muted={muted} /> : <div className="video-placeholder"><Avatar firstName={avatar?.firstName || label} lastName={avatar?.lastName} url={avatar?.avatarUrl} size="xl" /></div>}
+      {stream && <video ref={ref} className={hasVideo ? "" : "video-audio-only"} autoPlay playsInline muted={muted} />}
+      {!hasVideo && <div className="video-placeholder"><Avatar firstName={avatar?.firstName || label} lastName={avatar?.lastName} url={avatar?.avatarUrl} size="xl" /></div>}
       <span className="video-label">{label}</span>
       {handRaised && <span className="tile-hand" title="Qo'l ko'tarilgan"><Hand size={16} /></span>}
       {onPin && <button className={`tile-pin ${pinned ? "active" : ""}`} onClick={onPin} aria-label={pinned ? "Videoni bo'shatish" : "Videoni mahkamlash"}><Pin size={15} /></button>}
@@ -58,6 +60,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const [remoteMedia, setRemoteMedia] = useState<Record<string, { audio: boolean; video: boolean; screen: boolean }>>({});
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "offline">("connecting");
   const peers = useRef(new Map<string, RTCPeerConnection>());
   const iceQueue = useRef(new Map<string, RTCIceCandidateInit[]>());
@@ -65,6 +68,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const screenTrack = useRef<MediaStreamTrack | null>(null);
   const rtcConfig = useRef<RTCConfiguration>(RTC_CONFIG);
   const reconnectAttempts = useRef(new Map<string, number>());
+  const disconnectTimers = useRef(new Map<string, number>());
   const securityKeyPair = useRef<Promise<CryptoKeyPair> | null>(null);
   const remoteSecurityKeys = useRef(new Map<string, JsonWebKey>());
   const [securityCodes, setSecurityCodes] = useState<Record<string, string[]>>({});
@@ -142,10 +146,14 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   }
 
   const closePeer = useCallback((userId: string) => {
+    const timer = disconnectTimers.current.get(userId);
+    if (timer) window.clearTimeout(timer);
+    disconnectTimers.current.delete(userId);
     peers.current.get(userId)?.close();
     peers.current.delete(userId);
     iceQueue.current.delete(userId);
     setRemoteStreams((current) => { const next = { ...current }; delete next[userId]; return next; });
+    setRemoteMedia((current) => { const next = { ...current }; delete next[userId]; return next; });
   }, []);
 
   const createPeer = useCallback((targetUserId: string) => {
@@ -160,9 +168,29 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     peer.ontrack = (event) => {
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStreams((current) => ({ ...current, [targetUserId]: stream }));
+      setRemoteMedia((current) => ({
+        ...current,
+        [targetUserId]: {
+          audio: current[targetUserId]?.audio ?? true,
+          video: current[targetUserId]?.video ?? stream.getVideoTracks().length > 0,
+          screen: current[targetUserId]?.screen ?? false,
+        },
+      }));
     };
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "connected") reconnectAttempts.current.delete(targetUserId);
+      if (peer.connectionState === "connected") {
+        reconnectAttempts.current.delete(targetUserId);
+        const timer = disconnectTimers.current.get(targetUserId);
+        if (timer) window.clearTimeout(timer);
+        disconnectTimers.current.delete(targetUserId);
+      }
+      if (peer.connectionState === "disconnected" && !disconnectTimers.current.has(targetUserId)) {
+        const timer = window.setTimeout(() => {
+          disconnectTimers.current.delete(targetUserId);
+          if (peer.connectionState === "disconnected") void sendOfferRef.current(targetUserId, true);
+        }, 4000);
+        disconnectTimers.current.set(targetUserId, timer);
+      }
       if (peer.connectionState === "failed") {
         const attempts = reconnectAttempts.current.get(targetUserId) || 0;
         if (attempts < 2) {
@@ -199,14 +227,14 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     const onParticipants = async ({ userIds }: { userIds: string[] }) => {
       for (const targetUserId of userIds) {
         await sendSecurityKey(targetUserId);
-        await sendOffer(targetUserId);
+        if (user?.id && user.id.localeCompare(targetUserId) < 0) await sendOffer(targetUserId);
       }
     };
     const onUserJoined = ({ userId: joinedUserId }: { userId: string }) => {
       void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
-        if (!peers.current.has(joinedUserId)) void sendOffer(joinedUserId);
-      }, 800);
+        if (user?.id && user.id.localeCompare(joinedUserId) < 0 && !peers.current.has(joinedUserId)) void sendOffer(joinedUserId);
+      }, 300);
     };
     const onOffer = async ({ fromUserId, sdp }: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
       const peer = createPeer(fromUserId);
@@ -242,6 +270,16 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       setReactions((current) => [...current, reaction]);
       window.setTimeout(() => setReactions((current) => current.filter((item) => item.id !== reaction.id)), 3200);
     };
+    const onToggle = ({ userId: remoteUserId, kind, enabled }: { userId: string; kind: "audio" | "video" | "screen"; enabled: boolean }) => {
+      setRemoteMedia((current) => ({
+        ...current,
+        [remoteUserId]: {
+          audio: kind === "audio" ? enabled : current[remoteUserId]?.audio ?? true,
+          video: kind === "video" ? enabled : current[remoteUserId]?.video ?? true,
+          screen: kind === "screen" ? enabled : current[remoteUserId]?.screen ?? false,
+        },
+      }));
+    };
     const onMeetingError = ({ message }: { message: string }) => { show(message || "Meetingga qo‘shilib bo‘lmadi", "error"); setEntered(false); };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -254,6 +292,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     socket.on("meeting:user-left", onLeft);
     socket.on("meeting:hand", onHand);
     socket.on("meeting:reaction", onReaction);
+    socket.on("meeting:toggled", onToggle);
     socket.on("meeting:error", onMeetingError);
     if (socket.connected) onConnect();
     return () => {
@@ -268,9 +307,10 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       socket.off("meeting:user-left", onLeft);
       socket.off("meeting:hand", onHand);
       socket.off("meeting:reaction", onReaction);
+      socket.off("meeting:toggled", onToggle);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show]);
+  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -402,6 +442,8 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     getSocket().emit("meeting:leave", { meetingId });
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
+    disconnectTimers.current.forEach(window.clearTimeout);
+    disconnectTimers.current.clear();
     screenTrack.current?.stop();
     screenTrack.current = null;
     currentStream.current?.getTracks().forEach((track) => track.stop());
@@ -453,7 +495,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
         <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => setPinnedUserId((current) => current === user?.id ? null : user?.id || null)} />
-        {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); return <VideoTile key={remoteUserId} stream={stream} label={remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"} avatar={remote} pinned={pinnedUserId === remoteUserId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
+        {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"}${media?.screen ? " · ekran" : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
         {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
       </main>
       {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? "Qatnashchilar" : "Meeting ma’lumoti"}</strong><small>{sidePanel === "participants" ? `${remoteEntries.length + 1} kishi` : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label="Panelni yopish"><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName} (siz)</strong><small>{meeting.hostId === user?.id ? "Host" : "Qatnashchi"}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : "Qatnashchi"}</strong><small>Meetingda</small></span><MoreVertical size={16} /></div>; })}</div> : <div className="meeting-info-panel"><p>{meeting.description || "Jamoa video suhbati"}</p><label>Meeting kodi<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Kod nusxalandi"); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>Havolani ulashish</Button></div>}</aside>}
