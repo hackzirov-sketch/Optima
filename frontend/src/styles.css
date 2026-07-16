@@ -1503,6 +1503,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .ai-composer { min-height: 72px; grid-template-columns: minmax(0, 1fr) auto; padding-inline: max(18px, calc((100% - 900px) / 2)); }
 .ai-composer textarea { min-height: 46px; padding-inline: 15px; }
 .ai-typing { display: flex; align-items: center; gap: 5px; }
+.older-messages-loader { width: fit-content; margin: 0 auto 12px; padding: 7px 11px; display: flex; align-items: center; gap: 7px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 92%, var(--brand-100)); color: var(--muted); font-size: 10px; font-weight: 700; box-shadow: var(--shadow-sm); }
 .composer-ai-assist { position: absolute; z-index: 12; left: max(14px, calc((100% - 760px) / 2)); right: max(14px, calc((100% - 760px) / 2)); bottom: calc(100% + 8px); padding: 12px; display: grid; gap: 10px; border: 1px solid color-mix(in srgb, var(--brand-500) 22%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--surface) 96%, var(--brand-100)); box-shadow: 0 18px 46px rgba(50,66,112,.18); animation: premium-menu-in var(--motion-normal) var(--easing-standard); }
 .composer-ai-assist header { min-height: 34px; display: grid; grid-template-columns: 34px minmax(0,1fr) 32px; align-items: center; gap: 9px; }
 .composer-ai-assist header > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: var(--gradient-primary); color: #fff; }

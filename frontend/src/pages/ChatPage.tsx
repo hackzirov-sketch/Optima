@@ -69,6 +69,8 @@ export function ChatPage() {
   const [catalog, setCatalog] = useState<"all" | "direct" | "group" | "channel" | "bot">("all");
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAssistPrompt, setAiAssistPrompt] = useState("");
@@ -115,6 +117,7 @@ export function ChatPage() {
   const messageList = useRef<HTMLDivElement>(null);
   const aiMessageList = useRef<HTMLDivElement>(null);
   const aiShouldScroll = useRef(false);
+  const preserveMessageScroll = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -267,10 +270,38 @@ export function ChatPage() {
     }
     setLoadingMessages(true);
     api.chat.messages(selectedId)
-      .then((result) => setMessages([...result.data].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt)))))
+      .then((result) => {
+        setMessages([...result.data].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt))));
+        setHasOlderMessages((result.total || 0) > result.data.length);
+      })
       .catch((error) => show(error instanceof Error ? error.message : "Xabarlar yuklanmadi", "error"))
       .finally(() => setLoadingMessages(false));
   }, [selectedId, selectedRoom?.memberStatus, show]);
+
+  async function loadOlderMessages() {
+    if (!selectedId || loadingMessages || loadingOlderMessages || !hasOlderMessages) return;
+    const oldestSequence = messages.find((message) => typeof message.sequence === "number")?.sequence;
+    if (!oldestSequence) { setHasOlderMessages(false); return; }
+    const list = messageList.current;
+    const previousHeight = list?.scrollHeight || 0;
+    setLoadingOlderMessages(true);
+    try {
+      const result = await api.chat.messages(selectedId, oldestSequence);
+      setHasOlderMessages(result.data.length === 80);
+      preserveMessageScroll.current = true;
+      setMessages((current) => {
+        const byId = new Map([...result.data, ...current].map((message) => [message.id, message]));
+        return [...byId.values()].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt)));
+      });
+      window.requestAnimationFrame(() => {
+        if (list) list.scrollTop += list.scrollHeight - previousHeight;
+      });
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Eski xabarlar yuklanmadi", "error");
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }
 
   useEffect(() => {
     if (!workspace) return;
@@ -344,6 +375,10 @@ export function ChatPage() {
   }, [selectedId, selectedRoom?.memberStatus]);
 
   useEffect(() => {
+    if (preserveMessageScroll.current) {
+      preserveMessageScroll.current = false;
+      return;
+    }
     messagesEnd.current?.scrollIntoView({ behavior: messages.length > 10 ? "smooth" : "auto" });
     const timer = window.setTimeout(() => {
       const node = messageList.current;
@@ -861,7 +896,8 @@ export function ChatPage() {
               <div className="invite-state"><UsersRound size={28} /><h3>Suhbatga taklif</h3><p>Yozishishni boshlash uchun taklifni qabul qiling.</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>Qabul qilish</Button></div>
             ) : (
               <>
-                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); }}>
+                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); if (node.scrollTop < 90) void loadOlderMessages(); }}>
+                  {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin" size={18} /> Eski xabarlar yuklanmoqda</div>}
                   {loadingMessages && <div className="center-loader"><LoaderCircle className="spin" size={24} /></div>}
                   {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? "Xabar topilmadi" : "Suhbatni boshlang"}</h3><p>{messageSearch ? "Boshqa so‘z bilan qidirib ko‘ring." : "Birinchi xabarni yuboring."}</p></div>}
                   {visibleMessages.map((message, index) => {

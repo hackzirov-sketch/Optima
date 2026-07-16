@@ -13,7 +13,6 @@ import { ChatMemberService } from './member.service';
 import { ChatReactionService } from './reaction.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
 import { StorageService } from '../../storage/storage.service';
-import { RedisService } from '../../../redis/redis.service';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { UpdateMessageDto } from '../dto/update-message.dto';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,7 +28,6 @@ export class ChatMessageService {
     private readonly contentFilter: ContentFilterService,
     private readonly chatEncryption: ChatEncryptionService,
     private readonly storageService: StorageService,
-    private readonly redisService: RedisService,
     @InjectQueue('chat') private readonly chatQueue: Queue,
   ) {}
 
@@ -203,19 +201,18 @@ export class ChatMessageService {
       }
     }
 
-    // 2. Redis Sequence (Atomic)
-    const redisClient = this.redisService.getClient();
-    let sequence = 1;
-    if (redisClient) {
-      sequence = await redisClient.incr(`room:${roomId}:seq`);
-    } else {
-      // Fallback if Redis is down
-      const maxRes: Array<{ max: number | null }> = await this.dataSource.query(
-        `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
-        [roomId],
-      );
-      sequence = (maxRes[0]?.max || 0) + 1;
-    }
+    // Database-backed sequence survives Redis/container restarts and is atomic per room.
+    const sequenceRows: Array<{ messageSeq: number }> = await this.dataSource.query(
+      `UPDATE chat_rooms
+       SET message_seq = GREATEST(
+         COALESCE(message_seq, 0),
+         COALESCE((SELECT MAX(sequence) FROM chat_messages WHERE room_id = $1), 0)
+       ) + 1
+       WHERE id = $1
+       RETURNING message_seq AS "messageSeq"`,
+      [roomId],
+    );
+    const sequence = Number(sequenceRows[0]?.messageSeq ?? 1);
 
     const plainText = (dto.content ?? '').trim();
     let contentToSave = plainText;

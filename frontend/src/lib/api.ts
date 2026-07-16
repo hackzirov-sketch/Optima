@@ -215,8 +215,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    messages: (roomId: string) =>
-      apiFetch<{ data: ChatMessage[]; total: number }>(`/chat/rooms/${roomId}/messages?limit=80`),
+    messages: (roomId: string, cursor?: number) =>
+      apiFetch<{ data: ChatMessage[]; total?: number }>(`/chat/rooms/${roomId}/messages?limit=80${cursor ? `&cursor=${cursor}` : ""}`),
       send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments?: Array<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>) =>
         apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
           method: "POST",
