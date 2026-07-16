@@ -201,11 +201,7 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; }
-.brand-mark { width: 27px; height: 27px; padding: 5px; display: flex; align-items: flex-end; gap: 2px; background: var(--ink); border-radius: 7px; }
-.brand-mark i { display: block; width: 4px; border-radius: 1px; background: #fff; }
-.brand-mark i:nth-child(1) { height: 8px; opacity: .62; }
-.brand-mark i:nth-child(2) { height: 13px; opacity: .82; }
-.brand-mark i:nth-child(3) { height: 17px; }
+.brand-mark { width: 32px; height: 32px; display: block; object-fit: cover; border-radius: 8px; }
 .avatar { display: inline-grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.06); border-radius: 50%; background: #dde8e1; color: var(--accent-ink); font-size: 12px; font-weight: 800; text-transform: uppercase; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-sm { width: 30px; height: 30px; }
@@ -497,7 +493,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .icon-button-danger { color: var(--danger); }
 .icon-button-danger:hover { background: var(--danger-soft); color: var(--danger); box-shadow: none; }
 .brand { font-family: var(--font-display); font-size: 20px; letter-spacing: -.02em; }
-.brand-mark { width: 32px; height: 32px; padding: 6px; border-radius: var(--radius-sm); background: var(--gradient-primary); box-shadow: var(--shadow-brand); }
+.brand-mark { width: 36px; height: 36px; padding: 0; border-radius: 9px; background: #07366b; box-shadow: var(--shadow-brand); }
 .avatar { border-color: rgba(98,96,255,.16); background: var(--gradient-soft); color: var(--brand-800); }
 .panel, .metric-card, .meeting-card, .settings-panel, .profile-summary { border: var(--card-border); border-radius: var(--radius-card); background: var(--card); box-shadow: var(--shadow-sm); }
 .panel:hover, .metric-card:hover, .meeting-card:hover { border-color: var(--card-hover-border); box-shadow: var(--shadow-md); }
