@@ -30,12 +30,14 @@ export function LibraryPage() {
 
   useEffect(() => { const timer = window.setTimeout(() => setDebounced(query.trim()), 350); return () => clearTimeout(timer); }, [query]);
   useEffect(() => {
+    const controller = new AbortController();
     const params = new URLSearchParams();
     if (debounced) params.set("search", debounced);
     else if (topics[category]) params.set("topic", topics[category]);
     params.set("copyright", "false");
     setLoading(true);
-    fetch(`https://gutendex.com/books/?${params}`).then((response) => { if (!response.ok) throw new Error(); return response.json() as Promise<BookPage>; }).then(setPage).catch(() => setPage(null)).finally(() => setLoading(false));
+    fetch(`https://gutendex.com/books/?${params}`, { signal: controller.signal }).then((response) => { if (!response.ok) throw new Error(); return response.json() as Promise<BookPage>; }).then(setPage).catch((error) => { if (!(error instanceof DOMException && error.name === "AbortError")) setPage(null); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [debounced, category]);
 
   const featured = useMemo(() => page?.results[0] || null, [page]);

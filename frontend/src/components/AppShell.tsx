@@ -32,11 +32,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileOpen(false);
     setRouteLoading(true);
     const mobile = window.innerWidth <= 820;
+    const leavingLibrary = location.startsWith("/library");
     if (mobile) setMobilePulse(href);
     routeTimers.current = [
-      window.setTimeout(() => navigate(href), mobile ? 620 : 260),
-      window.setTimeout(() => setMobilePulse(null), mobile ? 680 : 380),
-      window.setTimeout(() => setRouteLoading(false), mobile ? 820 : 520),
+      window.setTimeout(() => navigate(href), leavingLibrary ? 80 : mobile ? 620 : 260),
+      window.setTimeout(() => setMobilePulse(null), leavingLibrary ? 180 : mobile ? 680 : 380),
+      window.setTimeout(() => setRouteLoading(false), leavingLibrary ? 260 : mobile ? 820 : 520),
     ];
   }
 
