@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, Pin, Plus, RadioTower, Reply, Search, Send, Smile, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -57,6 +57,7 @@ export function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -85,6 +86,7 @@ export function ChatPage() {
   const recordingTimer = useRef<number | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || null;
+  const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
   const memberMap = useMemo(() => {
     const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>();
     members.forEach((member) => result.set(member.userId, memberUser(member)));
@@ -107,6 +109,11 @@ export function ChatPage() {
     window.history.replaceState({}, "", `/chat?room=${id}`);
   }
 
+  function showRoomContext(event: MouseEvent, room: ChatRoom) {
+    event.preventDefault();
+    setRoomContext({ roomId: room.id, x: Math.min(event.clientX, window.innerWidth - 250), y: Math.min(event.clientY, window.innerHeight - 230) });
+  }
+
   async function deleteSelectedRoom() {
     if (!selectedRoom || selectedRoom.isSystem || selectedRoom.type === "direct") return;
     if (!window.confirm(`“${roomTitle(selectedRoom)}” guruhini barcha xabarlari bilan o‘chirasizmi?`)) return;
@@ -117,6 +124,20 @@ export function ChatPage() {
       setHeaderMenuOpen(false);
       if (remaining[0]) chooseRoom(remaining[0].id);
       else { setSelectedId(null); navigate("/chat"); }
+      show("Guruh o‘chirildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Guruh o‘chirilmadi", "error");
+    }
+  }
+
+  async function deleteRoomFromContext(room: ChatRoom) {
+    if (!window.confirm(`“${roomTitle(room)}” guruhini barcha xabarlari bilan o‘chirasizmi?`)) return;
+    try {
+      await api.chat.deleteRoom(room.id);
+      const remaining = rooms.filter((item) => item.id !== room.id);
+      setRooms(remaining);
+      setRoomContext(null);
+      if (selectedId === room.id) remaining[0] ? chooseRoom(remaining[0].id) : setSelectedId(null);
       show("Guruh o‘chirildi");
     } catch (error) {
       show(error instanceof Error ? error.message : "Guruh o‘chirilmadi", "error");
@@ -591,8 +612,14 @@ export function ChatPage() {
 
   return (
     <div className={`chat-page ${selectedRoom ? "chat-room-open" : ""}`}>
+      {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
+        <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />Suhbatni ochish</button>
+        <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />Kategoriyada ko‘rsatish</button>
+        {contextRoom.type !== "direct" && !contextRoom.isSystem && <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); window.setTimeout(() => void openRoomInvites(), 0); }}><UserPlus size={17} />Guruhga taklif</button>}
+        {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2 size={17} />Guruhni o‘chirish</button>}
+      </div>}
       <aside className="chat-sidebar">
-        <header className="chat-sidebar-header"><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
+        <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label="Bosh sahifaga qaytish" title="Bosh sahifa"><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
         <nav className="chat-catalog" aria-label="Chat kataloglari">
           <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
@@ -604,7 +631,7 @@ export function ChatPage() {
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
-              <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)}>
+              <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : <span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : <Hash size={17} />}</span>}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? "Taklif kutilmoqda" : "Hali xabar yo‘q")}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
@@ -619,7 +646,7 @@ export function ChatPage() {
         {selectedRoom && (
           <>
             <header className="conversation-header">
-              <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish"><ArrowLeft size={20} /></button>
+              <button className="icon-button chat-back" onClick={() => navigate("/")} aria-label="Bosh sahifaga qaytish" title="Bosh sahifa"><ArrowLeft size={20} /></button>
               <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>
               <div className="conversation-title"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></div>
               <div className="conversation-tools">
@@ -646,7 +673,7 @@ export function ChatPage() {
                     return (
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
-                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`}>
+                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`} onContextMenu={(event) => { event.preventDefault(); setActiveMenu(message.id); }}>
                           {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">

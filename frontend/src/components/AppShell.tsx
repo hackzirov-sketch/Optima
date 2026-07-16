@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${location.startsWith("/chat") ? "app-shell-chat" : ""}`}>
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <Logo />
