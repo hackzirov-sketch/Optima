@@ -94,7 +94,13 @@ export class ChatEncryptionService {
       try {
         return this.decrypt(contentJson);
       } catch (err) {
-        this.logger.warn(`Decrypt failed, falling back to raw content: ${err}`);
+        // Expected for messages encrypted under a since-rotated
+        // CHAT_ENCRYPTION_KEY — that ciphertext is permanently unrecoverable
+        // without the old key, so this isn't an actionable error per
+        // occurrence. Debug-level avoids flooding logs on every fetch of
+        // old message history; genuinely new decrypt failures are rare
+        // enough that DEBUG is still discoverable when investigating.
+        this.logger.debug(`Decrypt failed, falling back to raw content: ${err}`);
       }
     }
     return rawContent ?? '';

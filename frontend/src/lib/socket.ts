@@ -13,17 +13,20 @@ function socketServerUrl(): string {
 }
 
 export function getSocket(): Socket {
-  const token = session.accessToken();
   if (!socket) {
     socket = io(socketServerUrl(), {
-      auth: { token },
+      // A function (not a plain object) so socket.io-client re-reads the
+      // current access token on every connection attempt, including its
+      // own automatic reconnects after the tab was idle/backgrounded and
+      // the token has since expired — a static object would keep resending
+      // whatever token was valid when getSocket() was first called.
+      auth: (cb) => cb({ token: session.accessToken() }),
       transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 8,
     });
   }
-  socket.auth = { token };
   if (!socket.connected) socket.connect();
   return socket;
 }

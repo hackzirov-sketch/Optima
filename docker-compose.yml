@@ -2,152 +2,185 @@ name: optima
 
 services:
 
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
+  # FROZEN for TURN-only testing — postgres/redis/backend run locally via
+  # `npm run dev` instead. Uncomment to go back to the full docker-compose
+  # stack.
+  # postgres:
+  #   image: postgres:16-alpine
+  #   restart: unless-stopped
+  #
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER:-upz}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  #     POSTGRES_DB: ${POSTGRES_DB:-upz}
+  #
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "pg_isready -U ${POSTGRES_USER:-upz} -d ${POSTGRES_DB:-upz}"
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #
+  #   networks:
+  #     - upz_internal
 
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-upz}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:-upz}
 
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #
+  #   command:
+  #     [
+  #       "redis-server",
+  #       "--appendonly",
+  #       "yes",
+  #       "--requirepass",
+  #       "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+  #     ]
+  #
+  #   volumes:
+  #     - redis_data:/data
+  #
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "redis-cli",
+  #         "-a",
+  #         "${REDIS_PASSWORD}",
+  #         "ping"
+  #       ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #
+  #   networks:
+  #     - upz_internal
 
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-upz} -d ${POSTGRES_DB:-upz}"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-    networks:
-      - upz_internal
-
-
-  redis:
-    image: redis:7-alpine
+  coturn:
+    image: coturn/coturn:4.6-alpine
     restart: unless-stopped
 
     command:
-      [
-        "redis-server",
-        "--appendonly",
-        "yes",
-        "--requirepass",
-        "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
-      ]
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=${TURN_REALM:-upz.local}
+      - --user=${TURN_USERNAME:-upzturn}:${TURN_CREDENTIAL:?TURN_CREDENTIAL is required}
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --fingerprint
 
-    volumes:
-      - redis_data:/data
+    # Host networking so the wide relay port range doesn't need a per-port
+    # docker mapping — coturn's srflx/relay candidates must carry the
+    # server's real reachable address, which host mode gives directly.
+    # NOTE: this only makes calls work across different networks/NAT if
+    # this host itself has a public IP (or the relevant UDP range is
+    # port-forwarded to it) and TURN_PUBLIC_HOST below points at that
+    # address — on a home/office machine behind a router with no port
+    # forwarding, coturn here only helps peers already on the same LAN.
+    network_mode: host
 
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "redis-cli",
-          "-a",
-          "${REDIS_PASSWORD}",
-          "ping"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-    networks:
-      - upz_internal
-
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-
-    restart: unless-stopped
-
-    ports:
-      - "127.0.0.1:8080:8080"
-
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-    environment:
-      NODE_ENV: production
-      PORT: 8080
-      API_PREFIX: api/v1
-
-      FRONTEND_URL: ${FRONTEND_URL}
-
-      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
-
-      DATABASE_URL: postgresql://${POSTGRES_USER:-upz}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-upz}
-      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
-
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
-      JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
-
-      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
-      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
-      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
-
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
-
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
-
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-optima-pushes}
-      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
-
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-      CHAT_ENCRYPTION_KEY: ${CHAT_ENCRYPTION_KEY:?CHAT_ENCRYPTION_KEY is required}
-
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-
-      PUSH_ARTIFACT_TTL_DAYS: ${PUSH_ARTIFACT_TTL_DAYS:-7}
-      TURN_URLS: ${TURN_URLS:-}
-      TURN_USERNAME: ${TURN_USERNAME:-}
-      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
-
-    volumes:
-      - uploads_data:/app/uploads
-
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://localhost:8080/api/v1/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
-        ]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-
-    mem_limit: 768m
-
-    networks:
-      - upz_internal
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #
+  #   restart: unless-stopped
+  #
+  #   ports:
+  #     - "127.0.0.1:8080:8080"
+  #
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #
+  #   environment:
+  #     NODE_ENV: production
+  #     PORT: 8080
+  #     API_PREFIX: api/v1
+  #
+  #     FRONTEND_URL: ${FRONTEND_URL}
+  #
+  #     BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+  #
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-upz}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-upz}
+  #     DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
+  #
+  #     REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+  #
+  #     JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+  #     JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+  #     JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
+  #     JWT_REFRESH_EXPIRES: ${JWT_REFRESH_EXPIRES:-7d}
+  #
+  #     GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+  #     GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+  #     GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
+  #
+  #     GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  #     GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  #     GITHUB_CALLBACK_URL: ${GITHUB_CALLBACK_URL:-}
+  #
+  #     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  #     GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  #     GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+  #
+  #     R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  #     R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  #     R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  #     R2_BUCKET_NAME: ${R2_BUCKET_NAME:-optima-pushes}
+  #     R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+  #
+  #     ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+  #     CHAT_ENCRYPTION_KEY: ${CHAT_ENCRYPTION_KEY:?CHAT_ENCRYPTION_KEY is required}
+  #
+  #     SMTP_HOST: ${SMTP_HOST:-}
+  #     SMTP_PORT: ${SMTP_PORT:-587}
+  #     SMTP_USER: ${SMTP_USER:-}
+  #     SMTP_PASS: ${SMTP_PASS:-}
+  #
+  #     PUSH_ARTIFACT_TTL_DAYS: ${PUSH_ARTIFACT_TTL_DAYS:-7}
+  #     # TURN_PUBLIC_HOST must be this server's real reachable address (public
+  #     # IP or domain) — not "coturn"/"localhost" — for cross-network calls to
+  #     # work. See the coturn service's network_mode note above.
+  #     TURN_URLS: ${TURN_URLS:-turn:${TURN_PUBLIC_HOST:-localhost}:3478}
+  #     TURN_USERNAME: ${TURN_USERNAME:-upzturn}
+  #     TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+  #
+  #   volumes:
+  #     - uploads_data:/app/uploads
+  #
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "node",
+  #         "-e",
+  #         "require('http').get('http://localhost:8080/api/v1/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  #       ]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 20s
+  #
+  #
+  #   mem_limit: 768m
+  #
+  #   networks:
+  #     - upz_internal
 
 
 

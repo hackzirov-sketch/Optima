@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       await Promise.all([refreshUser(), refreshWorkspaces()]);
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[auth] bootstrap() failed, clearing session:", error);
       session.clear();
       setUser(null);
       setWorkspaces([]);
@@ -92,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await Promise.all([refreshUser(), refreshWorkspaces()]);
       setReady(true);
     } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[auth] completeOAuth() failed, clearing session:", error);
       session.clear();
       setUser(null);
       throw error;

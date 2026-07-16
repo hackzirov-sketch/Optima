@@ -69,11 +69,19 @@ async function renewSession(): Promise<boolean> {
       // different refresh token than the one we just sent, that rotation
       // already succeeded elsewhere. Use it instead of logging the user out.
       const latestToken = session.refreshToken();
-      return !!latestToken && latestToken !== refreshToken;
+      const recoveredElsewhere = !!latestToken && latestToken !== refreshToken;
+      if (!recoveredElsewhere) {
+        const body = await response.text().catch(() => "");
+        // eslint-disable-next-line no-console
+        console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
+      }
+      return recoveredElsewhere;
     }
     session.save((await response.json()) as AuthResult);
     return true;
-  } catch {
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn("[auth] POST /auth/refresh threw:", error);
     return false;
   }
 }
@@ -92,6 +100,8 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       refreshPromise = null;
     });
     if (await refreshPromise) return apiFetch<T>(path, { ...options, retry: false });
+    // eslint-disable-next-line no-console
+    console.warn(`[auth] refresh failed on ${path}, clearing session`);
     session.clear();
   }
 
