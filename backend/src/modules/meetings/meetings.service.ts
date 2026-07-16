@@ -9,8 +9,6 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import {
@@ -30,7 +28,6 @@ import {
 import * as crypto from 'crypto';
 
 export const MEETING_RECORDING_QUEUE = 'meeting-recording';
-export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enforced server-side regardless of client behavior
 
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
@@ -74,8 +71,6 @@ export class MeetingsService {
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => ReminderSchedulerService))
     private readonly reminderScheduler: ReminderSchedulerService,
-    @InjectQueue(MEETING_RECORDING_QUEUE)
-    private readonly recordingQueue: Queue,
     private readonly storageService: StorageService,
   ) {}
 
@@ -657,25 +652,10 @@ export class MeetingsService {
     );
     const recording = rows[0];
 
-    // Hard server-side cutoff: fires even if the client crashes, loses
-    // connection, or simply never sends a stop — this is the real cap,
-    // not just a UI countdown.
-    await this.recordingQueue.add(
-      'auto-stop',
-      { recordingId: recording.id, meetingId },
-      {
-        delay: MAX_RECORDING_DURATION_SECONDS * 1000,
-        jobId: `auto-stop_${recording.id}`,
-      },
-    );
-
     return recording;
   }
 
-  /**
-   * Called either by the host (manual stop) or by the auto-stop BullMQ job
-   * (`autoStopped: true`) once MAX_RECORDING_DURATION_SECONDS elapses.
-   */
+  /** Called by the host or a legacy auto-stop job created before unlimited recordings. */
   async stopRecording(
     meetingId: string,
     userId: string | null,
@@ -700,8 +680,8 @@ export class MeetingsService {
       });
     }
 
-    const durationSeconds = Math.min(
-      MAX_RECORDING_DURATION_SECONDS,
+    const durationSeconds = Math.max(
+      0,
       Math.floor((Date.now() - new Date(recording.startedAt).getTime()) / 1000),
     );
 
@@ -723,13 +703,6 @@ export class MeetingsService {
         ],
       ),
     );
-
-    // If this was a manual stop, cancel the pending auto-stop job so it
-    // doesn't fire a redundant stop later.
-    if (!opts.autoStopped) {
-      const job = await this.recordingQueue.getJob(`auto-stop_${recording.id}`);
-      await job?.remove().catch(() => undefined);
-    }
 
     return updatedRows[0];
   }

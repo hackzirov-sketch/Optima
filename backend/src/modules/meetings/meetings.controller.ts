@@ -162,10 +162,10 @@ export class MeetingsController {
     return this.meetingsService.inviteMembers(meetingId, userId, userIds || []);
   }
 
-  // ─── Recording (host/co-host only, hard 1-hour server-side cap) ───────────
+  // ─── Recording (host/co-host only) ────────────────────────────────────────
 
   @Post('meetings/:meetingId/recordings/start')
-  @ApiOperation({ summary: 'Start recording the meeting (max 1 hour, auto-stopped server-side)' })
+  @ApiOperation({ summary: 'Start recording the meeting' })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async startRecording(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,

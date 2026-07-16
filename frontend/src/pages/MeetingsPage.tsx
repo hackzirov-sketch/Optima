@@ -77,13 +77,11 @@ export function MeetingsPage() {
     setSaving(true);
     const form = new FormData(event.currentTarget);
     const start = new Date(String(form.get("startTime")));
-    const duration = Number(form.get("duration") || 45);
     try {
       const meeting = await api.meetings.create(workspace.id, {
         title: String(form.get("title") || "").trim(),
         description: String(form.get("description") || "").trim() || undefined,
         startTime: start.toISOString(),
-        endTime: new Date(start.getTime() + duration * 60_000).toISOString(),
         maxParticipants: Number(form.get("maxParticipants") || 20),
       });
       setCreateOpen(false);
@@ -151,7 +149,8 @@ export function MeetingsPage() {
         <form className="modal-form" onSubmit={create}>
           <label>Meeting nomi<input name="title" placeholder="Haftalik product sync" maxLength={200} autoFocus required /></label>
           <label>Qisqa izoh<textarea name="description" placeholder="Nimalarni muhokama qilamiz?" rows={3} /></label>
-          <div className="form-grid-2"><label>Boshlanish vaqti<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label><label>Davomiyligi<select name="duration" defaultValue="45"><option value="15">15 daqiqa</option><option value="30">30 daqiqa</option><option value="45">45 daqiqa</option><option value="60">1 soat</option></select></label></div>
+          <label>Boshlanish vaqti<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
+          <p className="field-hint"><Clock3 size={15} /> Meeting muddati cheklanmagan. Host yakunlaguncha davom etadi.</p>
           <label>Maksimal qatnashchi<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
           <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Bekor qilish</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>Yaratish</Button></div>
         </form>
