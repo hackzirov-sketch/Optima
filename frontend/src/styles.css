@@ -1363,6 +1363,38 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .avatar-upload-button { grid-column: 1 / -1; width: 100%; }
 }
 
+/* Telegram-inspired attachment players */
+.audio-message { width: min(390px, 68vw); min-height: 66px; margin: 4px 0 3px; padding: 8px; display: grid; grid-template-columns: 44px 26px minmax(0,1fr) 34px; align-items: center; gap: 7px; border: 1px solid color-mix(in srgb, var(--brand-500) 16%, transparent); border-radius: 16px; background: color-mix(in srgb, #BAC6EA 20%, var(--surface)); }
+.audio-play { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--gradient-primary); color: #fff; box-shadow: 0 6px 15px rgba(94,114,178,.22); }
+.audio-play:hover { transform: scale(1.04); }
+.audio-kind { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--brand-700); }
+.audio-main { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 2px 7px; }
+.audio-main strong { grid-column: 1 / -1; overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.audio-main input[type="range"] { width: 100%; min-width: 0; height: 18px; min-height: 18px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; accent-color: var(--brand-600); cursor: pointer; }
+.audio-main small { color: var(--muted); font-size: 8px; white-space: nowrap; }
+.audio-speed, .audio-download { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--surface); color: var(--brand-700); font-size: 10px; font-weight: 800; box-shadow: var(--shadow-sm); }
+.audio-speed:hover, .audio-download:hover { background: var(--brand-100); transform: translateY(-1px); }
+.voice-player { border-radius: 18px 18px 18px 7px; }
+.message-mine .audio-message { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.13); }
+.message-mine .audio-kind, .message-mine .audio-main strong, .message-mine .audio-main small { color: #fff; }
+.message-mine .audio-main input[type="range"] { accent-color: #fff; }
+.message-mine .audio-speed, .message-mine .audio-download { background: rgba(255,255,255,.18); color: #fff; box-shadow: none; }
+.file-attachment { min-width: min(330px,65vw); min-height: 62px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--brand-500) 14%, transparent); border-radius: 15px; background: color-mix(in srgb, #BAC6EA 18%, var(--surface)); }
+.file-attachment > span:first-child { border-radius: 13px; background: var(--gradient-primary); box-shadow: 0 5px 12px rgba(94,114,178,.2); }
+.file-attachment strong { color: var(--text); font-size: 11px; }
+.file-attachment small { font-size: 8.5px; }
+.message-mine .file-attachment { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.13); }
+.message-mine .file-attachment strong, .message-mine .file-attachment small, .message-mine .file-attachment > svg { color: #fff; }
+
+@media (max-width: 480px) {
+  .audio-message { width: min(278px, 76vw); grid-template-columns: 42px 22px minmax(0,1fr) 32px; gap: 5px; }
+  .audio-play { width: 42px; height: 42px; }
+  .audio-kind { width: 22px; }
+  .audio-main strong { font-size: 10px; }
+  .audio-main small { font-size: 7.5px; }
+  .file-attachment { min-width: min(270px,74vw); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mobile-nav a.tap-pulse, .mobile-nav a.tap-pulse::before { animation: none; }
 }

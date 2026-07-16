@@ -62,7 +62,10 @@ async function renewSession(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const latestToken = session.refreshToken();
+      return Boolean(latestToken && latestToken !== refreshToken);
+    }
     session.save((await response.json()) as AuthResult);
     return true;
   } catch {
@@ -209,11 +212,11 @@ export const api = {
       }),
     messages: (roomId: string) =>
       apiFetch<{ data: ChatMessage[]; total: number }>(`/chat/rooms/${roomId}/messages?limit=80`),
-    send: (roomId: string, content: string, clientMessageId: string, replyToId?: string) =>
-      apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content, clientMessageId, replyToId }),
-      }),
+      send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments?: Array<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>) =>
+        apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ content, clientMessageId, replyToId, attachments }),
+        }),
     editMessage: (messageId: string, content: string) =>
       apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
     deleteMessage: (messageId: string) =>

@@ -13,17 +13,15 @@ function socketServerUrl(): string {
 }
 
 export function getSocket(): Socket {
-  const token = session.accessToken();
   if (!socket) {
     socket = io(socketServerUrl(), {
-      auth: { token },
+      auth: (callback) => callback({ token: session.accessToken() }),
       transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 8,
     });
   }
-  socket.auth = { token };
   if (!socket.connected) socket.connect();
   return socket;
 }

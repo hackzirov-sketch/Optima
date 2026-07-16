@@ -2,6 +2,7 @@ import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Down
 import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
+import { AudioMessage } from "../components/AudioMessage";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -368,7 +369,9 @@ export function ChatPage() {
       if (!upload.ok) throw new Error("Fayl yuklanmadi");
       const attachment = { storageKey: signed.storageKey, storageUrl: signed.storageUrl, fileName: file.name, fileSize: file.size, mimeType: file.type || "application/octet-stream" };
       const socket = getSocket();
-      await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId: crypto.randomUUID(), attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
+      const clientMessageId = crypto.randomUUID();
+      if (socket.connected) await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId, attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
+      else await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
       setDraft("");
       setReplyingTo(null);
     } catch (error) {
@@ -403,10 +406,11 @@ export function ChatPage() {
     try {
       const attachment = await api.chat.uploadAudio(selectedRoom.id, blob);
       const socket = getSocket();
-      if (!socket.connected) throw new Error("Real-time aloqa mavjud emas");
-      await new Promise<void>((resolve, reject) => {
-        socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: "", clientMessageId: crypto.randomUUID(), attachments: [attachment] }, (error: Error | null) => error ? reject(error) : resolve());
+      const clientMessageId = crypto.randomUUID();
+      if (socket.connected) await new Promise<void>((resolve, reject) => {
+        socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: "", clientMessageId, attachments: [attachment] }, (error: Error | null) => error ? reject(error) : resolve());
       });
+      else await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
     } catch (error) {
       show(error instanceof Error ? error.message : "Audio xabar yuborilmadi", "error");
     } finally {
@@ -681,7 +685,7 @@ export function ChatPage() {
                             {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || "Javob berilgan xabar"}</span></button>}
                             {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : "Jamoa a’zosi"}</strong>}
                             {message.content && <p>{message.content}</p>}
-                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <audio key={attachment.id || attachment.url} className="voice-message" controls preload="metadata" src={attachment.url} aria-label="Audio xabar" /> : attachment.mimeType.startsWith("image/") ? <a className="message-image" key={attachment.id || attachment.url} href={attachment.url} target="_blank" rel="noreferrer"><img src={attachment.url} alt={attachment.fileName} /></a> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB</small></span><Download size={17} /></a>)}
+                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <a className="message-image" key={attachment.id || attachment.url} href={attachment.url} target="_blank" rel="noreferrer"><img src={attachment.url} alt={attachment.fileName} /></a> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB · Yuklab olish</small></span><Download size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
                             {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}

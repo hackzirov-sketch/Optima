@@ -60,6 +60,23 @@ services:
     networks:
       - upz_internal
 
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --realm=${TURN_REALM:-optima.local}
+      - --user=${TURN_USERNAME:-upzturn}:${TURN_CREDENTIAL:?TURN_CREDENTIAL is required}
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --fingerprint
+    network_mode: host
+
 
   backend:
     build:
@@ -123,8 +140,8 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
 
       PUSH_ARTIFACT_TTL_DAYS: ${PUSH_ARTIFACT_TTL_DAYS:-7}
-      TURN_URLS: ${TURN_URLS:-}
-      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_URLS: ${TURN_URLS:-turn:${TURN_PUBLIC_HOST:-localhost}:3478}
+      TURN_USERNAME: ${TURN_USERNAME:-upzturn}
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
 
     volumes:
