@@ -107,6 +107,22 @@ export function ChatPage() {
     window.history.replaceState({}, "", `/chat?room=${id}`);
   }
 
+  async function deleteSelectedRoom() {
+    if (!selectedRoom || selectedRoom.isSystem || selectedRoom.type === "direct") return;
+    if (!window.confirm(`“${roomTitle(selectedRoom)}” guruhini barcha xabarlari bilan o‘chirasizmi?`)) return;
+    try {
+      await api.chat.deleteRoom(selectedRoom.id);
+      const remaining = rooms.filter((room) => room.id !== selectedRoom.id);
+      setRooms(remaining);
+      setHeaderMenuOpen(false);
+      if (remaining[0]) chooseRoom(remaining[0].id);
+      else { setSelectedId(null); navigate("/chat"); }
+      show("Guruh o‘chirildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Guruh o‘chirilmadi", "error");
+    }
+  }
+
   async function loadRooms(preferredId?: string) {
     if (!workspace) return;
     const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(workspace.id), api.workspaces.members(workspace.id), api.chat.community()]);
@@ -609,7 +625,7 @@ export function ChatPage() {
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
                 <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall)} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
                 <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall)} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button></div>}</div>}
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>{selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
               </div>
             </header>
             {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}

@@ -23,9 +23,9 @@
   --lux-pearl: #F5F3FF;
   --lux-copper: #C2703D;
   --white: #FFFFFF;
-  --pearl: #FAFAFC;
-  --snow: #F8F9FD;
-  --gray-100: #EEF2FF;
+  --pearl: #FFFDF8;
+  --snow: #F8F4EA;
+  --gray-100: #F1EDE5;
   --gray-300: #CBD5E1;
   --gray-600: #475569;
   --navy-900: #101828;
@@ -43,8 +43,8 @@
   --gradient-border: linear-gradient(135deg,rgba(98,96,255,.6),rgba(212,175,106,.4));
   --canvas: var(--snow);
   --bg: var(--snow);
-  --surface: var(--white);
-  --card: var(--white);
+  --surface: #FFFDF8;
+  --card: #FFFFFC;
   --surface-muted: var(--gray-100);
   --surface-strong: var(--brand-100);
   --text: var(--navy-900);
@@ -372,9 +372,15 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .metric-card small { color: var(--muted); font-size: 11px; }
 .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .list-stack { padding: 8px 12px 12px; }
-.meeting-row, .chat-row { min-height: 62px; display: flex; align-items: center; gap: 11px; padding: 9px 7px; border-bottom: 1px solid var(--line); }
-.meeting-row:last-child, .chat-row:last-child { border-bottom: 0; }
-.meeting-row:hover, .chat-row:hover { background: #fafbf8; }
+.dashboard-list-row { display: flex; align-items: center; border-bottom: 1px solid var(--line); border-radius: var(--radius-md); transition: background-color var(--motion-fast) var(--easing-standard), box-shadow var(--motion-fast) var(--easing-standard); }
+.dashboard-list-row:last-child { border-bottom: 0; }
+.dashboard-list-row:hover { background: color-mix(in srgb, var(--brand-500) 8%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-500) 14%, transparent); }
+.meeting-row, .chat-row { min-width: 0; min-height: 62px; flex: 1; display: flex; align-items: center; gap: 11px; padding: 9px 7px; color: var(--text); }
+.meeting-row:hover, .chat-row:hover { color: var(--text); }
+.dashboard-list-row:hover .row-main small { color: var(--text-soft); }
+.row-delete-button { width: 38px; height: 38px; flex: 0 0 38px; margin-right: 6px; display: grid; place-items: center; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); opacity: .55; }
+.dashboard-list-row:hover .row-delete-button, .row-delete-button:focus-visible { opacity: 1; }
+.row-delete-button:hover { background: var(--danger-soft); color: var(--danger); transform: scale(1.03); }
 .meeting-status { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #a6aaa3; }
 .status-scheduled { background: #c18934; }
 .status-live { background: #3d9369; }
@@ -464,6 +470,8 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .icon-button { width: 44px; height: 44px; flex-basis: 44px; border-radius: var(--radius-pill); color: var(--text-soft); }
 .icon-button-dark { border: 0; background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-brand); }
 .icon-button-dark:hover { background: var(--gradient-primary); color: var(--white); box-shadow: var(--glow-brand); }
+.icon-button-danger { color: var(--danger); }
+.icon-button-danger:hover { background: var(--danger-soft); color: var(--danger); box-shadow: none; }
 .brand { font-family: var(--font-display); font-size: 20px; letter-spacing: -.02em; }
 .brand-mark { width: 32px; height: 32px; padding: 6px; border-radius: var(--radius-sm); background: var(--gradient-primary); box-shadow: var(--shadow-brand); }
 .avatar { border-color: rgba(98,96,255,.16); background: var(--gradient-soft); color: var(--brand-800); }
@@ -571,6 +579,9 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 :root[data-theme="dark"] .message-bubble { background: var(--card); }
 :root[data-theme="dark"] .message-mine .message-bubble { background: var(--gradient-primary); }
 :root[data-theme="dark"] .role-badge { background: var(--lux-midnight); color: var(--lux-gold); box-shadow: var(--glow-gold); }
+:root[data-theme="dark"] .dashboard-list-row:hover { background: color-mix(in srgb, var(--brand-500) 15%, var(--card)); }
+:root[data-theme="dark"] .row-delete-button:hover { background: rgba(248,113,113,.14); }
+:root[data-theme="dark"] .header-more-menu > button.danger { color: var(--danger); }
 
 @media (max-width: 767px) {
   .message-bubble { max-width: 82%; }

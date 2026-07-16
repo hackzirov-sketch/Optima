@@ -243,8 +243,10 @@ export const api = {
       apiFetch<void>(`/chat/rooms/${roomId}/invites/${inviteId}`, { method: "DELETE" }),
     joinByCode: (code: string) =>
       apiFetch<ChatRoom>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
-    discussion: (messageId: string) =>
-      apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
+      discussion: (messageId: string) =>
+        apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
+      deleteRoom: (roomId: string) =>
+        apiFetch<void>(`/chat/rooms/${roomId}`, { method: "DELETE" }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
@@ -258,7 +260,8 @@ export const api = {
     join: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/join`, { method: "POST" }),
     joinByCode: (code: string) =>
       apiFetch<Meeting>("/meetings/join-by-code", { method: "POST", body: JSON.stringify({ code }) }),
-    leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
+      leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
+      remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
   },
   notifications: {
     list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),

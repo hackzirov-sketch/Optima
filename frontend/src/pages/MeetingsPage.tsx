@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Clock3, Copy, Link2, Plus, Radio, Search, UsersRound, Video } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Clock3, Copy, Link2, Plus, Radio, Search, Trash2, UsersRound, Video } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, EmptyState, Modal, PageHeader, Skeleton } from "../components/ui";
@@ -16,7 +16,7 @@ function statusLabel(status: Meeting["status"]) {
 }
 
 export function MeetingsPage() {
-  const { workspace } = useAuth();
+  const { user, workspace } = useAuth();
   const { show } = useToast();
   const [, navigate] = useLocation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -112,6 +112,17 @@ export function MeetingsPage() {
     }
   }
 
+  async function removeMeeting(meeting: Meeting) {
+    if (!window.confirm(`“${meeting.title}” meetingini o‘chirishni tasdiqlaysizmi?`)) return;
+    try {
+      await api.meetings.remove(meeting.id);
+      setMeetings((current) => current.filter((item) => item.id !== meeting.id));
+      show("Meeting o‘chirildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Meeting o‘chirilmadi", "error");
+    }
+  }
+
   const defaultStart = new Date(Date.now() + 30 * 60_000);
   defaultStart.setMinutes(Math.ceil(defaultStart.getMinutes() / 5) * 5, 0, 0);
 
@@ -125,7 +136,7 @@ export function MeetingsPage() {
         <section className="meeting-card-grid">
           {active.map((meeting) => (
             <article className={`meeting-card ${meeting.status === "live" ? "meeting-live" : ""}`} key={meeting.id}>
-              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Meeting kodi nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button></div></header>
+              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Meeting kodi nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button>{meeting.hostId === user?.id && <button className="icon-button icon-button-sm icon-button-danger" onClick={() => void removeMeeting(meeting)} aria-label="Meetingni o‘chirish"><Trash2 size={15} /></button>}</div></header>
               <div className="meeting-card-body"><h2>{meeting.title}</h2><p>{meeting.description || "Jamoa video suhbati"}</p></div>
               <dl><div><dt><CalendarDays size={16} /> Vaqt</dt><dd>{dateTime(meeting.startTime)}</dd></div><div><dt><UsersRound size={16} /> Qatnashchilar</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl>
               <footer><code>{meeting.code}</code><Button onClick={() => navigate(`/meetings/${meeting.id}`)} icon={<ArrowRight size={17} />}>{meeting.status === "live" ? "Hozir qo‘shilish" : "Meetingni ochish"}</Button></footer>
