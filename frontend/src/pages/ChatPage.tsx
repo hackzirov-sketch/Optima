@@ -112,6 +112,8 @@ export function ChatPage() {
   const [inviteError, setInviteError] = useState("");
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
+  const aiMessageList = useRef<HTMLDivElement>(null);
+  const aiShouldScroll = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -159,6 +161,7 @@ export function ChatPage() {
   }
 
   function chooseAi() {
+    aiShouldScroll.current = true;
     setAiOpen(true);
     setSelectedId(null);
     setCatalog("bot");
@@ -170,12 +173,15 @@ export function ChatPage() {
     if (!prompt || aiThinking) return;
     const userMessage: AiConversationMessage = { id: crypto.randomUUID(), role: "user", text: prompt, createdAt: new Date().toISOString() };
     const next = [...aiMessages, userMessage].slice(-40);
+    aiShouldScroll.current = true;
     setAiMessages(next);
     setAiDraft("");
     setAiThinking(true);
     try {
       const history = next.slice(-12, -1).map(({ role, text }) => ({ role, text }));
       const result = await api.chat.ai(prompt, history);
+      const list = aiMessageList.current;
+      aiShouldScroll.current = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 120;
       const completed = [...next, { id: crypto.randomUUID(), role: "model" as const, text: result.reply, createdAt: new Date().toISOString(), sources: result.sources }].slice(-40);
       setAiMessages(completed);
       if (user?.id) localStorage.setItem(`optima-ai-conversation:${user.id}`, JSON.stringify(completed));
@@ -343,7 +349,17 @@ export function ChatPage() {
       if (node && node.scrollHeight - node.scrollTop - node.clientHeight < 96) setShowScrollButton(false);
     }, messages.length > 10 ? 420 : 0);
     return () => window.clearTimeout(timer);
-  }, [messages, typingUsers]);
+  }, [messages]);
+
+  useEffect(() => {
+    if (!aiOpen || !aiShouldScroll.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const node = aiMessageList.current;
+      if (node) node.scrollTo({ top: node.scrollHeight, behavior: aiMessages.length > 1 ? "smooth" : "auto" });
+      aiShouldScroll.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [aiMessages.length, aiOpen]);
 
   useEffect(() => {
     if (!detailsOpen || !selectedId) return;
@@ -814,7 +830,7 @@ export function ChatPage() {
         {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title="Suhbatni tanlang" description="Guruh yoki jamoa a’zosi bilan yozishishni boshlang." action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Yangi suhbat</Button>} />}
         {aiOpen && <div className="ai-conversation">
           <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label="Botlar ro'yxatiga qaytish"><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? "javob tayyorlamoqda..." : "onlayn yordamchi"}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> xavfsiz</span></header>
-          <div className="message-list ai-message-list" aria-live="polite">
+          <div ref={aiMessageList} className="message-list ai-message-list" aria-live="polite">
             {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>Savol bering, matn yozdiring yoki yangi ma'lumotni tekshirtiring.</p></div>}
             {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>Manbalar</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
             {aiThinking && <div className="typing-bubble ai-typing"><Bot size={16} /><i /><i /><i /></div>}
