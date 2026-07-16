@@ -560,6 +560,10 @@ export function ChatPage() {
 
   async function startCall(kind: "audio" | "video") {
     if (!workspace || !selectedRoom || startingCall) return;
+    if (selectedRoom.type !== "direct" || !detailPeer) {
+      show("Direct qo'ng'iroq faqat shaxsiy suhbatda mavjud.", "error");
+      return;
+    }
     setStartingCall(kind);
     try {
       const meeting = await api.meetings.create(workspace.id, {
@@ -569,11 +573,9 @@ export function ChatPage() {
         maxParticipants: Math.max(2, selectedRoom.memberCount + 2),
       });
       sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
-      if (selectedRoom.type === "direct" && detailPeer) {
-        const call = { meetingId: meeting.id, roomId: selectedRoom.id, peerId: detailPeer.id, kind, phase: "outgoing" as const };
-        setDirectCall(call);
-        getSocket().emit("call:invite", { meetingId: call.meetingId, roomId: call.roomId, targetUserId: call.peerId, kind: call.kind });
-      } else navigate(`/meetings/${meeting.id}`);
+      const call = { meetingId: meeting.id, roomId: selectedRoom.id, peerId: detailPeer.id, kind, phase: "outgoing" as const };
+      setDirectCall(call);
+      getSocket().emit("call:invite", { meetingId: call.meetingId, roomId: call.roomId, targetUserId: call.peerId, kind: call.kind });
     } catch (error) {
       show(error instanceof Error ? error.message : "Qo‘ng‘iroq boshlanmadi", "error");
       setStartingCall(null);
@@ -886,8 +888,10 @@ export function ChatPage() {
               <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label="Suhbat ma'lumotlarini ochish"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
-                <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall)} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
-                <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall)} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
+                {selectedRoom.type === "direct" && <>
+                  <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
+                  <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
+                </>}
                 {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>{selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
               </div>
             </header>

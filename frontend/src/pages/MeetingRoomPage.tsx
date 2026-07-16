@@ -428,11 +428,11 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
 
   if (loading) return <div className="meeting-room-loading"><LoaderCircle className="spin" size={26} /><p>Meeting tayyorlanmoqda...</p></div>;
-  if (!meeting) return <div className="meeting-room-loading"><p>Meeting topilmadi.</p><Button onClick={() => navigate("/meetings")}>Orqaga</Button></div>;
+  if (!meeting) return <div className="meeting-room-loading"><p>{directMode ? "Qo'ng'iroq topilmadi." : "Meeting topilmadi."}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>Orqaga</Button></div>;
 
   if (!entered) return (
     <div className="meeting-lobby">
-      <header><button className="icon-button" onClick={() => navigate("/meetings")} aria-label="Orqaga"><ArrowLeft size={20} /></button><span className="lobby-brand">Optima Meet</span><span className="lobby-secure"><Signal size={15} /> Himoyalangan aloqa</span></header>
+      <header><button className="icon-button" onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")} aria-label="Orqaga"><ArrowLeft size={20} /></button><span className="lobby-brand">{directMode ? "Direct call" : "Optima Meet"}</span><span className="lobby-secure"><Signal size={15} /> Himoyalangan aloqa</span></header>
       <main>
         <section className="lobby-media-column">
           <div className="lobby-preview"><VideoTile stream={previewStream} muted mirrored label="Siz" avatar={user || undefined} microphoneOn={microphone} /><div className="lobby-preview-controls"><button className={microphone ? "active" : "off"} onClick={() => setMicrophone((value) => !value)} aria-label="Mikrofon">{microphone ? <Mic size={20} /> : <MicOff size={20} />}</button><button className={camera ? "active" : "off"} onClick={() => setCamera((value) => !value)} aria-label="Kamera">{camera ? <Camera size={20} /> : <CameraOff size={20} />}</button><button onClick={() => setSettingsOpen((value) => !value)} aria-label="Qurilma sozlamalari" aria-expanded={settingsOpen}><Settings2 size={20} /></button></div></div>
