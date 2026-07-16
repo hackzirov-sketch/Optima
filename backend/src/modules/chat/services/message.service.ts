@@ -170,7 +170,7 @@ export class ChatMessageService {
     if (member.isBanned || (member.bannedUntil && new Date(member.bannedUntil) > new Date())) {
       throw new ForbiddenException({ code: 'CHAT_MEMBER_BANNED', message: 'You cannot send messages in this room' });
     }
-    if (room.postingMode === 'admins_only' && member.user.publicId !== '100000003') {
+    if (room.postingMode === 'admins_only' && member.user.publicId !== '777777') {
       throw new ForbiddenException({ code: 'CHANNEL_ADMIN_ONLY', message: 'Only channel admins can publish posts' });
     }
 
