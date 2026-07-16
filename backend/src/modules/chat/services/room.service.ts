@@ -342,13 +342,21 @@ export class ChatRoomService {
   ) {
     await this.wsMembersService.assertMember(workspaceId, userId);
 
+    let directTargetUserId = dto.targetUserId;
     if (dto.type === ChatRoomType.DIRECT) {
-      if (!dto.targetUserId)
+      if (!directTargetUserId && dto.targetPublicId) {
+        const targetRows = await this.dataSource.query(
+          `SELECT id FROM users WHERE public_id = $1 AND deleted_at IS NULL`,
+          [dto.targetPublicId],
+        );
+        directTargetUserId = targetRows[0]?.id;
+      }
+      if (!directTargetUserId)
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
-          message: 'targetUserId is required for direct rooms',
+          message: 'A valid direct message recipient is required',
         });
-      if (dto.targetUserId === userId)
+      if (directTargetUserId === userId)
         throw new BadRequestException({
           code: ErrorCode.DM_WITH_SELF,
           message: 'Cannot create a DM with yourself',
@@ -361,7 +369,7 @@ export class ChatRoomService {
          JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $2 AND cm1.left_at IS NULL
          JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $3 AND cm2.left_at IS NULL
          WHERE r.workspace_id = $1 AND r.type = $4`,
-        [workspaceId, userId, dto.targetUserId, ChatRoomType.DIRECT],
+        [workspaceId, userId, directTargetUserId, ChatRoomType.DIRECT],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
     }
@@ -406,8 +414,8 @@ export class ChatRoomService {
     const saved = savedRows[0];
 
     const memberIds = new Set<string>([userId]);
-    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
-      memberIds.add(dto.targetUserId);
+    if (dto.type === ChatRoomType.DIRECT && directTargetUserId) {
+      memberIds.add(directTargetUserId);
     }
     if (dto.type !== ChatRoomType.DIRECT && dto.memberIds?.length) {
       dto.memberIds
@@ -428,12 +436,12 @@ export class ChatRoomService {
     );
 
     // Create notification for target user
-    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
+    if (dto.type === ChatRoomType.DIRECT && directTargetUserId) {
       await this.dataSource.query(
         `INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          dto.targetUserId,
+          directTargetUserId,
           userId,
           'chat_invite',
           'Sizni suhbatga taklif qilishdi',

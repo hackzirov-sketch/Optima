@@ -105,6 +105,7 @@ export function ChatPage() {
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
   const [detailMemberTotal, setDetailMemberTotal] = useState(0);
   const [detailMembers, setDetailMembers] = useState<Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
+  const [openingDirect, setOpeningDirect] = useState<string | null>(null);
   const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
@@ -693,6 +694,22 @@ export function ChatPage() {
     }
   }
 
+  async function openDirectChat(publicId: string) {
+    if (!workspace || openingDirect) return;
+    setOpeningDirect(publicId);
+    try {
+      const room = await api.chat.createRoom(workspace.id, { type: "direct", targetPublicId: publicId });
+      setDetailsOpen(false);
+      setCatalog("direct");
+      await loadRooms(room.id);
+      show("Shaxsiy suhbat ochildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Shaxsiy suhbat ochilmadi", "error");
+    } finally {
+      setOpeningDirect(null);
+    }
+  }
+
   async function acceptInvite() {
     if (!selectedRoom) return;
     try {
@@ -970,7 +987,7 @@ export function ChatPage() {
           <div className="chat-details-content">
             {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? "Obunachilarni qidirish" : "A'zolarni qidirish"} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <button className="detail-member" key={member.publicId} onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button>)}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button><button className="detail-member-message" onClick={() => void openDirectChat(member.publicId)} disabled={openingDirect === member.publicId} aria-label={`${member.firstName}ga xabar yozish`} title="Shaxsiy xabar">{openingDirect === member.publicId ? <LoaderCircle className="spin" size={18} /> : <MessageCircle size={18} />}<span>Xabar</span></button></div>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
             {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>Hozircha bo'sh</strong><small>Ulashilgan kontent shu yerda ko'rinadi.</small></span></div>}
           </div>
