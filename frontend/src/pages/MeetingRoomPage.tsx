@@ -31,7 +31,7 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
   );
 }
 
-export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
+export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }: { meetingId: string; directMode?: boolean; onDirectClose?: () => void }) {
   const { user, workspace } = useAuth();
   const { show } = useToast();
   const [, navigate] = useLocation();
@@ -323,6 +323,11 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     setJoining(false);
   }
 
+  useEffect(() => {
+    if (directMode && !loading && meeting && !entered && !joining) void enterMeeting();
+  // Direct calls skip the pre-join lobby.
+  }, [directMode, loading, meeting?.id]);
+
   async function toggleTrack(kind: "audio" | "video") {
     const enabled = kind === "audio" ? !microphone : !camera;
     const existing = currentStream.current?.getTracks().find((track) => track.kind === kind);
@@ -404,7 +409,8 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
 
   function leave() {
     cleanup();
-    navigate("/meetings");
+    if (directMode) onDirectClose?.();
+    else navigate("/meetings");
   }
 
   function toggleHand() {
@@ -441,7 +447,7 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const remoteEntries = Object.entries(remoteStreams);
   const securityCode = Object.values(securityCodes)[0];
   return (
-    <div className="meeting-room">
+    <div className={`meeting-room ${directMode ? "direct-call-room" : ""}`}>
       <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label="Shifrlash kalitini tekshirish"><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>Kalitni solishtiring</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>

@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, Pin, Plus, RadioTower, Reply, Search, Send, Smile, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Smile, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { AudioMessage } from "../components/AudioMessage";
+import { MeetingRoomPage } from "./MeetingRoomPage";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -46,6 +47,7 @@ export function ChatPage() {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [startingCall, setStartingCall] = useState<"audio" | "video" | null>(null);
+  const [directCall, setDirectCall] = useState<{ meetingId: string; roomId: string; peerId: string; kind: "audio" | "video"; phase: "incoming" | "outgoing" | "active" } | null>(null);
   const [catalog, setCatalog] = useState<"all" | "direct" | "group" | "channel" | "bot">("all");
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -108,6 +110,15 @@ export function ChatPage() {
   const detailPeer = selectedRoom?.type === "direct"
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
+
+  useEffect(() => {
+    const socket = getSocket();
+    const incoming = (data: { meetingId: string; roomId: string; fromUserId: string; kind: "audio" | "video" }) => setDirectCall({ meetingId: data.meetingId, roomId: data.roomId, peerId: data.fromUserId, kind: data.kind, phase: "incoming" });
+    const accepted = (data: { meetingId: string }) => setDirectCall((current) => current?.meetingId === data.meetingId ? { ...current, phase: "active" } : current);
+    const closed = (data: { meetingId: string }) => setDirectCall((current) => current?.meetingId === data.meetingId ? null : current);
+    socket.on("call:incoming", incoming); socket.on("call:accepted", accepted); socket.on("call:declined", closed); socket.on("call:ended", closed);
+    return () => { socket.off("call:incoming", incoming); socket.off("call:accepted", accepted); socket.off("call:declined", closed); socket.off("call:ended", closed); };
+  }, []);
 
   function roomTitle(room: ChatRoom) {
     if (room.name) return room.name;
@@ -436,11 +447,29 @@ export function ChatPage() {
         maxParticipants: Math.max(2, selectedRoom.memberCount + 2),
       });
       sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
-      navigate(`/meetings/${meeting.id}`);
+      if (selectedRoom.type === "direct" && detailPeer) {
+        const call = { meetingId: meeting.id, roomId: selectedRoom.id, peerId: detailPeer.id, kind, phase: "outgoing" as const };
+        setDirectCall(call);
+        getSocket().emit("call:invite", { meetingId: call.meetingId, roomId: call.roomId, targetUserId: call.peerId, kind: call.kind });
+      } else navigate(`/meetings/${meeting.id}`);
     } catch (error) {
       show(error instanceof Error ? error.message : "Qo‘ng‘iroq boshlanmadi", "error");
       setStartingCall(null);
     }
+  }
+
+  function acceptDirectCall() {
+    if (!directCall) return;
+    sessionStorage.setItem(`optima:meeting-camera:${directCall.meetingId}`, directCall.kind === "video" ? "on" : "off");
+    getSocket().emit("call:accept", { meetingId: directCall.meetingId, roomId: directCall.roomId, targetUserId: directCall.peerId, kind: directCall.kind });
+    setDirectCall({ ...directCall, phase: "active" });
+  }
+
+  function closeDirectCall() {
+    if (!directCall) return;
+    getSocket().emit(directCall.phase === "incoming" ? "call:decline" : "call:end", { meetingId: directCall.meetingId, roomId: directCall.roomId, targetUserId: directCall.peerId, kind: directCall.kind });
+    setDirectCall(null);
+    setStartingCall(null);
   }
 
   async function sendVoice(blob: Blob) {
@@ -782,6 +811,8 @@ export function ChatPage() {
           </>
         )}
       </section>
+
+      {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true" aria-label="Direct qo'ng'iroq">{directCall.phase === "active" ? <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> : <section className="direct-call-ringing"><div className="direct-call-glow" /><Avatar firstName={memberMap.get(directCall.peerId)?.firstName || "User"} lastName={memberMap.get(directCall.peerId)?.lastName} url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> : <Phone size={17} />}{directCall.kind === "video" ? "Video qo'ng'iroq" : "Audio qo'ng'iroq"}</span><h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : "Foydalanuvchi"}</h2><p>{directCall.phase === "incoming" ? "Sizga qo'ng'iroq qilmoqda..." : "Ulanish kutilmoqda..."}</p><div className="direct-call-ringing-actions"><button className="decline" onClick={closeDirectCall}><PhoneOff size={23} /><span>{directCall.phase === "incoming" ? "Rad etish" : "Bekor qilish"}</span></button>{directCall.phase === "incoming" && <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> : <Phone size={23} />}<span>Qabul qilish</span></button>}</div><small><ShieldCheck size={15} /> Ulanish kaliti qo'ng'iroqda emoji bilan tekshiriladi</small></section>}</div>}
 
       <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? "Profil" : selectedRoom?.type === "channel" ? "Kanal ma'lumoti" : "Guruh ma'lumoti"} description={selectedRoom?.type === "direct" ? "Foydalanuvchi ma'lumotlari" : selectedRoom?.type === "channel" ? `${selectedRoom?.memberCount || 0} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
         <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
