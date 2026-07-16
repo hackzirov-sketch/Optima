@@ -62,7 +62,15 @@ async function renewSession(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      // Another tab may have already rotated this exact refresh token
+      // concurrently (same account open in two tabs, both refreshing at
+      // once) — localStorage is shared across tabs, so if it now holds a
+      // different refresh token than the one we just sent, that rotation
+      // already succeeded elsewhere. Use it instead of logging the user out.
+      const latestToken = session.refreshToken();
+      return !!latestToken && latestToken !== refreshToken;
+    }
     session.save((await response.json()) as AuthResult);
     return true;
   } catch {

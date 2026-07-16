@@ -188,6 +188,23 @@ export class SessionService {
     } as RefreshToken & { user: User };
   }
 
+  /**
+   * Atomically flips revoked_at from NULL to now() — only one concurrent
+   * caller for the same token id can win this. Used by refresh rotation to
+   * close the race where two requests both read revoked_at=NULL before
+   * either write commits (e.g. the same account open in two tabs, both
+   * refreshing around the same moment).
+   */
+  async claimRefreshToken(id: string): Promise<boolean> {
+    const rows = await this.dataSource.query(
+      `UPDATE refresh_tokens SET revoked_at = now()
+       WHERE id = $1 AND revoked_at IS NULL
+       RETURNING id`,
+      [id],
+    );
+    return rows.length > 0;
+  }
+
   async save(session: RefreshToken) {
     const { setClause, values } = (() => {
       const cols = ['revokedAt', 'lastUsedAt'] as const;

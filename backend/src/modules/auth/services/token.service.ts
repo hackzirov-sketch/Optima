@@ -20,6 +20,10 @@ interface TokenContext {
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
 
+  /** Tolerance window for concurrent refresh requests racing on the same
+   * still-valid token (e.g. two open tabs) before treating reuse as theft. */
+  private static readonly REUSE_GRACE_MS = 10_000;
+
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
@@ -91,27 +95,54 @@ export class TokenService {
       .digest('hex');
     const storedToken = await this.sessionService.findByTokenHash(tokenHash);
 
-    if (storedToken && storedToken.revokedAt) {
-      // Token Reuse Detection
-      await this.sessionService.revokeAllSessions(storedToken.userId);
-      throw new UnauthorizedException({
-        code: ErrorCode.TOKEN_REVOKED,
-        message: 'Token reuse detected. All sessions revoked.',
-      });
-    }
-
-    if (
-      !storedToken ||
-      new Date() > storedToken.expiresAt
-    ) {
+    if (!storedToken) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_INVALID,
         message: 'Invalid or expired refresh token',
       });
     }
 
-    storedToken.revokedAt = new Date();
-    await this.sessionService.save(storedToken);
+    if (storedToken.revokedAt) {
+      // Already rotated. Within a short grace window this is almost always
+      // a benign race between two concurrent requests for the same
+      // still-valid token — e.g. the same account open in two tabs, both
+      // refreshing within milliseconds of each other around token expiry —
+      // not an attacker replaying a stolen token: genuine reuse of a
+      // rotated-out token typically resurfaces well after rotation, not
+      // within the same instant. Only escalate to a full session wipe once
+      // we're clearly past that window.
+      const msSinceRevoked = Date.now() - storedToken.revokedAt.getTime();
+      if (msSinceRevoked > TokenService.REUSE_GRACE_MS) {
+        await this.sessionService.revokeAllSessions(storedToken.userId);
+        throw new UnauthorizedException({
+          code: ErrorCode.TOKEN_REVOKED,
+          message: 'Token reuse detected. All sessions revoked.',
+        });
+      }
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Refresh already in progress — retry with the latest token',
+      });
+    }
+
+    if (new Date() > storedToken.expiresAt) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Invalid or expired refresh token',
+      });
+    }
+
+    // Atomic claim: only the request that actually flips revoked_at from
+    // NULL proceeds. A concurrent request that loses this race falls into
+    // the grace-window branch above instead of both requests independently
+    // rotating the same token.
+    const claimed = await this.sessionService.claimRefreshToken(storedToken.id);
+    if (!claimed) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Refresh already in progress — retry with the latest token',
+      });
+    }
 
     return this.generateTokens(storedToken.user, {
       ip: storedToken.ipAddress ?? undefined,
