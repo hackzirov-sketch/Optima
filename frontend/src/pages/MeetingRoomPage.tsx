@@ -34,6 +34,7 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const [camera, setCamera] = useState(() => sessionStorage.getItem(`optima:meeting-camera:${meetingId}`) !== "off");
   const [microphone, setMicrophone] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream>();
   const [previewStream, setPreviewStream] = useState<MediaStream>();
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevice, setCameraDevice] = useState("");
@@ -47,6 +48,7 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
   const peers = useRef(new Map<string, RTCPeerConnection>());
   const iceQueue = useRef(new Map<string, RTCIceCandidateInit[]>());
   const currentStream = useRef<MediaStream | undefined>(undefined);
+  const screenTrack = useRef<MediaStreamTrack | null>(null);
   const rtcConfig = useRef<RTCConfiguration>(RTC_CONFIG);
   const reconnectAttempts = useRef(new Map<string, number>());
   const sendOfferRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
@@ -283,21 +285,44 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     getSocket().emit("meeting:toggle", { meetingId, kind, enabled });
   }
 
+  async function stopScreenShare() {
+    const sharedTrack = screenTrack.current;
+    if (!sharedTrack && !screenSharing) return;
+    if (sharedTrack) sharedTrack.onended = null;
+    const cameraTrack = currentStream.current?.getVideoTracks()[0] ?? null;
+    for (const peer of peers.current.values()) {
+      const sender = peer.getSenders().find((entry) => entry.track === sharedTrack || entry.track?.kind === "video");
+      if (sender) await sender.replaceTrack(cameraTrack);
+    }
+    sharedTrack?.stop();
+    screenTrack.current = null;
+    setScreenStream(undefined);
+    setScreenSharing(false);
+    getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: false });
+  }
+
   async function toggleScreen() {
     if (screenSharing) {
-      const cameraTrack = currentStream.current?.getVideoTracks()[0];
-      if (cameraTrack) for (const peer of peers.current.values()) await peer.getSenders().find((sender) => sender.track?.kind === "video")?.replaceTrack(cameraTrack);
-      setScreenSharing(false);
-      getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: false });
+      await stopScreenShare();
       return;
     }
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const track = display.getVideoTracks()[0];
-      for (const peer of peers.current.values()) await peer.getSenders().find((sender) => sender.track?.kind === "video")?.replaceTrack(track);
+      if (!track) throw new Error("Screen track unavailable");
+      screenTrack.current = track;
+      setScreenStream(display);
+      for (const [targetUserId, peer] of peers.current) {
+        const sender = peer.getSenders().find((entry) => entry.track?.kind === "video");
+        if (sender) await sender.replaceTrack(track);
+        else {
+          peer.addTrack(track, display);
+          await sendOffer(targetUserId);
+        }
+      }
       setScreenSharing(true);
       getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: true });
-      track.onended = () => void toggleScreen();
+      track.onended = () => void stopScreenShare();
     } catch {
       show("Ekran ulash bekor qilindi", "error");
     }
@@ -307,6 +332,8 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
     getSocket().emit("meeting:leave", { meetingId });
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
+    screenTrack.current?.stop();
+    screenTrack.current = null;
     currentStream.current?.getTracks().forEach((track) => track.stop());
   }, [meetingId]);
 
@@ -340,7 +367,7 @@ export function MeetingRoomPage({ meetingId }: { meetingId: string }) {
       <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
-        <VideoTile stream={localStream} muted mirrored label="Siz" avatar={user || undefined} microphoneOn={microphone} />
+        <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} />
         {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); return <VideoTile key={remoteUserId} stream={stream} label={remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"} avatar={remote} />; })}
         {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
       </main>

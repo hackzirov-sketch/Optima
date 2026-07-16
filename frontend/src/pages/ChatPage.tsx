@@ -381,8 +381,13 @@ export function ChatPage() {
       const attachment = await api.chat.uploadFile(selectedRoom.id, file);
       const socket = getSocket();
       const clientMessageId = crypto.randomUUID();
-      if (socket.connected) await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId, attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
-      else await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
+      if (socket.connected) {
+        try {
+          await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId, attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
+        } catch {
+          await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
+        }
+      } else await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
       setDraft("");
       setReplyingTo(null);
     } catch (error) {
@@ -418,10 +423,15 @@ export function ChatPage() {
       const attachment = await api.chat.uploadAudio(selectedRoom.id, blob);
       const socket = getSocket();
       const clientMessageId = crypto.randomUUID();
-      if (socket.connected) await new Promise<void>((resolve, reject) => {
-        socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: "", clientMessageId, attachments: [attachment] }, (error: Error | null) => error ? reject(error) : resolve());
-      });
-      else await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
+      if (socket.connected) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: "", clientMessageId, attachments: [attachment] }, (error: Error | null) => error ? reject(error) : resolve());
+          });
+        } catch {
+          await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
+        }
+      } else await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
     } catch (error) {
       show(error instanceof Error ? error.message : "Audio xabar yuborilmadi", "error");
     } finally {
