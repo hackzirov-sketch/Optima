@@ -1219,6 +1219,13 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .message-mine .message-bubble { min-width: 118px; border: 0; border-radius: 18px 18px 6px 18px; background: var(--gradient-primary); color: #fff; box-shadow: 0 8px 20px rgba(94,114,178,.2); }
 .message-bubble > p { min-width: 0; font-size: 14px; line-height: 1.5; }
 .message-mine .message-bubble > span small, .message-mine .message-bubble > span time, .message-mine .message-bubble > span svg { color: rgba(255,255,255,.82); }
+.message-list { padding-inline: max(24px,calc((100% - 920px)/2)); }
+.message { max-width: min(72%,620px); }
+.message-bubble, .message-mine .message-bubble { min-width: 0; max-width: 100%; }
+.message-bubble { padding: 10px 13px 7px; }
+.message-bubble > span { min-width: 58px; }
+.conversation-header > .avatar { width: 48px; height: 48px; flex: 0 0 48px; }
+@media (max-width: 820px) { .message-list { padding-inline: 10px; }.message { max-width: 86%; }.conversation-header > .avatar { width: 40px; height: 40px; flex-basis: 40px; } }
 .message-context-menu { width: 232px; padding: 8px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 18px 46px rgba(50,66,112,.2); }
 .message-menu-trigger { top: 8px; right: -34px; background: color-mix(in srgb, var(--card) 88%, transparent); box-shadow: 0 4px 12px rgba(50,66,112,.12); }
 .message-mine .message-menu-trigger { right: auto; left: -34px; }

@@ -750,7 +750,7 @@ export function ChatPage() {
           <>
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
-              <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>
+              {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : <span className="room-avatar room-avatar-sm">{selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>}
               <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label="Suhbat ma'lumotlarini ochish"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
