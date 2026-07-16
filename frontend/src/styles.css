@@ -475,7 +475,7 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 body { font: var(--text-body); background: var(--bg); }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 700; }
 h1 { letter-spacing: -.02em; }
-button, a, input, textarea, select { transition-duration: var(--dur-base); transition-timing-function: var(--ease-out); }
+button, a, input, textarea, select { transition-property: color, background-color, border-color, box-shadow, opacity, transform; transition-duration: var(--dur-base); transition-timing-function: var(--ease-out); }
 input, textarea, select { min-height: 44px; padding: 10px 14px; border: var(--card-border); border-radius: var(--radius-md); background: var(--surface); }
 input:hover, textarea:hover, select:hover { border-color: var(--card-hover-border); }
 input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--brand-500); box-shadow: 0 0 0 4px rgba(98,96,255,.12); }
@@ -1109,7 +1109,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 /* Smooth navigation and chat category motion */
 .route-transition { min-height: inherit; }
 .chat-catalog { position: relative; isolation: isolate; }
-.chat-catalog .catalog-indicator { position: absolute; z-index: 0; top: 4px; bottom: 12px; left: 12px; width: calc((100% - 24px) / 5); border: 1px solid rgba(115,135,200,.18); border-radius: 46% 46% 42% 42% / 55% 55% 45% 45%; background: color-mix(in srgb, #BAC6EA 58%, var(--surface)); box-shadow: 0 8px 18px rgba(94,114,178,.16); transition: transform 300ms var(--easing-spring), border-radius 300ms var(--easing-standard), box-shadow 300ms var(--easing-standard); }
+.chat-catalog .catalog-indicator { position: absolute; z-index: 0; top: 4px; bottom: 12px; left: 12px; width: calc((100% - 24px) / 5); border: 1px solid rgba(115,135,200,.18); border-radius: 46% 46% 42% 42% / 55% 55% 45% 45%; background: color-mix(in srgb, #BAC6EA 58%, var(--surface)); box-shadow: 0 8px 18px rgba(94,114,178,.16); transition: transform 260ms var(--easing-standard), border-radius 260ms var(--easing-standard), box-shadow 260ms var(--easing-standard); }
 .chat-catalog .catalog-direct { transform: translateX(100%); }
 .chat-catalog .catalog-group { transform: translateX(200%); }
 .chat-catalog .catalog-channel { transform: translateX(300%); }
@@ -1120,10 +1120,12 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .chat-catalog button svg { width: 18px; height: 18px; flex: 0 0 18px; }
 .chat-catalog button > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-catalog button b { z-index: 2; top: 2px; right: 3px; background: var(--brand-600); color: #fff; box-shadow: 0 4px 10px rgba(94,114,178,.22); }
-.room-list-transition { animation: catalog-content-enter 230ms var(--easing-standard) both; }
-@keyframes catalog-content-enter { from { opacity: .35; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+.page, .chat-page { animation: page-soft-enter 150ms var(--easing-standard) both; }
+.room-list-transition { animation: content-soft-enter 150ms var(--easing-standard) both; }
+@keyframes page-soft-enter { from { opacity: .72; } to { opacity: 1; } }
+@keyframes content-soft-enter { from { opacity: .6; } to { opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .room-list-transition { animation: none; }
+  .page, .chat-page, .room-list-transition { animation: none; }
   .chat-catalog .catalog-indicator { transition: none; }
 }
