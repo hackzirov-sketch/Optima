@@ -777,8 +777,17 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .profile-meta small { font-size: 9px; }.profile-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-soft); font-size: 10px; }
 .profile-summary > .button { width: calc(100% - 32px); }
 .settings-stack { display: grid; gap: 14px; }
+.settings-tabs { padding: 6px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; border: var(--card-border); border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--shadow-sm); }
+.settings-tabs button { min-width: 0; min-height: 56px; padding: 8px 10px; display: grid; grid-template-columns: 28px minmax(0,1fr); align-items: center; gap: 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-soft); text-align: left; }
+.settings-tabs button:hover { background: var(--surface-muted); color: var(--text); }
+.settings-tabs button.active { background: var(--brand-100); color: var(--brand-700); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-500) 18%, transparent); }
+.settings-tabs button > span { min-width: 0; display: grid; gap: 2px; }
+.settings-tabs strong, .settings-tabs small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-tabs strong { font-size: 11px; }.settings-tabs small { color: var(--muted); font-size: 8.5px; }
+.settings-section-enter { animation: content-soft-enter var(--motion-normal) var(--easing-standard); }
 .settings-panel { overflow: hidden; }
 .settings-header { min-height: 78px; padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.settings-header > .button { margin-left: auto; white-space: nowrap; }
 .settings-header > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px; background: var(--surface-muted); color: var(--accent); }
 .settings-header h2 { margin-bottom: 4px; font-size: 14px; }.settings-header p { margin: 0; color: var(--muted); font-size: 10px; }
 .settings-form { padding: 20px; display: grid; gap: 15px; }
@@ -1013,9 +1022,25 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .conversation { min-width: 0; background: #edf2ee; background-image: radial-gradient(circle at 1px 1px, rgba(40,96,71,.055) 1px, transparent 0); background-size: 24px 24px; }
 .conversation-header { min-height: 68px; padding: 9px 14px; display: grid; grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center; gap: 10px; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); z-index: 6; }
 .conversation-title { min-width: 0; flex: 1; }
+.conversation-title:is(button) { padding: 5px 7px; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; text-align: left; }
+.conversation-title:is(button):hover { background: var(--surface-muted); }
 .conversation-header > .conversation-title { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 3px; }
 .conversation-title h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-title p { color: var(--accent); }
+.chat-details { display: grid; gap: 12px; }
+.chat-details-hero { min-height: 74px; padding: 12px; display: grid; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: 11px; border-radius: var(--radius-lg); background: var(--surface-muted); }
+.chat-details-hero > .room-avatar { width: 48px; height: 48px; }
+.chat-details-hero > div { min-width: 0; display: grid; gap: 3px; }.chat-details-hero strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.chat-details-hero small { color: var(--muted); }
+.chat-details-hero > button { min-height: 38px; padding: 0 13px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-pill); background: var(--brand-100); color: var(--brand-700); font-weight: 750; }
+.chat-details-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chat-details-tabs button { min-height: 38px; padding: 0 13px; flex: 0 0 auto; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--muted); font-weight: 700; }
+.chat-details-tabs button:hover { background: var(--surface-muted); color: var(--text); }.chat-details-tabs button.active { background: var(--brand-100); color: var(--brand-700); }
+.chat-details-content { min-height: 260px; max-height: min(54vh,520px); overflow-y: auto; }
+.detail-member, .shared-item { min-height: 58px; padding: 7px 9px; display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; gap: 9px; border-radius: var(--radius-md); color: var(--text); text-decoration: none; }
+.detail-member:hover, .shared-item:hover { background: var(--surface-muted); }
+.detail-member > span, .shared-item > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }.detail-member strong, .detail-member small, .shared-item strong, .shared-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.detail-member small, .shared-item small { color: var(--muted); font-size: 9px; }
+.detail-member > i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }.detail-member > i.online { background: var(--success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent); }
+.shared-item > span:first-child { width: 40px; height: 40px; display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-md); background: var(--brand-100); color: var(--brand-700); }.shared-item img { width: 100%; height: 100%; object-fit: cover; }
 .conversation-tools { position: relative; width: auto; height: 44px; margin-left: auto; padding: 2px; display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 1px; border: 1px solid var(--line); border-radius: 8px; background: #f7f8f7; white-space: nowrap; }
 .conversation-header > .conversation-tools { min-width: max-content; width: max-content; flex: 0 0 auto; display: inline-flex; grid-template-columns: none; gap: 1px; }
 .conversation-tools .icon-button { flex: 0 0 38px; width: 38px; height: 38px; min-width: 38px; padding: 0; border-radius: 6px; }
@@ -1333,12 +1358,18 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .profile-summary > .button { width: calc(100% - 24px); min-height: 42px; }
 
   .settings-stack { gap: 12px; }
+  .settings-tabs { position: sticky; top: 8px; z-index: 8; padding: 4px; border-radius: 16px; backdrop-filter: blur(16px); }
+  .settings-tabs button { min-height: 48px; padding: 6px; grid-template-columns: 1fr; justify-items: center; gap: 3px; text-align: center; }
+  .settings-tabs button svg { width: 17px; height: 17px; }
+  .settings-tabs small { display: none; }
+  .settings-tabs strong { font-size: 9px; }
   .settings-panel { border-radius: 18px; }
   .settings-header { min-height: 62px; padding: 11px 13px; gap: 10px; }
   .settings-header > span { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 11px; }
   .settings-header > span svg { width: 18px; height: 18px; }
   .settings-header h2 { margin-bottom: 2px; font-size: 13px; }
   .settings-header p { font-size: 9px; line-height: 1.35; }
+  .settings-header > .button { min-height: 36px; padding-inline: 10px; font-size: 9px; }
   .settings-form { padding: 12px; gap: 11px; }
   .settings-form label { gap: 5px; font-size: 11px; }
   .settings-form label > small { font-size: 9px; }

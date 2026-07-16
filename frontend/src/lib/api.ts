@@ -207,6 +207,8 @@ export const api = {
   chat: {
     community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
+    roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
+    shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
     rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
     createRoom: (workspaceId: string, data: Record<string, unknown>) =>
       apiFetch<ChatRoom>(`/workspaces/${workspaceId}/chat/rooms`, {

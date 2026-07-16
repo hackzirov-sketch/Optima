@@ -72,6 +72,11 @@ export function ChatPage() {
   const [workspaceInviteOpen, setWorkspaceInviteOpen] = useState(false);
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailMembers, setDetailMembers] = useState<Array<{ firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
+  const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
   const [roomInvites, setRoomInvites] = useState<RoomInvite[]>([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
@@ -264,6 +269,15 @@ export function ChatPage() {
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: messages.length > 10 ? "smooth" : "auto" });
   }, [messages, typingUsers]);
+
+  useEffect(() => {
+    if (!detailsOpen || !selectedId) return;
+    setDetailsLoading(true);
+    const request = detailsTab === "members"
+      ? api.chat.roomMembers(selectedId).then((result) => { setDetailMembers(result.items); setSharedItems([]); })
+      : api.chat.shared(selectedId, detailsTab).then((items) => { setSharedItems(items); setDetailMembers([]); });
+    void request.catch((error) => show(error instanceof Error ? error.message : "Ma'lumot yuklanmadi", "error")).finally(() => setDetailsLoading(false));
+  }, [detailsOpen, detailsTab, selectedId, show]);
 
   useEffect(() => {
     if (!selectedId || !messages.length) return;
@@ -674,7 +688,7 @@ export function ChatPage() {
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
               <span className="room-avatar room-avatar-sm">{selectedRoom.type === "direct" ? <UserRound size={16} /> : selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>
-              <div className="conversation-title"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></div>
+              <button className="conversation-title" onClick={() => setDetailsOpen(true)} aria-label="Suhbat ma'lumotlarini ochish"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
                 <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall)} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
@@ -734,6 +748,19 @@ export function ChatPage() {
           </>
         )}
       </section>
+
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom ? roomTitle(selectedRoom) : "Suhbat ma'lumoti"} description={selectedRoom?.description || `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
+        <div className="chat-details">
+          <div className="chat-details-hero"><span className="room-avatar">{selectedRoom?.type === "channel" ? <Megaphone size={22} /> : selectedRoom?.type === "direct" ? <UserRound size={22} /> : <Hash size={22} />}</span><div><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{selectedRoom?.isMuted ? "Ovozsiz" : "Xabarnomalar yoqilgan"}</small></div><button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={18} /> : <BellOff size={18} />}{selectedRoom?.isMuted ? "Unmute" : "Mute"}</button></div>
+          <nav className="chat-details-tabs">{(["members", "media", "files", "links", "music", "voice"] as const).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: "A'zolar", media: "Media", files: "Fayllar", links: "Linklar", music: "Musiqa", voice: "Voice" })[tab]}</button>)}</nav>
+          <div className="chat-details-content">
+            {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={`${member.username}-${member.firstName}`}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : "Username yo'q"} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></div>)}
+            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); return <a className="shared-item" key={item.id || item.messageId} href={href || undefined} target={href ? "_blank" : undefined} rel="noreferrer"><span>{detailsTab === "media" && item.mimeType?.startsWith("image/") && href ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</a>; })}
+            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>Hozircha bo'sh</strong><small>Ulashilgan kontent shu yerda ko'rinadi.</small></span></div>}
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Yangi suhbat" description="Guruh oching yoki jamoa a’zosi bilan shaxsiy yozishing.">
         <form className="modal-form" onSubmit={createConversation}>
