@@ -18,6 +18,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
 import { AuthService } from '../services/auth.service';
@@ -26,7 +27,6 @@ import { TokenService } from '../services/token.service';
 import { SessionService } from '../services/session.service';
 import { RegisterDto } from '../schemas/register.schema';
 import { LoginDto } from '../schemas/login.schema';
-import { RefreshTokenDto } from '../schemas/refresh-token.schema';
 import { VerifyEmailDto } from '../schemas/verify-email.schema';
 import { ResendVerificationDto } from '../schemas/resend-verification.schema';
 import { SetPasswordDto } from '../schemas/set-password.schema';
@@ -38,6 +38,13 @@ import { Public } from '../../../common/decorators/public.decorator';
 import { AuthRateLimitGuard } from '../guards/auth-rate-limit.guard';
 import { AuthRateLimit } from '../decorators/auth-rate-limit.decorator';
 import { JwtRefreshGuard } from '../guards/jwt-refresh.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import {
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+  setAuthCookies,
+  clearAuthCookies,
+} from '../../../common/utils/auth-cookies.util';
 
 @ApiTags('Auth')
 @SkipThrottle() // Auth routes use AuthRateLimitGuard — global ThrottlerGuard skipped (saves 3 Redis calls/req)
@@ -81,10 +88,10 @@ export class AuthController {
   @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 60, blockSeconds: 1800 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address with verifyToken + 6-digit code' })
-  async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto) {
+  async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.verifyEmail(dto);
     await req.clearRateLimit?.();
-    return result;
+    return this.respondWithTokens(res, result);
   }
 
   @Public()
@@ -103,16 +110,29 @@ export class AuthController {
   @Post('login')
   @AuthRateLimit({ action: 'login', maxAttempts: 5, windowSeconds: 60, blockSeconds: 900 })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Authenticate user and return tokens' })
+  @ApiOperation({ summary: 'Authenticate user, set httpOnly auth cookies' })
   async login(
     @Req() req,
     @Body() dto: LoginDto,
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.login(dto, ip, userAgent);
     await req.clearRateLimit?.();
-    return result;
+    return this.respondWithTokens(res, result);
+  }
+
+  /** Tokens never reach the response body — they're set as httpOnly cookies
+   * here and stripped out, so nothing JS-readable on the frontend ever holds
+   * one (defeats token exfiltration via XSS). */
+  private respondWithTokens<T extends { accessToken: string; refreshToken: string }>(
+    res: Response,
+    result: T,
+  ) {
+    const { accessToken, refreshToken, ...rest } = result;
+    setAuthCookies(res, this.configService, { accessToken, refreshToken });
+    return rest;
   }
 
   @Public()
@@ -195,12 +215,12 @@ export class AuthController {
   @Post('exchange-code')
   @AuthRateLimit({ action: 'exchange-code', maxAttempts: 10, windowSeconds: 60, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens' })
-  async exchangeOAuthCode(@Req() req, @Body() body: { code: string }) {
+  @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens, set httpOnly auth cookies' })
+  async exchangeOAuthCode(@Req() req, @Body() body: { code: string }, @Res({ passthrough: true }) res: Response) {
     if (!body?.code) throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'code is required' });
     const result = await this.oauthService.exchangeOAuthSessionCode(body.code);
     await req.clearRateLimit?.();
-    return result;
+    return this.respondWithTokens(res, result);
   }
 
   @Public()
@@ -208,29 +228,43 @@ export class AuthController {
   @Post('refresh')
   @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 60, blockSeconds: 300 })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  async refresh(@Req() req, @Body() dto: RefreshTokenDto) {
-    const result = await this.tokenService.refresh(dto.refreshToken);
+  @ApiOperation({ summary: 'Refresh access token using the httpOnly refresh cookie' })
+  async refresh(
+    @Req() req,
+    @CurrentUser('refreshToken') refreshToken: string,
+    @CurrentUser('workspaceId') workspaceId: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.tokenService.refresh(refreshToken, workspaceId);
     await req.clearRateLimit?.();
-    return result;
+    return this.respondWithTokens(res, result);
   }
 
   @Post('logout')
+  @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Revoke refresh token, blacklist current access token, clear auth cookies',
+  })
+  async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
+    const refreshToken: string | undefined = req.cookies?.[REFRESH_COOKIE];
+    const accessToken: string | undefined = req.cookies?.[ACCESS_COOKIE];
+    if (refreshToken) await this.tokenService.logout(refreshToken, accessToken);
+    clearAuthCookies(res, this.configService);
+    return { message: 'Logged out successfully' };
+  }
+
+  @Get('session')
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Revoke refresh token and blacklist current access token',
+    summary: 'Get the workspace this session is scoped to',
+    description:
+      'The access token is an httpOnly cookie, unreadable by frontend JS, so it has no way to decode ' +
+      'the `workspaceId` claim itself (e.g. on a plain page reload with no in-memory state left). This ' +
+      'is the one round trip that hands it back.',
   })
-  async logout(
-    @Body() dto: RefreshTokenDto,
-    @Headers('authorization') authorization?: string,
-  ) {
-    let accessToken: string | undefined;
-    if (authorization?.toLowerCase().startsWith('bearer ')) {
-      accessToken = authorization.slice(7).trim();
-    }
-    await this.tokenService.logout(dto.refreshToken, accessToken);
-    return { message: 'Logged out successfully' };
+  getSession(@CurrentUser('workspaceId') workspaceId: string | undefined) {
+    return { workspaceId: workspaceId ?? null };
   }
 
   @Get('sessions')

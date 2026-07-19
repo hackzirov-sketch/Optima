@@ -43,6 +43,11 @@ export class WorkspacesService {
     return rows[0];
   }
 
+  /** Verifies the user belongs to the workspace — throws ForbiddenException otherwise. */
+  async assertMembership(workspaceId: string, userId: string): Promise<void> {
+    await this.getMember(workspaceId, userId);
+  }
+
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
     const existing = await this.dataSource.query(`SELECT id FROM workspaces WHERE slug = $1`, [dto.slug]);
     if (existing[0]) {

@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import * as path from 'path';
 
 export function setupApp(app: NestExpressApplication, config: ConfigService): void {
@@ -14,6 +15,9 @@ export function setupApp(app: NestExpressApplication, config: ConfigService): vo
 
   // Security
   app.use(helmet());
+  // Auth now lives in httpOnly cookies (not localStorage) — needed to read
+  // them off incoming requests (req.cookies) in the JWT strategies below.
+  app.use(cookieParser());
   app.useStaticAssets(path.resolve(process.cwd(), 'uploads'), { prefix: '/uploads/' });
   app.enableCors({
     origin: allowedOrigins,

@@ -8,12 +8,14 @@ import { TagsService } from './services/tags.service';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     UsersModule,
     MailModule,
     NotificationsModule,
+    AuthModule,
   ],
   controllers: [WorkspacesController, InvitationsController],
   providers: [WorkspacesService, MembersService, InvitationsService, TagsService],

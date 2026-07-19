@@ -26,15 +26,21 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!workspace) return;
+    const workspaceId = workspace.id;
     setLoading(true);
-    Promise.all([api.chat.rooms(workspace.id), api.meetings.list(workspace.id), api.workspaces.members(workspace.id)])
+    Promise.all([api.chat.rooms(workspaceId), api.meetings.list(workspaceId), api.workspaces.members(workspaceId)])
       .then(([nextRooms, nextMeetings, nextMembers]) => {
         setRooms(nextRooms);
         setMeetings(nextMeetings);
         setMembers(nextMembers);
       })
       .finally(() => setLoading(false));
-  }, [workspace]);
+    // Depend on the id, not the workspace object — auth re-resolves a fresh
+    // object on every bootstrap/refresh even when it's still the same
+    // workspace, and re-fetching on every identity change (rather than on
+    // an actual workspace switch) needlessly repeats these calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.id]);
 
   const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
   const unread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);

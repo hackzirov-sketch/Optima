@@ -32,9 +32,9 @@ export class TokenService {
     private deviceService: DeviceService,
   ) {}
 
-  async buildJwtPair(user: User): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
+  async buildJwtPair(user: User, workspaceId?: string): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     const jti = crypto.randomUUID();
-    const payload = { sub: user.id, email: user.email, jti };
+    const payload = { sub: user.id, email: user.email, jti, workspaceId };
     // Parallel JWT signing (both are CPU-bound, independent)
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload),
@@ -46,14 +46,14 @@ export class TokenService {
     return { accessToken, refreshToken, jti };
   }
 
-  async generateTokens(user: User, ctx: TokenContext = {}) {
+  async generateTokens(user: User, ctx: TokenContext = {}, workspaceId?: string) {
     const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
     const deviceInfo = this.deviceService.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
 
     // Parallel: enforceSessionLimit + buildJwtPair (independent)
     const [{ accessToken, refreshToken }] = await Promise.all([
-      this.buildJwtPair(user),
+      this.buildJwtPair(user, workspaceId),
       this.sessionService.enforceSessionLimit(user.id),
     ]);
 
@@ -89,7 +89,7 @@ export class TokenService {
     }
   }
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken: string, workspaceId?: string) {
     const tokenHash = crypto
       .createHash('sha256')
       .update(refreshToken)
@@ -150,7 +150,9 @@ export class TokenService {
       userAgent: storedToken.userAgent ?? undefined,
       deviceName: storedToken.deviceName ?? undefined,
       provider: storedToken.provider ?? 'jwt-refresh',
-    });
+      // Carry the active workspace forward across rotation — otherwise every
+      // silent refresh would drop the user back to "no workspace selected".
+    }, workspaceId);
   }
 
   async logout(refreshToken: string, accessToken?: string) {

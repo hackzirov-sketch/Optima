@@ -306,10 +306,11 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!workspace) return;
+    const workspaceId = workspace.id;
     const socket = getSocket();
     const onConnect = () => {
       setConnected(true);
-      socket.emit("join_workspace", { workspaceId: workspace.id });
+      socket.emit("join_workspace", { workspaceId });
       if (selectedId && selectedRoom?.memberStatus !== "pending") socket.emit("join_room", { roomId: selectedId });
     };
     const onDisconnect = () => setConnected(false);
@@ -365,7 +366,12 @@ export function ChatPage() {
       socket.off("reaction_updated", onReaction);
       socket.off("error", onError);
     };
-  }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
+    // Depend on the id, not the workspace object — auth re-resolves a fresh
+    // object on every bootstrap/refresh even when it's still the same
+    // workspace, and re-running this (re-emitting join_workspace/join_room)
+    // on every identity change wastes socket traffic for no reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.id, selectedId, selectedRoom?.memberStatus, user?.id, show]);
 
   useEffect(() => {
     const socket = getSocket();

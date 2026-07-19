@@ -67,11 +67,6 @@ function unwrapEnvelope<T>(body: unknown): T {
   return body as T;
 }
 
-function recoveredElsewhere(sentToken: string): boolean {
-  const latestToken = session.refreshToken();
-  return !!latestToken && latestToken !== sentToken;
-}
-
 interface RefreshResult {
   ok: boolean;
   /** True when we couldn't even reach the server (offline, waking from
@@ -83,43 +78,40 @@ interface RefreshResult {
   networkError: boolean;
 }
 
+/** Tokens live in httpOnly cookies now — the browser sends/receives them
+ * automatically via `credentials: "include"`, so there's no token for this
+ * function to read, compare, or store; it only needs to know whether the
+ * rotation succeeded. */
 async function renewSession(): Promise<RefreshResult> {
-  const refreshToken = session.refreshToken();
-  if (!refreshToken) return { ok: false, networkError: false };
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
+    response = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn("[auth] POST /auth/refresh threw:", error);
     return { ok: false, networkError: true };
   }
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    // Another tab may have already rotated this exact refresh token
-    // concurrently (same account open in two tabs, both refreshing at
-    // once) — localStorage is shared across tabs, so if it now holds a
-    // different refresh token than the one we just sent, that rotation
-    // already succeeded elsewhere. Use it instead of logging the user out.
-    if (recoveredElsewhere(refreshToken)) return { ok: true, networkError: false };
-    // The winning tab's response + localStorage write is a separate round
-    // trip that can simply land a beat after ours — a 401 here doesn't yet
-    // mean the token is dead, only that we lost the race. Give the winner
-    // a brief moment to finish before giving up for real.
-    if (response.status === 401) {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      if (recoveredElsewhere(refreshToken)) return { ok: true, networkError: false };
+  if (response.ok) return { ok: true, networkError: false };
+
+  // Losing a concurrent-refresh race (another tab's request rotated the
+  // cookie a beat before ours landed) surfaces as a benign 401 here — the
+  // server intentionally distinguishes this from real token theft. Give the
+  // winner a brief moment to finish, then retry once before giving up.
+  if (response.status === 401) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      const retry = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+      if (retry.ok) return { ok: true, networkError: false };
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[auth] POST /auth/refresh retry threw:", error);
+      return { ok: false, networkError: true };
     }
-    // eslint-disable-next-line no-console
-    console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
-    return { ok: false, networkError: false };
   }
-  session.save(unwrapEnvelope<AuthResult>(await response.json()));
-  return { ok: true, networkError: false };
+  const body = await response.text().catch(() => "");
+  // eslint-disable-next-line no-console
+  console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
+  return { ok: false, networkError: false };
 }
 
 /** Exported so callers (e.g. auth.tsx's periodic/visibility-triggered refresh)
@@ -134,22 +126,24 @@ export async function refreshSession(): Promise<RefreshResult> {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
-  if (!options.anonymous) {
-    const token = session.accessToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-  }
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: "include" });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
     const result = await refreshSession();
     if (result.ok) return apiFetch<T>(path, { ...options, retry: false });
     // A network-level failure to refresh doesn't mean the session is
-    // actually invalid — don't wipe it out from under the user just because
-    // the network hasn't come back yet (e.g. right after waking from sleep).
+    // actually invalid — don't tell the app to log out just because the
+    // network hasn't come back yet (e.g. right after waking from sleep).
     if (!result.networkError) {
       // eslint-disable-next-line no-console
-      console.warn(`[auth] refresh failed on ${path}, clearing session`);
-      session.clear();
+      console.warn(`[auth] refresh failed on ${path}, session is invalid`);
+      // NOTE: this must only ever clear local state, never trigger a
+      // re-fetch (e.g. re-running bootstrap) — a genuinely dead session
+      // means EVERY authenticated call on the page is about to 401 the same
+      // way, and re-fetching in response to each one is an infinite loop
+      // that floods the server (session.ts's listener is responsible for
+      // keeping this side-effect-free; see auth.tsx).
+      session.notify();
     }
   }
 
@@ -208,16 +202,16 @@ export const api = {
         body: JSON.stringify({ email }),
       }),
     exchangeOAuthCode: (code: string) =>
-      apiFetch<Pick<AuthResult, "accessToken" | "refreshToken">>("/auth/exchange-code", {
+      // Tokens never appear in the body — the response sets httpOnly cookies directly.
+      apiFetch<Record<string, never>>("/auth/exchange-code", {
         method: "POST",
         anonymous: true,
         body: JSON.stringify({ code }),
       }),
-    logout: (refreshToken: string) =>
-      apiFetch<{ message: string }>("/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({ refreshToken }),
-      }),
+    logout: () => apiFetch<{ message: string }>("/auth/logout", { method: "POST" }),
+    /** The access token is an httpOnly cookie the frontend can't decode — this
+     * is how it learns which workspace the current session is scoped to. */
+    session: () => apiFetch<{ workspaceId: string | null }>("/auth/session"),
     sessions: () => apiFetch<Array<{
       id: string;
       deviceName?: string | null;
@@ -249,6 +243,9 @@ export const api = {
     create: (data: { name: string; slug: string; description?: string }) =>
       apiFetch<Workspace>("/workspaces", { method: "POST", body: JSON.stringify(data) }),
     members: (workspaceId: string) => apiFetch<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`),
+    /** Reissues the auth cookies scoped to this workspace (embedded as a `workspaceId` JWT claim). */
+    select: (workspaceId: string) =>
+      apiFetch<{ workspaceId: string }>(`/workspaces/${workspaceId}/select`, { method: "POST" }),
     invite: (workspaceId: string, email: string, role: string) =>
       apiFetch<{ id: string; email: string; role: string; token: string }>(`/workspaces/${workspaceId}/invitations`, {
         method: "POST",

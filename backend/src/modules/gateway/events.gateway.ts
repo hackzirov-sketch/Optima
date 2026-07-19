@@ -16,6 +16,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { parseCookie } from 'cookie';
+import { ACCESS_COOKIE } from '../../common/utils/auth-cookies.util';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
@@ -155,9 +157,12 @@ export class EventsGateway
 
   // ─── Auth middleware ─────────────────────────────────
   private extractUser(client: Socket): WsUser | null {
-    const token =
-      client.handshake.auth?.token ||
-      client.handshake.headers?.authorization?.replace('Bearer ', '');
+    // Auth now lives in an httpOnly cookie (see auth-cookies.util.ts) — the
+    // browser attaches it automatically on the handshake request as long as
+    // the client connects with withCredentials:true, so there's nothing for
+    // frontend JS to read or hand us explicitly anymore.
+    const rawCookie = client.handshake.headers?.cookie;
+    const token = rawCookie ? parseCookie(rawCookie)[ACCESS_COOKIE] : undefined;
 
     if (!token) return null;
 

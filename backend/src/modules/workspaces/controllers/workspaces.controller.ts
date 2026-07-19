@@ -6,8 +6,11 @@ import {
   Delete,
   Body,
   Param,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { WorkspacesService } from '../services/workspaces.service';
 import { MembersService } from '../services/members.service';
 import { InvitationsService } from '../services/invitations.service';
@@ -20,6 +23,9 @@ import { InviteMemberDto } from '../schemas/invite-member.schema';
 import { UpdateMemberRoleDto } from '../schemas/update-member-role.schema';
 import { TransferOwnershipDto } from '../schemas/transfer-ownership.schema';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { TokenService } from '../../auth/services/token.service';
+import { UsersService } from '../../users/services/users.service';
+import { setAuthCookies } from '../../../common/utils/auth-cookies.util';
 
 @ApiTags('Workspaces')
 @ApiBearerAuth('access-token')
@@ -30,7 +36,30 @@ export class WorkspacesController {
     private readonly membersService: MembersService,
     private readonly invitationsService: InvitationsService,
     private readonly tagsService: TagsService,
+    private readonly tokenService: TokenService,
+    private readonly usersService: UsersService,
+    private readonly config: ConfigService,
   ) {}
+
+  @Post(':wsId/select')
+  @ApiOperation({
+    summary: 'Set the active workspace for this session',
+    description:
+      'Verifies membership, then reissues the access/refresh token pair scoped to this workspace ' +
+      '(embedded as a `workspaceId` JWT claim) and resets the httpOnly auth cookies. Replaces the old ' +
+      'client-side "selected workspace" localStorage key — the active workspace now lives in the token itself.',
+  })
+  async selectWorkspace(
+    @Param('wsId') wsId: string,
+    @CurrentUser('id') userId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.workspacesService.assertMembership(wsId, userId);
+    const user = await this.usersService.findById(userId);
+    const { accessToken, refreshToken, ...rest } = await this.tokenService.generateTokens(user, {}, wsId);
+    setAuthCookies(res, this.config, { accessToken, refreshToken });
+    return { ...rest, workspaceId: wsId };
+  }
 
   // ── Workspaces ──────────────────────────────────
   @Post()
