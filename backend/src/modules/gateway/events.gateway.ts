@@ -71,6 +71,12 @@ export interface MeetingIceDto     { meetingId: string; targetUserId: string; ca
 export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
 export interface DirectCallDto { meetingId: string; roomId: string; targetUserId: string; kind: 'audio' | 'video'; }
 
+// A socket drop (network blip, tab refresh) shouldn't immediately count as
+// "left the meeting" — give it a window to reconnect and rejoin before the
+// participant is marked as having left in the DB (which can in turn trigger
+// meeting auto-end if they were the last one present).
+const MEETING_RECONNECT_GRACE_MS = 30_000;
+
 @Injectable()
 @WebSocketGateway({
   cors: {
@@ -247,10 +253,28 @@ export class EventsGateway
       }
     }, 2000);
 
-    // Clean up meeting presence if this socket was in a meeting
+    // Clean up meeting presence if this socket was in a meeting — but only
+    // after a reconnect grace period (see MEETING_RECONNECT_GRACE_MS), not
+    // immediately. Socket.IO already removes the disconnected socket from
+    // all rooms synchronously, so the `meeting:${id}:user:${userId}` room
+    // membership check below correctly reflects "no reconnect happened yet"
+    // rather than this socket's own (already-gone) membership.
     const meetingId = client.data?.meetingId;
     if (meetingId) {
-      await this.leaveMeeting(client, userId, meetingId);
+      setTimeout(async () => {
+        try {
+          const stillPresent = await this.server
+            .in(`meeting:${meetingId}:user:${userId}`)
+            .fetchSockets();
+          if (stillPresent.length === 0) {
+            await this.meetingsService.leave(meetingId, userId).catch(() => {});
+            this.server.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
+            this.logger.log(`User ${userId} left meeting ${meetingId} (disconnect grace expired)`);
+          }
+        } catch (err) {
+          this.logger.error(`Error finalizing meeting leave for ${userId}`, err);
+        }
+      }, MEETING_RECONNECT_GRACE_MS);
     }
 
     this.logger.log(`Client disconnected: ${client.id} → userId=${userId}`);
@@ -649,6 +673,16 @@ export class EventsGateway
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
       client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
       this.logger.log(`User ${userId} left meeting ${meetingId}`);
+    }
+  }
+
+  /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */
+  async forceEndMeetingRoom(meetingId: string) {
+    const sockets = await this.server.in(`meeting:${meetingId}`).fetchSockets();
+    for (const s of sockets) {
+      delete s.data.meetingId;
+      await s.leave(`meeting:${meetingId}`);
+      if (s.data?.userId) await s.leave(`meeting:${meetingId}:user:${s.data.userId}`);
     }
   }
 

@@ -31,6 +31,12 @@ import * as crypto from 'crypto';
 export const MEETING_RECORDING_QUEUE = 'meeting-recording';
 export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enforced server-side regardless of client behavior
 
+export const MEETING_LIFECYCLE_QUEUE = 'meeting-lifecycle';
+// Google Meet-style grace window: a brief network drop/reload for the last
+// remaining participant shouldn't tear the meeting down. Re-checked at fire
+// time by MeetingLifecycleProcessor, not just at schedule time.
+export const MEETING_AUTO_END_GRACE_SECONDS = 20;
+
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
   meeting_code AS "meetingCode", status, scope, start_time AS "startTime", end_time AS "endTime",
@@ -74,6 +80,8 @@ export class MeetingsService {
     private readonly reminderScheduler: ReminderSchedulerService,
     @InjectQueue(MEETING_RECORDING_QUEUE)
     private readonly recordingQueue: Queue,
+    @InjectQueue(MEETING_LIFECYCLE_QUEUE)
+    private readonly lifecycleQueue: Queue,
     private readonly storageService: StorageService,
   ) {}
 
@@ -506,6 +514,13 @@ export class MeetingsService {
     return iceServers;
   }
 
+  /**
+   * Leave the meeting. This is "leave only" semantics for everyone,
+   * including the host — same as Google Meet, the host leaving does NOT
+   * end the meeting for the rest of the participants. The meeting is only
+   * torn down when the host explicitly calls `endMeeting`, or when the
+   * last remaining participant leaves (see `scheduleAutoEndCheck`).
+   */
   async leave(meetingId: string, userId: string) {
     const participantRows = await this.dataSource.query(
       `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -522,20 +537,98 @@ export class MeetingsService {
       [participantRows[0].id],
     );
 
-    // If host leaves and meeting is live, end it
-    const meeting = await this.findMeeting(meetingId);
-    if (
-      meeting &&
-      meeting.hostId === userId &&
-      meeting.status === MeetingStatus.LIVE
-    ) {
-      await this.dataSource.query(
-        `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now() WHERE id = $1`,
-        [meetingId, MeetingStatus.ENDED],
-      );
-    }
+    await this.scheduleAutoEndCheck(meetingId);
 
     return { left: true };
+  }
+
+  /**
+   * If nobody is left in a LIVE meeting, schedule a delayed re-check
+   * (MEETING_AUTO_END_GRACE_SECONDS later) rather than ending immediately —
+   * gives a rejoin/reconnect a window to cancel the auto-end. Safe to call
+   * after every leave: it's a cheap no-op whenever someone is still present.
+   */
+  private async scheduleAutoEndCheck(meetingId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting || meeting.status !== MeetingStatus.LIVE) return;
+
+    const activeCountRows = await this.dataSource.query(
+      `SELECT COUNT(*) FROM meeting_participants WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+    if (Number(activeCountRows[0]?.count ?? 0) > 0) return;
+
+    await this.lifecycleQueue.add(
+      'check-auto-end',
+      { meetingId },
+      {
+        delay: MEETING_AUTO_END_GRACE_SECONDS * 1000,
+        jobId: `auto-end_${meetingId}`,
+      },
+    );
+  }
+
+  /**
+   * Called only by MeetingLifecycleProcessor once the grace period elapses.
+   * Re-checks presence at fire time — if someone rejoined in the meantime
+   * this is a no-op, exactly like Google Meet's empty-room behavior.
+   */
+  async checkAutoEnd(meetingId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting || meeting.status !== MeetingStatus.LIVE) return null;
+
+    const activeCountRows = await this.dataSource.query(
+      `SELECT COUNT(*) FROM meeting_participants WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+    if (Number(activeCountRows[0]?.count ?? 0) > 0) return null;
+
+    return this.finishMeeting(meetingId);
+  }
+
+  /** Host-only: end the meeting for everyone right now ("End meeting" popup choice). */
+  async endMeeting(meetingId: string, userId: string) {
+    await this.assertHost(meetingId, userId);
+    const ended = await this.finishMeeting(meetingId);
+    if (!ended) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ALREADY_FINISHED,
+        message: 'Meeting already finished',
+      });
+    }
+    return ended;
+  }
+
+  /**
+   * Shared terminal transition, used by both the explicit host "End meeting"
+   * action and the automatic empty-room timeout. Marks the meeting ENDED
+   * (history is never deleted — only ever transitions to ENDED/CANCELLED),
+   * force-closes any still-active participant rows, auto-stops an in-progress
+   * recording, and cancels any pending auto-end job so it doesn't fire twice.
+   */
+  private async finishMeeting(meetingId: string) {
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
+         WHERE id = $1 AND status = $3::meeting_status_enum
+         RETURNING ${MEETING_COLUMNS_SQL}`,
+        [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
+      ),
+    );
+    const meeting = rows[0];
+    if (!meeting) return null; // already ended/cancelled — no-op
+
+    await this.dataSource.query(
+      `UPDATE meeting_participants SET left_at = now() WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+
+    await this.stopRecording(meetingId, null, { autoStopped: true }).catch(() => undefined);
+
+    const job = await this.lifecycleQueue.getJob(`auto-end_${meetingId}`);
+    await job?.remove().catch(() => undefined);
+
+    return meeting;
   }
 
   async joinByCode(code: string, userId: string) {

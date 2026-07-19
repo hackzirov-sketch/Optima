@@ -162,6 +162,21 @@ export interface Meeting {
   createdAt: string;
 }
 
+export interface MeetingRecording {
+  id: string;
+  meetingId: string;
+  startedBy: string;
+  status: "recording" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  stoppedAt?: string | null;
+  durationSeconds?: number | null;
+  autoStopped: boolean;
+  storageKey?: string | null;
+  storageUrl?: string | null;
+  fileSize?: number | null;
+  createdAt: string;
+}
+
 export interface MeetingFile {
   id: string;
   meetingId: string;

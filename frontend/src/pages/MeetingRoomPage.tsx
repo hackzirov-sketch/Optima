@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Info, LayoutGrid, Link2, LoaderCircle, Mic, MicOff, MonitorUp, MoreVertical, Paperclip, PhoneOff, Pin, Settings2, ShieldCheck, Signal, Smile, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Circle, Copy, Download, FileText, Hand, Info, LayoutGrid, Link2, LoaderCircle, Mic, MicOff, MonitorUp, MoreVertical, Paperclip, PhoneOff, Pin, Settings2, ShieldCheck, Signal, Smile, Square, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -83,6 +83,13 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const remoteSecurityKeys = useRef(new Map<string, JsonWebKey>());
   const [securityCodes, setSecurityCodes] = useState<Record<string, string[]>>({});
   const sendOfferRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+  const [leavePrompt, setLeavePrompt] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const recordingIdRef = useRef<string | null>(null);
+  const recordingStateRef = useRef<{ recorder: MediaRecorder; chunks: Blob[]; canvas: HTMLCanvasElement; audioCtx: AudioContext; rafId: number; outputStream: MediaStream } | null>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  const cleanupRef = useRef<() => void>(() => {});
 
   const ensureSecurityKey = useCallback(() => {
     securityKeyPair.current ||= crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
@@ -138,6 +145,9 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   }, [meetingId, workspace?.id, show]);
 
   const users = useMemo(() => new Map(members.map((member) => [member.userId, member.user as User])), [members]);
+  const isHost = Boolean(meeting && user && meeting.hostId === user.id);
+  const myRole = meeting?.participants.find((participant) => participant.userId === user?.id)?.role;
+  const canRecord = isHost || myRole === "co_host";
 
   async function shareMeetingLink() {
     if (!meeting) return;
@@ -294,6 +304,11 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       setFiles((current) => current.some((item) => item.id === file.id) ? current : [file, ...current]);
     };
     const onMeetingError = ({ message }: { message: string }) => { show(message || "Meetingga qo‘shilib bo‘lmadi", "error"); setEntered(false); };
+    const onMeetingEnded = ({ reason }: { reason?: string }) => {
+      show(reason === "host_ended" ? "Host meetingni yakunladi" : "Meeting yakunlandi");
+      cleanupRef.current();
+      if (directMode) onDirectClose?.(); else navigate("/meetings");
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("meeting:participants", onParticipants);
@@ -308,6 +323,7 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     socket.on("meeting:toggled", onToggle);
     socket.on("meeting:file-shared", onFileShared);
     socket.on("meeting:error", onMeetingError);
+    socket.on("meeting:ended", onMeetingEnded);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -324,8 +340,9 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       socket.off("meeting:toggled", onToggle);
       socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
+      socket.off("meeting:ended", onMeetingEnded);
     };
-  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
+  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id, directMode, onDirectClose, navigate]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -453,6 +470,104 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     }
   }
 
+  const drawRecordingFrame = useCallback(() => {
+    const state = recordingStateRef.current;
+    if (!state) return;
+    const ctx = state.canvas.getContext("2d");
+    const videos = stageRef.current ? (Array.from(stageRef.current.querySelectorAll("video")) as HTMLVideoElement[]) : [];
+    if (ctx) {
+      const count = Math.max(1, videos.length);
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      const cellW = state.canvas.width / cols;
+      const cellH = state.canvas.height / rows;
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, state.canvas.width, state.canvas.height);
+      videos.forEach((video, index) => {
+        if (video.readyState < 2 || !video.videoWidth) return;
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = col * cellW;
+        const y = row * cellH;
+        const scale = Math.min(cellW / video.videoWidth, cellH / video.videoHeight);
+        const w = video.videoWidth * scale;
+        const h = video.videoHeight * scale;
+        ctx.drawImage(video, x + (cellW - w) / 2, y + (cellH - h) / 2, w, h);
+      });
+    }
+    state.rafId = requestAnimationFrame(drawRecordingFrame);
+  }, []);
+
+  // Client-side "meeting recording": composites every visible <video> tile onto
+  // a canvas and mixes every stream's audio through Web Audio, since this
+  // backend uses mesh WebRTC (no SFU to record server-side). The blob is
+  // uploaded to R2 via the same presign flow used for shared files.
+  const startRecording = useCallback(async () => {
+    if (!canRecord || recording || recordingBusy) return;
+    setRecordingBusy(true);
+    try {
+      const created = await api.meetings.recordings.start(meetingId);
+      recordingIdRef.current = created.id;
+      const canvas = document.createElement("canvas");
+      canvas.width = 1280;
+      canvas.height = 720;
+      const canvasStream = canvas.captureStream(30);
+      const audioCtx = new AudioContext();
+      const dest = audioCtx.createMediaStreamDestination();
+      const sourceStreams = [currentStream.current, ...Object.values(remoteStreams)].filter(Boolean) as MediaStream[];
+      for (const stream of sourceStreams) {
+        if (!stream.getAudioTracks().length) continue;
+        try { audioCtx.createMediaStreamSource(stream).connect(dest); } catch { /* stream not mixable — skip */ }
+      }
+      const outputStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" : "video/webm";
+      const recorder = new MediaRecorder(outputStream, { mimeType });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.start(1000);
+      recordingStateRef.current = { recorder, chunks, canvas, audioCtx, rafId: 0, outputStream };
+      recordingStateRef.current.rafId = requestAnimationFrame(drawRecordingFrame);
+      setRecording(true);
+      show("Yozib olish boshlandi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Yozib olishni boshlab bo‘lmadi", "error");
+    } finally {
+      setRecordingBusy(false);
+    }
+  }, [canRecord, recording, recordingBusy, meetingId, remoteStreams, drawRecordingFrame, show]);
+
+  const stopRecording = useCallback(async () => {
+    const state = recordingStateRef.current;
+    const recordingId = recordingIdRef.current;
+    if (!state || !recordingId) return;
+    setRecordingBusy(true);
+    try {
+      cancelAnimationFrame(state.rafId);
+      const blob: Blob = await new Promise((resolve) => {
+        state.recorder.onstop = () => resolve(new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" }));
+        if (state.recorder.state !== "inactive") state.recorder.stop();
+        else resolve(new Blob(state.chunks, { type: "video/webm" }));
+      });
+      state.outputStream.getTracks().forEach((track) => track.stop());
+      await state.audioCtx.close().catch(() => {});
+      recordingStateRef.current = null;
+      setRecording(false);
+      const signed = await api.meetings.recordings.upload(meetingId, recordingId, blob);
+      await api.meetings.recordings.stop(meetingId, { storageKey: signed.storageKey, storageUrl: signed.storageUrl, fileSize: blob.size });
+      show("Yozuv saqlandi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Yozuvni saqlab bo‘lmadi", "error");
+    } finally {
+      recordingIdRef.current = null;
+      setRecordingBusy(false);
+    }
+  }, [meetingId, show]);
+
+  function toggleRecording() {
+    if (recording) void stopRecording();
+    else void startRecording();
+  }
+
   const cleanup = useCallback(() => {
     getSocket().emit("meeting:leave", { meetingId });
     peers.current.forEach((peer) => peer.close());
@@ -462,12 +577,45 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
     screenTrack.current?.stop();
     screenTrack.current = null;
     currentStream.current?.getTracks().forEach((track) => track.stop());
+    const recState = recordingStateRef.current;
+    if (recState) {
+      cancelAnimationFrame(recState.rafId);
+      if (recState.recorder.state !== "inactive") recState.recorder.stop();
+      recState.outputStream.getTracks().forEach((track) => track.stop());
+      recState.audioCtx.close().catch(() => {});
+      recordingStateRef.current = null;
+    }
   }, [meetingId]);
+  cleanupRef.current = cleanup;
 
-  function leave() {
+  async function performLeave() {
+    if (recording) await stopRecording();
     cleanup();
     if (directMode) onDirectClose?.();
     else navigate("/meetings");
+  }
+
+  function leave() {
+    if (isHost) { setLeavePrompt(true); return; }
+    void performLeave();
+  }
+
+  async function confirmEndMeeting() {
+    setLeavePrompt(false);
+    if (recording) await stopRecording();
+    try {
+      await api.meetings.end(meetingId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Meetingni yakunlab bo‘lmadi", "error");
+    }
+    cleanup();
+    if (directMode) onDirectClose?.();
+    else navigate("/meetings");
+  }
+
+  async function confirmLeaveOnly() {
+    setLeavePrompt(false);
+    await performLeave();
   }
 
   function toggleHand() {
@@ -531,10 +679,10 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
   const securityCode = Object.values(securityCodes)[0];
   return (
     <div className={`meeting-room ${directMode ? "direct-call-room" : ""}`}>
-      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div><div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}</strong><small>{connectionState === "connected" ? "Aloqa barqaror" : connectionState === "offline" ? "Qayta ulanmoqda" : "Ulanmoqda"}</small></span></div>{recording && <span className="recording-badge"><Circle size={9} /> YOZILMOQDA</span>}<div className="meeting-header-actions"><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label="Meeting ma’lumoti"><Info size={18} /></button><button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label="Qatnashchilar"><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label="Shifrlash kalitini tekshirish"><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>Kalitni solishtiring</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
-      <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
+      <main ref={stageRef} className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
         <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? "Siz ekran ulashyapsiz" : "Siz"} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => setPinnedUserId((current) => current === user?.id ? null : user?.id || null)} />
         {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : "Qatnashchi"}${media?.screen ? " · ekran" : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
         {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>Boshqalarni kutyapmiz</h2><p>Havolani yuboring, qatnashchilar shu yerda paydo bo‘ladi.</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> Havolani ulashish</button></article>}
@@ -543,7 +691,8 @@ export function MeetingRoomPage({ meetingId, directMode = false, onDirectClose }
       </div>
       <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
       <input ref={meetingFileInput} className="sr-only" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMeetingFile(file); }} />
-      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile} aria-label="Fayl ulashish">{uploadingFile ? <LoaderCircle className="spin" size={20} /> : <Paperclip size={20} />}</button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? "Qo'lni tushirish" : "Qo'l ko'tarish"}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label="Reaksiya yuborish"><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button aria-label="Grid ko‘rinishi"><LayoutGrid size={20} /></button><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={20} /></button><button aria-label="Qo‘shimcha amallar"><MoreVertical size={20} /></button></div></footer>
+      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? "Mikrofonni o‘chirish" : "Mikrofonni yoqish"}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? "Kamerani o‘chirish" : "Kamerani yoqish"}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label="Ekranni ulash"><MonitorUp size={21} /></button><button onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile} aria-label="Fayl ulashish">{uploadingFile ? <LoaderCircle className="spin" size={20} /> : <Paperclip size={20} />}</button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? "Qo'lni tushirish" : "Qo'l ko'tarish"}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label="Reaksiya yuborish"><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label="Meetingdan chiqish"><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button aria-label="Grid ko‘rinishi"><LayoutGrid size={20} /></button><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label="Ulashilgan fayllar"><Paperclip size={20} /></button>{canRecord && <button className={recording ? "active" : ""} onClick={toggleRecording} disabled={recordingBusy} aria-label={recording ? "Yozishni to‘xtatish" : "Meetingni yozib olish"}>{recordingBusy ? <LoaderCircle className="spin" size={20} /> : recording ? <Square size={20} /> : <Circle size={20} />}</button>}<button aria-label="Qo‘shimcha amallar"><MoreVertical size={20} /></button></div></footer>
+      {leavePrompt && <div className="meeting-modal-overlay" role="dialog" aria-modal="true"><div className="meeting-modal"><h2>Meetingdan chiqyapsiz</h2><p>Siz host sifatida chiqmoqchisiz. Meeting hammaga yakunlansinmi yoki davom etsinmi?</p><div className="meeting-modal-actions"><Button onClick={() => void confirmEndMeeting()}>Meeting hammaga tugasin</Button><Button variant="secondary" onClick={() => void confirmLeaveOnly()}>Faqat men chiqaman</Button><button className="meeting-modal-cancel" onClick={() => setLeavePrompt(false)}>Bekor qilish</button></div></div></div>}
     </div>
   );
 }

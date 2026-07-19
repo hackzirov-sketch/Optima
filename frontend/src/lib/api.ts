@@ -5,6 +5,7 @@ import type {
   GlobalSearchResult,
   Meeting,
   MeetingFile,
+  MeetingRecording,
   NotificationItem,
   RoomInvite,
   User,
@@ -330,7 +331,24 @@ export const api = {
     joinByCode: (code: string) =>
       apiFetch<Meeting>("/meetings/join-by-code", { method: "POST", body: JSON.stringify({ code }) }),
     leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
+    end: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/end`, { method: "POST" }),
     remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
+    recordings: {
+      list: (meetingId: string) => apiFetch<MeetingRecording[]>(`/meetings/${meetingId}/recordings`),
+      start: (meetingId: string) => apiFetch<MeetingRecording>(`/meetings/${meetingId}/recordings/start`, { method: "POST" }),
+      stop: (meetingId: string, data?: { storageKey: string; storageUrl: string; fileSize: number }) =>
+        apiFetch<MeetingRecording>(`/meetings/${meetingId}/recordings/stop`, { method: "POST", body: JSON.stringify(data || {}) }),
+      upload: async (meetingId: string, recordingId: string, blob: Blob) => {
+        const mimeType = blob.type || "video/webm";
+        const signed = await apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string }>(`/meetings/${meetingId}/recordings/${recordingId}/presign`, {
+          method: "POST",
+          body: JSON.stringify({ mimeType, fileSize: blob.size }),
+        });
+        const uploaded = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: blob });
+        if (!uploaded.ok) throw new ApiError("Yozuv bulutga yuklanmadi", uploaded.status);
+        return signed;
+      },
+    },
     files: (meetingId: string) => apiFetch<MeetingFile[]>(`/meetings/${meetingId}/files`),
     shareFile: async (meetingId: string, file: File) => {
       const mimeType = file.type || "application/octet-stream";

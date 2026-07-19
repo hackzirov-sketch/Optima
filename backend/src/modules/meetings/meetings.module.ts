@@ -5,13 +5,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
 import { GatewayModule } from '../gateway/gateway.module';
-import { MeetingsService, MEETING_RECORDING_QUEUE } from './meetings.service';
+import { MeetingsService, MEETING_RECORDING_QUEUE, MEETING_LIFECYCLE_QUEUE } from './meetings.service';
 import { MeetingsController } from './meetings.controller';
 import { MeetingRecordingProcessor } from './processors/meeting-recording.processor';
+import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.processor';
 
 @Module({
   imports: [
-    BullModule.registerQueue({ name: MEETING_RECORDING_QUEUE }),
+    BullModule.registerQueue({ name: MEETING_RECORDING_QUEUE }, { name: MEETING_LIFECYCLE_QUEUE }),
     forwardRef(() => WorkspacesModule),
     ModerationModule,
     StorageModule,
@@ -24,7 +25,7 @@ import { MeetingRecordingProcessor } from './processors/meeting-recording.proces
     forwardRef(() => GatewayModule),
   ],
   controllers: [MeetingsController],
-  providers: [MeetingsService, MeetingRecordingProcessor],
+  providers: [MeetingsService, MeetingRecordingProcessor, MeetingLifecycleProcessor],
   exports: [MeetingsService],
 })
 export class MeetingsModule {}

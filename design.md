@@ -20,7 +20,7 @@ UPZ ikkita asosiy qismdan iborat: **NestJS backend** (`backend/src`) va **React+
 |--------|-------------|------|
 | Backend framework | NestJS | Modul-based, `backend/src` |
 | Frontend | React + Vite + TypeScript | `frontend/src`, nginx orqali serve qilinadi |
-| DB | PostgreSQL 16 | **Raw SQL orqali**, ORM emas — pastga qarang |
+| DB | PostgreSQL 16 | **Raw SQL orqali**, ORM emas — pastga qarang |   
 | DB access | `pg` `Pool` + `DatabaseService` | `backend/src/database/database.service.ts` |
 | Cache / ephemeral | Redis (ioredis) | `backend/src/redis/redis.service.ts` |
 | Realtime | Socket.IO gateway | `backend/src/modules/gateway/events.gateway.ts` |
