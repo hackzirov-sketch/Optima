@@ -1,4 +1,5 @@
 const AUTH_EVENT_KEY = "optima_auth_event";
+const SESSION_HINT_COOKIE = "optima_has_session";
 
 /**
  * Auth now lives entirely in httpOnly cookies set by the backend — nothing

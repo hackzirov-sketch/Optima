@@ -234,6 +234,20 @@ export class StorageService {
     };
   }
 
+  /** Direct server-side upload for a user's own avatar (buffered through the API, then pushed to Cloudinary). */
+  async uploadAvatar(buffer: Buffer, userId: string, mimeType: string) {
+    const limits = FOLDER_LIMITS.avatars;
+    if (buffer.length > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: `Avatar must be ${Math.round(limits.maxBytes / 1024 / 1024)}MB or smaller` });
+    }
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for avatars: ${limits.mimeTypes.join(', ')}` });
+    }
+    const publicId = `${this.baseFolder}/avatars/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, 'image');
+    return { storageKey: result.public_id, storageUrl: result.secure_url, fileSize: buffer.length, mimeType };
+  }
+
   async uploadBase64(
     base64Data: string,
     prefix = 'pushes',

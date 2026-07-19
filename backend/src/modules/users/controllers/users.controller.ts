@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Delete,
   Body,
@@ -8,9 +9,14 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger'
 import { UsersService } from '../services/users.service'
+import { StorageService } from '../../storage/storage.service'
 import { Query } from '@nestjs/common'
 import { CurrentUser } from '../../../common/decorators/current-user.decorator'
 import type { User } from '../../../database/entities/user.entity'
@@ -19,11 +25,16 @@ import { UpdateSettingsDto } from '../schemas/update-settings.schema'
 import { UpdateAvatarDto } from '../schemas/update-avatar.schema'
 import { Public } from '../../../common/decorators/public.decorator'
 
+const ALLOWED_AVATAR_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) { }
+  constructor(
+    private usersService: UsersService,
+    private storageService: StorageService,
+  ) { }
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile with workspaces' })
@@ -47,6 +58,21 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user avatar URL' })
   updateAvatar(@CurrentUser() user: User, @Body() dto: UpdateAvatarDto) {
     return this.usersService.updateAvatar(user.id, dto.avatarUrl)
+  }
+
+  @Post('me/avatar/upload')
+  @ApiOperation({ summary: 'Upload current user avatar through the API' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  async uploadAvatar(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number },
+  ) {
+    const mimeType = file?.mimetype?.split(';')[0]
+    if (!file?.buffer || !mimeType || !ALLOWED_AVATAR_MIME_TYPES.has(mimeType)) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid image (jpeg, png, webp, gif) is required' })
+    }
+    const result = await this.storageService.uploadAvatar(file.buffer, userId, mimeType)
+    return this.usersService.updateAvatar(userId, result.storageUrl)
   }
 
   @Get('search')
