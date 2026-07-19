@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 
 import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
@@ -9,6 +9,7 @@ import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatMemberService } from './services/member.service';
+import { CommunityService } from './services/community.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
@@ -17,6 +18,7 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
+import { AiRequestDto } from './dto/ai-request.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { RoomScope } from '../../common/enums';
 
@@ -32,7 +34,56 @@ export class ChatController {
     private readonly roomInviteService: ChatRoomInviteService,
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
+    private readonly communityService: CommunityService,
   ) {}
+
+  // ── OTIMA community (ported from main) ────────────────────────────────────
+  @Get('chat/community')
+  @ApiOperation({ summary: 'Get mandatory OTIMA community channel and discussion group' })
+  community(@CurrentUser('id') userId: string) {
+    return this.communityService.overview(userId);
+  }
+
+  @Get('chat/community/:roomId/members')
+  @ApiOperation({ summary: 'List community room members' })
+  communityMembers(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('query') query = '',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.listMembers(roomId, userId, query, Number(page) || 1, Number(limit) || 30);
+  }
+
+  @Get('chat/community/:roomId/shared/:kind')
+  @ApiOperation({ summary: 'List shared media/files/links/music/voice in a community room' })
+  communityShared(
+    @Param('roomId') roomId: string,
+    @Param('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
+    @CurrentUser('id') userId: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.shared(roomId, userId, kind, cursor, Number(limit) || 30);
+  }
+
+  @Post('chat/community/posts/:messageId/discussion')
+  @ApiOperation({ summary: 'Get or create the discussion-group thread for a channel post' })
+  communityDiscussion(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    return this.communityService.getOrCreateDiscussion(messageId, userId);
+  }
+
+  @Patch('chat/community/:roomId/members/:username/role')
+  @ApiOperation({ summary: 'Promote/demote a community member (admin/owner only)' })
+  communityUpdateMemberRole(
+    @Param('roomId') roomId: string,
+    @Param('username') username: string,
+    @Body('role') role: 'member' | 'admin',
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.communityService.updateMemberRole(roomId, username, role, userId);
+  }
 
   @Get('workspaces/:workspaceId/chat/rooms')
   @ApiOperation({ summary: 'List chat rooms for workspace (membership)' })
@@ -57,6 +108,30 @@ export class ChatController {
   @ApiOperation({ summary: 'Get chat room' })
   getRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
     return this.roomService.getRoom(roomId, userId);
+  }
+
+  @Get('chat/rooms/:roomId/members')
+  @ApiOperation({ summary: 'List room members (search + paginated)' })
+  listRoomMembers(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('q') q = '',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.listMembers(roomId, userId, q, Number(page) || 1, Number(limit) || 30);
+  }
+
+  @Get('chat/rooms/:roomId/shared')
+  @ApiOperation({ summary: 'List shared media/files/links/music/voice in a room' })
+  listRoomShared(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.shared(roomId, userId, kind, cursor, Number(limit) || 30);
   }
 
   @Get('chat/rooms/:roomId/messages')
@@ -191,6 +266,16 @@ export class ChatController {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
   }
 
+  @Patch('chat/rooms/:roomId/mute')
+  @ApiOperation({ summary: 'Mute/unmute notifications for a room (caller only)' })
+  setRoomMuted(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: { muted: boolean },
+  ) {
+    return this.memberService.setMuted(roomId, userId, dto.muted);
+  }
+
   @Delete('chat/rooms/:roomId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a chat room (DM or group if creator)' })
@@ -202,13 +287,13 @@ export class ChatController {
   }
 
   @Post('chat/ai')
+  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 12, ttl: 60000 } })
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(
-    @Body('message') message: string,
-    @Body('history') history: { role: 'user' | 'model'; text: string }[] | undefined,
+    @Body() dto: AiRequestDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.aiService.generateAiReply(message, history ?? [], userId);
+    return this.aiService.generateAiReply(dto.message, dto.history ?? [], userId);
   }
 
   // ── Media attachment upload ────────────────────────────────────────────────
@@ -250,6 +335,22 @@ export class ChatController {
       throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid audio recording is required' });
     }
     return this.storageService.uploadChatAudio(file.buffer, userId, mimeType);
+  }
+
+  @Post('chat/rooms/:roomId/attachments/file')
+  @ApiOperation({ summary: 'Upload a chat file through the API' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  async uploadFile(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number; originalname: string },
+  ) {
+    await this.memberService.assertRoomMember(roomId, userId);
+    if (!file?.buffer || !file.originalname) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid file is required' });
+    }
+    const mimeType = file.mimetype?.split(';')[0] || 'application/octet-stream';
+    return this.storageService.uploadChatAttachment(file.buffer, userId, file.originalname, mimeType);
   }
 
   // ── Chat Invite Accept / Decline ──────────────────────────────────────────

@@ -67,6 +67,7 @@ export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sd
 export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
 export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
 export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
+export interface DirectCallDto { meetingId: string; roomId: string; targetUserId: string; kind: 'audio' | 'video'; }
 
 @Injectable()
 @WebSocketGateway({
@@ -562,6 +563,35 @@ export class EventsGateway
       fromUserId: userId,
       sdp: data.sdp,
     });
+  }
+
+  // ─── Direct (1:1) audio/video call signaling (ported from main) ───────
+  @SubscribeMessage('call:invite')
+  handleDirectCallInvite(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+    const userId = client.data?.userId;
+    if (!userId || !data.meetingId || !data.roomId || !data.targetUserId) return;
+    this.server.to(`user:${data.targetUserId}`).emit('call:incoming', { ...data, fromUserId: userId });
+  }
+
+  @SubscribeMessage('call:accept')
+  handleDirectCallAccept(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+    const userId = client.data?.userId;
+    if (!userId) return;
+    this.server.to(`user:${data.targetUserId}`).emit('call:accepted', { ...data, fromUserId: userId });
+  }
+
+  @SubscribeMessage('call:decline')
+  handleDirectCallDecline(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+    const userId = client.data?.userId;
+    if (!userId) return;
+    this.server.to(`user:${data.targetUserId}`).emit('call:declined', { ...data, fromUserId: userId });
+  }
+
+  @SubscribeMessage('call:end')
+  handleDirectCallEnd(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+    const userId = client.data?.userId;
+    if (!userId) return;
+    this.server.to(`user:${data.targetUserId}`).emit('call:ended', { ...data, fromUserId: userId });
   }
 
   // ─── Meeting: ICE candidate ───────────────────────────

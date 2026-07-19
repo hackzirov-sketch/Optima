@@ -1,5 +1,5 @@
 export const USER_COLUMNS_SQL = `
-  id, first_name AS "firstName", last_name AS "lastName", username, email,
+  id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, email,
   phone_number AS "phoneNumber",
   avatar_url AS "avatarUrl", language, timezone, theme, occupation,
   is_active AS "isActive", is_verified AS "isVerified", providers,

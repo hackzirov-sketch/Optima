@@ -18,7 +18,9 @@ export const CHAT_ROOM_COLUMNS_SQL_R = `
 `;
 
 export const CHAT_MEMBER_COLUMNS_SQL = `
-  id, room_id AS "roomId", user_id AS "userId", is_muted AS "isMuted",
+  id, room_id AS "roomId", user_id AS "userId", role,
+  is_banned AS "isBanned", banned_until AS "bannedUntil", status,
+  is_muted AS "isMuted",
   muted_until AS "mutedUntil", last_read_at AS "lastReadAt",
   last_read_message_id AS "lastReadMessageId", last_read_seq AS "lastReadSeq",
   joined_at AS "joinedAt", left_at AS "leftAt"
@@ -30,7 +32,10 @@ export const CHAT_MESSAGE_COLUMNS_SQL = `
   is_edited AS "isEdited", edited_at AS "editedAt", deleted_at AS "deletedAt",
   is_system AS "isSystem", system_metadata AS "systemMetadata",
   created_at AS "createdAt", updated_at AS "updatedAt", sequence,
-  client_message_id AS "clientMessageId", metadata
+  client_message_id AS "clientMessageId", metadata,
+  source_channel_message_id AS "sourceChannelMessageId",
+  discussion_root_message_id AS "discussionRootMessageId",
+  is_pinned AS "isPinned", view_count AS "viewCount"
 `;
 
 export const CHAT_REACTION_COLUMNS_SQL = `

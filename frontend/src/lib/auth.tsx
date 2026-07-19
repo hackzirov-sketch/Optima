@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthResult, User, Workspace } from "../types";
-import { api } from "./api";
+import { api, ApiError, refreshSession } from "./api";
 import { session } from "./session";
 
 interface AuthContextValue {
@@ -53,12 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await Promise.all([refreshUser(), refreshWorkspaces()]);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] bootstrap() failed, clearing session:", error);
-      session.clear();
-      setUser(null);
-      setWorkspaces([]);
-      setWorkspace(null);
+      if (error instanceof ApiError && error.status === 401) {
+        session.clear();
+        setUser(null);
+        setWorkspaces([]);
+        setWorkspace(null);
+      }
     } finally {
       setReady(true);
     }
@@ -67,6 +67,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  useEffect(() => {
+    // A single failed refresh isn't necessarily a dead token — the backend
+    // intentionally tolerates brief concurrent-refresh races (e.g. two
+    // triggers landing close together) by rejecting the losing call with a
+    // benign, recoverable 401 rather than treating it as theft. Only give up
+    // after consecutive failures, so that race doesn't read as a hard logout
+    // — but a token that's actually dead still won't be retried forever,
+    // since real failures do accumulate here.
+    let consecutiveFailures = 0;
+    // The access token is valid for ~20 minutes server-side — there's no
+    // reason to hit /auth/refresh more often than roughly every 15 minutes.
+    // Without this floor, every tab focus (alt-tab, switching windows) fires
+    // an extra refresh call regardless of how recently one already
+    // succeeded, which needlessly hammers the server at scale (thousands of
+    // idle-but-focused tabs all refreshing on every glance back at the
+    // browser) and raises the odds of tripping the concurrent-refresh race
+    // above. Only the periodic timer and tab-focus events call refresh(), so
+    // gating both on this floor is enough — it doesn't touch apiFetch's
+    // reactive 401 retry, which always needs to run immediately regardless
+    // of timing.
+    const MIN_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+    let lastRefreshAt = 0;
+    const refresh = (force = false) => {
+      if (!session.refreshToken()) return;
+      if (!force && Date.now() - lastRefreshAt < MIN_REFRESH_INTERVAL_MS) return;
+      lastRefreshAt = Date.now();
+      void refreshSession().then((result) => {
+        if (result.ok) {
+          consecutiveFailures = 0;
+          return;
+        }
+        // Not being able to reach the network (e.g. right after waking from
+        // sleep, before the connection is back) isn't evidence the session
+        // is invalid — don't count it toward a forced logout, and don't
+        // hold the cooldown against a retry either.
+        if (result.networkError) {
+          lastRefreshAt = 0;
+          return;
+        }
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 2) {
+          session.clear();
+          setUser(null);
+          setWorkspaces([]);
+          setWorkspace(null);
+        }
+      });
+    };
+    const timer = window.setInterval(() => refresh(true), MIN_REFRESH_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     const syncSession = () => {
@@ -94,8 +153,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await Promise.all([refreshUser(), refreshWorkspaces()]);
       setReady(true);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] completeOAuth() failed, clearing session:", error);
       session.clear();
       setUser(null);
       throw error;

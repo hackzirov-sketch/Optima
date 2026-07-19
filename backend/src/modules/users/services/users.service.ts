@@ -54,10 +54,34 @@ export class UsersService {
 
   async findPublicById(id: string): Promise<PublicUserDto> {
     const rows: PublicUserDto[] = await this.dataSource.query(
-      `SELECT id, first_name AS "firstName", last_name AS "lastName", username,
+      `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username,
               avatar_url AS "avatarUrl", last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
+    )
+    const user = rows[0]
+    if (!user) {
+      throw new NotFoundException({
+        code: ErrorCode.USER_NOT_FOUND,
+        message: 'User not found',
+      })
+    }
+    return user
+  }
+
+  /** Ported from main — looks up a public profile by @username or numeric public_id. */
+  async findPublic(identifier: string): Promise<PublicUserDto> {
+    const normalized = identifier.replace(/^@/, '')
+    const isNumeric = /^\d+$/.test(normalized)
+    const rows: PublicUserDto[] = await this.dataSource.query(
+      isNumeric
+        ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
+                  username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+           FROM users WHERE public_id = $1 AND deleted_at IS NULL`
+        : `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
+                  username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+           FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
+      [isNumeric ? Number(normalized) : normalized],
     )
     const user = rows[0]
     if (!user) {

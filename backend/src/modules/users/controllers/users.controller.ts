@@ -17,6 +17,7 @@ import type { User } from '../../../database/entities/user.entity'
 import { UpdateProfileDto } from '../schemas/update-profile.schema'
 import { UpdateSettingsDto } from '../schemas/update-settings.schema'
 import { UpdateAvatarDto } from '../schemas/update-avatar.schema'
+import { Public } from '../../../common/decorators/public.decorator'
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -55,6 +56,13 @@ export class UsersController {
     if (!q || q.trim().length < 2) return { data: [] }
     const rows = await this.usersService.searchPublic(q.trim(), limit)
     return { data: rows }
+  }
+
+  @Get('profile/:identifier')
+  @Public()
+  @ApiOperation({ summary: 'Get public profile by username or public user ID (ported from main)' })
+  getPublicProfile(@Param('identifier') identifier: string) {
+    return this.usersService.findPublic(identifier)
   }
 
   @Get(':id')

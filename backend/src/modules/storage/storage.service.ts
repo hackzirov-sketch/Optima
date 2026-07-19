@@ -8,12 +8,10 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
-import { promises as fs } from 'fs';
-import * as path from 'path';
 
-export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings';
+export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings' | 'meeting-files';
 
 const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[] | null }> = {
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
@@ -41,6 +39,7 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
     ],
   },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
+  'meeting-files': { maxBytes: 100 * 1024 * 1024, mimeTypes: null },
   'meeting-recordings': {
     // 1-hour hard cap is enforced server-side on duration (see MeetingsService),
     // this is just a generous byte ceiling so a runaway/misbehaving client
@@ -181,6 +180,27 @@ export class StorageService {
     return { key, url: `${this.r2PublicUrl}/${key}` };
   }
 
+  /** Cloudinary has no dedicated "audio" resource type — audio files upload as 'video'. */
+  private cloudinaryResourceType(mimeType: string): 'image' | 'video' | 'raw' {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'video';
+    return 'raw';
+  }
+
+  private uploadBufferToCloudinary(
+    buffer: Buffer,
+    publicId: string,
+    resourceType: 'image' | 'video' | 'raw',
+  ): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { public_id: publicId, resource_type: resourceType },
+        (err, result) => (err || !result ? reject(err) : resolve(result)),
+      );
+      stream.end(buffer);
+    });
+  }
+
   async uploadChatAudio(buffer: Buffer, userId: string, mimeType: string) {
     const extensions: Record<string, string> = {
       'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a',
@@ -188,11 +208,30 @@ export class StorageService {
     };
     const extension = extensions[mimeType];
     if (!extension) throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'Unsupported audio format' });
-    const directory = path.resolve(process.cwd(), 'uploads', 'audio');
-    await fs.mkdir(directory, { recursive: true });
     const fileName = `${userId}-${uuidv4()}.${extension}`;
-    await fs.writeFile(path.join(directory, fileName), buffer, { mode: 0o600 });
-    return { storageKey: `audio/${fileName}`, storageUrl: `/uploads/audio/${fileName}`, fileName, fileSize: buffer.length, mimeType };
+    const publicId = `${this.baseFolder}/audio/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, 'video');
+    return { storageKey: result.public_id, storageUrl: result.secure_url, fileName, fileSize: buffer.length, mimeType };
+  }
+
+  /** Direct server-side upload for chat files (buffered through the API, then pushed to Cloudinary). */
+  async uploadChatAttachment(buffer: Buffer, userId: string, fileName: string, mimeType: string) {
+    const limits = FOLDER_LIMITS.attachments;
+    if (buffer.length > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Chat files must be 100 MB or smaller' });
+    }
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'This file type is not supported' });
+    }
+    const publicId = `${this.baseFolder}/attachments/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, this.cloudinaryResourceType(mimeType));
+    return {
+      storageKey: result.public_id,
+      storageUrl: result.secure_url,
+      fileName,
+      fileSize: buffer.length,
+      mimeType,
+    };
   }
 
   async uploadBase64(

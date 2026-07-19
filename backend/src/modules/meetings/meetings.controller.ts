@@ -25,6 +25,7 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JoinByCodeDto } from './dto/join-by-code.dto';
 import { PresignRecordingDto } from './dto/presign-recording.dto';
+import { PresignMeetingFileDto, ShareMeetingFileDto } from './dto/share-meeting-file.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { EventsGateway } from '../gateway/events.gateway';
 import { Inject, forwardRef } from '@nestjs/common';
@@ -160,6 +161,28 @@ export class MeetingsController {
     @Body('userIds') userIds: string[],
   ) {
     return this.meetingsService.inviteMembers(meetingId, userId, userIds || []);
+  }
+
+  // ─── Shared files (ported from main) ───────────────────────────────────────
+
+  @Get('meetings/:meetingId/files')
+  @ApiOperation({ summary: 'List files shared in a meeting' })
+  listFiles(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string) {
+    return this.meetingsService.listSharedFiles(meetingId, userId);
+  }
+
+  @Post('meetings/:meetingId/files/presign')
+  @ApiOperation({ summary: 'Get a direct upload URL for a meeting file' })
+  presignFile(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string, @Body() dto: PresignMeetingFileDto) {
+    return this.meetingsService.presignSharedFile(meetingId, userId, dto.fileName, dto.mimeType, dto.fileSize);
+  }
+
+  @Post('meetings/:meetingId/files')
+  @ApiOperation({ summary: 'Publish an uploaded file to meeting participants' })
+  async shareFile(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string, @Body() dto: ShareMeetingFileDto) {
+    const file = await this.meetingsService.shareFile(meetingId, userId, dto);
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:file-shared', { file });
+    return file;
   }
 
   // ─── Recording (host/co-host only, hard 1-hour server-side cap) ───────────

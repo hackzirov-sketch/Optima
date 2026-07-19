@@ -14,6 +14,7 @@ import { ChatReactionService } from './services/reaction.service';
 import { ChatPresenceService } from './services/presence.service';
 import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
+import { CommunityService } from './services/community.service';
 import { ChatProcessor } from './workers/chat.processor';
 
 @Module({
@@ -33,6 +34,7 @@ import { ChatProcessor } from './workers/chat.processor';
     ChatPresenceService,
     ChatAiService,
     ChatRoomInviteService,
+    CommunityService,
     ChatProcessor,
   ],
   exports: [

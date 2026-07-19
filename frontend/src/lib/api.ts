@@ -4,6 +4,7 @@ import type {
   ChatRoom,
   GlobalSearchResult,
   Meeting,
+  MeetingFile,
   NotificationItem,
   RoomInvite,
   User,
@@ -35,7 +36,7 @@ interface ApiOptions extends RequestInit {
   retry?: boolean;
 }
 
-let refreshPromise: Promise<boolean> | null = null;
+let refreshPromise: Promise<RefreshResult> | null = null;
 
 function errorMessage(body: unknown, fallback: string): { message: string; code?: string } {
   if (!body || typeof body !== "object") return { message: fallback };
@@ -53,37 +54,81 @@ function errorMessage(body: unknown, fallback: string): { message: string; code?
   return { message, code };
 }
 
-async function renewSession(): Promise<boolean> {
+/** Every backend response is wrapped in `{success, data}` by the global
+ * NestJS response interceptor. `apiFetch` unwraps this automatically, but a
+ * couple of call sites talk to `fetch()` directly (see `renewSession` below)
+ * and must unwrap it themselves — skipping this silently saves the wrapper
+ * object's `undefined` fields (e.g. `accessToken`) instead of the real
+ * token pair, which corrupts the session on every refresh. */
+function unwrapEnvelope<T>(body: unknown): T {
+  if (body && typeof body === "object" && "success" in body && "data" in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+}
+
+function recoveredElsewhere(sentToken: string): boolean {
+  const latestToken = session.refreshToken();
+  return !!latestToken && latestToken !== sentToken;
+}
+
+interface RefreshResult {
+  ok: boolean;
+  /** True when we couldn't even reach the server (offline, waking from
+   * sleep before the network is back, DNS hiccup, etc). Distinguishing this
+   * from a real auth rejection matters: a device that was idle/asleep and
+   * hasn't reconnected to the network yet must NOT be treated as having an
+   * invalid session — only an explicit rejection from the server means the
+   * tokens are actually dead. */
+  networkError: boolean;
+}
+
+async function renewSession(): Promise<RefreshResult> {
   const refreshToken = session.refreshToken();
-  if (!refreshToken) return false;
+  if (!refreshToken) return { ok: false, networkError: false };
+  let response: Response;
   try {
-    const response = await fetch(`${API_URL}/auth/refresh`, {
+    response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!response.ok) {
-      // Another tab may have already rotated this exact refresh token
-      // concurrently (same account open in two tabs, both refreshing at
-      // once) — localStorage is shared across tabs, so if it now holds a
-      // different refresh token than the one we just sent, that rotation
-      // already succeeded elsewhere. Use it instead of logging the user out.
-      const latestToken = session.refreshToken();
-      const recoveredElsewhere = !!latestToken && latestToken !== refreshToken;
-      if (!recoveredElsewhere) {
-        const body = await response.text().catch(() => "");
-        // eslint-disable-next-line no-console
-        console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
-      }
-      return recoveredElsewhere;
-    }
-    session.save((await response.json()) as AuthResult);
-    return true;
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn("[auth] POST /auth/refresh threw:", error);
-    return false;
+    return { ok: false, networkError: true };
   }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    // Another tab may have already rotated this exact refresh token
+    // concurrently (same account open in two tabs, both refreshing at
+    // once) — localStorage is shared across tabs, so if it now holds a
+    // different refresh token than the one we just sent, that rotation
+    // already succeeded elsewhere. Use it instead of logging the user out.
+    if (recoveredElsewhere(refreshToken)) return { ok: true, networkError: false };
+    // The winning tab's response + localStorage write is a separate round
+    // trip that can simply land a beat after ours — a 401 here doesn't yet
+    // mean the token is dead, only that we lost the race. Give the winner
+    // a brief moment to finish before giving up for real.
+    if (response.status === 401) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      if (recoveredElsewhere(refreshToken)) return { ok: true, networkError: false };
+    }
+    // eslint-disable-next-line no-console
+    console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
+    return { ok: false, networkError: false };
+  }
+  session.save(unwrapEnvelope<AuthResult>(await response.json()));
+  return { ok: true, networkError: false };
+}
+
+/** Exported so callers (e.g. auth.tsx's periodic/visibility-triggered refresh)
+ * can proactively renew, sharing the same in-flight dedup as apiFetch's 401 retry. */
+export async function refreshSession(): Promise<RefreshResult> {
+  refreshPromise ??= renewSession().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -96,13 +141,16 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
-    refreshPromise ??= renewSession().finally(() => {
-      refreshPromise = null;
-    });
-    if (await refreshPromise) return apiFetch<T>(path, { ...options, retry: false });
-    // eslint-disable-next-line no-console
-    console.warn(`[auth] refresh failed on ${path}, clearing session`);
-    session.clear();
+    const result = await refreshSession();
+    if (result.ok) return apiFetch<T>(path, { ...options, retry: false });
+    // A network-level failure to refresh doesn't mean the session is
+    // actually invalid — don't wipe it out from under the user just because
+    // the network hasn't come back yet (e.g. right after waking from sleep).
+    if (!result.networkError) {
+      // eslint-disable-next-line no-console
+      console.warn(`[auth] refresh failed on ${path}, clearing session`);
+      session.clear();
+    }
   }
 
   if (response.status === 204) return undefined as T;
@@ -112,10 +160,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     const normalized = errorMessage(body, `Request failed (${response.status})`);
     throw new ApiError(normalized.message, response.status, normalized.code, body);
   }
-  if (body && typeof body === "object" && "success" in body && "data" in body) {
-    return (body as { data: T }).data;
-  }
-  return body as T;
+  return unwrapEnvelope<T>(body);
 }
 
 export const api = {
@@ -188,6 +233,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -216,23 +262,45 @@ export const api = {
     global: (query: string) => apiFetch<GlobalSearchResult>(`/search?q=${encodeURIComponent(query)}`),
   },
   chat: {
+    community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
+    mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
+    roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
+    shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
     rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
     createRoom: (workspaceId: string, data: Record<string, unknown>) =>
       apiFetch<ChatRoom>(`/workspaces/${workspaceId}/chat/rooms`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    messages: (roomId: string) =>
-      apiFetch<{ data: ChatMessage[]; total: number }>(`/chat/rooms/${roomId}/messages?limit=80`),
-    send: (roomId: string, content: string, clientMessageId: string) =>
+    messages: (roomId: string, cursor?: number) =>
+      apiFetch<{ data: ChatMessage[]; total?: number }>(`/chat/rooms/${roomId}/messages?limit=80${cursor ? `&cursor=${cursor}` : ""}`),
+    send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments?: Array<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>) =>
       apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, clientMessageId }),
+        body: JSON.stringify({ content, clientMessageId, replyToId, attachments }),
+      }),
+    editMessage: (messageId: string, content: string) =>
+      apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
+    deleteMessage: (messageId: string) =>
+      apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
+    addReaction: (messageId: string, emoji: string) =>
+      apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
+    removeReaction: (messageId: string, emoji: string) =>
+      apiFetch<void>(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: "DELETE" }),
+    presignAttachment: (roomId: string, file: File) =>
+      apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string; expiresIn: number }>(`/chat/rooms/${roomId}/attachments/presign`, {
+        method: "POST",
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type || "application/octet-stream", fileSize: file.size }),
       }),
     uploadAudio: (roomId: string, blob: Blob) => {
       const body = new FormData();
       body.append("file", blob, `voice-${Date.now()}.webm`);
       return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/audio`, { method: "POST", body });
+    },
+    uploadFile: (roomId: string, file: File) => {
+      const body = new FormData();
+      body.append("file", file, file.name);
+      return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/file`, { method: "POST", body });
     },
     acceptInvite: (roomId: string) => apiFetch(`/chat/rooms/${roomId}/invite/accept`, { method: "POST" }),
     createInvite: (roomId: string, data: { maxUses?: number; expiresInHours?: number }) =>
@@ -245,6 +313,12 @@ export const api = {
       apiFetch<void>(`/chat/rooms/${roomId}/invites/${inviteId}`, { method: "DELETE" }),
     joinByCode: (code: string) =>
       apiFetch<ChatRoom>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+    discussion: (messageId: string) =>
+      apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
+    deleteRoom: (roomId: string) =>
+      apiFetch<void>(`/chat/rooms/${roomId}`, { method: "DELETE" }),
+    ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>
+      apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history }) }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
@@ -259,6 +333,24 @@ export const api = {
     joinByCode: (code: string) =>
       apiFetch<Meeting>("/meetings/join-by-code", { method: "POST", body: JSON.stringify({ code }) }),
     leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
+    remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
+    files: (meetingId: string) => apiFetch<MeetingFile[]>(`/meetings/${meetingId}/files`),
+    shareFile: async (meetingId: string, file: File) => {
+      const mimeType = file.type || "application/octet-stream";
+      const signed = await apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string }>(`/meetings/${meetingId}/files/presign`, {
+        method: "POST",
+        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size }),
+      });
+      const uploaded = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
+      if (!uploaded.ok) throw new ApiError("Fayl bulutga yuklanmadi", uploaded.status);
+      return apiFetch<MeetingFile>(`/meetings/${meetingId}/files`, {
+        method: "POST",
+        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size, storageKey: signed.storageKey, storageUrl: signed.storageUrl }),
+      });
+    },
+  },
+  library: {
+    read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
   },
   notifications: {
     list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),

@@ -12,6 +12,15 @@ export interface ChatMember {
 
   user: User;
 
+  /** Ported from main (OTIMA community moderation). */
+  role: 'member' | 'admin' | 'owner';
+
+  isBanned: boolean;
+
+  bannedUntil: Date | null;
+
+  status: 'pending' | 'active';
+
   isMuted: boolean;
 
   mutedUntil: Date | null;

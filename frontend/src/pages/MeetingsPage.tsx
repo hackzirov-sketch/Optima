@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Clock3, Copy, Link2, Plus, Radio, Search, UsersRound, Video } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Clock3, Copy, Link2, Plus, Radio, Search, Trash2, UsersRound, Video } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, EmptyState, Modal, PageHeader, Skeleton } from "../components/ui";
@@ -16,7 +16,7 @@ function statusLabel(status: Meeting["status"]) {
 }
 
 export function MeetingsPage() {
-  const { workspace } = useAuth();
+  const { user, workspace } = useAuth();
   const { show } = useToast();
   const [, navigate] = useLocation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -77,13 +77,11 @@ export function MeetingsPage() {
     setSaving(true);
     const form = new FormData(event.currentTarget);
     const start = new Date(String(form.get("startTime")));
-    const duration = Number(form.get("duration") || 45);
     try {
       const meeting = await api.meetings.create(workspace.id, {
         title: String(form.get("title") || "").trim(),
         description: String(form.get("description") || "").trim() || undefined,
         startTime: start.toISOString(),
-        endTime: new Date(start.getTime() + duration * 60_000).toISOString(),
         maxParticipants: Number(form.get("maxParticipants") || 20),
       });
       setCreateOpen(false);
@@ -112,6 +110,17 @@ export function MeetingsPage() {
     }
   }
 
+  async function removeMeeting(meeting: Meeting) {
+    if (!window.confirm(`“${meeting.title}” meetingini o‘chirishni tasdiqlaysizmi?`)) return;
+    try {
+      await api.meetings.remove(meeting.id);
+      setMeetings((current) => current.filter((item) => item.id !== meeting.id));
+      show("Meeting o‘chirildi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Meeting o‘chirilmadi", "error");
+    }
+  }
+
   const defaultStart = new Date(Date.now() + 30 * 60_000);
   defaultStart.setMinutes(Math.ceil(defaultStart.getMinutes() / 5) * 5, 0, 0);
 
@@ -125,7 +134,7 @@ export function MeetingsPage() {
         <section className="meeting-card-grid">
           {active.map((meeting) => (
             <article className={`meeting-card ${meeting.status === "live" ? "meeting-live" : ""}`} key={meeting.id}>
-              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Meeting kodi nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button></div></header>
+              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Meeting kodi nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button>{meeting.hostId === user?.id && <button className="icon-button icon-button-sm icon-button-danger" onClick={() => void removeMeeting(meeting)} aria-label="Meetingni o‘chirish"><Trash2 size={15} /></button>}</div></header>
               <div className="meeting-card-body"><h2>{meeting.title}</h2><p>{meeting.description || "Jamoa video suhbati"}</p></div>
               <dl><div><dt><CalendarDays size={16} /> Vaqt</dt><dd>{dateTime(meeting.startTime)}</dd></div><div><dt><UsersRound size={16} /> Qatnashchilar</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl>
               <footer><code>{meeting.code}</code><Button onClick={() => navigate(`/meetings/${meeting.id}`)} icon={<ArrowRight size={17} />}>{meeting.status === "live" ? "Hozir qo‘shilish" : "Meetingni ochish"}</Button></footer>
@@ -140,7 +149,8 @@ export function MeetingsPage() {
         <form className="modal-form" onSubmit={create}>
           <label>Meeting nomi<input name="title" placeholder="Haftalik product sync" maxLength={200} autoFocus required /></label>
           <label>Qisqa izoh<textarea name="description" placeholder="Nimalarni muhokama qilamiz?" rows={3} /></label>
-          <div className="form-grid-2"><label>Boshlanish vaqti<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label><label>Davomiyligi<select name="duration" defaultValue="45"><option value="15">15 daqiqa</option><option value="30">30 daqiqa</option><option value="45">45 daqiqa</option><option value="60">1 soat</option></select></label></div>
+          <label>Boshlanish vaqti<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
+          <p className="field-hint"><Clock3 size={15} /> Meeting muddati cheklanmagan. Host yakunlaguncha davom etadi.</p>
           <label>Maksimal qatnashchi<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
           <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Bekor qilish</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>Yaratish</Button></div>
         </form>

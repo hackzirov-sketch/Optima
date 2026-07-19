@@ -51,4 +51,15 @@ export interface ChatRoom {
   createdAt: Date;
 
   updatedAt: Date;
+
+  /** OTIMA community fields (ported from main) — only set on the two system rooms. */
+  slug: string | null;
+
+  isSystem: boolean;
+
+  membershipLocked: boolean;
+
+  postingMode: 'members' | 'admins_only';
+
+  linkedRoomId: string | null;
 }

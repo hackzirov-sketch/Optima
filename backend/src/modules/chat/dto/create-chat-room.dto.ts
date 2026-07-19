@@ -45,6 +45,12 @@ export class CreateChatRoomDto {
   @IsUUID()
   targetUserId?: string;
 
+  @ApiPropertyOptional({ description: 'Public user ID alternative for opening a direct room' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  targetPublicId?: string;
+
   @ApiPropertyOptional({ description: 'Initial member IDs for group/project rooms (excluding creator)' })
   @IsOptional()
   @IsArray()

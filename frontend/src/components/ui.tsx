@@ -4,7 +4,7 @@ import { LoaderCircle, X } from "lucide-react";
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <div className="brand" aria-label="Optima">
-      <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
+      <img className="brand-mark" src="/optima-logo.png" alt="" aria-hidden="true" />
       {!compact && <span>Optima</span>}
     </div>
   );

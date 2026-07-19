@@ -3,8 +3,9 @@ export type UserLanguage = "uz" | "ru" | "en";
 
 export interface User {
   id: string;
+  publicId?: string;
   email: string;
-  username: string;
+  username: string | null;
   firstName: string;
   lastName: string;
   avatarUrl?: string | null;
@@ -59,7 +60,7 @@ export interface WorkspaceMember {
 export interface ChatRoom {
   id: string;
   workspaceId: string | null;
-  type: "workspace" | "project" | "group" | "direct";
+  type: "workspace" | "project" | "group" | "direct" | "public" | "private" | "channel";
   scope: "workspace_only" | "private" | "public";
   name?: string | null;
   description?: string | null;
@@ -79,6 +80,14 @@ export interface ChatRoom {
     createdAt: string;
   } | null;
   createdAt: string;
+  /** OTIMA community fields (ported from main) — only set on the two system rooms. */
+  slug?: string | null;
+  isSystem?: boolean;
+  membershipLocked?: boolean;
+  postingMode?: "members" | "admins_only";
+  linkedRoomId?: string | null;
+  myRole?: "member" | "admin" | "owner";
+  isMuted?: boolean;
 }
 
 export interface RoomInvite {
@@ -117,6 +126,11 @@ export interface ChatMessage {
   createdAt: string;
   reactions?: Array<{ emoji: string; userIds: string[] }>;
   sender?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  /** OTIMA community discussion-thread fields (ported from main). */
+  sourceChannelMessageId?: string | null;
+  discussionRootMessageId?: string | null;
+  isPinned?: boolean;
+  viewCount?: number;
 }
 
 export interface MeetingParticipant {
@@ -146,6 +160,19 @@ export interface Meeting {
   participants: MeetingParticipant[];
   agenda?: string | null;
   createdAt: string;
+}
+
+export interface MeetingFile {
+  id: string;
+  meetingId: string;
+  sharedBy: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: string;
+  storageUrl: string;
+  createdAt: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export interface NotificationItem {

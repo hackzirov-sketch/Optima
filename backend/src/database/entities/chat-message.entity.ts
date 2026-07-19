@@ -41,4 +41,13 @@ export interface ChatMessage {
   clientMessageId: string | null;
 
   metadata: any;
+
+  /** OTIMA community discussion-thread fields (ported from main). */
+  sourceChannelMessageId: string | null;
+
+  discussionRootMessageId: string | null;
+
+  isPinned: boolean;
+
+  viewCount: number;
 }

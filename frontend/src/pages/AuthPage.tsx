@@ -1,11 +1,31 @@
 import { ArrowLeft, ArrowRight, Check, Crown, Eye, EyeOff, Github, LoaderCircle, LockKeyhole, Mail, PlayCircle, ShieldCheck, UsersRound, Video } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { ApiError, api, oauthStartUrl, type OAuthProvider } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Button, Logo } from "../components/ui";
 import { useToast } from "../components/Toast";
 
 type Mode = "login" | "register" | "verify" | "forgot" | "resetCode" | "newPassword" | "oauth";
+
+/** Modes that can be reached by navigating straight to their URL (no
+ * server-issued token from a prior step required to render them). */
+const DEEP_LINKABLE_MODES: Mode[] = ["login", "register", "forgot"];
+
+const PATH_FOR_MODE: Record<Mode, string> = {
+  login: "/auth/login",
+  register: "/auth/register",
+  verify: "/auth/verify",
+  forgot: "/auth/forgot-password",
+  resetCode: "/auth/reset-password",
+  newPassword: "/auth/reset-password",
+  oauth: "/auth/callback",
+};
+
+function modeFromPath(pathname: string): Mode | null {
+  const entry = (Object.entries(PATH_FOR_MODE) as [Mode, string][]).find(([, path]) => path === pathname);
+  return entry ? entry[0] : null;
+}
 
 function SocialAuthButtons({ disabled }: { disabled: boolean }) {
   const start = (provider: OAuthProvider) => {
@@ -40,7 +60,11 @@ function detailValue(error: ApiError, key: string): string | undefined {
 }
 
 export function AuthPage() {
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(() => {
+    const fromPath = modeFromPath(window.location.pathname);
+    return fromPath && DEEP_LINKABLE_MODES.includes(fromPath) ? fromPath : "login";
+  });
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -73,6 +97,17 @@ export function AuthPage() {
   }
 
   useEffect(() => {
+    // Keep the address bar in sync with the current step — covers direct
+    // loads of a non-deep-linkable step (e.g. /auth/verify with no pending
+    // verification) and any other stray path, which both fall back to login.
+    if (window.location.pathname === "/auth/callback") return;
+    if (window.location.pathname !== PATH_FOR_MODE[mode]) {
+      navigate(PATH_FOR_MODE[mode], { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (window.location.pathname !== "/auth/callback" || callbackStarted.current) return;
     callbackStarted.current = true;
     const params = new URLSearchParams(window.location.search);
@@ -103,8 +138,13 @@ export function AuthPage() {
     oauth: "Hisob tekshirilmoqda",
   })[mode], [mode]);
 
-  const switchMode = (next: Mode) => {
+  const goTo = (next: Mode, options?: { replace?: boolean }) => {
     setMode(next);
+    navigate(PATH_FOR_MODE[next], options);
+  };
+
+  const switchMode = (next: Mode) => {
+    goTo(next);
     setError("");
     if (next === "login") {
       setDevVerificationCode("");
@@ -127,7 +167,7 @@ export function AuthPage() {
           setVerifyToken(token);
           setVerificationEmail(email);
           setDevVerificationCode(detailValue(caught, "devVerificationCode") || "");
-          setMode("verify");
+          goTo("verify");
           setError("");
         } else setError(caught.message);
       } else setError("Server bilan aloqa bo‘lmadi");
@@ -160,7 +200,7 @@ export function AuthPage() {
       setVerifyToken(result.verifyToken);
       setVerificationEmail(email);
       setDevVerificationCode(result.devVerificationCode || "");
-      setMode("verify");
+      goTo("verify");
       show("Tasdiqlash kodi yuborildi");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Ro‘yxatdan o‘tib bo‘lmadi");
@@ -195,8 +235,8 @@ export function AuthPage() {
       if (result.resetToken) {
         setResetToken(result.resetToken);
         setDevResetCode(result.devResetCode || "");
-        setMode("resetCode");
-      } else setMode("login");
+        goTo("resetCode");
+      } else goTo("login");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "So‘rov yuborilmadi");
     } finally {
@@ -212,7 +252,7 @@ export function AuthPage() {
     try {
       const result = await api.auth.verifyResetOtp(resetToken, String(data.get("code") || "").replace(/\D/g, ""));
       setConfirmedToken(result.confirmedToken);
-      setMode("newPassword");
+      goTo("newPassword");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Kod noto‘g‘ri");
     } finally {
@@ -235,7 +275,7 @@ export function AuthPage() {
     try {
       const result = await api.auth.resetPassword(confirmedToken, password);
       show(result.message);
-      setMode("login");
+      goTo("login");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Parol yangilanmadi");
     } finally {
@@ -322,7 +362,7 @@ export function AuthPage() {
               <SocialAuthButtons disabled={loading} />
               <div className="auth-divider"><span>yoki</span></div>
               <div className="form-grid-2"><label>Ism<input name="firstName" autoComplete="given-name" required maxLength={50} /></label><label>Familiya<input name="lastName" autoComplete="family-name" required maxLength={50} /></label></div>
-              <label>Username<input name="username" autoComplete="username" placeholder="ahmad_dev" pattern="[A-Za-z0-9_-]{3,50}" required /></label>
+              <label>Username<input name="username" autoComplete="username" placeholder="ahmad_dev" pattern="[A-Za-z0-9_\-]{3,50}" required /></label>
               <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
               <label>Kasbingiz<select name="occupation" defaultValue="developer"><option value="developer">Dasturchi</option><option value="designer">Dizayner</option><option value="project_manager">Project manager</option><option value="freelancer">Freelancer</option><option value="student">Talaba</option><option value="other">Boshqa</option></select></label>
               <label>Parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} placeholder="Kamida 8 belgi" required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Parolni ko‘rsatish"><Eye size={18} /></button></span><small>1 katta harf, 1 kichik harf, raqam va maxsus belgi.</small></label>

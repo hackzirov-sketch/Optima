@@ -37,6 +37,7 @@ import { Public } from '../../../common/decorators/public.decorator';
 
 import { AuthRateLimitGuard } from '../guards/auth-rate-limit.guard';
 import { AuthRateLimit } from '../decorators/auth-rate-limit.decorator';
+import { JwtRefreshGuard } from '../guards/jwt-refresh.guard';
 
 @ApiTags('Auth')
 @SkipThrottle() // Auth routes use AuthRateLimitGuard — global ThrottlerGuard skipped (saves 3 Redis calls/req)
@@ -68,10 +69,11 @@ export class AuthController {
   @Post('register')
   @AuthRateLimit({ action: 'register', maxAttempts: 3, windowSeconds: 3600, blockSeconds: 86400 })
   @ApiOperation({ summary: 'Register a new user and send verification email' })
-  async register(@Req() req, @Body() dto: RegisterDto) {
-    const result = await this.authService.register(dto);
-    await req.clearRateLimit?.();
-    return result;
+  async register(@Body() dto: RegisterDto) {
+    // No clearRateLimit here: register always "succeeds" for valid input (a
+    // new account each time), so clearing on success would let someone
+    // create unlimited accounts from one IP — the whole point of the cap.
+    return this.authService.register(dto);
   }
 
   @Public()
@@ -90,10 +92,11 @@ export class AuthController {
   @AuthRateLimit({ action: 'resend-verification', maxAttempts: 5, windowSeconds: 3600, blockSeconds: 3600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend the email verification code' })
-  async resendVerification(@Req() req, @Body() dto: ResendVerificationDto) {
-    const result = await this.authService.resendVerification(dto);
-    await req.clearRateLimit?.();
-    return result;
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    // No clearRateLimit here: this always returns a generic 200 (even for a
+    // nonexistent/already-verified email), so clearing on "success" would
+    // erase the per-IP cap on every single call — it would never accumulate.
+    return this.authService.resendVerification(dto);
   }
 
   @Public()
@@ -117,10 +120,9 @@ export class AuthController {
   @AuthRateLimit({ action: 'forgot-password', maxAttempts: 5, windowSeconds: 600, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send password reset email' })
-  async forgotPassword(@Req() req, @Body() dto: ForgotPasswordDto) {
-    const result = await this.authService.forgotPassword(dto);
-    await req.clearRateLimit?.();
-    return result;
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    // No clearRateLimit here: same generic-200-always shape as resend-verification.
+    return this.authService.forgotPassword(dto);
   }
 
   @Public()
@@ -202,7 +204,7 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(AuthGuard('jwt-refresh'))
+  @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 60, blockSeconds: 300 })
   @HttpCode(HttpStatus.OK)

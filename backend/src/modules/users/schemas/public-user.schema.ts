@@ -2,6 +2,7 @@
  * selected by findPublicById's raw SQL query. */
 export interface PublicUserDto {
   id: string;
+  publicId: string;
   firstName: string;
   lastName: string;
   username: string;

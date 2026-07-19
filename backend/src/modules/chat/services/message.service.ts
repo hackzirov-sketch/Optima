@@ -157,8 +157,8 @@ export class ChatMessageService {
    *    catches that pattern even though each individual second passes.
    */
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
-    const roomRows: Array<{ id: string; isReadOnly: boolean }> = await this.dataSource.query(
-      `SELECT id, is_read_only AS "isReadOnly" FROM chat_rooms WHERE id = $1`,
+    const roomRows: Array<{ id: string; isReadOnly: boolean; postingMode: string | null }> = await this.dataSource.query(
+      `SELECT id, is_read_only AS "isReadOnly", posting_mode AS "postingMode" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
     const room = roomRows[0];
@@ -166,6 +166,12 @@ export class ChatMessageService {
     // assertRoomMemberWithUser: membership + user bir SELECT'da — keyinroq sender uchun alohida query yo'q
     const member = await this.chatMemberService.assertRoomMemberWithUser(roomId, userId);
     if (room.isReadOnly) throw new ForbiddenException({ code: ErrorCode.ROOM_READ_ONLY, message: 'Room is read-only' });
+    if (member.isBanned || (member.bannedUntil && new Date(member.bannedUntil) > new Date())) {
+      throw new ForbiddenException({ code: 'CHAT_MEMBER_BANNED', message: 'You cannot send messages in this room' });
+    }
+    if (room.postingMode === 'admins_only' && member.user.publicId !== '777777') {
+      throw new ForbiddenException({ code: 'CHANNEL_ADMIN_ONLY', message: 'Only channel admins can publish posts' });
+    }
 
     const hasAttachments = !!dto.attachments?.length;
     if (!dto.content?.trim() && !hasAttachments) {

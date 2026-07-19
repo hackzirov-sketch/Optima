@@ -7,6 +7,9 @@ import { UserSettings } from './user-settings.entity';
 export interface User {
   id: string;
 
+  /** Random 6-digit public identifier — safe to expose (see public_user_id_registry, ported from main). */
+  publicId: string;
+
   firstName: string;
 
   lastName: string;

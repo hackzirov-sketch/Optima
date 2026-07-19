@@ -40,16 +40,16 @@ export class ChatMemberService {
   async assertRoomMemberWithUser(
     roomId: string,
     userId: string,
-  ): Promise<ChatMember & { user: { id: string; firstName: string; lastName: string; avatarUrl: string | null } }> {
+  ): Promise<ChatMember & { role: string; isBanned: boolean; bannedUntil: string | null; user: { id: string; firstName: string; lastName: string; avatarUrl: string | null; publicId: string } }> {
     const rows: any[] = await this.dataSource.query(
       `SELECT
          cm.id AS "id", cm.room_id AS "roomId", cm.user_id AS "userId",
          cm.is_muted AS "isMuted", cm.muted_until AS "mutedUntil",
          cm.last_read_at AS "lastReadAt", cm.last_read_message_id AS "lastReadMessageId",
          cm.last_read_seq AS "lastReadSeq", cm.joined_at AS "joinedAt", cm.left_at AS "leftAt",
-         cm.status AS "status",
+         cm.status AS "status", cm.role AS "role", cm.is_banned AS "isBanned", cm.banned_until AS "bannedUntil",
          u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
-         u.avatar_url AS "u_avatarUrl"
+         u.avatar_url AS "u_avatarUrl", u.public_id::text AS "u_publicId"
        FROM chat_members cm
        JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = $1 AND cm.user_id = $2 AND cm.left_at IS NULL AND cm.status = 'active'`,
@@ -62,11 +62,28 @@ export class ChatMemberService {
         message: 'Not a member of this chat room',
       });
     }
-    const { u_id, u_firstName, u_lastName, u_avatarUrl, ...member } = row;
+    const { u_id, u_firstName, u_lastName, u_avatarUrl, u_publicId, ...member } = row;
     return {
       ...member,
-      user: { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl },
+      user: { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl, publicId: u_publicId },
     };
+  }
+
+  /** Mute/unmute notifications for a room, for the calling member only. */
+  async setMuted(roomId: string, userId: string, muted: boolean): Promise<{ isMuted: boolean }> {
+    const rows = await this.dataSource.query(
+      `UPDATE chat_members SET is_muted = $3
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'
+       RETURNING is_muted AS "isMuted"`,
+      [roomId, userId, muted],
+    );
+    if (!rows[0]) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
+      });
+    }
+    return rows[0];
   }
 
   /** Accept a pending chat invite (e.g. DM request) */

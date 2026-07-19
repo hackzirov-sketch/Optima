@@ -22,7 +22,7 @@ export class TokenService {
 
   /** Tolerance window for concurrent refresh requests racing on the same
    * still-valid token (e.g. two open tabs) before treating reuse as theft. */
-  private static readonly REUSE_GRACE_MS = 10_000;
+  private static readonly REUSE_GRACE_MS = 20_000;
 
   constructor(
     private jwtService: JwtService,
@@ -59,10 +59,11 @@ export class TokenService {
 
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    // ASYNC: persist session — does not block login response
-    this.sessionService
-      .persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo)
-      .catch((err) => this.logger.error(`persistRefreshToken failed: ${err?.message ?? err}`));
+    // Must complete before we hand the refreshToken back to the client — otherwise
+    // a client that refreshes again within milliseconds (e.g. two visibilitychange
+    // events firing back-to-back) can race findByTokenHash() against this INSERT
+    // and get a spurious "invalid token" 401, wiping the session it was just given.
+    await this.sessionService.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
 
     // SECURITY: raw-SQL rows are plain objects, not User class instances, so the
     // @Exclude() on User.passwordHash is NOT applied by ClassSerializerInterceptor.

@@ -357,11 +357,20 @@ export class ChatRoomService {
     }
 
     if (dto.type === ChatRoomType.DIRECT) {
-      if (!dto.targetUserId)
+      let directTargetUserId = dto.targetUserId;
+      if (!directTargetUserId && dto.targetPublicId) {
+        const targetRows = await this.dataSource.query(
+          `SELECT id FROM users WHERE public_id = $1 AND deleted_at IS NULL`,
+          [dto.targetPublicId],
+        );
+        directTargetUserId = targetRows[0]?.id;
+      }
+      if (!directTargetUserId)
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
-          message: 'targetUserId is required for direct rooms',
+          message: 'A valid direct message recipient is required',
         });
+      dto.targetUserId = directTargetUserId;
       if (dto.targetUserId === userId)
         throw new BadRequestException({
           code: ErrorCode.DM_WITH_SELF,
