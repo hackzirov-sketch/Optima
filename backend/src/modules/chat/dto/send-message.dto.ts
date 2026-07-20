@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -74,4 +75,12 @@ export class SendMessageDto {
   @ValidateNested({ each: true })
   @Type(() => MessageAttachmentInputDto)
   attachments?: MessageAttachmentInputDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Slack-style thread reply — excluded from the main room timeline, only shown in the thread panel. When true, replyToId must be the thread root message id.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isThreadReply?: boolean;
 }

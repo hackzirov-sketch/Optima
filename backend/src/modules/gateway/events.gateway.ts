@@ -436,6 +436,57 @@ export class EventsGateway
     return { event: 'message_sent', messageId: saved.id };
   }
 
+  // ─── Thread reply (Slack-style, §14.13) — separate event so it never lands
+  // in the main-timeline `new_message` stream (thread replies are hidden there). ──
+  @SubscribeMessage('send_thread_reply')
+  async handleSendThreadReply(
+    @MessageBody() data: SendMessageWsDto & { threadRootId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!await this.assertActiveUser(userId, client)) return;
+
+    let saved: any;
+    try {
+      saved = await this.messageService.sendThreadReply(data.threadRootId, userId, {
+        content: data.text,
+        clientMessageId: data.clientMessageId,
+        attachments: data.attachments,
+      } as any);
+    } catch (err: any) {
+      client.emit('error', {
+        code: err?.response?.code || 'SEND_THREAD_REPLY_FAILED',
+        message: err?.message || 'Failed to send thread reply',
+      });
+      return;
+    }
+
+    this.server.to(`room:${saved.roomId}`).emit('thread_reply', {
+      threadRootId: data.threadRootId,
+      threadReplyCount: saved.threadReplyCount ?? null,
+      message: {
+        id: saved.id,
+        roomId: saved.roomId,
+        senderId: saved.senderId,
+        sequence: saved.sequence,
+        clientMessageId: saved.clientMessageId,
+        content: saved.content,
+        contentType: saved.contentType ?? 'text',
+        attachments: saved.attachments ?? [],
+        replyToId: saved.replyToId ?? null,
+        isThreadReply: true,
+        isEdited: false,
+        editedAt: null,
+        createdAt: saved.createdAt,
+        reactions: [],
+        sender: saved.sender ?? null,
+      },
+    });
+
+    return { event: 'thread_reply_sent', messageId: saved.id };
+  }
+
   // ─── Message reaction ─────────────────────────────────
   @SubscribeMessage('add_reaction')
   async handleAddReaction(

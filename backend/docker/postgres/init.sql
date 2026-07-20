@@ -3144,6 +3144,64 @@ DROP TRIGGER IF EXISTS trg_protect_user_public_id ON public.users;
 CREATE TRIGGER trg_protect_user_public_id
   BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.protect_user_public_id();
 
+-- ── 6. Chat appearance: room background (admin-managed) + per-user wallpaper ──
+-- See SYSTEM_DESIGN.md §14.10 for the design rationale (priority order:
+-- user_chat_settings.background_url -> chat_rooms.background_url -> default theme).
+ALTER TABLE public.chat_rooms
+  ADD COLUMN IF NOT EXISTS background_url text,
+  ADD COLUMN IF NOT EXISTS background_type varchar(20) NOT NULL DEFAULT 'DEFAULT';
+
+CREATE TABLE IF NOT EXISTS public.user_chat_settings (
+  id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  room_id uuid NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  background_url text,
+  background_type varchar(20),
+  theme varchar(20),
+  font_size integer,
+  compact_mode boolean NOT NULL DEFAULT false,
+  animation_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, room_id)
+);
+
+CREATE INDEX IF NOT EXISTS "IDX_user_chat_settings_user" ON public.user_chat_settings (user_id);
+
+-- ── 7. Message drafts (Telegram-style unsent text, restored per room) ──────
+-- See SYSTEM_DESIGN.md §14.12.
+CREATE TABLE IF NOT EXISTS public.message_drafts (
+  id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  room_id uuid NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  content text NOT NULL DEFAULT '',
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, room_id)
+);
+
+CREATE INDEX IF NOT EXISTS "IDX_message_drafts_user" ON public.message_drafts (user_id);
+
+-- ── 8. Slack-style message threads (§14.13) ─────────────────────────────────
+-- Thread replies are a distinct concept from the existing inline reply_to_id
+-- quote-reply: they're excluded from the main room timeline (listMessages)
+-- and only surface in the thread panel, matching Slack's "doesn't clutter
+-- the channel" behavior. reply_to_id is still set (= root message id) so
+-- existing reply-lookup code keeps working; is_thread_reply is what actually
+-- hides them from the main feed.
+ALTER TABLE public.chat_messages
+  ADD COLUMN IF NOT EXISTS is_thread_reply boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.message_threads (
+  id uuid DEFAULT public.uuid_generate_v4() NOT NULL PRIMARY KEY,
+  room_id uuid NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  root_message_id uuid NOT NULL UNIQUE REFERENCES public.chat_messages(id) ON DELETE CASCADE,
+  reply_count integer NOT NULL DEFAULT 0,
+  last_reply_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "IDX_chat_messages_thread_replies"
+  ON public.chat_messages (reply_to_id) WHERE is_thread_reply = true;
 
 --
 -- PostgreSQL database dump complete

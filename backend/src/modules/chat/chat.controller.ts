@@ -172,6 +172,23 @@ export class ChatController {
     return this.messageService.updateMessage(messageId, userId, dto);
   }
 
+  @Get('chat/messages/:messageId/thread')
+  @ApiOperation({ summary: 'Get a message’s Slack-style thread (root + replies)' })
+  getThread(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    return this.messageService.getThread(messageId, userId);
+  }
+
+  @Post('chat/messages/:messageId/thread')
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Post a reply into a message’s thread (REST fallback — prefer the socket event)' })
+  sendThreadReply(
+    @Param('messageId') messageId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.messageService.sendThreadReply(messageId, userId, dto);
+  }
+
   @Post('chat/messages/:messageId/reactions')
   @ApiOperation({ summary: 'Add reaction' })
   addReaction(@Param('messageId') messageId: string, @CurrentUser('id') userId: string, @Body() dto: AddReactionDto) {
@@ -257,13 +274,75 @@ export class ChatController {
   }
 
   @Patch('chat/rooms/:roomId/settings')
-  @ApiOperation({ summary: 'Update room settings (scope, name, description)' })
+  @ApiOperation({
+    summary:
+      'Update room settings (scope, name, description; background changes require owner/admin)',
+  })
   updateRoomSettings(
     @Param('roomId') roomId: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: { scope?: RoomScope; name?: string; description?: string },
+    @Body()
+    dto: {
+      scope?: RoomScope;
+      name?: string;
+      description?: string;
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
+    },
   ) {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/appearance')
+  @ApiOperation({
+    summary: 'Get the caller’s personal appearance override for a room',
+  })
+  getChatAppearance(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.roomService.getUserChatSettings(roomId, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/appearance')
+  @ApiOperation({
+    summary:
+      'Update the caller’s personal wallpaper/theme/font-size/compact-mode/animation for a room',
+  })
+  updateChatAppearance(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body()
+    dto: {
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
+      theme?: string | null;
+      fontSize?: number | null;
+      compactMode?: boolean;
+      animationEnabled?: boolean;
+    },
+  ) {
+    return this.roomService.upsertUserChatSettings(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/draft')
+  @ApiOperation({
+    summary: 'Get the caller’s unsent draft text for a room (Telegram-style)',
+  })
+  getDraft(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.messageService.getDraft(roomId, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/draft')
+  @ApiOperation({
+    summary: 'Save (or, if empty, clear) the caller’s draft text for a room',
+  })
+  saveDraft(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body('content') content: string,
+  ) {
+    return this.messageService.saveDraft(roomId, userId, content ?? '');
   }
 
   @Patch('chat/rooms/:roomId/mute')

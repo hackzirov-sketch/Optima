@@ -7,6 +7,7 @@ import {
 import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
+import { UserChatSettings } from '../../../database/entities/user-chat-settings.entity';
 import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
@@ -38,6 +39,8 @@ export interface ChatRoomDto {
   updatedAt: Date;
   memberIds: string[];
   memberCount: number;
+  backgroundUrl: string | null;
+  backgroundType: string;
   lastMessage: {
     id: string;
     content: string;
@@ -127,6 +130,8 @@ export class ChatRoomService {
       updatedAt: room.updatedAt,
       memberIds: members.map((m) => m.userId),
       memberCount: members.length,
+      backgroundUrl: room.backgroundUrl ?? null,
+      backgroundType: room.backgroundType ?? 'DEFAULT',
       lastMessage,
       unreadCount,
       isMember: true,
@@ -206,6 +211,8 @@ export class ChatRoomService {
         updatedAt: room.updatedAt,
         memberIds: roomMemberIds,
         memberCount: roomMemberIds.length,
+        backgroundUrl: room.backgroundUrl ?? null,
+        backgroundType: room.backgroundType ?? 'DEFAULT',
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -302,7 +309,13 @@ export class ChatRoomService {
   async updateRoomSettings(
     roomId: string,
     userId: string,
-    dto: { scope?: RoomScope; name?: string; description?: string },
+    dto: {
+      scope?: RoomScope;
+      name?: string;
+      description?: string;
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
+    },
   ) {
     const room = await this.findRoomById(roomId);
     if (!room)
@@ -310,11 +323,32 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_FOUND,
         message: 'Room not found',
       });
-    await this.chatMemberService.assertRoomMember(roomId, userId);
-    if (room.createdById !== userId)
+    const member = await this.chatMemberService.assertRoomMember(
+      roomId,
+      userId,
+    );
+    const isBackgroundOnlyChange =
+      dto.backgroundUrl !== undefined || dto.backgroundType !== undefined;
+    const isPrivileged =
+      room.createdById === userId ||
+      member.role === 'owner' ||
+      member.role === 'admin';
+    if (!isPrivileged)
       throw new ForbiddenException({
         code: ErrorCode.ROOM_INVITE_FORBIDDEN,
-        message: 'Only the creator can update room settings',
+        message: isBackgroundOnlyChange
+          ? 'Only the room owner/admin can change the background'
+          : 'Only the creator can update room settings',
+      });
+    if (
+      dto.backgroundType &&
+      !['DEFAULT', 'IMAGE', 'COLOR', 'GRADIENT', 'PATTERN'].includes(
+        dto.backgroundType,
+      )
+    )
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Invalid backgroundType',
       });
 
     const { setClause, values } = buildUpdateSet(
@@ -332,6 +366,89 @@ export class ChatRoomService {
       updated = rows[0];
     }
     return this.enrichRoom(updated, userId);
+  }
+
+  /**
+   * Per-user wallpaper/theme/font-size/compact-mode/animation override for a room.
+   * Takes priority over the room's `backgroundUrl` — see SYSTEM_DESIGN.md §14.10.
+   */
+  async getUserChatSettings(
+    roomId: string,
+    userId: string,
+  ): Promise<UserChatSettings | null> {
+    const rows: UserChatSettings[] = await this.dataSource.query(
+      `SELECT id, user_id AS "userId", room_id AS "roomId",
+              background_url AS "backgroundUrl", background_type AS "backgroundType", theme,
+              font_size AS "fontSize", compact_mode AS "compactMode",
+              animation_enabled AS "animationEnabled",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM user_chat_settings WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async upsertUserChatSettings(
+    roomId: string,
+    userId: string,
+    dto: {
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
+      theme?: string | null;
+      fontSize?: number | null;
+      compactMode?: boolean;
+      animationEnabled?: boolean;
+    },
+  ): Promise<UserChatSettings> {
+    await this.chatMemberService.assertRoomMember(roomId, userId);
+    const existing = await this.getUserChatSettings(roomId, userId);
+    const merged = {
+      backgroundUrl:
+        dto.backgroundUrl !== undefined
+          ? dto.backgroundUrl
+          : (existing?.backgroundUrl ?? null),
+      backgroundType:
+        dto.backgroundType !== undefined
+          ? dto.backgroundType
+          : (existing?.backgroundType ?? null),
+      theme: dto.theme !== undefined ? dto.theme : (existing?.theme ?? null),
+      fontSize:
+        dto.fontSize !== undefined
+          ? dto.fontSize
+          : (existing?.fontSize ?? null),
+      compactMode:
+        dto.compactMode !== undefined
+          ? dto.compactMode
+          : (existing?.compactMode ?? false),
+      animationEnabled:
+        dto.animationEnabled !== undefined
+          ? dto.animationEnabled
+          : (existing?.animationEnabled ?? true),
+    };
+    const rows: UserChatSettings[] = await this.dataSource.query(
+      `INSERT INTO user_chat_settings
+         (user_id, room_id, background_url, background_type, theme, font_size, compact_mode, animation_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (user_id, room_id) DO UPDATE SET
+         background_url = $3, background_type = $4, theme = $5, font_size = $6,
+         compact_mode = $7, animation_enabled = $8, updated_at = now()
+       RETURNING id, user_id AS "userId", room_id AS "roomId",
+                 background_url AS "backgroundUrl", background_type AS "backgroundType", theme,
+                 font_size AS "fontSize", compact_mode AS "compactMode",
+                 animation_enabled AS "animationEnabled",
+                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [
+        userId,
+        roomId,
+        merged.backgroundUrl,
+        merged.backgroundType,
+        merged.theme,
+        merged.fontSize,
+        merged.compactMode,
+        merged.animationEnabled,
+      ],
+    );
+    return rows[0];
   }
 
   async createRoom(

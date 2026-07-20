@@ -1,14 +1,18 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
-import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Palette, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { FormEvent, KeyboardEvent, type CSSProperties, type MouseEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { AudioMessage } from "../components/AudioMessage";
+import { EmojiPickerButton } from "../components/EmojiPicker";
+import { AttachMenuButton } from "../components/AttachMenu";
+import { ChatAppearanceMenu, type AppearanceValue } from "../components/ChatAppearanceMenu";
+import { ThreadPanel } from "../components/ThreadPanel";
 import { MeetingRoomPage } from "./MeetingRoomPage";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
-import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
+import type { ChatMessage, ChatRoom, RoomInvite, User, UserChatSettings, WorkspaceMember } from "../types";
 
 function memberUser(member: WorkspaceMember): User {
   return (member.user || {
@@ -81,10 +85,9 @@ export function ChatPage() {
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [activeMenu, setActiveMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -111,6 +114,9 @@ export function ChatPage() {
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
   const [forwarding, setForwarding] = useState(false);
   const [roomInvites, setRoomInvites] = useState<RoomInvite[]>([]);
+  const [personalAppearance, setPersonalAppearance] = useState<UserChatSettings | null>(null);
+  const [appearanceOpen, setAppearanceOpen] = useState<"personal" | "room" | null>(null);
+  const [openThread, setOpenThread] = useState<ChatMessage | null>(null);
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
@@ -118,9 +124,15 @@ export function ChatPage() {
   const messageList = useRef<HTMLDivElement>(null);
   const aiMessageList = useRef<HTMLDivElement>(null);
   const aiShouldScroll = useRef(false);
+  const aiOpenRef = useRef(aiOpen);
+  useEffect(() => { aiOpenRef.current = aiOpen; if (aiOpen) setSelectedId(null); }, [aiOpen]);
   const preserveMessageScroll = useRef(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const roomSearchInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
+  const draftSaveTimer = useRef<number | null>(null);
+  const draftRef = useRef(draft);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
   const recordingChunks = useRef<Blob[]>([]);
@@ -129,6 +141,21 @@ export function ChatPage() {
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || null;
   const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
+  const activeMessage = messages.find((message) => message.id === activeMenu?.id) || null;
+  const canManageRoomBackground = Boolean(selectedRoom && (selectedRoom.createdById === user?.id || selectedRoom.myRole === "admin" || selectedRoom.myRole === "owner"));
+  const effectiveAppearance: AppearanceValue = {
+    backgroundUrl: personalAppearance?.backgroundUrl ?? selectedRoom?.backgroundUrl ?? null,
+    backgroundType: (personalAppearance?.backgroundUrl ? personalAppearance.backgroundType : selectedRoom?.backgroundType) ?? "DEFAULT",
+    compactMode: personalAppearance?.compactMode ?? false,
+    animationEnabled: personalAppearance?.animationEnabled ?? true,
+    fontSize: personalAppearance?.fontSize ?? 15,
+  };
+  const messageListStyle: Record<string, string | number> = { "--chat-font-size": `${effectiveAppearance.fontSize ?? 15}px` };
+  if (effectiveAppearance.backgroundUrl) {
+    if (effectiveAppearance.backgroundType === "IMAGE") { messageListStyle.backgroundImage = `url(${effectiveAppearance.backgroundUrl})`; messageListStyle.backgroundSize = "cover"; messageListStyle.backgroundPosition = "center"; }
+    else if (effectiveAppearance.backgroundType === "COLOR") messageListStyle.backgroundColor = effectiveAppearance.backgroundUrl;
+    else if (effectiveAppearance.backgroundType === "GRADIENT") messageListStyle.backgroundImage = effectiveAppearance.backgroundUrl;
+  }
   const memberMap = useMemo(() => {
     const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>();
     members.forEach((member) => result.set(member.userId, memberUser(member)));
@@ -243,6 +270,10 @@ export function ChatPage() {
     const mergedRooms = [...systemRooms, ...nextRooms.filter((room) => !systemRooms.some((system) => system.id === room.id))];
     setRooms(mergedRooms);
     setMembers(nextMembers);
+    if (!preferredId && aiOpenRef.current) {
+      setLoadingRooms(false);
+      return;
+    }
     const target = preferredId || selectedId;
     if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
     else if (mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
@@ -351,11 +382,16 @@ export function ChatPage() {
     const onError = (data: { code?: string; message?: string }) => {
       if (data?.code) show(data.message || "Real-time xatolik", "error");
     };
+    const onThreadReply = (data: { threadRootId: string; threadReplyCount: number | null }) => {
+      if (data.threadReplyCount == null) return;
+      setMessages((current) => current.map((item) => item.id === data.threadRootId ? { ...item, threadReplyCount: data.threadReplyCount as number } : item));
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("new_message", onMessage);
     socket.on("typing", onTyping);
     socket.on("reaction_updated", onReaction);
+    socket.on("thread_reply", onThreadReply);
     socket.on("error", onError);
     if (socket.connected) onConnect();
     return () => {
@@ -364,6 +400,7 @@ export function ChatPage() {
       socket.off("new_message", onMessage);
       socket.off("typing", onTyping);
       socket.off("reaction_updated", onReaction);
+      socket.off("thread_reply", onThreadReply);
       socket.off("error", onError);
     };
     // Depend on the id, not the workspace object — auth re-resolves a fresh
@@ -414,6 +451,28 @@ export function ChatPage() {
   }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
 
   useEffect(() => {
+    setPersonalAppearance(null);
+    setAppearanceOpen(null);
+    setOpenThread(null);
+    if (!selectedId) return;
+    let cancelled = false;
+    void api.chat.getAppearance(selectedId).then((settings) => { if (!cancelled) setPersonalAppearance(settings); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedId]);
+
+  useEffect(() => {
+    const roomId = selectedId;
+    if (!roomId) return;
+    let cancelled = false;
+    void api.chat.getDraft(roomId).then((result) => { if (!cancelled) setDraft(result.content); }).catch(() => {});
+    return () => {
+      cancelled = true;
+      if (draftSaveTimer.current) { window.clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
+      void api.chat.saveDraft(roomId, draftRef.current).catch(() => {});
+    };
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!selectedId || !messages.length) return;
     const latest = messages[messages.length - 1];
     if (latest.id.startsWith("optimistic:")) return;
@@ -446,6 +505,14 @@ export function ChatPage() {
     socket.emit("typing", { roomId: selectedId, typing: true });
     if (typingTimer.current) window.clearTimeout(typingTimer.current);
     typingTimer.current = window.setTimeout(() => socket.emit("typing", { roomId: selectedId, typing: false }), 1200);
+    if (draftSaveTimer.current) window.clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = window.setTimeout(() => { void api.chat.saveDraft(selectedId, value).catch(() => {}); }, 700);
+  }
+
+  function clearDraft() {
+    if (draftSaveTimer.current) window.clearTimeout(draftSaveTimer.current);
+    setDraft("");
+    if (selectedId) void api.chat.saveDraft(selectedId, "").catch(() => {});
   }
 
   async function runComposerAi() {
@@ -474,14 +541,14 @@ export function ChatPage() {
       try {
         const updated = await api.chat.editMessage(editing.id, content);
         setMessages((current) => current.map((item) => item.id === editing.id ? updated : item));
-        setDraft("");
+        clearDraft();
         setEditing(null);
       } catch (error) {
         show(error instanceof Error ? error.message : "Xabar tahrirlanmadi", "error");
       }
       return;
     }
-    setDraft("");
+    clearDraft();
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
@@ -555,13 +622,12 @@ export function ChatPage() {
           await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
         }
       } else await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
-      setDraft("");
+      clearDraft();
       setReplyingTo(null);
     } catch (error) {
       show(error instanceof Error ? error.message : "Fayl yuborilmadi", "error");
     } finally {
       setUploading(false);
-      if (fileInput.current) fileInput.current.value = "";
     }
   }
 
@@ -673,11 +739,103 @@ export function ChatPage() {
   }, []);
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey || !event.shiftKey)) {
       event.preventDefault();
       void sendMessage();
+      return;
+    }
+    if (event.key === "Escape") {
+      if (replyingTo || editing) {
+        setEditing(null);
+        setReplyingTo(null);
+        if (editing) clearDraft();
+      } else {
+        (event.target as HTMLTextAreaElement).blur();
+      }
+      return;
+    }
+    if (event.key === "ArrowUp" && !draft && !editing) {
+      const lastOwn = [...(visibleMessages || [])].reverse().find((message) => message.senderId === user?.id);
+      if (lastOwn) {
+        event.preventDefault();
+        setEditing(lastOwn);
+        setReplyingTo(null);
+        setDraft(lastOwn.content);
+      }
     }
   }
+
+  const swipeAccum = useRef<{ id: string; x: number } | null>(null);
+  const swipeIdleTimer = useRef<number | null>(null);
+
+  function clearSwipe() {
+    swipeAccum.current = null;
+  }
+
+  function handleMessageSwipe(event: WheelEvent<HTMLDivElement>, message: ChatMessage) {
+    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY) * 1.3 || Math.abs(event.deltaX) < 2) {
+      clearSwipe();
+      return;
+    }
+    if (!swipeAccum.current || swipeAccum.current.id !== message.id) swipeAccum.current = { id: message.id, x: 0 };
+    swipeAccum.current.x += event.deltaX;
+    if (swipeIdleTimer.current) window.clearTimeout(swipeIdleTimer.current);
+    swipeIdleTimer.current = window.setTimeout(clearSwipe, 250);
+    if (swipeAccum.current.x > 70) {
+      setReplyingTo(message);
+      setEditing(null);
+      clearSwipe();
+    }
+  }
+
+  function autoResizeComposer() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 130)}px`;
+  }
+
+  useEffect(() => {
+    if (!draft && textareaRef.current) textareaRef.current.style.height = "auto";
+  }, [draft]);
+
+  useEffect(() => {
+    function handleOutsidePointer(event: globalThis.MouseEvent) {
+      const target = event.target as HTMLElement;
+      if (headerMenuOpen && !target.closest(".header-more")) setHeaderMenuOpen(false);
+      if (activeMenu && !target.closest(".message-context-menu") && !target.closest(".message-menu-trigger")) setActiveMenu(null);
+    }
+    document.addEventListener("mousedown", handleOutsidePointer);
+    return () => document.removeEventListener("mousedown", handleOutsidePointer);
+  }, [headerMenuOpen, activeMenu]);
+
+  useEffect(() => {
+    function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (headerMenuOpen) setHeaderMenuOpen(false);
+        else if (activeMenu) setActiveMenu(null);
+        else if (messageSearchOpen) { setMessageSearchOpen(false); setMessageSearch(""); }
+        else if (replyingTo || editing) { setEditing(null); setReplyingTo(null); }
+      }
+      const meta = event.ctrlKey || event.metaKey;
+      if (!meta) return;
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        roomSearchInput.current?.focus();
+      } else if (event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        textareaRef.current?.focus();
+      } else if (event.key.toLowerCase() === "f" && selectedRoom) {
+        event.preventDefault();
+        setMessageSearchOpen(true);
+      } else if (event.shiftKey && event.key.toLowerCase() === "m" && selectedRoom) {
+        event.preventDefault();
+        void toggleChannelMute();
+      }
+    }
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [selectedRoom, headerMenuOpen, activeMenu, messageSearchOpen, replyingTo, editing]);
 
   async function createConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -823,6 +981,30 @@ export function ChatPage() {
       show(error instanceof Error ? error.message : "Sozlama saqlanmadi", "error");
     }
   }
+  async function changePersonalAppearance(patch: Partial<AppearanceValue>) {
+    if (!selectedRoom) return;
+    try {
+      const updated = await api.chat.updateAppearance(selectedRoom.id, patch);
+      setPersonalAppearance(updated);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Ko‘rinish saqlanmadi", "error");
+    }
+  }
+
+  async function changeRoomBackground(patch: Partial<AppearanceValue>) {
+    if (!selectedRoom) return;
+    try {
+      const updated = await api.chat.updateRoomBackground(selectedRoom.id, {
+        backgroundUrl: patch.backgroundUrl ?? null,
+        backgroundType: patch.backgroundType ?? "DEFAULT",
+      });
+      setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, backgroundUrl: updated.backgroundUrl, backgroundType: updated.backgroundType } : room));
+      show("Suhbat foni yangilandi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Fon saqlanmadi", "error");
+    }
+  }
+
   async function forwardMessage(targetRoomId: string) {
     if (!forwardingMessage || forwarding) return;
     setForwarding(true);
@@ -862,6 +1044,16 @@ export function ChatPage() {
   return (
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
       {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label="Rasmni yuklab olish"><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label="Yopish"><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
+      {activeMenu && activeMessage && <div className="message-context-menu" style={{ left: activeMenu.x, top: activeMenu.y }} role="menu">
+        <div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => { void reactToMessage(activeMessage, emoji); setActiveMenu(null); }}>{emoji}</button>)}</div>
+        <button onClick={() => { setReplyingTo(activeMessage); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button>
+        {!activeMessage.isThreadReply && <button onClick={() => { setOpenThread(activeMessage); setActiveMenu(null); }}><MessagesSquare size={16} />Thread’da javob berish</button>}
+        <button onClick={() => { setForwardingMessage(activeMessage); setActiveMenu(null); }}><Send size={16} />Boshqa chatga yuborish</button>
+        <button onClick={() => { void navigator.clipboard.writeText(activeMessage.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>
+        {activeMessage.senderId === user?.id && <button onClick={() => { setEditing(activeMessage); setReplyingTo(null); setDraft(activeMessage.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}
+        <button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>
+        {activeMessage.senderId === user?.id && <button className="danger" onClick={() => { void deleteMessage(activeMessage); setActiveMenu(null); }}><Trash2 size={16} />O‘chirish</button>}
+      </div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
         <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />Suhbatni ochish</button>
         <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />Kategoriyada ko‘rsatish</button>
@@ -870,7 +1062,7 @@ export function ChatPage() {
       </div>}
       <aside className="chat-sidebar">
         <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label="Bosh sahifaga qaytish" title="Bosh sahifa"><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
-        <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
+        <label className="search-field"><Search size={17} /><input ref={roomSearchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
         <nav className="chat-catalog" aria-label="Chat kataloglari">
           <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
           {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
@@ -889,7 +1081,7 @@ export function ChatPage() {
             );
           })}
         </div>
-        <footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? "Real-time ulangan" : "Qayta ulanmoqda..."}</small></footer>
+        {/*<footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? "Real-time ulangan" : "Qayta ulanmoqda..."}</small></footer>*/}
       </aside>
 
       <section className="conversation">
@@ -903,7 +1095,7 @@ export function ChatPage() {
           </div>
           <div className="composer ai-composer"><textarea value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiMessage(); } }} placeholder="OPTIMA AI ga yozing" rows={1} maxLength={6000} aria-label="AI uchun savol" /><button className="send-button" onClick={() => void sendAiMessage()} disabled={!aiDraft.trim() || aiThinking} aria-label="Savolni yuborish">{aiThinking ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button></div>
         </div>}
-        {selectedRoom && (
+        {selectedRoom && !aiOpen && (
           <>
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
@@ -915,7 +1107,13 @@ export function ChatPage() {
                   <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
                   <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>{selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
+                <span className="appearance-menu-wrap">
+                  <button className={`icon-button ${appearanceOpen === "personal" ? "active" : ""}`} onClick={() => setAppearanceOpen((value) => value === "personal" ? null : "personal")} aria-label="Ko‘rinish sozlamalari" title="Ko‘rinish" aria-expanded={appearanceOpen === "personal"}><Palette size={18} /></button>
+                  <ChatAppearanceMenu open={appearanceOpen === "personal"} onClose={() => setAppearanceOpen(null)} title="Mening ko‘rinishim" showPersonalization value={effectiveAppearance} onChange={(patch) => void changePersonalAppearance(patch)} onUploadFile={async (file) => (await api.chat.uploadFile(selectedRoom.id, file)).storageUrl} />
+                </span>
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>{canManageRoomBackground && <button onClick={() => { setHeaderMenuOpen(false); setAppearanceOpen("room"); }}><Palette size={17} /><span><strong>Suhbat foni</strong><small>Hammaga ko‘rinadi</small></span></button>}{selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}
+                  <ChatAppearanceMenu open={appearanceOpen === "room"} onClose={() => setAppearanceOpen(null)} title="Suhbat foni (hammaga)" showPersonalization={false} value={{ backgroundUrl: selectedRoom.backgroundUrl ?? null, backgroundType: selectedRoom.backgroundType ?? "DEFAULT" }} onChange={(patch) => void changeRoomBackground(patch)} onUploadFile={async (file) => (await api.chat.uploadFile(selectedRoom.id, file)).storageUrl} />
+                </div>}
               </div>
             </header>
             {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}
@@ -923,7 +1121,7 @@ export function ChatPage() {
               <div className="invite-state"><UsersRound size={28} /><h3>Suhbatga taklif</h3><p>Yozishishni boshlash uchun taklifni qabul qiling.</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>Qabul qilish</Button></div>
             ) : (
               <>
-                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); if (node.scrollTop < 90) void loadOlderMessages(); }}>
+                <div ref={messageList} className={`message-list ${effectiveAppearance.compactMode ? "chat-compact" : ""} ${effectiveAppearance.animationEnabled === false ? "chat-no-animation" : ""}`} style={messageListStyle as CSSProperties} aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); if (node.scrollTop < 90) void loadOlderMessages(); }}>
                   {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin" size={18} /> Eski xabarlar yuklanmoqda</div>}
                   {loadingMessages && <div className="center-loader"><LoaderCircle className="spin" size={24} /></div>}
                   {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? "Xabar topilmadi" : "Suhbatni boshlang"}</h3><p>{messageSearch ? "Boshqa so‘z bilan qidirib ko‘ring." : "Birinchi xabarni yuboring."}</p></div>}
@@ -936,7 +1134,7 @@ export function ChatPage() {
                     return (
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
-                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`} onContextMenu={(event) => { event.preventDefault(); setActiveMenu(message.id); }}>
+                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`} onContextMenu={(event) => { event.preventDefault(); setActiveMenu({ id: message.id, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 246)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 320)) }); }} onWheel={(event) => handleMessageSwipe(event, message)} onMouseLeave={clearSwipe}>
                           {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
@@ -945,10 +1143,19 @@ export function ChatPage() {
                             {message.content && <p>{message.content}</p>}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB · Yuklab olish</small></span><Download size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
+                            {!!message.threadReplyCount && <button className="thread-pill" onClick={() => setOpenThread(message)}><MessagesSquare size={13} />{message.threadReplyCount} ta javob</button>}
                             <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
                             {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}
-                            <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label="Xabar amallari" aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />Boshqa chatga yuborish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
+                            <button
+                              className="message-menu-trigger"
+                              onClick={(event) => {
+                                if (activeMenu?.id === message.id) { setActiveMenu(null); return; }
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                setActiveMenu({ id: message.id, x: Math.max(8, Math.min(rect.left, window.innerWidth - 246)), y: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 320)) });
+                              }}
+                              aria-label="Xabar amallari"
+                              aria-expanded={activeMenu?.id === message.id}
+                            ><MoreVertical size={16} /></button>
                           </div>
                         </div>
                       </div>
@@ -959,18 +1166,18 @@ export function ChatPage() {
                   {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
                 </div>
                 {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? "Unmute" : "Mute"}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
-                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { setDraft(""); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
-                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
-                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
-                  <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
-                  {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label="Fayl biriktirish">{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
-                  {recording ? <div className="recording-status"><i /><strong>Audio yozilmoqda</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label="Yozuvni bekor qilish"><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder="Xabar yozing" rows={1} maxLength={1500} aria-label="Xabar matni" />}
+                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { clearDraft(); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
+                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); clearDraft(); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
+                  <EmojiPickerButton onSelect={(emoji) => { setDraft((current) => `${current}${emoji}`); textareaRef.current?.focus(); }} />
+                  {!recording && <AttachMenuButton uploading={uploading} onPick={(file) => void uploadAttachment(file)} />}
+                  {recording ? <div className="recording-status"><i /><strong>Audio yozilmoqda</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label="Yozuvni bekor qilish"><Trash2 size={18} /></button></div> : <textarea ref={textareaRef} value={draft} onChange={(event) => { announceTyping(event.target.value); autoResizeComposer(); }} onKeyDown={keyDown} placeholder="Xabar yozing" rows={1} maxLength={1500} aria-label="Xabar matni" />}
                   {draft.trim() && !recording ? <button className="send-button" onClick={() => void sendMessage()} disabled={sending} aria-label="Xabarni yuborish">{sending ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> : <button className={`send-button voice-button ${recording ? "recording" : ""}`} onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending} aria-label={recording ? "Audio xabarni yuborish" : "Audio xabar yozish"}>{sending ? <LoaderCircle className="spin" size={19} /> : recording ? <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
                 </div>}
               </>
             )}
           </>
         )}
+        {openThread && <ThreadPanel root={openThread} currentUserId={user?.id} onClose={() => setOpenThread(null)} onReplyCountChange={(rootId, count) => { setMessages((current) => current.map((item) => item.id === rootId ? { ...item, threadReplyCount: count } : item)); setOpenThread((current) => current && current.id === rootId ? { ...current, threadReplyCount: count } : current); }} />}
       </section>
 
       {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true" aria-label="Direct qo'ng'iroq">{directCall.phase === "active" ? <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> : <section className="direct-call-ringing"><div className="direct-call-glow" /><Avatar firstName={memberMap.get(directCall.peerId)?.firstName || "User"} lastName={memberMap.get(directCall.peerId)?.lastName} url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> : <Phone size={17} />}{directCall.kind === "video" ? "Video qo'ng'iroq" : "Audio qo'ng'iroq"}</span><h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : "Foydalanuvchi"}</h2><p>{directCall.phase === "incoming" ? "Sizga qo'ng'iroq qilmoqda..." : "Ulanish kutilmoqda..."}</p><div className="direct-call-ringing-actions"><button className="decline" onClick={closeDirectCall}><PhoneOff size={23} /><span>{directCall.phase === "incoming" ? "Rad etish" : "Bekor qilish"}</span></button>{directCall.phase === "incoming" && <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> : <Phone size={23} />}<span>Qabul qilish</span></button>}</div><small><ShieldCheck size={15} /> Ulanish kaliti qo'ng'iroqda emoji bilan tekshiriladi</small></section>}</div>}

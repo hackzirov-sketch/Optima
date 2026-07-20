@@ -50,4 +50,12 @@ export interface ChatMessage {
   isPinned: boolean;
 
   viewCount: number;
+
+  /** Slack-style threads (§14.13) — true for replies posted into a message's thread panel. */
+  isThreadReply: boolean;
+
+  /** Only populated on root messages that have a thread, via the message_threads LEFT JOIN. */
+  threadReplyCount?: number;
+
+  threadLastReplyAt?: Date | null;
 }

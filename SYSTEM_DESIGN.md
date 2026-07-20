@@ -236,4 +236,208 @@ Qo'shimcha mavjud (spec'da yo'q): `auth` queue, `chat` queue, `MEETING_RECORDING
 
 ---
 
+## 14. Chat System Design — Telegram-style UX (qo'shimcha)
+
+> **Status:** faqat dizayn hujjati. Quyidagi bo'limlarning bir qismi (14.1, 14.2, 14.3 ning trackpad swipe qismi, 14.5 ning ArrowUp/Ctrl+F/Ctrl+E/Ctrl+Shift+M) frontendda allaqachon amalga oshirilgan (`frontend/src/pages/ChatPage.tsx`, `frontend/src/components/EmojiPicker.tsx`, `frontend/src/components/AttachMenu.tsx`, `frontend/src/lib/useOutsideClose.ts`). Qolgani (14.4 custom shortcuts, 14.9–14.11 wallpaper/appearance/admin settings, mobile gesture'lar, thread/permission integratsiyasi) **hali kod darajasida yo'q** — bu yerda faqat maqsad va arxitektura qayd etilyapti, DB sxemasi o'zgartirilmagan.
+
+Maqsad — UPZ chatini Telegram Desktop + Telegram Mobile UX tamoyillariga yaqinlashtirish, lekin UPZ workflow'lariga (workspace/task/GitHub integratsiyasi) moslashtirish.
+
+### 14.1 Chat Context Menu System (Absolute Popup)
+
+Barcha action menyular oddiy document flow ichida emas, **absolute/fixed positioning** orqali ishlaydi:
+
+* Telegram Desktop kabi bosilgan joyga yaqin ochiladi.
+* Ekran chegarasidan chiqib ketmaydi (viewport clamp).
+* Pastga sig'masa yuqoriga, o'ngga sig'masa chapga ochiladi.
+* Smooth animation (`emoji-pop-in`, 150–170ms) bilan chiqadi.
+
+**Position logic (amalga oshirilgan, `ChatPage.tsx`):**
+
+```ts
+const rect = messageElement.getBoundingClientRect();
+setActiveMenu({
+  id: message.id,
+  x: Math.max(8, Math.min(rect.left, window.innerWidth - 246)),
+  y: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 320)),
+});
+```
+
+Message ustida **Right Click** (desktop) yoki **"⋮" tugma** (fallback, shu jumladan mobil) bosilganda `.message-context-menu` shu koordinatalarda `position: fixed` bilan render bo'ladi: Reply → React → Forward → Copy → Edit → Pin (tez orada) → Delete.
+
+**Rejalashtirilgan, hali yo'q:** mobil **Long Press (500ms)** orqali bir xil menyuni bottom-sheet ko'rinishida ochish (14.8-bo'limga qarang).
+
+### 14.2 Outside Click Behavior (umumiy qoida)
+
+Barcha popup turlari — emoji picker, attachment menu, message context menu, header-more menu, member menu, search filter, settings menu — bitta umumiy qoidaga bo'ysunadi:
+
+```
+click outside → close popup
+ESC           → close active popup / context menu / remove focus
+```
+
+Amalga oshirilgan: `frontend/src/lib/useOutsideClose.ts` (emoji/attach popup uchun) va `ChatPage.tsx` ichidagi global `mousedown`/`keydown` listener (header-more-menu, message-context-menu, message-search uchun). Yangi popup qo'shilganda ham shu hook/qoidaga amal qilinishi shart — alohida outside-click logikasi yozilmaydi.
+
+### 14.3 Message Gesture System
+
+**Desktop:**
+* Right Click → message menu (14.1).
+* Hover → Reply / Reaction / More tezkor tugmalari ko'rinadi.
+* Touchpad **ikki barmoq bilan o'ngga gorizontal swipe** → Reply rejimi ochiladi (amalga oshirilgan, `handleMessageSwipe`, `deltaX` akkumulyatori, 250ms idle reset). Swipe left — kelajakda **Quick reaction panel** uchun rezervlangan.
+
+Flow: `swipe right → gesture detect → reply preview ko'rsatiladi → composer'ga focus`.
+
+### 14.4 Custom Shortcut System (kelajak, hali yo'q)
+
+Foydalanuvchi o'z shortcut'larini o'zgartira olishi uchun mo'ljallangan jadval **taklifi** (hali migratsiya qilinmagan):
+
+```sql
+-- taklif, hali yaratilmagan
+user_shortcuts (
+  id, user_id, action, key_combination, created_at, updated_at
+)
+```
+
+```json
+{ "action": "reply", "shortcut": "ALT+R" }
+```
+
+Standart shortcut'lar 14.5-jadvaldagi qiymatlar bo'ladi; `user_shortcuts`da yozuv bo'lsa, u ustunlik qiladi.
+
+### 14.5 Keyboard Shortcut System
+
+| Guruh | Amal | Shortcut | Holat |
+|---|---|---|---|
+| Navigatsiya | Keyingi chat | `Ctrl+Tab` | rejalashtirilgan |
+| Navigatsiya | Oldingi chat | `Ctrl+Shift+Tab` | rejalashtirilgan |
+| Navigatsiya | Chat papkasi | `Ctrl+1..9` | rejalashtirilgan |
+| Navigatsiya | Saved Messages | `Ctrl+0` | rejalashtirilgan |
+| Navigatsiya | Global qidiruv (chat ro'yxati) | `Ctrl+K` | ✅ amalga oshirilgan |
+| Navigatsiya | Joriy chatda qidiruv | `Ctrl+F` | ✅ amalga oshirilgan |
+| Xabar amali | Oldingi/keyingi xabarga reply | `Ctrl+↑` / `Ctrl+↓` | rejalashtirilgan |
+| Xabar amali | Oxirgi o'z xabarini tahrirlash | `ArrowUp` (composer bo'sh bo'lsa) | ✅ amalga oshirilgan |
+| Xabar amali | O'chirish | `Delete` | rejalashtirilgan |
+| Xabar amali | Forward | `Ctrl+Shift+F` | rejalashtirilgan |
+| Xabar amali | Select | `Ctrl+Click` | rejalashtirilgan |
+| Composer | Yuborish | `Enter` | ✅ amalga oshirilgan |
+| Composer | Yangi qator | `Shift+Enter` | ✅ amalga oshirilgan |
+| Composer | Muqobil yuborish | `Ctrl+Enter` | ✅ amalga oshirilgan |
+| Composer | Emoji picker | `Ctrl+E` | ✅ amalga oshirilgan |
+| Composer | Fayl biriktirish | `Ctrl+O` | rejalashtirilgan |
+| Composer | Ovozli yozuv (hold) | `Space` (bosib turish) | rejalashtirilgan |
+| Formatlash | Bold / Italic / Code / Link | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+M`* / `Ctrl+K`* | rejalashtirilgan |
+| Chat boshqaruvi | Mute | `Ctrl+Shift+M` | ✅ amalga oshirilgan |
+| Chat boshqaruvi | Pin chat | `Ctrl+Shift+P` | rejalashtirilgan (backend'da pin yo'q) |
+| Chat boshqaruvi | Joriy chatni yopish | `Ctrl+W` | rejalashtirilgan |
+
+\* `Ctrl+Shift+M` (code format) va `Ctrl+K` (link) allaqachon boshqa amallarga (mute, global search) band — bular real implementatsiyada **kontekstga qarab** ajratiladi (composer fokusda + matn tanlangan bo'lsa formatlash, aks holda mute/search), Telegram'dagi bilan bitta-bittaga bir xil emas, UPZ'ga moslashtirilgan.
+
+**Transition qoidasi:** shortcut orqali ochiladigan har qanday popup/panel (`emoji-picker`, `attach-menu`, `message-context-menu`, `header-more-menu`, `composer-mode`) `var(--dur-fast)`–`var(--dur-enter)` (140–260ms) oralig'idagi `ease-out` transition/animatsiyadan foydalanadi — bu allaqachon `styles.css`da standart (`emoji-pop-in`, `composer-mode-in`, `premium-menu-in`). Yangi shortcut-panel qo'shilganda ham shu animatsiya to'plamidan foydalanish shart, alohida qattiq (linear yoki 0ms) o'tish yozilmaydi.
+
+### 14.6 Mobile Gesture System (rejalashtirilgan)
+
+* **Long Press (500ms)** → context menu (bottom sheet, 14.8).
+* **Swipe Right** → Reply.
+* **Double Tap** → tezkor reaksiya (default ❤️).
+* **Pinch Zoom** → media (image/video) uchun.
+
+### 14.7 Desktop / Tablet / Mobile Adaptive Layout (rejalashtirilgan)
+
+```
+Desktop (≥1024px): | Sidebar | Chat | Info Panel |   (3 ustun)
+Tablet   (768–1023px): | Sidebar | Chat |            (2 ustun, Info Panel — drawer)
+Mobile   (<768px): Chat List → Chat Window            (1 ustun, hozirgi .chat-room-open holatiga yaqin)
+```
+
+Hozirgi `ChatPage.tsx` allaqachon mobil uchun 1-ustunli `.chat-room-open` klassini ishlatadi (438–890-qatorlar oralig'idagi CSS); 3-ustunli Info Panel (o'ng panel) hozircha modal (`Modal` orqali `detailsOpen`) — doimiy drawer/column emas.
+
+### 14.8 Mobile Navigation & Context Menu (rejalashtirilgan)
+
+* Chat ro'yxatida **swipe right** → orqaga.
+* Chatda **swipe left edge** → Chat Info.
+* Long press → **Bottom Sheet** context menu: Reply / React / Forward / Copy / Pin / Delete (desktop'dagi `.message-context-menu` bilan bir xil action ro'yxati, faqat UI shakli bottom-sheet).
+
+### 14.9 Mobile Composer (rejalashtirilgan)
+
+Pastga mahkamlangan (`position: sticky`/`fixed`), joriy desktop composer bilan bir xil komponent (`EmojiPickerButton`, `AttachMenuButton`, textarea, send/voice tugma), faqat kattaroq touch target va "+" tugmasi bottom-sheet (Photos / Camera / File / Location / Contact) ochadi — hozirgi `AttachMenuButton` popover'ining mobil variantidir.
+
+### 14.10 Chat Background / Appearance / Admin Settings
+
+**Status:** wallpaper qismi (✅) amalga oshirilgan. Bubble style/auto-download/enter-sends/link-preview va admin "Slow Mode/Media Rules/Retention" (`conversation_settings`) hali **rejalashtirilgan** — quyida ikkalasi ham ajratib ko'rsatilgan.
+
+**✅ Amalga oshirilgan (background/wallpaper):**
+
+```sql
+-- backend/docker/postgres/init.sql — qo'llanilgan
+ALTER TABLE public.chat_rooms
+  ADD COLUMN background_url text,
+  ADD COLUMN background_type varchar(20) NOT NULL DEFAULT 'DEFAULT';   -- admin/owner boshqaradi
+
+CREATE TABLE public.user_chat_settings (
+  id, user_id, room_id, background_url, background_type, theme,
+  font_size, compact_mode, animation_enabled, created_at, updated_at,
+  UNIQUE (user_id, room_id)
+);
+```
+
+- API: `PATCH /chat/rooms/:roomId/settings` (backgroundUrl/backgroundType — faqat creator yoki `chat_members.role IN ('owner','admin')`, `ChatRoomService.updateRoomSettings`), `GET`/`PATCH /chat/rooms/:roomId/appearance` (shaxsiy override, har qanday a'zo, `ChatRoomService.getUserChatSettings`/`upsertUserChatSettings`).
+- Frontend: `frontend/src/components/ChatAppearanceMenu.tsx` (preset gradient/rang svatchlari + fayl orqali rasm yuklash — mavjud `/chat/rooms/:roomId/attachments/file` endpointi orqali — + custom rasm URL + compact mode + animatsiya + shrift o'lchami), `ChatPage.tsx`dagi Palette tugmasi (shaxsiy) va header-more-menu ichidagi "Suhbat foni" (admin/owner uchun).
+- Ustunlik tartibi (`effectiveAppearance` hisoblanadi, `ChatPage.tsx`): **User Custom Wallpaper → Room Background → Default Theme.**
+- Ruxsat modeli: alohida `ChatPermission` enum yaratilmadi — mavjud `chat_members.role` (`member`/`admin`/`owner`) ustidan oddiy tekshiruv qo'llanildi, `community.service.ts`dagi mavjud pattern bilan bir xil. To'liq granular `ChatPermission` (MANAGE_BACKGROUND, MANAGE_AVATAR va h.k.) — hali qilinmagan, kerak bo'lsa keyingi bosqich.
+
+**Rejalashtirilgan (hali yo'q):** Bubble Style, Auto Download Media, Enter Sends Message, Preview Links (`user_chat_settings`ga qo'shimcha ustunlar sifatida qo'shiladi), va admin `conversation_settings` (slow_mode_seconds, allow_links, allow_files, allow_media, message_retention_days, history_visibility).
+
+### 14.12 Message Drafts (Telegram-style) — ✅ amalga oshirilgan
+
+Yozilgan-lekin-yuborilmagan matn har bir (user, room) juftligi uchun serverda saqlanadi va boshqa chatga o'tib qaytganda tiklanadi.
+
+```sql
+-- backend/docker/postgres/init.sql — qo'llanilgan
+CREATE TABLE public.message_drafts (
+  id, user_id, room_id, content, updated_at,
+  UNIQUE (user_id, room_id)
+);
+```
+
+- API: `GET`/`PATCH /chat/rooms/:roomId/draft` (`ChatMessageService.getDraft`/`saveDraft`, `chat.controller.ts`). Bo'sh matn yuborilsa qator o'chiriladi (`DELETE`), aks holda `UPSERT`.
+- Frontend (`ChatPage.tsx`): chatga kirganda draft serverdan yuklanadi; yozayotganda 700ms debounce bilan avtomatik saqlanadi (`draftSaveTimer`); boshqa chatga o'tishda yoki komponent unmount bo'lganda joriy matn darhol flush qilinadi (effect cleanup, `draftRef` orqali eng so'nggi qiymat o'qiladi — stale closure muammosisiz). Xabar yuborilgach yoki reply/edit bekor qilingach `clearDraft()` chaqiriladi — bu debounce timerini bekor qiladi va serverdagi draftni ham tozalaydi (aks holda eski debounce keyinroq otilib, tozalangan draftni qayta yozib qo'yishi mumkin edi).
+
+### 14.13 Message Threads (Slack-style) — ✅ amalga oshirilgan
+
+Har qanday xabarga alohida panelda ("thread") javob berish mumkin — mavjud inline `reply_to_id` quote-reply funksiyasidan farqli, thread javoblari asosiy timeline'da ko'rinmaydi (Slack'dagidek), faqat thread panelida.
+
+```sql
+-- backend/docker/postgres/init.sql — qo'llanilgan
+ALTER TABLE public.chat_messages ADD COLUMN is_thread_reply boolean NOT NULL DEFAULT false;
+
+CREATE TABLE public.message_threads (
+  id, room_id, root_message_id UNIQUE, reply_count, last_reply_at, created_at
+);
+```
+
+- `is_thread_reply = true` bo'lgan xabarlar `ChatMessageService.listMessages`dan chiqarib tashlanadi (`WHERE ... AND is_thread_reply = false`) — shu bilan asosiy chat oqimini "iflos" qilmaydi. `reply_to_id` baribir root xabarga ishora qilib turadi (mavjud reply-lookup kodi buzilmaydi).
+- API: `GET /chat/messages/:messageId/thread` (root + barcha javoblar), `POST /chat/messages/:messageId/thread` (REST fallback). Realtime uchun alohida socket event: `send_thread_reply` → `thread_reply` broadcast (`events.gateway.ts`) — asosiy `new_message` oqimidan ataylab ajratilgan, aks holda thread javoblari asosiy ro'yxatga "sizib kirib qolardi".
+- `message_threads.reply_count`/`last_reply_at` har javobda `UPSERT` bilan yangilanadi va asosiy xabar ro'yxatiga `LEFT JOIN` qilinib "N ta javob" pill sifatida ko'rsatiladi (`threadReplyCount` maydoni).
+- Thread javobi room'ning "oxirgi xabar" preview'ini (sidebar) YANGILAMAYDI — `update-room-metadata` background job thread javoblari uchun ataylab o'tkazib yuboriladi (`message-side-effects`/bildirishnoma job'i esa ishlaydi).
+- Ruxsat: thread ochish/root xabarga ega bo'lish tekshiruvi yo'q (har qanday a'zo javob yoza oladi, root allaqachon thread javobi bo'lsa — ya'ni nested thread — `VALIDATION_ERROR` bilan rad etiladi).
+- Frontend: `frontend/src/components/ThreadPanel.tsx` (root xabar + javoblar ro'yxati + mini composer, `.conversation` ichida `position:absolute` panel sifatida ochiladi, 200ms slide-in animatsiya bilan), message context menu'ga "Thread'da javob berish" tugmasi qo'shildi.
+
+### 14.11 Final Chat UX Architecture (kontseptual xarita)
+
+```
+Conversation
+  ├── Messages
+  ├── Threads
+  ├── Members
+  ├── Permissions
+  ├── Appearance
+  ├── Media
+  ├── Search
+  ├── Notifications
+  └── WebSocket Room
+```
+
+Bu — Telegram Desktop UX + Telegram Mobile gesture + Slack thread modeli + Discord permission modeli + UPZ developer workflow integratsiyasi aralashmasi. Maqsad — Meet, AI Assistant, GitHub events va Task discussion'larni ham keyinchalik shu chat arxitekturasiga ulash uchun tayyor asos qoldirish. 14.10'ning background/wallpaper qismi endi kodda va DB'da mavjud (yuqoriga qarang); 14.4 (custom shortcuts) va 14.10'ning qolgan qismi (conversation_settings — slow mode/retention) hali faqat kelajakdagi migratsiya uchun taklif sifatida qayd etilgan.
+
+---
+
 *Ushbu hujjat 2026-07-15 holatiga ko'ra tuzildi. Har bir bosqich amalga oshirilishidan oldin foydalanuvchi bilan alohida tasdiqlanadi.*

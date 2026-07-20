@@ -4,6 +4,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
 import { ChatMessage } from '../../../database/entities/chat-message.entity';
+import { MessageDraft } from '../../../database/entities/message-draft.entity';
 import { ChatReaction } from '../../../database/entities/chat-reaction.entity';
 import { MessageAttachment } from '../../../database/entities/message-attachment.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -39,7 +40,10 @@ export class ChatMessageService {
     const p = Number(page) || 1;
 
     const params: unknown[] = [roomId];
-    let whereClause = `m.room_id = $1 AND m.deleted_at IS NULL`;
+    // Thread replies are excluded from the main timeline (Slack-style) — they only
+    // surface via getThread(). The inline reply_to_id quote-reply feature (unrelated
+    // to threads) still shows normally since it doesn't set is_thread_reply.
+    let whereClause = `m.room_id = $1 AND m.deleted_at IS NULL AND m.is_thread_reply = false`;
     if (cursor) {
       params.push(cursor);
       whereClause += ` AND m.sequence < $${params.length}`;
@@ -60,9 +64,11 @@ export class ChatMessageService {
          m.is_system AS "isSystem", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
          m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
          u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
-         u.avatar_url AS "s_avatarUrl"
+         u.avatar_url AS "s_avatarUrl",
+         t.reply_count AS "threadReplyCount", t.last_reply_at AS "threadLastReplyAt"
        FROM chat_messages m
        LEFT JOIN users u ON u.id = m.sender_id
+       LEFT JOIN message_threads t ON t.root_message_id = m.id
        WHERE ${whereClause}
        ORDER BY m.sequence DESC
        LIMIT ${limitParam} ${offsetClause}`,
@@ -72,7 +78,7 @@ export class ChatMessageService {
     let total: number | undefined;
     if (!cursor) {
       const countRows: Array<{ count: string }> = await this.dataSource.query(
-        `SELECT COUNT(*) FROM chat_messages m WHERE m.room_id = $1 AND m.deleted_at IS NULL`,
+        `SELECT COUNT(*) FROM chat_messages m WHERE m.room_id = $1 AND m.deleted_at IS NULL AND m.is_thread_reply = false`,
         [roomId],
       );
       total = Number(countRows[0]?.count ?? 0);
@@ -129,6 +135,8 @@ export class ChatMessageService {
       createdAt: msg.createdAt,
       updatedAt: msg.updatedAt,
       reactions: this.chatReactionService.groupReactions(reactionsByMsg.get(msg.id) ?? []),
+      threadReplyCount: msg.threadReplyCount ? Number(msg.threadReplyCount) : 0,
+      threadLastReplyAt: msg.threadLastReplyAt ?? null,
     }));
 
     return { data, total, limit: l };
@@ -171,6 +179,32 @@ export class ChatMessageService {
     }
     if (room.postingMode === 'admins_only' && member.user.publicId !== '777777') {
       throw new ForbiddenException({ code: 'CHANNEL_ADMIN_ONLY', message: 'Only channel admins can publish posts' });
+    }
+
+    if (dto.isThreadReply) {
+      if (!dto.replyToId) {
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'replyToId (thread root message id) is required for a thread reply',
+        });
+      }
+      const rootRows: Array<{ id: string; roomId: string; isThreadReply: boolean }> =
+        await this.dataSource.query(
+          `SELECT id, room_id AS "roomId", is_thread_reply AS "isThreadReply"
+           FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
+          [dto.replyToId],
+        );
+      const rootMsg = rootRows[0];
+      if (!rootMsg || rootMsg.roomId !== roomId)
+        throw new NotFoundException({
+          code: ErrorCode.MESSAGE_NOT_FOUND,
+          message: 'Thread root message not found in this room',
+        });
+      if (rootMsg.isThreadReply)
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Cannot start a thread on a reply — thread on the root message instead',
+        });
     }
 
     const hasAttachments = !!dto.attachments?.length;
@@ -237,8 +271,8 @@ export class ChatMessageService {
     const savedRows: ChatMessage[] = await this.dataSource.query(
       `INSERT INTO chat_messages
          (room_id, sender_id, sequence, client_message_id, content, content_json,
-          content_type, reply_to_id, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          content_type, reply_to_id, metadata, is_thread_reply)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
       [
         roomId,
@@ -250,9 +284,23 @@ export class ChatMessageService {
         contentType,
         dto.replyToId ?? null,
         {},
+        !!dto.isThreadReply,
       ],
     );
-    const saved = savedRows[0];
+    const saved: any = savedRows[0];
+
+    if (dto.isThreadReply && dto.replyToId) {
+      const threadRows: Array<{ replyCount: number }> = await this.dataSource.query(
+        `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
+         VALUES ($1, $2, 1, now())
+         ON CONFLICT (root_message_id) DO UPDATE SET
+           reply_count = message_threads.reply_count + 1, last_reply_at = now()
+         RETURNING reply_count AS "replyCount"`,
+        [roomId, dto.replyToId],
+      );
+      saved.threadReplyCount = threadRows[0].replyCount;
+      saved.threadRootId = dto.replyToId;
+    }
 
     // 3b. Persist attachments (already uploaded to R2 via /chat/rooms/:roomId/attachments/presign)
     let savedAttachments: MessageAttachment[] = [];
@@ -286,18 +334,26 @@ export class ChatMessageService {
     }
 
     // 4. Background Jobs — parallel, not sequential
-    await Promise.all([
-      this.chatQueue.add(
-        'update-room-metadata',
-        { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
-        { jobId: roomId }, // Dedup by roomId
-      ),
+    // Thread replies are hidden from the main timeline (Slack-style), so they must
+    // NOT bump the room's "last message" preview in the sidebar — only the
+    // notification/side-effects job runs for them.
+    const jobs = [
       this.chatQueue.add(
         'message-side-effects',
         { messageId: saved.id, roomId, senderId: userId },
         { jobId: saved.id },
       ),
-    ]);
+    ];
+    if (!dto.isThreadReply) {
+      jobs.push(
+        this.chatQueue.add(
+          'update-room-metadata',
+          { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
+          { jobId: roomId }, // Dedup by roomId
+        ),
+      );
+    }
+    await Promise.all(jobs);
 
     // Fix: sender'ni DB'dan qayta yuklamaymiz — assertRoomMemberWithUser yuqorida
     // user join bilan chaqirilgan, shuning uchun alohida SELECT yo'q.
@@ -401,6 +457,7 @@ export class ChatMessageService {
       contentType: msg.contentType ?? 'text',
       attachments: attachments.map((a) => this.mapAttachment(a)),
       replyToId: msg.replyToId ?? null,
+      isThreadReply: msg.isThreadReply ?? false,
       isEdited: msg.isEdited ?? false,
       editedAt: msg.editedAt ?? null,
       createdAt: msg.createdAt,
@@ -414,5 +471,98 @@ export class ChatMessageService {
           }
         : null,
     };
+  }
+
+  private static readonly THREAD_MESSAGE_SELECT_SQL = `
+    m.id AS "id", m.room_id AS "roomId", m.sender_id AS "senderId",
+    m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
+    m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
+    m.is_thread_reply AS "isThreadReply", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
+    m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
+    u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName", u.avatar_url AS "s_avatarUrl"
+  `;
+
+  /** Slack-style thread: the root message plus its replies (is_thread_reply = true), oldest first. */
+  async getThread(rootMessageId: string, userId: string) {
+    const rootRows: any[] = await this.dataSource.query(
+      `SELECT ${ChatMessageService.THREAD_MESSAGE_SELECT_SQL}
+       FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
+       WHERE m.id = $1 AND m.deleted_at IS NULL`,
+      [rootMessageId],
+    );
+    const root = rootRows[0];
+    if (!root) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    await this.chatMemberService.assertRoomMember(root.roomId, userId);
+
+    const replies: any[] = await this.dataSource.query(
+      `SELECT ${ChatMessageService.THREAD_MESSAGE_SELECT_SQL}
+       FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
+       WHERE m.reply_to_id = $1 AND m.is_thread_reply = true AND m.deleted_at IS NULL
+       ORDER BY m.sequence ASC`,
+      [rootMessageId],
+    );
+
+    const allIds = [root.id, ...replies.map((r) => r.id)];
+    const attachments: MessageAttachment[] = await this.dataSource.query(
+      `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = ANY($1::uuid[])`,
+      [allIds],
+    );
+    const attachmentsByMsg = new Map<string, MessageAttachment[]>();
+    for (const a of attachments) {
+      if (!attachmentsByMsg.has(a.messageId)) attachmentsByMsg.set(a.messageId, []);
+      attachmentsByMsg.get(a.messageId)!.push(a);
+    }
+    const sender = (row: any) =>
+      row.s_id ? { id: row.s_id, firstName: row.s_firstName, lastName: row.s_lastName, avatarUrl: row.s_avatarUrl } : null;
+    const decrypt = (row: any) =>
+      row.contentType === 'document' ? row.content : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? '');
+
+    return {
+      root: this.mapToResponseWithSender(root, decrypt(root), sender(root), attachmentsByMsg.get(root.id) ?? []),
+      replies: replies.map((r) => this.mapToResponseWithSender(r, decrypt(r), sender(r), attachmentsByMsg.get(r.id) ?? [])),
+    };
+  }
+
+  /** Resolves the root message's room, then posts through the normal sendMessage pipeline. */
+  async sendThreadReply(rootMessageId: string, userId: string, dto: SendMessageDto) {
+    const rootRows: Array<{ roomId: string }> = await this.dataSource.query(
+      `SELECT room_id AS "roomId" FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
+      [rootMessageId],
+    );
+    const root = rootRows[0];
+    if (!root) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Thread root message not found' });
+    return this.sendMessage(root.roomId, userId, { ...dto, replyToId: rootMessageId, isThreadReply: true });
+  }
+
+  /** Telegram-style unsent-message text for a room, restored when the user comes back. */
+  async getDraft(roomId: string, userId: string): Promise<{ content: string }> {
+    const rows: MessageDraft[] = await this.dataSource.query(
+      `SELECT content FROM message_drafts WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+    return { content: rows[0]?.content ?? '' };
+  }
+
+  async saveDraft(
+    roomId: string,
+    userId: string,
+    content: string,
+  ): Promise<{ content: string }> {
+    await this.chatMemberService.assertRoomMember(roomId, userId);
+    if (!content.trim()) {
+      await this.dataSource.query(
+        `DELETE FROM message_drafts WHERE user_id = $1 AND room_id = $2`,
+        [userId, roomId],
+      );
+      return { content: '' };
+    }
+    const rows: MessageDraft[] = await this.dataSource.query(
+      `INSERT INTO message_drafts (user_id, room_id, content)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, room_id) DO UPDATE SET content = $3, updated_at = now()
+       RETURNING content`,
+      [userId, roomId, content],
+    );
+    return { content: rows[0].content };
   }
 }

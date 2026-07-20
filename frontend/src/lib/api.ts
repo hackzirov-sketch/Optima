@@ -9,6 +9,7 @@ import type {
   NotificationItem,
   RoomInvite,
   User,
+  UserChatSettings,
   Workspace,
   WorkspaceMember,
 } from "../types";
@@ -262,6 +263,13 @@ export const api = {
   chat: {
     community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
+    updateRoomBackground: (roomId: string, data: { backgroundUrl: string | null; backgroundType: NonNullable<ChatRoom["backgroundType"]> }) =>
+      apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+    getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),
+    getDraft: (roomId: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`),
+    saveDraft: (roomId: string, content: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify({ content }) }),
+    updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
+      apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
     roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
     rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
@@ -281,6 +289,10 @@ export const api = {
       apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
     deleteMessage: (messageId: string) =>
       apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
+    getThread: (messageId: string) =>
+      apiFetch<{ root: ChatMessage; replies: ChatMessage[] }>(`/chat/messages/${messageId}/thread`),
+    sendThreadReply: (messageId: string, content: string, clientMessageId: string) =>
+      apiFetch<ChatMessage>(`/chat/messages/${messageId}/thread`, { method: "POST", body: JSON.stringify({ content, clientMessageId }) }),
     addReaction: (messageId: string, emoji: string) =>
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>

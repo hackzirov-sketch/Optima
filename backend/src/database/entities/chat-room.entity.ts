@@ -62,4 +62,9 @@ export interface ChatRoom {
   postingMode: 'members' | 'admins_only';
 
   linkedRoomId: string | null;
+
+  /** Admin/owner-managed background shown to every member (see §14.10). */
+  backgroundUrl: string | null;
+
+  backgroundType: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
 }

@@ -4,6 +4,7 @@ export const CHAT_ROOM_COLUMNS_SQL = `
   is_read_only AS "isReadOnly", is_public AS "isPublic", invite_code AS "inviteCode",
   last_message_id AS "lastMessageId", last_message_at AS "lastMessageAt",
   message_seq AS "messageSeq", created_by AS "createdById",
+  background_url AS "backgroundUrl", background_type AS "backgroundType",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 
@@ -14,6 +15,7 @@ export const CHAT_ROOM_COLUMNS_SQL_R = `
   r.is_read_only AS "isReadOnly", r.is_public AS "isPublic", r.invite_code AS "inviteCode",
   r.last_message_id AS "lastMessageId", r.last_message_at AS "lastMessageAt",
   r.message_seq AS "messageSeq", r.created_by AS "createdById",
+  r.background_url AS "backgroundUrl", r.background_type AS "backgroundType",
   r.created_at AS "createdAt", r.updated_at AS "updatedAt"
 `;
 
@@ -35,7 +37,8 @@ export const CHAT_MESSAGE_COLUMNS_SQL = `
   client_message_id AS "clientMessageId", metadata,
   source_channel_message_id AS "sourceChannelMessageId",
   discussion_root_message_id AS "discussionRootMessageId",
-  is_pinned AS "isPinned", view_count AS "viewCount"
+  is_pinned AS "isPinned", view_count AS "viewCount",
+  is_thread_reply AS "isThreadReply"
 `;
 
 export const CHAT_REACTION_COLUMNS_SQL = `

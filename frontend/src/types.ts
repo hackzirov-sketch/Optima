@@ -88,6 +88,22 @@ export interface ChatRoom {
   linkedRoomId?: string | null;
   myRole?: "member" | "admin" | "owner";
   isMuted?: boolean;
+  /** Admin/owner-managed background shown to every member (see SYSTEM_DESIGN.md §14.10). */
+  backgroundUrl?: string | null;
+  backgroundType?: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN";
+}
+
+/** Caller's personal wallpaper/theme/font-size/compact-mode/animation override for a room. */
+export interface UserChatSettings {
+  id: string;
+  userId: string;
+  roomId: string;
+  backgroundUrl: string | null;
+  backgroundType: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN" | null;
+  theme: string | null;
+  fontSize: number | null;
+  compactMode: boolean;
+  animationEnabled: boolean;
 }
 
 export interface RoomInvite {
@@ -131,6 +147,10 @@ export interface ChatMessage {
   discussionRootMessageId?: string | null;
   isPinned?: boolean;
   viewCount?: number;
+  /** Slack-style threads (see SYSTEM_DESIGN.md §14.13). */
+  isThreadReply?: boolean;
+  threadReplyCount?: number;
+  threadLastReplyAt?: string | null;
 }
 
 export interface MeetingParticipant {

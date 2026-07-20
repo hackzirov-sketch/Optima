@@ -1,14 +1,14 @@
-import { Bell, BookOpen, ChevronDown, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Bell, ChevronDown, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { Avatar, Logo } from "./ui";
 
 const nav = [
   { href: "/", label: "Bosh sahifa", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/meetings", label: "Meeting", icon: Video },
-  { href: "/library", label: "Library", icon: BookOpen },
+  { href: "/library", label: "Library", icon: FileText },
   { href: "/profile", label: "Profil", icon: UserRound },
 ];
 
@@ -17,28 +17,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [mobilePulse, setMobilePulse] = useState<string | null>(null);
-  const routeTimers = useRef<number[]>([]);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
-
-  useEffect(() => () => routeTimers.current.forEach(window.clearTimeout), []);
+  const dockActiveIndex = nav.findIndex((item) => active(item.href));
 
   function openSection(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (active(href) || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    routeTimers.current.forEach(window.clearTimeout);
     setMobileOpen(false);
-    setRouteLoading(true);
-    const mobile = window.innerWidth <= 820;
-    const leavingLibrary = location.startsWith("/library");
-    if (mobile) setMobilePulse(href);
-    routeTimers.current = [
-      window.setTimeout(() => navigate(href), leavingLibrary ? 80 : mobile ? 620 : 260),
-      window.setTimeout(() => setMobilePulse(null), leavingLibrary ? 180 : mobile ? 680 : 380),
-      window.setTimeout(() => setRouteLoading(false), leavingLibrary ? 260 : mobile ? 820 : 520),
-    ];
+    navigate(href);
   }
 
   function toggleTheme() {
@@ -109,6 +96,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="app-main">{children}</main>
       </div>
       <nav className="desktop-dock" aria-label="Asosiy navigatsiya">
+        <span
+          className={`dock-pill ${dockActiveIndex >= 0 ? "is-active" : ""}`}
+          style={{ "--dock-index": Math.max(dockActiveIndex, 0) } as React.CSSProperties}
+          aria-hidden="true"
+        />
         {nav.map((item) => {
           const Icon = item.icon;
           return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""} data-label={item.label} aria-label={item.label}><Icon size={21} strokeWidth={1.9} /></Link>;
@@ -117,10 +109,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="mobile-nav" aria-label="Mobil navigatsiya">
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={`${active(item.href) ? "active" : ""} ${mobilePulse === item.href ? "tap-pulse" : ""}`}><Icon size={20} /><span>{item.label}</span></Link>;
+          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{item.label}</span></Link>;
         })}
       </nav>
-      {routeLoading && <div className="route-loader" role="status" aria-label="Sahifa ochilmoqda"><div className="route-loader-mark" aria-hidden="true"><i /><i /><i /></div><strong>OPTIMA</strong></div>}
     </div>
   );
 }

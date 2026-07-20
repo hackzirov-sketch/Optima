@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import { useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { AppShell } from "./components/AppShell";
@@ -16,7 +15,13 @@ import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { LibraryPage } from "./pages/LibraryPage";
 
 function LoadingScreen() {
-  return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Workspace yuklanmoqda</span></div>;
+  return (
+    <div className="app-loading" role="status" aria-label="Yuklanmoqda">
+      <Logo />
+      <div className="route-loader-mark" aria-hidden="true"><i /><i /><i /></div>
+      <span>Workspace yuklanmoqda</span>
+    </div>
+  );
 }
 
 export function App() {
@@ -47,7 +52,7 @@ export function App() {
 
   return (
     <AppShell>
-      <div className="route-transition">
+      <div className="route-transition" key={location}>
         <Switch>
           <Route path="/" component={DashboardPage} />
           <Route path="/chat" component={ChatPage} />
