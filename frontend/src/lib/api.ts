@@ -289,6 +289,12 @@ export const api = {
       apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
     deleteMessage: (messageId: string) =>
       apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
+    pinMessage: (messageId: string) =>
+      apiFetch<ChatMessage | null>(`/chat/messages/${messageId}/pin`, { method: "POST" }),
+    unpinMessage: (messageId: string) =>
+      apiFetch<void>(`/chat/messages/${messageId}/pin`, { method: "DELETE" }),
+    pinnedMessage: (roomId: string) =>
+      apiFetch<ChatMessage | null>(`/chat/rooms/${roomId}/pinned-message`),
     getThread: (messageId: string) =>
       apiFetch<{ root: ChatMessage; replies: ChatMessage[] }>(`/chat/messages/${messageId}/thread`),
     sendThreadReply: (messageId: string, content: string, clientMessageId: string) =>

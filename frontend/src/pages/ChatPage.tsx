@@ -117,6 +117,7 @@ export function ChatPage() {
   const [personalAppearance, setPersonalAppearance] = useState<UserChatSettings | null>(null);
   const [appearanceOpen, setAppearanceOpen] = useState<"personal" | "room" | null>(null);
   const [openThread, setOpenThread] = useState<ChatMessage | null>(null);
+  const [pinnedMessage, setPinnedMessage] = useState<ChatMessage | null>(null);
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
@@ -386,12 +387,22 @@ export function ChatPage() {
       if (data.threadReplyCount == null) return;
       setMessages((current) => current.map((item) => item.id === data.threadRootId ? { ...item, threadReplyCount: data.threadReplyCount as number } : item));
     };
+    const onPinned = (data: { message: ChatMessage }) => {
+      if (data.message.roomId !== selectedId) return;
+      setPinnedMessage(data.message);
+    };
+    const onUnpinned = (data: { roomId: string; messageId: string }) => {
+      if (data.roomId !== selectedId) return;
+      setPinnedMessage((current) => current?.id === data.messageId ? null : current);
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("new_message", onMessage);
     socket.on("typing", onTyping);
     socket.on("reaction_updated", onReaction);
     socket.on("thread_reply", onThreadReply);
+    socket.on("message_pinned", onPinned);
+    socket.on("message_unpinned", onUnpinned);
     socket.on("error", onError);
     if (socket.connected) onConnect();
     return () => {
@@ -401,6 +412,8 @@ export function ChatPage() {
       socket.off("typing", onTyping);
       socket.off("reaction_updated", onReaction);
       socket.off("thread_reply", onThreadReply);
+      socket.off("message_pinned", onPinned);
+      socket.off("message_unpinned", onUnpinned);
       socket.off("error", onError);
     };
     // Depend on the id, not the workspace object — auth re-resolves a fresh
@@ -449,6 +462,14 @@ export function ChatPage() {
       : api.chat.shared(selectedId, detailsTab).then((items) => { setSharedItems(items); setDetailMembers([]); });
     void request.catch((error) => show(error instanceof Error ? error.message : "Ma'lumot yuklanmadi", "error")).finally(() => setDetailsLoading(false));
   }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
+
+  useEffect(() => {
+    setPinnedMessage(null);
+    if (!selectedId || selectedRoom?.memberStatus === "pending") return;
+    let cancelled = false;
+    void api.chat.pinnedMessage(selectedId).then((message) => { if (!cancelled) setPinnedMessage(message); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedId, selectedRoom?.memberStatus]);
 
   useEffect(() => {
     setPersonalAppearance(null);
@@ -594,6 +615,25 @@ export function ChatPage() {
       show("Xabar o‘chirildi");
     } catch (error) {
       show(error instanceof Error ? error.message : "Xabar o‘chirilmadi", "error");
+    }
+  }
+
+  async function togglePinMessage(message: ChatMessage) {
+    setActiveMenu(null);
+    try {
+      if (message.isPinned) {
+        await api.chat.unpinMessage(message.id);
+        setPinnedMessage((current) => current?.id === message.id ? null : current);
+        setMessages((current) => current.map((item) => item.id === message.id ? { ...item, isPinned: false } : item));
+        show("Xabar mahkamlashdan olindi");
+      } else {
+        const pinned = await api.chat.pinMessage(message.id);
+        setPinnedMessage(pinned);
+        setMessages((current) => current.map((item) => item.id === message.id ? { ...item, isPinned: true } : item.isPinned ? { ...item, isPinned: false } : item));
+        show("Xabar mahkamlandi");
+      }
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Mahkamlashda xatolik", "error");
     }
   }
 
@@ -1051,7 +1091,7 @@ export function ChatPage() {
         <button onClick={() => { setForwardingMessage(activeMessage); setActiveMenu(null); }}><Send size={16} />Boshqa chatga yuborish</button>
         <button onClick={() => { void navigator.clipboard.writeText(activeMessage.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>
         {activeMessage.senderId === user?.id && <button onClick={() => { setEditing(activeMessage); setReplyingTo(null); setDraft(activeMessage.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}
-        <button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>
+        <button onClick={() => void togglePinMessage(activeMessage)}><Pin size={16} />{activeMessage.isPinned ? "Mahkamlashdan olish" : "Mahkamlash"}</button>
         {activeMessage.senderId === user?.id && <button className="danger" onClick={() => { void deleteMessage(activeMessage); setActiveMenu(null); }}><Trash2 size={16} />O‘chirish</button>}
       </div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
@@ -1116,6 +1156,11 @@ export function ChatPage() {
                 </div>}
               </div>
             </header>
+            {pinnedMessage && <button className="pinned-banner" onClick={() => document.getElementById(`message-${pinnedMessage.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+              <Pin size={16} />
+              <span><strong>Mahkamlangan xabar</strong><small>{pinnedMessage.content || pinnedMessage.attachments?.[0]?.fileName || "Media"}</small></span>
+              {pinnedMessage.senderId === user?.id && <span className="pinned-banner-close" role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); void togglePinMessage(pinnedMessage); }} aria-label="Mahkamlashdan olish"><X size={15} /></span>}
+            </button>}
             {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}
             {selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>Suhbatga taklif</h3><p>Yozishishni boshlash uchun taklifni qabul qiling.</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>Qabul qilish</Button></div>

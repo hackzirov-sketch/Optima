@@ -1151,6 +1151,13 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .conversation-search span { font-size: .75rem; white-space: nowrap; }
 .conversation-search button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
 .conversation-search button:hover { background: var(--surface-muted); color: var(--text); }
+.pinned-banner { width: 100%; min-height: 44px; padding: 6px 18px; display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; gap: 11px; background: #fff; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; text-align: left; color: var(--accent); }
+.pinned-banner:hover { background: var(--surface-muted); }
+.pinned-banner > span:nth-child(2) { min-width: 0; display: grid; gap: 1px; }
+.pinned-banner strong { font-size: .72rem; font-weight: 600; color: var(--accent); }
+.pinned-banner small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: .8rem; }
+.pinned-banner-close { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); }
+.pinned-banner-close:hover { background: var(--surface-muted); color: var(--text); }
 .message-list { position: relative; padding: 22px clamp(16px,5vw,72px) 26px; scrollbar-gutter: stable; }
 .message { max-width: min(74%, 680px); margin-bottom: 3px; }
 .message-bubble { position: relative; border: 0; border-radius: 8px 8px 8px 2px; padding: 8px 12px 6px; box-shadow: 0 1px 2px rgba(28,36,32,.12); }
@@ -1281,6 +1288,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 :root[data-theme="dark"] .header-more-menu,
 :root[data-theme="dark"] .message-context-menu,
 :root[data-theme="dark"] .conversation-search,
+:root[data-theme="dark"] .pinned-banner,
 :root[data-theme="dark"] .composer-mode {
   border-color: rgba(165,180,252,.13);
   background: #0F172A;

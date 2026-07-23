@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
@@ -21,6 +21,7 @@ import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { AiRequestDto } from './dto/ai-request.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { RoomScope } from '../../common/enums';
+import { EventsGateway } from '../gateway/events.gateway';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -35,6 +36,8 @@ export class ChatController {
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
     private readonly communityService: CommunityService,
+    @Inject(forwardRef(() => EventsGateway))
+    private readonly gateway: EventsGateway,
   ) {}
 
   // ── OTIMA community (ported from main) ────────────────────────────────────
@@ -170,6 +173,27 @@ export class ChatController {
   @ApiOperation({ summary: 'Edit message' })
   updateMessage(@Param('messageId') messageId: string, @CurrentUser('id') userId: string, @Body() dto: UpdateMessageDto) {
     return this.messageService.updateMessage(messageId, userId, dto);
+  }
+
+  @Post('chat/messages/:messageId/pin')
+  @ApiOperation({ summary: 'Pin message (Telegram-style — unpins any previously pinned message in the room)' })
+  async pinMessage(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    const pinned = await this.messageService.pinMessage(messageId, userId);
+    if (pinned) this.gateway.broadcastToRoom(pinned.roomId, 'message_pinned', { message: pinned });
+    return pinned;
+  }
+
+  @Delete('chat/messages/:messageId/pin')
+  @ApiOperation({ summary: 'Unpin message' })
+  async unpinMessage(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    const { roomId } = await this.messageService.unpinMessage(messageId, userId);
+    this.gateway.broadcastToRoom(roomId, 'message_unpinned', { roomId, messageId });
+  }
+
+  @Get('chat/rooms/:roomId/pinned-message')
+  @ApiOperation({ summary: 'Get the room’s pinned message, if any' })
+  getPinnedMessage(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.messageService.getPinnedMessage(roomId, userId);
   }
 
   @Get('chat/messages/:messageId/thread')

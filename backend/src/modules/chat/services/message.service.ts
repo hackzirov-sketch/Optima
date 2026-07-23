@@ -429,6 +429,50 @@ export class ChatMessageService {
     return { ...saved, content: plainText, editedAt: saved.editedAt };
   }
 
+  /** Telegram-style single pinned message per room — pinning a new one unpins the previous. */
+  async pinMessage(messageId: string, userId: string) {
+    const rows: ChatMessage[] = await this.dataSource.query(
+      `SELECT ${CHAT_MESSAGE_COLUMNS_SQL} FROM chat_messages WHERE id = $1`,
+      [messageId],
+    );
+    const msg = rows[0];
+    if (!msg || msg.deletedAt) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    await this.chatMemberService.assertRoomMember(msg.roomId, userId);
+
+    await this.dataSource.query(`UPDATE chat_messages SET is_pinned = false WHERE room_id = $1 AND is_pinned = true`, [msg.roomId]);
+    await this.dataSource.query(`UPDATE chat_messages SET is_pinned = true WHERE id = $1`, [messageId]);
+
+    return this.getPinnedMessage(msg.roomId, userId);
+  }
+
+  async unpinMessage(messageId: string, userId: string) {
+    const rows: Array<{ roomId: string }> = await this.dataSource.query(
+      `SELECT room_id AS "roomId" FROM chat_messages WHERE id = $1`,
+      [messageId],
+    );
+    const msg = rows[0];
+    if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    await this.chatMemberService.assertRoomMember(msg.roomId, userId);
+    await this.dataSource.query(`UPDATE chat_messages SET is_pinned = false WHERE id = $1`, [messageId]);
+    return { roomId: msg.roomId };
+  }
+
+  async getPinnedMessage(roomId: string, userId: string) {
+    await this.chatMemberService.assertRoomMember(roomId, userId);
+    const rows: any[] = await this.dataSource.query(
+      `SELECT ${ChatMessageService.THREAD_MESSAGE_SELECT_SQL}, m.is_pinned AS "isPinned"
+       FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
+       WHERE m.room_id = $1 AND m.is_pinned = true AND m.deleted_at IS NULL
+       LIMIT 1`,
+      [roomId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const sender = row.s_id ? { id: row.s_id, firstName: row.s_firstName, lastName: row.s_lastName, avatarUrl: row.s_avatarUrl } : null;
+    const content = row.contentType === 'document' ? row.content : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? '');
+    return { ...this.mapToResponseWithSender(row, content, sender, []), isPinned: true };
+  }
+
   private mapToResponse(msg: any, decryptedContent: string, attachments: MessageAttachment[] = []) {
     return this.mapToResponseWithSender(msg, decryptedContent, msg.sender ?? null, attachments);
   }

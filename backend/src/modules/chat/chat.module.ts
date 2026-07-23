@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
+import { GatewayModule } from '../gateway/gateway.module';
 
 import { ChatController } from './chat.controller';
 import { ChatEncryptionService } from './chat-encryption.service';
@@ -23,6 +24,9 @@ import { ChatProcessor } from './workers/chat.processor';
     forwardRef(() => WorkspacesModule),
     ModerationModule,
     StorageModule,
+    // GatewayModule -> ChatModule closes a cycle, so this edge must be
+    // deferred via forwardRef() (same pattern as MeetingsModule).
+    forwardRef(() => GatewayModule),
   ],
   controllers: [ChatController],
   providers: [
