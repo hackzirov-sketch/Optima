@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import { ChatReaction } from '../../../database/entities/chat-reaction.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -10,7 +9,7 @@ import { CHAT_REACTION_COLUMNS_SQL } from '../chat.sql';
 @Injectable()
 export class ChatReactionService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
   ) {}
 
   groupReactions(reactions: ChatReaction[]): { emoji: string; userIds: string[] }[] {

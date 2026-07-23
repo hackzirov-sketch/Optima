@@ -25,8 +25,8 @@ export interface User {
 }
 
 export interface AuthResult {
-  accessToken: string;
-  refreshToken: string;
+  // Tokens are never in the response body — the backend sets them as httpOnly
+  // cookies directly, so nothing JS-readable holds them.
   user: User;
   requiresPasswordSetup?: boolean;
 }
@@ -59,9 +59,9 @@ export interface WorkspaceMember {
 
 export interface ChatRoom {
   id: string;
-  workspaceId: string;
-  type: "public" | "private" | "workspace" | "project" | "group" | "direct" | "channel";
-  visibility: "public" | "invite_only" | "workspace_only" | "members_only";
+  workspaceId: string | null;
+  type: "workspace" | "project" | "group" | "direct" | "public" | "private" | "channel";
+  scope: "workspace_only" | "private" | "public";
   name?: string | null;
   description?: string | null;
   avatarUrl?: string | null;
@@ -80,6 +80,7 @@ export interface ChatRoom {
     createdAt: string;
   } | null;
   createdAt: string;
+  /** OTIMA community fields (ported from main) — only set on the two system rooms. */
   slug?: string | null;
   isSystem?: boolean;
   membershipLocked?: boolean;
@@ -87,6 +88,22 @@ export interface ChatRoom {
   linkedRoomId?: string | null;
   myRole?: "member" | "admin" | "owner";
   isMuted?: boolean;
+  /** Admin/owner-managed background shown to every member (see SYSTEM_DESIGN.md §14.10). */
+  backgroundUrl?: string | null;
+  backgroundType?: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN";
+}
+
+/** Caller's personal wallpaper/theme/font-size/compact-mode/animation override for a room. */
+export interface UserChatSettings {
+  id: string;
+  userId: string;
+  roomId: string;
+  backgroundUrl: string | null;
+  backgroundType: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN" | null;
+  theme: string | null;
+  fontSize: number | null;
+  compactMode: boolean;
+  animationEnabled: boolean;
 }
 
 export interface RoomInvite {
@@ -125,10 +142,15 @@ export interface ChatMessage {
   createdAt: string;
   reactions?: Array<{ emoji: string; userIds: string[] }>;
   sender?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  /** OTIMA community discussion-thread fields (ported from main). */
   sourceChannelMessageId?: string | null;
   discussionRootMessageId?: string | null;
   isPinned?: boolean;
   viewCount?: number;
+  /** Slack-style threads (see SYSTEM_DESIGN.md §14.13). */
+  isThreadReply?: boolean;
+  threadReplyCount?: number;
+  threadLastReplyAt?: string | null;
 }
 
 export interface MeetingParticipant {
@@ -157,6 +179,21 @@ export interface Meeting {
   participantCount: number;
   participants: MeetingParticipant[];
   agenda?: string | null;
+  createdAt: string;
+}
+
+export interface MeetingRecording {
+  id: string;
+  meetingId: string;
+  startedBy: string;
+  status: "recording" | "completed" | "failed" | "cancelled";
+  startedAt: string;
+  stoppedAt?: string | null;
+  durationSeconds?: number | null;
+  autoStopped: boolean;
+  storageKey?: string | null;
+  storageUrl?: string | null;
+  fileSize?: number | null;
   createdAt: string;
 }
 

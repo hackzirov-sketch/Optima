@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { ChatAiService } from '../chat/services/ai.service';
 
 const SUBJECTS = [
@@ -11,7 +11,7 @@ const SUBJECTS = [
 
 @Injectable()
 export class EducationService {
-  constructor(private readonly db: DataSource, private readonly ai: ChatAiService) {}
+  constructor(private readonly db: DatabaseService, private readonly ai: ChatAiService) {}
 
   subjects() { return SUBJECTS; }
 

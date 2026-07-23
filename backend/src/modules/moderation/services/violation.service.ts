@@ -3,8 +3,7 @@ import {
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
@@ -32,8 +31,7 @@ export class ViolationService {
   private readonly logger = new Logger(ViolationService.name);
 
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly config: ConfigService,
   ) {}
 
@@ -47,14 +45,10 @@ export class ViolationService {
     const permanentThreshold =
       this.config.get<number>('moderation.permanentBlockThreshold') ?? 3;
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
+    return this.dataSource.withTransaction(async (query) => {
       // Lock any existing row for this user to avoid a lost-update race when two
       // violations land concurrently (e.g. two flagged messages sent back to back).
-      const existingRows: ViolationRow[] = await queryRunner.query(
+      const existingRows: ViolationRow[] = await query(
         `SELECT id, user_id AS "userId", type, count, blocked_until AS "blockedUntil",
                 is_permanent AS "isPermanent", reason
          FROM user_violations WHERE user_id = $1 FOR UPDATE`,
@@ -78,29 +72,22 @@ export class ViolationService {
       }
 
       if (existing) {
-        await queryRunner.query(
+        await query(
           `UPDATE user_violations
            SET count = $2, type = $3, reason = $4, blocked_until = $5, is_permanent = $6, updated_at = now()
            WHERE user_id = $1`,
           [userId, count, type, reason, blockedUntil, isPermanent],
         );
       } else {
-        await queryRunner.query(
+        await query(
           `INSERT INTO user_violations (user_id, type, count, reason, blocked_until, is_permanent)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [userId, type, count, reason, blockedUntil, isPermanent],
         );
       }
 
-      await queryRunner.commitTransaction();
-
       return { blocked: true, isPermanent, blockedUntil, count };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+    });
   }
 
   async getStatus(userId: string): Promise<ViolationStatus> {

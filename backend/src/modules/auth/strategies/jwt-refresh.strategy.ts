@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { REFRESH_COOKIE } from '../../../common/utils/auth-cookies.util';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -11,7 +12,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   constructor(private configService: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
+      // The refresh token now travels only as an httpOnly cookie, never in
+      // the request body — nothing JS-readable holds it.
+      jwtFromRequest: (req: Request) => req?.cookies?.[REFRESH_COOKIE] ?? null,
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('jwt.refreshSecret')!,
       passReqToCallback: true,
@@ -19,7 +22,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
   }
 
   async validate(req: Request, payload: any) {
-    const refreshToken = req.body.refreshToken;
+    const refreshToken = req.cookies?.[REFRESH_COOKIE];
     return { ...payload, refreshToken };
   }
 }

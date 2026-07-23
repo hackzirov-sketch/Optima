@@ -7,16 +7,17 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import {
   MeetingStatus,
   MeetingParticipantRole,
 } from '../../common/enums/meeting.enum';
-import { NotificationType } from '../../common/enums';
-import { MembersService } from '../workspaces/members.service';
+import { NotificationType, RoomScope } from '../../common/enums';
+import { MembersService } from '../workspaces/services/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { StorageService } from '../storage/storage.service';
@@ -28,10 +29,17 @@ import {
 import * as crypto from 'crypto';
 
 export const MEETING_RECORDING_QUEUE = 'meeting-recording';
+export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enforced server-side regardless of client behavior
+
+export const MEETING_LIFECYCLE_QUEUE = 'meeting-lifecycle';
+// Google Meet-style grace window: a brief network drop/reload for the last
+// remaining participant shouldn't tear the meeting down. Re-checked at fire
+// time by MeetingLifecycleProcessor, not just at schedule time.
+export const MEETING_AUTO_END_GRACE_SECONDS = 20;
 
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
-  meeting_code AS "meetingCode", status, visibility, start_time AS "startTime", end_time AS "endTime",
+  meeting_code AS "meetingCode", status, scope, start_time AS "startTime", end_time AS "endTime",
   max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
@@ -61,8 +69,7 @@ function generateMeetingCode(): string {
 @Injectable()
 export class MeetingsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
     // MeetingsService -> NotificationsService -> EventsGateway -> MeetingsService
@@ -71,6 +78,10 @@ export class MeetingsService {
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => ReminderSchedulerService))
     private readonly reminderScheduler: ReminderSchedulerService,
+    @InjectQueue(MEETING_RECORDING_QUEUE)
+    private readonly recordingQueue: Queue,
+    @InjectQueue(MEETING_LIFECYCLE_QUEUE)
+    private readonly lifecycleQueue: Queue,
     private readonly storageService: StorageService,
   ) {}
 
@@ -274,6 +285,13 @@ export class MeetingsService {
     userId: string,
     dto: CreateMeetingDto,
   ) {
+    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'workspace_only meetings require a workspace',
+      });
+    }
     if (workspaceId) {
       await this.membersService.assertMember(workspaceId, userId);
     }
@@ -299,7 +317,7 @@ export class MeetingsService {
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
            (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
-            max_participants, is_recurring, agenda, visibility)
+            max_participants, is_recurring, agenda, scope)
          VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 100), COALESCE($9, false), $10, $11)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
@@ -313,7 +331,7 @@ export class MeetingsService {
           dto.maxParticipants ?? null,
           dto.isRecurring ?? null,
           dto.agenda ?? null,
-          dto.visibility ?? 'workspace',
+          scope,
         ],
       );
       saved = rows[0];
@@ -357,62 +375,6 @@ export class MeetingsService {
 
     const participants = await this.findParticipants(meetingId);
     return this.enrichMeeting(meeting, participants);
-  }
-
-  private async assertMeetingParticipant(meetingId: string, userId: string) {
-    const rows = await this.dataSource.query(
-      `SELECT m.id
-       FROM meetings m
-       LEFT JOIN meeting_participants p
-         ON p.meeting_id = m.id AND p.user_id = $2 AND p.left_at IS NULL
-       WHERE m.id = $1 AND (m.host_id = $2 OR p.id IS NOT NULL)`,
-      [meetingId, userId],
-    );
-    if (!rows[0]) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_NOT_PARTICIPANT,
-        message: 'Join the meeting before sharing files',
-      });
-    }
-  }
-
-  async presignSharedFile(meetingId: string, userId: string, fileName: string, mimeType: string, fileSize: number) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    return this.storageService.getPresignedUploadUrl('meeting-files', userId, fileName, mimeType, fileSize);
-  }
-
-  async shareFile(meetingId: string, userId: string, file: { fileName: string; mimeType: string; fileSize: number; storageKey: string; storageUrl: string }) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    if (!file.storageKey.startsWith(`meeting-files/${userId}/`)) {
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file key' });
-    }
-    if (!file.storageUrl.endsWith(`/${file.storageKey}`)) {
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file URL' });
-    }
-    const rows = normalizeReturning(await this.dataSource.query(
-      `INSERT INTO meeting_shared_files
-         (meeting_id, shared_by, file_name, mime_type, file_size, storage_key, storage_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, meeting_id AS "meetingId", shared_by AS "sharedBy", file_name AS "fileName",
-                 mime_type AS "mimeType", file_size::text AS "fileSize", storage_url AS "storageUrl", created_at AS "createdAt"`,
-      [meetingId, userId, file.fileName, file.mimeType, file.fileSize, file.storageKey, file.storageUrl],
-    ));
-    return rows[0];
-  }
-
-  async listSharedFiles(meetingId: string, userId: string) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    return this.dataSource.query(
-      `SELECT f.id, f.meeting_id AS "meetingId", f.shared_by AS "sharedBy", f.file_name AS "fileName",
-              f.mime_type AS "mimeType", f.file_size::text AS "fileSize", f.storage_url AS "storageUrl",
-              f.created_at AS "createdAt", u.first_name AS "firstName", u.last_name AS "lastName"
-       FROM meeting_shared_files f
-       JOIN users u ON u.id = f.shared_by
-       WHERE f.meeting_id = $1
-       ORDER BY f.created_at DESC
-       LIMIT 100`,
-      [meetingId],
-    );
   }
 
   async update(meetingId: string, userId: string, dto: UpdateMeetingDto) {
@@ -552,6 +514,13 @@ export class MeetingsService {
     return iceServers;
   }
 
+  /**
+   * Leave the meeting. This is "leave only" semantics for everyone,
+   * including the host — same as Google Meet, the host leaving does NOT
+   * end the meeting for the rest of the participants. The meeting is only
+   * torn down when the host explicitly calls `endMeeting`, or when the
+   * last remaining participant leaves (see `scheduleAutoEndCheck`).
+   */
   async leave(meetingId: string, userId: string) {
     const participantRows = await this.dataSource.query(
       `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -568,20 +537,98 @@ export class MeetingsService {
       [participantRows[0].id],
     );
 
-    // If host leaves and meeting is live, end it
-    const meeting = await this.findMeeting(meetingId);
-    if (
-      meeting &&
-      meeting.hostId === userId &&
-      meeting.status === MeetingStatus.LIVE
-    ) {
-      await this.dataSource.query(
-        `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now() WHERE id = $1`,
-        [meetingId, MeetingStatus.ENDED],
-      );
-    }
+    await this.scheduleAutoEndCheck(meetingId);
 
     return { left: true };
+  }
+
+  /**
+   * If nobody is left in a LIVE meeting, schedule a delayed re-check
+   * (MEETING_AUTO_END_GRACE_SECONDS later) rather than ending immediately —
+   * gives a rejoin/reconnect a window to cancel the auto-end. Safe to call
+   * after every leave: it's a cheap no-op whenever someone is still present.
+   */
+  private async scheduleAutoEndCheck(meetingId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting || meeting.status !== MeetingStatus.LIVE) return;
+
+    const activeCountRows = await this.dataSource.query(
+      `SELECT COUNT(*) FROM meeting_participants WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+    if (Number(activeCountRows[0]?.count ?? 0) > 0) return;
+
+    await this.lifecycleQueue.add(
+      'check-auto-end',
+      { meetingId },
+      {
+        delay: MEETING_AUTO_END_GRACE_SECONDS * 1000,
+        jobId: `auto-end_${meetingId}`,
+      },
+    );
+  }
+
+  /**
+   * Called only by MeetingLifecycleProcessor once the grace period elapses.
+   * Re-checks presence at fire time — if someone rejoined in the meantime
+   * this is a no-op, exactly like Google Meet's empty-room behavior.
+   */
+  async checkAutoEnd(meetingId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting || meeting.status !== MeetingStatus.LIVE) return null;
+
+    const activeCountRows = await this.dataSource.query(
+      `SELECT COUNT(*) FROM meeting_participants WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+    if (Number(activeCountRows[0]?.count ?? 0) > 0) return null;
+
+    return this.finishMeeting(meetingId);
+  }
+
+  /** Host-only: end the meeting for everyone right now ("End meeting" popup choice). */
+  async endMeeting(meetingId: string, userId: string) {
+    await this.assertHost(meetingId, userId);
+    const ended = await this.finishMeeting(meetingId);
+    if (!ended) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ALREADY_FINISHED,
+        message: 'Meeting already finished',
+      });
+    }
+    return ended;
+  }
+
+  /**
+   * Shared terminal transition, used by both the explicit host "End meeting"
+   * action and the automatic empty-room timeout. Marks the meeting ENDED
+   * (history is never deleted — only ever transitions to ENDED/CANCELLED),
+   * force-closes any still-active participant rows, auto-stops an in-progress
+   * recording, and cancels any pending auto-end job so it doesn't fire twice.
+   */
+  private async finishMeeting(meetingId: string) {
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
+         WHERE id = $1 AND status = $3::meeting_status_enum
+         RETURNING ${MEETING_COLUMNS_SQL}`,
+        [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
+      ),
+    );
+    const meeting = rows[0];
+    if (!meeting) return null; // already ended/cancelled — no-op
+
+    await this.dataSource.query(
+      `UPDATE meeting_participants SET left_at = now() WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+
+    await this.stopRecording(meetingId, null, { autoStopped: true }).catch(() => undefined);
+
+    const job = await this.lifecycleQueue.getJob(`auto-end_${meetingId}`);
+    await job?.remove().catch(() => undefined);
+
+    return meeting;
   }
 
   async joinByCode(code: string, userId: string) {
@@ -654,6 +701,67 @@ export class MeetingsService {
   }
 
   // ─────────────────────────────────────────────
+  //  Shared files (ported from main — meeting_shared_files table added to
+  //  init.sql, see MERGE_NOTES.md)
+  // ─────────────────────────────────────────────
+
+  private async assertMeetingParticipant(meetingId: string, userId: string) {
+    const rows = await this.dataSource.query(
+      `SELECT m.id
+       FROM meetings m
+       LEFT JOIN meeting_participants p
+         ON p.meeting_id = m.id AND p.user_id = $2 AND p.left_at IS NULL
+       WHERE m.id = $1 AND (m.host_id = $2 OR p.id IS NOT NULL)`,
+      [meetingId, userId],
+    );
+    if (!rows[0]) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_NOT_PARTICIPANT,
+        message: 'Join the meeting before sharing files',
+      });
+    }
+  }
+
+  async presignSharedFile(meetingId: string, userId: string, fileName: string, mimeType: string, fileSize: number) {
+    await this.assertMeetingParticipant(meetingId, userId);
+    return this.storageService.getPresignedUploadUrl('meeting-files', userId, fileName, mimeType, fileSize);
+  }
+
+  async shareFile(meetingId: string, userId: string, file: { fileName: string; mimeType: string; fileSize: number; storageKey: string; storageUrl: string }) {
+    await this.assertMeetingParticipant(meetingId, userId);
+    if (!file.storageKey.startsWith(`meeting-files/${userId}/`)) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file key' });
+    }
+    if (!file.storageUrl.endsWith(`/${file.storageKey}`)) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file URL' });
+    }
+    const rows = normalizeReturning(await this.dataSource.query(
+      `INSERT INTO meeting_shared_files
+         (meeting_id, shared_by, file_name, mime_type, file_size, storage_key, storage_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, meeting_id AS "meetingId", shared_by AS "sharedBy", file_name AS "fileName",
+                 mime_type AS "mimeType", file_size::text AS "fileSize", storage_url AS "storageUrl", created_at AS "createdAt"`,
+      [meetingId, userId, file.fileName, file.mimeType, file.fileSize, file.storageKey, file.storageUrl],
+    ));
+    return rows[0];
+  }
+
+  async listSharedFiles(meetingId: string, userId: string) {
+    await this.assertMeetingParticipant(meetingId, userId);
+    return this.dataSource.query(
+      `SELECT f.id, f.meeting_id AS "meetingId", f.shared_by AS "sharedBy", f.file_name AS "fileName",
+              f.mime_type AS "mimeType", f.file_size::text AS "fileSize", f.storage_url AS "storageUrl",
+              f.created_at AS "createdAt", u.first_name AS "firstName", u.last_name AS "lastName"
+       FROM meeting_shared_files f
+       JOIN users u ON u.id = f.shared_by
+       WHERE f.meeting_id = $1
+       ORDER BY f.created_at DESC
+       LIMIT 100`,
+      [meetingId],
+    );
+  }
+
+  // ─────────────────────────────────────────────
   //  Recording (hard 1-hour cap, enforced server-side)
   // ─────────────────────────────────────────────
 
@@ -708,10 +816,25 @@ export class MeetingsService {
     );
     const recording = rows[0];
 
+    // Hard server-side cutoff: fires even if the client crashes, loses
+    // connection, or simply never sends a stop — this is the real cap,
+    // not just a UI countdown.
+    await this.recordingQueue.add(
+      'auto-stop',
+      { recordingId: recording.id, meetingId },
+      {
+        delay: MAX_RECORDING_DURATION_SECONDS * 1000,
+        jobId: `auto-stop_${recording.id}`,
+      },
+    );
+
     return recording;
   }
 
-  /** Called by the host or a legacy auto-stop job created before unlimited recordings. */
+  /**
+   * Called either by the host (manual stop) or by the auto-stop BullMQ job
+   * (`autoStopped: true`) once MAX_RECORDING_DURATION_SECONDS elapses.
+   */
   async stopRecording(
     meetingId: string,
     userId: string | null,
@@ -736,8 +859,8 @@ export class MeetingsService {
       });
     }
 
-    const durationSeconds = Math.max(
-      0,
+    const durationSeconds = Math.min(
+      MAX_RECORDING_DURATION_SECONDS,
       Math.floor((Date.now() - new Date(recording.startedAt).getTime()) / 1000),
     );
 
@@ -759,6 +882,13 @@ export class MeetingsService {
         ],
       ),
     );
+
+    // If this was a manual stop, cancel the pending auto-stop job so it
+    // doesn't fire a redundant stop later.
+    if (!opts.autoStopped) {
+      const job = await this.recordingQueue.getJob(`auto-stop_${recording.id}`);
+      await job?.remove().catch(() => undefined);
+    }
 
     return updatedRows[0];
   }

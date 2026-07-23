@@ -1,23 +1,21 @@
 export const CHAT_ROOM_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", group_id AS "groupId", project_id AS "projectId", type,
-  slug, is_system AS "isSystem", membership_locked AS "membershipLocked",
-  posting_mode AS "postingMode", linked_room_id AS "linkedRoomId", visibility,
-  name, avatar_url AS "avatarUrl", description, is_archived AS "isArchived",
+  id, workspace_id AS "workspaceId", group_id AS "groupId", project_id AS "projectId",
+  type, scope, name, avatar_url AS "avatarUrl", description, is_archived AS "isArchived",
   is_read_only AS "isReadOnly", is_public AS "isPublic", invite_code AS "inviteCode",
   last_message_id AS "lastMessageId", last_message_at AS "lastMessageAt",
   message_seq AS "messageSeq", created_by AS "createdById",
+  background_url AS "backgroundUrl", background_type AS "backgroundType",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 
 /** Same columns as CHAT_ROOM_COLUMNS_SQL, prefixed with `r.` for use in JOIN queries aliased as `r`. */
 export const CHAT_ROOM_COLUMNS_SQL_R = `
-  r.id, r.workspace_id AS "workspaceId", r.group_id AS "groupId", r.project_id AS "projectId", r.type,
-  r.slug, r.is_system AS "isSystem", r.membership_locked AS "membershipLocked",
-  r.posting_mode AS "postingMode", r.linked_room_id AS "linkedRoomId", r.visibility,
-  r.name, r.avatar_url AS "avatarUrl", r.description, r.is_archived AS "isArchived",
+  r.id, r.workspace_id AS "workspaceId", r.group_id AS "groupId", r.project_id AS "projectId",
+  r.type, r.scope, r.name, r.avatar_url AS "avatarUrl", r.description, r.is_archived AS "isArchived",
   r.is_read_only AS "isReadOnly", r.is_public AS "isPublic", r.invite_code AS "inviteCode",
   r.last_message_id AS "lastMessageId", r.last_message_at AS "lastMessageAt",
   r.message_seq AS "messageSeq", r.created_by AS "createdById",
+  r.background_url AS "backgroundUrl", r.background_type AS "backgroundType",
   r.created_at AS "createdAt", r.updated_at AS "updatedAt"
 `;
 
@@ -39,7 +37,8 @@ export const CHAT_MESSAGE_COLUMNS_SQL = `
   client_message_id AS "clientMessageId", metadata,
   source_channel_message_id AS "sourceChannelMessageId",
   discussion_root_message_id AS "discussionRootMessageId",
-  is_pinned AS "isPinned", view_count AS "viewCount"
+  is_pinned AS "isPinned", view_count AS "viewCount",
+  is_thread_reply AS "isThreadReply"
 `;
 
 export const CHAT_REACTION_COLUMNS_SQL = `

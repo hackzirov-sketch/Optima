@@ -102,10 +102,9 @@ export enum PushStatus {
   MERGED = 'merged',
 }
 
+/** Structural kind of a chat room — what it's attached to. Derived server-side
+ * from workspaceId/groupId/projectId/targetUserId, never trusted from the client. */
 export enum ChatRoomType {
-  CHANNEL = 'channel',
-  PUBLIC = 'public',
-  PRIVATE = 'private',
   WORKSPACE = 'workspace',
   PROJECT = 'project',
   GROUP = 'group',
@@ -117,18 +116,20 @@ export enum ChatMemberStatus {
   ACTIVE = 'active',
 }
 
-export enum ChatVisibility {
-  PUBLIC = 'public',
-  INVITE_ONLY = 'invite_only',
+/**
+ * Shared scope model for chat rooms and meetings — chosen by the user at
+ * creation time, replacing the old ChatVisibility/MeetingVisibility enums
+ * (which had different, overlapping value sets for what is really the same
+ * concept). Determines both who can see/join the room and whether a
+ * workspace is required:
+ *  - WORKSPACE_ONLY: workspace_id required, visible only to workspace members
+ *  - PRIVATE:        workspace_id optional, only explicitly invited users
+ *  - PUBLIC:         workspace_id optional, discoverable in global search
+ */
+export enum RoomScope {
   WORKSPACE_ONLY = 'workspace_only',
-  MEMBERS_ONLY = 'members_only',
-}
-
-export enum MeetingVisibility {
-  PUBLIC = 'public',
-  WORKSPACE = 'workspace',
   PRIVATE = 'private',
-  SELECTED_USERS = 'selected_users',
+  PUBLIC = 'public',
 }
 
 export enum UserPresence {

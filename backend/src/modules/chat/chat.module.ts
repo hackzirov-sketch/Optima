@@ -34,6 +34,7 @@ import { CommunityService } from './services/community.service';
     ChatPresenceService,
     ChatAiService,
     ChatRoomInviteService,
+    CommunityService,
     ChatProcessor,
     CommunityService,
   ],

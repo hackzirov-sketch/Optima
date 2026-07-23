@@ -1,11 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { mapUserRow } from '../../users/users.sql';
+import { mapUserRow } from '../../users/repositories/users.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
 
 interface TokenContext {
@@ -27,8 +26,7 @@ export class SessionService {
   private readonly maxSessions: number;
 
   constructor(
-    @InjectDataSource()
-    private dataSource: DataSource,
+    private dataSource: DatabaseService,
     private configService: ConfigService,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
@@ -186,6 +184,23 @@ export class SessionService {
       userAgent, provider, lastUsedAt, expiresAt, revokedAt, createdAt,
       user,
     } as RefreshToken & { user: User };
+  }
+
+  /**
+   * Atomically flips revoked_at from NULL to now() — only one concurrent
+   * caller for the same token id can win this. Used by refresh rotation to
+   * close the race where two requests both read revoked_at=NULL before
+   * either write commits (e.g. the same account open in two tabs, both
+   * refreshing around the same moment).
+   */
+  async claimRefreshToken(id: string): Promise<boolean> {
+    const rows = await this.dataSource.query(
+      `UPDATE refresh_tokens SET revoked_at = now()
+       WHERE id = $1 AND revoked_at IS NULL
+       RETURNING id`,
+      [id],
+    );
+    return rows.length > 0;
   }
 
   async save(session: RefreshToken) {

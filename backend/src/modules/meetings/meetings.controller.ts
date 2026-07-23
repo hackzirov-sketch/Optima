@@ -25,6 +25,7 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JoinByCodeDto } from './dto/join-by-code.dto';
 import { PresignRecordingDto } from './dto/presign-recording.dto';
+import { StopRecordingDto } from './dto/stop-recording.dto';
 import { PresignMeetingFileDto, ShareMeetingFileDto } from './dto/share-meeting-file.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { EventsGateway } from '../gateway/events.gateway';
@@ -152,6 +153,22 @@ export class MeetingsController {
     return this.meetingsService.leave(meetingId, userId);
   }
 
+  @Post('meetings/:meetingId/end')
+  @ApiOperation({ summary: 'End the meeting for everyone (host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async end(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const meeting = await this.meetingsService.endMeeting(meetingId, userId);
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:ended', {
+      meetingId,
+      reason: 'host_ended',
+    });
+    await this.gateway.forceEndMeetingRoom(meetingId);
+    return meeting;
+  }
+
   @Post('meetings/:meetingId/invite')
   @ApiOperation({ summary: 'Invite members to a meeting' })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
@@ -162,6 +179,8 @@ export class MeetingsController {
   ) {
     return this.meetingsService.inviteMembers(meetingId, userId, userIds || []);
   }
+
+  // ─── Shared files (ported from main) ───────────────────────────────────────
 
   @Get('meetings/:meetingId/files')
   @ApiOperation({ summary: 'List files shared in a meeting' })
@@ -179,21 +198,21 @@ export class MeetingsController {
   @ApiOperation({ summary: 'Publish an uploaded file to meeting participants' })
   async shareFile(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string, @Body() dto: ShareMeetingFileDto) {
     const file = await this.meetingsService.shareFile(meetingId, userId, dto);
-    this.gateway.broadcastToMeeting(meetingId, 'meeting:file-shared', { file });
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:file-shared', { file });
     return file;
   }
 
-  // ─── Recording (host/co-host only) ────────────────────────────────────────
+  // ─── Recording (host/co-host only, hard 1-hour server-side cap) ───────────
 
   @Post('meetings/:meetingId/recordings/start')
-  @ApiOperation({ summary: 'Start recording the meeting' })
+  @ApiOperation({ summary: 'Start recording the meeting (max 1 hour, auto-stopped server-side)' })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async startRecording(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     const recording = await this.meetingsService.startRecording(meetingId, userId);
-    this.gateway.broadcastToMeeting(meetingId, 'meeting:recording:started', { recording });
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:recording:started', { recording });
     return recording;
   }
 
@@ -203,9 +222,10 @@ export class MeetingsController {
   async stopRecording(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
+    @Body() dto: StopRecordingDto,
   ) {
-    const recording = await this.meetingsService.stopRecording(meetingId, userId);
-    this.gateway.broadcastToMeeting(meetingId, 'meeting:recording:stopped', { recording });
+    const recording = await this.meetingsService.stopRecording(meetingId, userId, dto);
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:recording:stopped', { recording });
     return recording;
   }
 

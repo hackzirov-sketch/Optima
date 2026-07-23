@@ -1,45 +1,34 @@
-import type { AuthResult, User } from "../types";
+const AUTH_EVENT_KEY = "optima_auth_event";
+const SESSION_HINT_COOKIE = "optima_has_session";
 
-const ACCESS_KEY = "optima_access_token";
-const REFRESH_KEY = "optima_refresh_token";
-const USER_KEY = "optima_user";
-const WORKSPACE_KEY = "optima_workspace";
-
+/**
+ * Auth now lives entirely in httpOnly cookies set by the backend — nothing
+ * token- or user-related is readable or stored by frontend JS anymore (that's
+ * the whole point: an XSS bug can't exfiltrate a cookie it can't read).
+ * This module is just a same-tab + cross-tab "something about the session
+ * changed, go re-check" signal; callers re-fetch `/users/me` in response
+ * rather than trusting any locally cached state.
+ */
 export const session = {
-  accessToken: () => localStorage.getItem(ACCESS_KEY),
-  refreshToken: () => localStorage.getItem(REFRESH_KEY),
-  user: (): User | null => {
+  notify() {
     try {
-      const value = localStorage.getItem(USER_KEY);
-      return value ? (JSON.parse(value) as User) : null;
+      localStorage.setItem(AUTH_EVENT_KEY, String(Date.now()));
     } catch {
-      return null;
+      // Private browsing / storage disabled — the same-tab dispatch below
+      // still fires, only cross-tab sync is lost.
     }
-  },
-  save(result: AuthResult) {
-    localStorage.setItem(ACCESS_KEY, result.accessToken);
-    localStorage.setItem(REFRESH_KEY, result.refreshToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(result.user));
     window.dispatchEvent(new Event("optima:session"));
   },
-  saveTokens(accessToken: string, refreshToken: string) {
-    localStorage.setItem(ACCESS_KEY, accessToken);
-    localStorage.setItem(REFRESH_KEY, refreshToken);
-    window.dispatchEvent(new Event("optima:session"));
-  },
-  saveUser(user: User) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-    window.dispatchEvent(new Event("optima:session"));
-  },
-  selectedWorkspace: () => localStorage.getItem(WORKSPACE_KEY),
-  selectWorkspace(id: string) {
-    localStorage.setItem(WORKSPACE_KEY, id);
-  },
-  clear() {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(WORKSPACE_KEY);
-    window.dispatchEvent(new Event("optima:session"));
+  onChange(handler: () => void) {
+    const onCustom = () => handler();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === AUTH_EVENT_KEY) handler();
+    };
+    window.addEventListener("optima:session", onCustom);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("optima:session", onCustom);
+      window.removeEventListener("storage", onStorage);
+    };
   },
 };

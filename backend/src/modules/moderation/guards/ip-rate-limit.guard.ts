@@ -5,8 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -23,8 +22,7 @@ interface IpRateLimitRow {
 @Injectable()
 export class IpRateLimitGuard implements CanActivate {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly config: ConfigService,
   ) {}
 

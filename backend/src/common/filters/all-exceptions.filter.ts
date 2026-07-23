@@ -7,7 +7,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { EntityNotFoundError, QueryFailedError } from 'typeorm';
 import { TokenExpiredError, JsonWebTokenError } from 'jsonwebtoken';
 import { ErrorCode } from '../enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
@@ -41,8 +40,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       redirect = exceptionResponse.redirect;
       requiresPasswordSetup = exceptionResponse.requiresPasswordSetup;
 
-      // Handle class-validator errors
+      // Handle Zod validation errors (nestjs-zod's ZodValidationPipe/ZodValidationException)
       if (
+        status === HttpStatus.BAD_REQUEST &&
+        Array.isArray(exceptionResponse.errors)
+      ) {
+        message = 'Validation failed';
+        code = ErrorCode.VALIDATION_ERROR;
+        details = exceptionResponse.errors.map(
+          (issue: any) => `${issue.path?.join('.') || 'value'}: ${issue.message}`,
+        );
+      } else if (
         status === HttpStatus.BAD_REQUEST &&
         Array.isArray(exceptionResponse.message)
       ) {
@@ -50,11 +58,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         code = ErrorCode.VALIDATION_ERROR;
         details = exceptionResponse.message;
       }
-    } else if (exception instanceof EntityNotFoundError) {
-      status = HttpStatus.NOT_FOUND;
-      code = ErrorCode.NOT_FOUND;
-      message = 'Resource not found';
-    } else if (exception instanceof QueryFailedError && (exception as any).code === '23505') {
+    } else if (exception?.code === '23505') {
+      // Postgres unique_violation — raised directly by the `pg` driver on
+      // raw queries (no ORM wrapping a "QueryFailedError" around it here).
       status = HttpStatus.CONFLICT;
       code = ErrorCode.DUPLICATE_ENTRY;
       message = 'Duplicate entry — this resource already exists';

@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 
 const durationSeconds = (value: string) => {
   const match = value.match(/^P(?:([\d.]+)D)?T?(?:([\d.]+)H)?(?:([\d.]+)M)?(?:([\d.]+)S)?$/);
@@ -10,7 +10,7 @@ const durationSeconds = (value: string) => {
 @Injectable()
 export class EducationSyncService {
   private readonly key: string;
-  constructor(private readonly db: DataSource, config: ConfigService) { this.key = config.get<string>('YOUTUBE_API_KEY')?.trim() || ''; }
+  constructor(private readonly db: DatabaseService, config: ConfigService) { this.key = config.get<string>('YOUTUBE_API_KEY')?.trim() || ''; }
 
   async resolveChannel(source: string, userId: string) {
     await this.assertAdmin(userId); this.assertConfigured();

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -13,6 +12,7 @@ import { validate } from './config/env';
 
 import { RedisModule } from './redis/redis.module';
 import { CommonModule } from './common/common.module';
+import { DatabaseModule } from './database/database.module';
 
 // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -49,28 +49,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       validate,
     }),
 
-    // ── Database ───────────────────────────────────
-    TypeOrmModule.forRootAsync({
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        url: config.get('DATABASE_URL'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false,
-        // Only log slow queries in dev, not every query (logging: true kills performance)
-        logging: false,
-        // SSL always on — Neon requires it regardless of NODE_ENV
-        // ssl: { rejectUnauthorized: false },
-        extra: {
-          max: parseInt(config.get('DATABASE_POOL_SIZE') || '20', 10),
-          // Keep connections alive — eliminates Neon cold-connect overhead on warm pool
-          keepAlive: true,
-          keepAliveInitialDelayMillis: 10000,
-          idleTimeoutMillis: 60000,      // was 30000 — give Neon more time before disconnect
-          connectionTimeoutMillis: 5000, // was 10000 — fail fast instead of hanging
-        },
-      }),
-      inject: [ConfigService],
-    }),
+    // ── Database (plain `pg` pool — see DatabaseModule) ───────────────────
+    DatabaseModule,
 
     // ── Redis Queue ────────────────────────────────
     BullModule.forRootAsync({

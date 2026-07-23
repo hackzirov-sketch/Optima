@@ -4,8 +4,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { Project } from '../../database/entities/project.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../../common/enums';
@@ -22,8 +21,7 @@ const PROJECT_MEMBER_COLUMNS_SQL = `
 @Injectable()
 export class ProjectMembersService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly notifications: NotificationsService,
     private readonly permission: PermissionService,
   ) {}

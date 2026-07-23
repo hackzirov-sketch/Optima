@@ -1,16 +1,15 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 
 import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
-import { AiRequestDto } from './dto/ai-request.dto';
-import { Throttle } from '@nestjs/throttler';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatMemberService } from './services/member.service';
+import { CommunityService } from './services/community.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
@@ -19,8 +18,9 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
+import { AiRequestDto } from './dto/ai-request.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
-import { CommunityService } from './services/community.service';
+import { RoomScope } from '../../common/enums';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -37,36 +37,31 @@ export class ChatController {
     private readonly communityService: CommunityService,
   ) {}
 
+  // ── OTIMA community (ported from main) ────────────────────────────────────
   @Get('chat/community')
   @ApiOperation({ summary: 'Get mandatory OTIMA community channel and discussion group' })
   community(@CurrentUser('id') userId: string) {
     return this.communityService.overview(userId);
   }
 
-  @Patch('chat/rooms/:roomId/mute')
-  @ApiOperation({ summary: 'Mute or unmute room notifications' })
-  muteRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string, @Body('muted') muted: boolean) {
-    return this.memberService.setMuted(roomId, userId, Boolean(muted));
-  }
-
-  @Get('chat/rooms/:roomId/members')
-  @ApiOperation({ summary: 'List room members with privacy-safe profile fields' })
-  roomMembers(
+  @Get('chat/community/:roomId/members')
+  @ApiOperation({ summary: 'List community room members' })
+  communityMembers(
     @Param('roomId') roomId: string,
     @CurrentUser('id') userId: string,
-    @Query('q') query?: string,
+    @Query('query') query = '',
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.communityService.listMembers(roomId, userId, query, Number(page) || 1, Number(limit) || 30);
   }
 
-  @Get('chat/rooms/:roomId/shared')
-  @ApiOperation({ summary: 'List server-filtered shared content' })
-  sharedContent(
+  @Get('chat/community/:roomId/shared/:kind')
+  @ApiOperation({ summary: 'List shared media/files/links/music/voice in a community room' })
+  communityShared(
     @Param('roomId') roomId: string,
+    @Param('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
     @CurrentUser('id') userId: string,
-    @Query('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
@@ -74,18 +69,18 @@ export class ChatController {
   }
 
   @Post('chat/community/posts/:messageId/discussion')
-  @ApiOperation({ summary: 'Open or create the unique group discussion for a channel post' })
-  postDiscussion(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+  @ApiOperation({ summary: 'Get or create the discussion-group thread for a channel post' })
+  communityDiscussion(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
     return this.communityService.getOrCreateDiscussion(messageId, userId);
   }
 
-  @Patch('chat/system/:roomId/members/:username/role')
-  @ApiOperation({ summary: 'Change a system channel/group member role (admin only)' })
-  systemMemberRole(
+  @Patch('chat/community/:roomId/members/:username/role')
+  @ApiOperation({ summary: 'Promote/demote a community member (admin/owner only)' })
+  communityUpdateMemberRole(
     @Param('roomId') roomId: string,
     @Param('username') username: string,
-    @CurrentUser('id') userId: string,
     @Body('role') role: 'member' | 'admin',
+    @CurrentUser('id') userId: string,
   ) {
     return this.communityService.updateMemberRole(roomId, username, role, userId);
   }
@@ -98,15 +93,45 @@ export class ChatController {
   }
 
   @Post('workspaces/:workspaceId/chat/rooms')
-  @ApiOperation({ summary: 'Create chat room' })
+  @ApiOperation({ summary: 'Create chat room in a workspace' })
   createRoom(@Param('workspaceId') workspaceId: string, @CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
     return this.roomService.createRoom(workspaceId, userId, dto);
+  }
+
+  @Post('chat/rooms')
+  @ApiOperation({ summary: 'Create a standalone chat room (private/public, no workspace)' })
+  createStandaloneRoom(@CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
+    return this.roomService.createRoom(null, userId, dto);
   }
 
   @Get('chat/rooms/:roomId')
   @ApiOperation({ summary: 'Get chat room' })
   getRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
     return this.roomService.getRoom(roomId, userId);
+  }
+
+  @Get('chat/rooms/:roomId/members')
+  @ApiOperation({ summary: 'List room members (search + paginated)' })
+  listRoomMembers(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('q') q = '',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.listMembers(roomId, userId, q, Number(page) || 1, Number(limit) || 30);
+  }
+
+  @Get('chat/rooms/:roomId/shared')
+  @ApiOperation({ summary: 'List shared media/files/links/music/voice in a room' })
+  listRoomShared(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.communityService.shared(roomId, userId, kind, cursor, Number(limit) || 30);
   }
 
   @Get('chat/rooms/:roomId/messages')
@@ -145,6 +170,23 @@ export class ChatController {
   @ApiOperation({ summary: 'Edit message' })
   updateMessage(@Param('messageId') messageId: string, @CurrentUser('id') userId: string, @Body() dto: UpdateMessageDto) {
     return this.messageService.updateMessage(messageId, userId, dto);
+  }
+
+  @Get('chat/messages/:messageId/thread')
+  @ApiOperation({ summary: 'Get a message’s Slack-style thread (root + replies)' })
+  getThread(@Param('messageId') messageId: string, @CurrentUser('id') userId: string) {
+    return this.messageService.getThread(messageId, userId);
+  }
+
+  @Post('chat/messages/:messageId/thread')
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Post a reply into a message’s thread (REST fallback — prefer the socket event)' })
+  sendThreadReply(
+    @Param('messageId') messageId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.messageService.sendThreadReply(messageId, userId, dto);
   }
 
   @Post('chat/messages/:messageId/reactions')
@@ -232,13 +274,85 @@ export class ChatController {
   }
 
   @Patch('chat/rooms/:roomId/settings')
-  @ApiOperation({ summary: 'Update room settings (isPublic, name, description)' })
+  @ApiOperation({
+    summary:
+      'Update room settings (scope, name, description; background changes require owner/admin)',
+  })
   updateRoomSettings(
     @Param('roomId') roomId: string,
     @CurrentUser('id') userId: string,
-    @Body() dto: { isPublic?: boolean; name?: string; description?: string },
+    @Body()
+    dto: {
+      scope?: RoomScope;
+      name?: string;
+      description?: string;
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
+    },
   ) {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/appearance')
+  @ApiOperation({
+    summary: 'Get the caller’s personal appearance override for a room',
+  })
+  getChatAppearance(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.roomService.getUserChatSettings(roomId, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/appearance')
+  @ApiOperation({
+    summary:
+      'Update the caller’s personal wallpaper/theme/font-size/compact-mode/animation for a room',
+  })
+  updateChatAppearance(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body()
+    dto: {
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
+      theme?: string | null;
+      fontSize?: number | null;
+      compactMode?: boolean;
+      animationEnabled?: boolean;
+    },
+  ) {
+    return this.roomService.upsertUserChatSettings(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/draft')
+  @ApiOperation({
+    summary: 'Get the caller’s unsent draft text for a room (Telegram-style)',
+  })
+  getDraft(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.messageService.getDraft(roomId, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/draft')
+  @ApiOperation({
+    summary: 'Save (or, if empty, clear) the caller’s draft text for a room',
+  })
+  saveDraft(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body('content') content: string,
+  ) {
+    return this.messageService.saveDraft(roomId, userId, content ?? '');
+  }
+
+  @Patch('chat/rooms/:roomId/mute')
+  @ApiOperation({ summary: 'Mute/unmute notifications for a room (caller only)' })
+  setRoomMuted(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: { muted: boolean },
+  ) {
+    return this.memberService.setMuted(roomId, userId, dto.muted);
   }
 
   @Delete('chat/rooms/:roomId')

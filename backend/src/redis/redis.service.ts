@@ -55,20 +55,14 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (!client) {
-        // Fail open in dev; fail closed in production
-        if (process.env.NODE_ENV === 'production') {
-          this.logger.error('Redis unavailable — JWT blacklist check FAILED CLOSED. Token rejected.');
-          return true;
-        }
+        // Fail open: blacklist is defense-in-depth on top of JWT signature/expiry
+        // checks — a Redis outage should not lock out every authenticated user.
         return false;
       }
       const v = await client.get(RedisKeys.blacklistToken(jti));
       return v !== null;
     } catch (e) {
-      if (process.env.NODE_ENV === 'production') {
-        this.logger.error(`JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Token rejected for safety.`);
-        return true;
-      }
+      this.logger.warn(`JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Failing open.`);
       return false;
     }
   }
@@ -102,12 +96,12 @@ export class RedisService implements OnModuleDestroy {
   async isUserSessionBlocked(userId: string): Promise<boolean> {
     try {
       const client = this.getClient();
-      if (!client) return process.env.NODE_ENV === 'production';
+      if (!client) return false;
       const v = await client.get(RedisKeys.userBlock(userId));
       return v !== null;
     } catch (e) {
-      this.logger.warn(`Redis user-block check failed: ${e instanceof Error ? e.message : e}`);
-      return process.env.NODE_ENV === 'production';
+      this.logger.warn(`Redis user-block check failed: ${e instanceof Error ? e.message : e}. Failing open.`);
+      return false;
     }
   }
 
@@ -465,8 +459,9 @@ export class RedisService implements OnModuleDestroy {
       }
     } catch (e) {
       this.logger.warn(`Redis validateTokenPipeline failed: ${e instanceof Error ? e.message : e}`);
-      // Fail safe: in production reject, in dev allow
-      if (process.env.NODE_ENV === 'production') return [true, false, null];
+      // Fail open: blacklist is defense-in-depth on top of JWT signature/expiry
+      // checks (only set on logout/account deletion) — a Redis outage should
+      // not lock out every authenticated user in the app.
     }
     return [false, false, null];
   }

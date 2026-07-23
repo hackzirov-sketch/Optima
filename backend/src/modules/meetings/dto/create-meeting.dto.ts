@@ -10,7 +10,7 @@ import {
   Max,
   IsEnum,
 } from 'class-validator';
-import { MeetingVisibility } from '../../../common/enums';
+import { RoomScope } from '../../../common/enums';
 
 export class CreateMeetingDto {
   @ApiProperty()
@@ -49,8 +49,8 @@ export class CreateMeetingDto {
   @IsString()
   agenda?: string;
 
-  @ApiPropertyOptional({ enum: MeetingVisibility, default: MeetingVisibility.PRIVATE })
+  @ApiPropertyOptional({ enum: RoomScope, default: RoomScope.WORKSPACE_ONLY })
   @IsOptional()
-  @IsEnum(MeetingVisibility)
-  visibility?: MeetingVisibility;
+  @IsEnum(RoomScope)
+  scope?: RoomScope;
 }

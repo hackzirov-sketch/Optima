@@ -1,14 +1,22 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { ChatMemberService } from './member.service';
 
 type SharedKind = 'media' | 'files' | 'links' | 'music' | 'voice';
 
+/**
+ * Ported from UPZ-main onto the raw-SQL DatabaseService used by the
+ * production branch (was @InjectDataSource() DataSource from TypeORM --
+ * DatabaseService.query() has the identical signature/return shape, so
+ * only the injected type changed, not the SQL). Relies on the
+ * chat_rooms.slug / is_system / membership_locked / posting_mode /
+ * linked_room_id columns and the chat_members.role column added by the
+ * OTIMA community schema patch appended to init.sql -- see MERGE_NOTES.md.
+ */
 @Injectable()
 export class CommunityService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly members: ChatMemberService,
   ) {}
 
@@ -106,18 +114,18 @@ export class CommunityService {
       throw new NotFoundException('Community channel post not found');
     }
     await this.members.assertRoomMember(source.groupId, userId);
-    return this.dataSource.transaction(async (manager) => {
-      const existing = await manager.query(
+    return this.dataSource.withTransaction(async (query) => {
+      const existing = await query(
         `SELECT id, room_id AS "roomId", source_channel_message_id AS "sourceChannelMessageId"
          FROM chat_messages WHERE source_channel_message_id = $1 AND deleted_at IS NULL LIMIT 1`,
         [messageId],
       );
       if (existing[0]) return existing[0];
-      const sequenceRows = await manager.query(
+      const sequenceRows = await query(
         `UPDATE chat_rooms SET message_seq = message_seq + 1 WHERE id = $1 RETURNING message_seq`,
         [source.groupId],
       );
-      const inserted = await manager.query(
+      const inserted = await query(
         `INSERT INTO chat_messages
            (room_id, sender_id, sequence, content, content_type, is_system, system_metadata, source_channel_message_id)
          VALUES ($1, $2, $3, $4, 'text', true, $5::jsonb, $6)
@@ -126,7 +134,7 @@ export class CommunityService {
          RETURNING id, room_id AS "roomId", source_channel_message_id AS "sourceChannelMessageId"`,
         [source.groupId, source.senderId, sequenceRows[0].message_seq, source.content ?? '', JSON.stringify({ kind: 'channel_discussion' }), messageId],
       );
-      await manager.query(
+      await query(
         `UPDATE chat_messages SET discussion_root_message_id = $2 WHERE id = $1`,
         [messageId, inserted[0].id],
       );

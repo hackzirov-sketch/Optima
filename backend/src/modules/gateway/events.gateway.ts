@@ -11,13 +11,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
-import * as crypto from 'crypto';
+import { parseCookie } from 'cookie';
+import { ACCESS_COOKIE } from '../../common/utils/auth-cookies.util';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ViolationService } from '../moderation/services/violation.service';
@@ -66,13 +66,16 @@ export interface AddReactionWsDto {
 export interface MeetingJoinDto    { meetingId: string; }
 export interface MeetingLeaveDto   { meetingId: string; }
 export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
-export interface MeetingKeyDto     { meetingId: string; targetUserId: string; publicKey: JsonWebKey; }
 export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
 export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
 export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
-export interface MeetingHandDto    { meetingId: string; raised: boolean; }
-export interface MeetingReactionDto { meetingId: string; emoji: string; }
 export interface DirectCallDto { meetingId: string; roomId: string; targetUserId: string; kind: 'audio' | 'video'; }
+
+// A socket drop (network blip, tab refresh) shouldn't immediately count as
+// "left the meeting" — give it a window to reconnect and rejoin before the
+// participant is marked as having left in the DB (which can in turn trigger
+// meeting auto-end if they were the last one present).
+const MEETING_RECONNECT_GRACE_MS = 30_000;
 
 @Injectable()
 @WebSocketGateway({
@@ -97,8 +100,7 @@ export class EventsGateway
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly violationService: ViolationService,
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => MeetingsService))
     private readonly meetingsService: MeetingsService,
   ) {}
@@ -161,9 +163,12 @@ export class EventsGateway
 
   // ─── Auth middleware ─────────────────────────────────
   private extractUser(client: Socket): WsUser | null {
-    const token =
-      client.handshake.auth?.token ||
-      client.handshake.headers?.authorization?.replace('Bearer ', '');
+    // Auth now lives in an httpOnly cookie (see auth-cookies.util.ts) — the
+    // browser attaches it automatically on the handshake request as long as
+    // the client connects with withCredentials:true, so there's nothing for
+    // frontend JS to read or hand us explicitly anymore.
+    const rawCookie = client.handshake.headers?.cookie;
+    const token = rawCookie ? parseCookie(rawCookie)[ACCESS_COOKIE] : undefined;
 
     if (!token) return null;
 
@@ -248,10 +253,28 @@ export class EventsGateway
       }
     }, 2000);
 
-    // Clean up meeting presence if this socket was in a meeting
+    // Clean up meeting presence if this socket was in a meeting — but only
+    // after a reconnect grace period (see MEETING_RECONNECT_GRACE_MS), not
+    // immediately. Socket.IO already removes the disconnected socket from
+    // all rooms synchronously, so the `meeting:${id}:user:${userId}` room
+    // membership check below correctly reflects "no reconnect happened yet"
+    // rather than this socket's own (already-gone) membership.
     const meetingId = client.data?.meetingId;
     if (meetingId) {
-      await this.leaveMeeting(client, userId, meetingId);
+      setTimeout(async () => {
+        try {
+          const stillPresent = await this.server
+            .in(`meeting:${meetingId}:user:${userId}`)
+            .fetchSockets();
+          if (stillPresent.length === 0) {
+            await this.meetingsService.leave(meetingId, userId).catch(() => {});
+            this.server.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
+            this.logger.log(`User ${userId} left meeting ${meetingId} (disconnect grace expired)`);
+          }
+        } catch (err) {
+          this.logger.error(`Error finalizing meeting leave for ${userId}`, err);
+        }
+      }, MEETING_RECONNECT_GRACE_MS);
     }
 
     this.logger.log(`Client disconnected: ${client.id} → userId=${userId}`);
@@ -413,6 +436,57 @@ export class EventsGateway
     return { event: 'message_sent', messageId: saved.id };
   }
 
+  // ─── Thread reply (Slack-style, §14.13) — separate event so it never lands
+  // in the main-timeline `new_message` stream (thread replies are hidden there). ──
+  @SubscribeMessage('send_thread_reply')
+  async handleSendThreadReply(
+    @MessageBody() data: SendMessageWsDto & { threadRootId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!await this.assertActiveUser(userId, client)) return;
+
+    let saved: any;
+    try {
+      saved = await this.messageService.sendThreadReply(data.threadRootId, userId, {
+        content: data.text,
+        clientMessageId: data.clientMessageId,
+        attachments: data.attachments,
+      } as any);
+    } catch (err: any) {
+      client.emit('error', {
+        code: err?.response?.code || 'SEND_THREAD_REPLY_FAILED',
+        message: err?.message || 'Failed to send thread reply',
+      });
+      return;
+    }
+
+    this.server.to(`room:${saved.roomId}`).emit('thread_reply', {
+      threadRootId: data.threadRootId,
+      threadReplyCount: saved.threadReplyCount ?? null,
+      message: {
+        id: saved.id,
+        roomId: saved.roomId,
+        senderId: saved.senderId,
+        sequence: saved.sequence,
+        clientMessageId: saved.clientMessageId,
+        content: saved.content,
+        contentType: saved.contentType ?? 'text',
+        attachments: saved.attachments ?? [],
+        replyToId: saved.replyToId ?? null,
+        isThreadReply: true,
+        isEdited: false,
+        editedAt: null,
+        createdAt: saved.createdAt,
+        reactions: [],
+        sender: saved.sender ?? null,
+      },
+    });
+
+    return { event: 'thread_reply_sent', messageId: saved.id };
+  }
+
   // ─── Message reaction ─────────────────────────────────
   @SubscribeMessage('add_reaction')
   async handleAddReaction(
@@ -448,26 +522,13 @@ export class EventsGateway
 
   // ─── Message read receipt ────────────────────────────
   @SubscribeMessage('message_read')
-  async handleMessageRead(
+  handleMessageRead(
     @MessageBody() data: { roomId: string; messageId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
     if (!client.rooms.has(`room:${data.roomId}`)) return;
-
-    const updated = await this.dataSource.query(
-      `UPDATE chat_members cm
-       SET last_read_seq = GREATEST(cm.last_read_seq, m.sequence),
-           last_read_message_id = m.id::text,
-           last_read_at = now()
-       FROM chat_messages m
-       WHERE cm.room_id = $1 AND cm.user_id = $2
-         AND cm.left_at IS NULL AND m.id = $3 AND m.room_id = $1
-       RETURNING cm.last_read_seq AS "lastReadSeq"`,
-      [data.roomId, userId, data.messageId],
-    );
-    if (!updated.length) return;
 
     client.to(`room:${data.roomId}`).emit('message_read', {
       userId,
@@ -584,20 +645,7 @@ export class EventsGateway
     });
   }
 
-  @SubscribeMessage('meeting:key')
-  handleMeetingKey(
-    @MessageBody() data: MeetingKeyDto,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
-    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:key', {
-      meetingId: data.meetingId,
-      fromUserId: userId,
-      publicKey: data.publicKey,
-    });
-  }
-
+  // ─── Direct (1:1) audio/video call signaling (ported from main) ───────
   @SubscribeMessage('call:invite')
   handleDirectCallInvite(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
@@ -659,36 +707,6 @@ export class EventsGateway
     });
   }
 
-  @SubscribeMessage('meeting:hand')
-  handleMeetingHand(
-    @MessageBody() data: MeetingHandDto,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
-    this.server.to(`meeting:${data.meetingId}`).emit('meeting:hand', {
-      meetingId: data.meetingId,
-      userId,
-      raised: Boolean(data.raised),
-    });
-  }
-
-  @SubscribeMessage('meeting:reaction')
-  handleMeetingReaction(
-    @MessageBody() data: MeetingReactionDto,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const userId = client.data?.userId;
-    const allowed = new Set(['👍', '❤️', '🎉', '👏', '😂', '😮']);
-    if (!userId || !allowed.has(data.emoji) || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
-    this.server.to(`meeting:${data.meetingId}`).emit('meeting:reaction', {
-      meetingId: data.meetingId,
-      userId,
-      emoji: data.emoji,
-      id: crypto.randomUUID(),
-    });
-  }
-
   // ─── Internal: clean up meeting state ────────────────
   private async leaveMeeting(client: Socket, userId: string, meetingId: string) {
     delete client.data.meetingId;
@@ -709,6 +727,16 @@ export class EventsGateway
     }
   }
 
+  /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */
+  async forceEndMeetingRoom(meetingId: string) {
+    const sockets = await this.server.in(`meeting:${meetingId}`).fetchSockets();
+    for (const s of sockets) {
+      delete s.data.meetingId;
+      await s.leave(`meeting:${meetingId}`);
+      if (s.data?.userId) await s.leave(`meeting:${meetingId}:user:${s.data.userId}`);
+    }
+  }
+
   // ─── Public helpers for other services ───────────────
 
   /** Send a notification to a specific user across all their sockets */
@@ -719,10 +747,6 @@ export class EventsGateway
   /** Broadcast a message to all members of a chat room */
   broadcastToRoom(roomId: string, event: string, payload: unknown) {
     this.server?.to(`room:${roomId}`)?.emit(event, payload);
-  }
-
-  broadcastToMeeting(meetingId: string, event: string, payload: unknown) {
-    this.server?.to(`meeting:${meetingId}`)?.emit(event, payload);
   }
 
   /** Broadcast an event to all sockets in a workspace room */

@@ -1,5 +1,5 @@
 import { ArrowRight, Building2, CheckCircle2, MessageCircle, Video } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Logo } from "../components/ui";
 import { useAuth } from "../lib/auth";
 
@@ -11,15 +11,18 @@ export function WorkspaceSetupPage() {
   const { user, createWorkspace, logout } = useAuth();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const suggested = useRef(false);
 
   useEffect(() => {
-    if (name || !user?.firstName) return;
+    if (suggested.current || !user?.firstName) return;
+    suggested.current = true;
     const suggestedName = `${user.firstName} Workspace`;
     setName(suggestedName);
     setSlug(`${slugify(suggestedName)}-${Date.now().toString(36)}`);
-  }, [name, user?.firstName]);
+  }, [user?.firstName]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,8 +61,8 @@ export function WorkspaceSetupPage() {
           <h2>Workspace ma’lumoti</h2>
           <p>Keyinroq sozlamalardan o‘zgartira olasiz.</p>
           {error && <div className="form-error" role="alert">{error}</div>}
-          <label>Nomi<input value={name} onChange={(event) => { setName(event.target.value); setSlug(slugify(event.target.value)); }} placeholder="Masalan: Optima Team" maxLength={100} autoFocus required /></label>
-          <label>Manzil<span className="slug-input"><span>optima.app/</span><input value={slug} onChange={(event) => setSlug(slugify(event.target.value))} placeholder="optima-team" maxLength={100} required /></span></label>
+          <label>Nomi<input value={name} onChange={(event) => { setName(event.target.value); if (!slugEdited) setSlug(slugify(event.target.value)); }} placeholder="Masalan: Optima Team" maxLength={100} autoFocus required /></label>
+          <label>Manzil<span className="slug-input"><span>optima.app/</span><input value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.target.value)); }} placeholder="optima-team" maxLength={100} required /></span></label>
           <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Workspace yaratish</Button>
         </form>
       </section>

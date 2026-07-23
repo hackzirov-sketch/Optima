@@ -1,5 +1,4 @@
 import { io, type Socket } from "socket.io-client";
-import { session } from "./session";
 
 let socket: Socket | null = null;
 
@@ -15,7 +14,10 @@ function socketServerUrl(): string {
 export function getSocket(): Socket {
   if (!socket) {
     socket = io(socketServerUrl(), {
-      auth: (callback) => callback({ token: session.accessToken() }),
+      // Auth is the httpOnly access-token cookie — withCredentials makes the
+      // browser attach it to the handshake request automatically, same as
+      // any other same-site request. Nothing for JS to read or hand over.
+      withCredentials: true,
       transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,

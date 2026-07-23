@@ -4,15 +4,15 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
-import { ChatRoomType, ChatVisibility } from '../../../common/enums';
+import { UserChatSettings } from '../../../database/entities/user-chat-settings.entity';
+import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
-import { MembersService } from '../../workspaces/members.service';
+import { MembersService } from '../../workspaces/services/members.service';
 import { CreateChatRoomDto } from '../dto/create-chat-room.dto';
 import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_COLUMNS_SQL_R } from '../chat.sql';
 import {
@@ -22,14 +22,14 @@ import {
 
 export interface ChatRoomDto {
   id: string;
-  workspaceId: string;
+  workspaceId: string | null;
   type: ChatRoomType;
   name: string | null;
   avatarUrl: string | null;
   description: string | null;
   isArchived: boolean;
   isReadOnly: boolean;
-  visibility: ChatVisibility;
+  scope: RoomScope;
   inviteCode: string | null;
   isMember: boolean;
   groupId: string | null;
@@ -39,6 +39,8 @@ export interface ChatRoomDto {
   updatedAt: Date;
   memberIds: string[];
   memberCount: number;
+  backgroundUrl: string | null;
+  backgroundType: string;
   lastMessage: {
     id: string;
     content: string;
@@ -52,7 +54,7 @@ export interface ChatRoomDto {
 @Injectable()
 export class ChatRoomService {
   constructor(
-    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly wsMembersService: MembersService,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatEncryption: ChatEncryptionService,
@@ -103,12 +105,7 @@ export class ChatRoomService {
     const myMembership = members.find((m) => m.userId === userId);
     let unreadCount = 0;
     if (myMembership) {
-      const unreadRows = await this.dataSource.query(
-        `SELECT count(*)::int AS count FROM chat_messages
-         WHERE room_id = $1 AND sequence > $2 AND sender_id <> $3`,
-        [room.id, myMembership.lastReadSeq, userId],
-      );
-      unreadCount = Number(unreadRows[0]?.count || 0);
+      unreadCount = Math.max(0, room.messageSeq - myMembership.lastReadSeq);
     }
 
     const lastMessage = room.lastMessageId
@@ -124,7 +121,7 @@ export class ChatRoomService {
       description: room.description ?? null,
       isArchived: room.isArchived,
       isReadOnly: room.isReadOnly,
-      visibility: room.visibility,
+      scope: room.scope,
       inviteCode: room.inviteCode ?? null,
       groupId: room.groupId ?? null,
       projectId: room.projectId ?? null,
@@ -133,6 +130,8 @@ export class ChatRoomService {
       updatedAt: room.updatedAt,
       memberIds: members.map((m) => m.userId),
       memberCount: members.length,
+      backgroundUrl: room.backgroundUrl ?? null,
+      backgroundType: room.backgroundType ?? 'DEFAULT',
       lastMessage,
       unreadCount,
       isMember: true,
@@ -145,10 +144,7 @@ export class ChatRoomService {
     const myRooms: Array<
       ChatRoom & { myLastReadSeq: number; myStatus: string }
     > = await this.dataSource.query(
-      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus",
-              (SELECT count(*)::int FROM chat_messages unread
-               WHERE unread.room_id = r.id AND unread.sequence > cm.last_read_seq
-                 AND unread.sender_id <> $2) AS "unreadCount"
+      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
        WHERE r.workspace_id = $1`,
@@ -192,7 +188,7 @@ export class ChatRoomService {
 
     return myRooms.map((room) => {
       const roomMemberIds = membersByRoom.get(room.id) ?? [];
-      const unreadCount = Math.max(0, Number((room as any).unreadCount || 0));
+      const unreadCount = Math.max(0, room.messageSeq - room.myLastReadSeq);
       const lastMsg = room.lastMessageId
         ? lastMsgMap.get(room.lastMessageId)
         : null;
@@ -206,7 +202,7 @@ export class ChatRoomService {
         description: room.description ?? null,
         isArchived: room.isArchived,
         isReadOnly: room.isReadOnly,
-        visibility: room.visibility,
+        scope: room.scope,
         inviteCode: room.inviteCode ?? null,
         groupId: room.groupId ?? null,
         projectId: room.projectId ?? null,
@@ -215,6 +211,8 @@ export class ChatRoomService {
         updatedAt: room.updatedAt,
         memberIds: roomMemberIds,
         memberCount: roomMemberIds.length,
+        backgroundUrl: room.backgroundUrl ?? null,
+        backgroundType: room.backgroundType ?? 'DEFAULT',
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -248,7 +246,7 @@ export class ChatRoomService {
 
     const publicRooms: ChatRoom[] = await this.dataSource.query(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms
-       WHERE workspace_id = $1 AND visibility = 'public' AND is_archived = false`,
+       WHERE workspace_id = $1 AND scope = 'public' AND is_archived = false`,
       [workspaceId],
     );
 
@@ -262,7 +260,7 @@ export class ChatRoomService {
       name: r.name ?? null,
       avatarUrl: r.avatarUrl ?? null,
       description: r.description ?? null,
-      visibility: ChatVisibility.PUBLIC,
+      scope: RoomScope.PUBLIC,
       isArchived: false,
       isReadOnly: r.isReadOnly,
       groupId: r.groupId ?? null,
@@ -285,7 +283,7 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_FOUND,
         message: 'Room not found',
       });
-    if (room.visibility !== ChatVisibility.PUBLIC)
+    if (room.scope !== RoomScope.PUBLIC)
       throw new ForbiddenException({
         code: ErrorCode.ROOM_NOT_PUBLIC,
         message: 'Room is not public',
@@ -311,7 +309,13 @@ export class ChatRoomService {
   async updateRoomSettings(
     roomId: string,
     userId: string,
-    dto: { visibility?: ChatVisibility; name?: string; description?: string },
+    dto: {
+      scope?: RoomScope;
+      name?: string;
+      description?: string;
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
+    },
   ) {
     const room = await this.findRoomById(roomId);
     if (!room)
@@ -319,11 +323,32 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_FOUND,
         message: 'Room not found',
       });
-    await this.chatMemberService.assertRoomMember(roomId, userId);
-    if (room.createdById !== userId)
+    const member = await this.chatMemberService.assertRoomMember(
+      roomId,
+      userId,
+    );
+    const isBackgroundOnlyChange =
+      dto.backgroundUrl !== undefined || dto.backgroundType !== undefined;
+    const isPrivileged =
+      room.createdById === userId ||
+      member.role === 'owner' ||
+      member.role === 'admin';
+    if (!isPrivileged)
       throw new ForbiddenException({
         code: ErrorCode.ROOM_INVITE_FORBIDDEN,
-        message: 'Only the creator can update room settings',
+        message: isBackgroundOnlyChange
+          ? 'Only the room owner/admin can change the background'
+          : 'Only the creator can update room settings',
+      });
+    if (
+      dto.backgroundType &&
+      !['DEFAULT', 'IMAGE', 'COLOR', 'GRADIENT', 'PATTERN'].includes(
+        dto.backgroundType,
+      )
+    )
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Invalid backgroundType',
       });
 
     const { setClause, values } = buildUpdateSet(
@@ -343,15 +368,113 @@ export class ChatRoomService {
     return this.enrichRoom(updated, userId);
   }
 
+  /**
+   * Per-user wallpaper/theme/font-size/compact-mode/animation override for a room.
+   * Takes priority over the room's `backgroundUrl` — see SYSTEM_DESIGN.md §14.10.
+   */
+  async getUserChatSettings(
+    roomId: string,
+    userId: string,
+  ): Promise<UserChatSettings | null> {
+    const rows: UserChatSettings[] = await this.dataSource.query(
+      `SELECT id, user_id AS "userId", room_id AS "roomId",
+              background_url AS "backgroundUrl", background_type AS "backgroundType", theme,
+              font_size AS "fontSize", compact_mode AS "compactMode",
+              animation_enabled AS "animationEnabled",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM user_chat_settings WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId],
+    );
+    return rows[0] ?? null;
+  }
+
+  async upsertUserChatSettings(
+    roomId: string,
+    userId: string,
+    dto: {
+      backgroundUrl?: string | null;
+      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
+      theme?: string | null;
+      fontSize?: number | null;
+      compactMode?: boolean;
+      animationEnabled?: boolean;
+    },
+  ): Promise<UserChatSettings> {
+    await this.chatMemberService.assertRoomMember(roomId, userId);
+    const existing = await this.getUserChatSettings(roomId, userId);
+    const merged = {
+      backgroundUrl:
+        dto.backgroundUrl !== undefined
+          ? dto.backgroundUrl
+          : (existing?.backgroundUrl ?? null),
+      backgroundType:
+        dto.backgroundType !== undefined
+          ? dto.backgroundType
+          : (existing?.backgroundType ?? null),
+      theme: dto.theme !== undefined ? dto.theme : (existing?.theme ?? null),
+      fontSize:
+        dto.fontSize !== undefined
+          ? dto.fontSize
+          : (existing?.fontSize ?? null),
+      compactMode:
+        dto.compactMode !== undefined
+          ? dto.compactMode
+          : (existing?.compactMode ?? false),
+      animationEnabled:
+        dto.animationEnabled !== undefined
+          ? dto.animationEnabled
+          : (existing?.animationEnabled ?? true),
+    };
+    const rows: UserChatSettings[] = await this.dataSource.query(
+      `INSERT INTO user_chat_settings
+         (user_id, room_id, background_url, background_type, theme, font_size, compact_mode, animation_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (user_id, room_id) DO UPDATE SET
+         background_url = $3, background_type = $4, theme = $5, font_size = $6,
+         compact_mode = $7, animation_enabled = $8, updated_at = now()
+       RETURNING id, user_id AS "userId", room_id AS "roomId",
+                 background_url AS "backgroundUrl", background_type AS "backgroundType", theme,
+                 font_size AS "fontSize", compact_mode AS "compactMode",
+                 animation_enabled AS "animationEnabled",
+                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [
+        userId,
+        roomId,
+        merged.backgroundUrl,
+        merged.backgroundType,
+        merged.theme,
+        merged.fontSize,
+        merged.compactMode,
+        merged.animationEnabled,
+      ],
+    );
+    return rows[0];
+  }
+
   async createRoom(
-    workspaceId: string,
+    workspaceId: string | null,
     userId: string,
     dto: CreateChatRoomDto,
   ) {
-    await this.wsMembersService.assertMember(workspaceId, userId);
+    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'workspace_only rooms require a workspace',
+      });
+    }
+    if ((dto.groupId || dto.projectId) && !workspaceId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Group/project rooms require a workspace',
+      });
+    }
+    if (workspaceId) {
+      await this.wsMembersService.assertMember(workspaceId, userId);
+    }
 
-    let directTargetUserId = dto.targetUserId;
     if (dto.type === ChatRoomType.DIRECT) {
+      let directTargetUserId = dto.targetUserId;
       if (!directTargetUserId && dto.targetPublicId) {
         const targetRows = await this.dataSource.query(
           `SELECT id FROM users WHERE public_id = $1 AND deleted_at IS NULL`,
@@ -364,7 +487,8 @@ export class ChatRoomService {
           code: ErrorCode.VALIDATION_ERROR,
           message: 'A valid direct message recipient is required',
         });
-      if (directTargetUserId === userId)
+      dto.targetUserId = directTargetUserId;
+      if (dto.targetUserId === userId)
         throw new BadRequestException({
           code: ErrorCode.DM_WITH_SELF,
           message: 'Cannot create a DM with yourself',
@@ -376,8 +500,8 @@ export class ChatRoomService {
          FROM chat_rooms r
          JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $2 AND cm1.left_at IS NULL
          JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $3 AND cm2.left_at IS NULL
-         WHERE r.workspace_id = $1 AND r.type = $4`,
-        [workspaceId, userId, directTargetUserId, ChatRoomType.DIRECT],
+         WHERE r.workspace_id IS NOT DISTINCT FROM $1 AND r.type = $4`,
+        [workspaceId, userId, dto.targetUserId, ChatRoomType.DIRECT],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
     }
@@ -405,14 +529,26 @@ export class ChatRoomService {
         });
     }
 
+    // Derive type from the scoping fields where it's unambiguous, rather than
+    // trusting dto.type outright — group_id/project_id/targetUserId are the
+    // real source of truth, so a client sending a mismatched type can't drift
+    // the stored value away from what the room actually is.
+    const derivedType = dto.targetUserId
+      ? ChatRoomType.DIRECT
+      : dto.groupId
+        ? ChatRoomType.GROUP
+        : dto.projectId
+          ? ChatRoomType.PROJECT
+          : dto.type;
+
     const savedRows: ChatRoom[] = await this.dataSource.query(
-      `INSERT INTO chat_rooms (workspace_id, type, visibility, name, group_id, project_id, created_by)
+      `INSERT INTO chat_rooms (workspace_id, type, scope, name, group_id, project_id, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
       [
         workspaceId,
-        dto.type,
-        dto.visibility ?? ChatVisibility.MEMBERS_ONLY,
+        derivedType,
+        scope,
         dto.name ?? null,
         dto.groupId ?? null,
         dto.projectId ?? null,
@@ -422,8 +558,8 @@ export class ChatRoomService {
     const saved = savedRows[0];
 
     const memberIds = new Set<string>([userId]);
-    if (dto.type === ChatRoomType.DIRECT && directTargetUserId) {
-      memberIds.add(directTargetUserId);
+    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
+      memberIds.add(dto.targetUserId);
     }
     if (dto.type !== ChatRoomType.DIRECT && dto.memberIds?.length) {
       dto.memberIds
@@ -444,12 +580,12 @@ export class ChatRoomService {
     );
 
     // Create notification for target user
-    if (dto.type === ChatRoomType.DIRECT && directTargetUserId) {
+    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
       await this.dataSource.query(
         `INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          directTargetUserId,
+          dto.targetUserId,
           userId,
           'chat_invite',
           'Sizni suhbatga taklif qilishdi',

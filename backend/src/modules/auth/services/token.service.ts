@@ -20,6 +20,10 @@ interface TokenContext {
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
 
+  /** Tolerance window for concurrent refresh requests racing on the same
+   * still-valid token (e.g. two open tabs) before treating reuse as theft. */
+  private static readonly REUSE_GRACE_MS = 20_000;
+
   constructor(
     private jwtService: JwtService,
     private configService: ConfigService,
@@ -28,9 +32,9 @@ export class TokenService {
     private deviceService: DeviceService,
   ) {}
 
-  async buildJwtPair(user: User): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
+  async buildJwtPair(user: User, workspaceId?: string): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     const jti = crypto.randomUUID();
-    const payload = { sub: user.id, email: user.email, jti };
+    const payload = { sub: user.id, email: user.email, jti, workspaceId };
     // Parallel JWT signing (both are CPU-bound, independent)
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload),
@@ -42,20 +46,23 @@ export class TokenService {
     return { accessToken, refreshToken, jti };
   }
 
-  async generateTokens(user: User, ctx: TokenContext = {}) {
+  async generateTokens(user: User, ctx: TokenContext = {}, workspaceId?: string) {
     const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
     const deviceInfo = this.deviceService.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
 
     // Parallel: enforceSessionLimit + buildJwtPair (independent)
     const [{ accessToken, refreshToken }] = await Promise.all([
-      this.buildJwtPair(user),
+      this.buildJwtPair(user, workspaceId),
       this.sessionService.enforceSessionLimit(user.id),
     ]);
 
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    // ASYNC: persist session — does not block login response
+    // Must complete before we hand the refreshToken back to the client — otherwise
+    // a client that refreshes again within milliseconds (e.g. two visibilitychange
+    // events firing back-to-back) can race findByTokenHash() against this INSERT
+    // and get a spurious "invalid token" 401, wiping the session it was just given.
     await this.sessionService.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
 
     // SECURITY: raw-SQL rows are plain objects, not User class instances, so the
@@ -82,41 +89,70 @@ export class TokenService {
     }
   }
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken: string, workspaceId?: string) {
     const tokenHash = crypto
       .createHash('sha256')
       .update(refreshToken)
       .digest('hex');
     const storedToken = await this.sessionService.findByTokenHash(tokenHash);
 
-    if (storedToken && storedToken.revokedAt) {
-      // Token Reuse Detection
-      await this.sessionService.revokeAllSessions(storedToken.userId);
-      throw new UnauthorizedException({
-        code: ErrorCode.TOKEN_REVOKED,
-        message: 'Token reuse detected. All sessions revoked.',
-      });
-    }
-
-    if (
-      !storedToken ||
-      new Date() > storedToken.expiresAt
-    ) {
+    if (!storedToken) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_INVALID,
         message: 'Invalid or expired refresh token',
       });
     }
 
-    storedToken.revokedAt = new Date();
-    await this.sessionService.save(storedToken);
+    if (storedToken.revokedAt) {
+      // Already rotated. Within a short grace window this is almost always
+      // a benign race between two concurrent requests for the same
+      // still-valid token — e.g. the same account open in two tabs, both
+      // refreshing within milliseconds of each other around token expiry —
+      // not an attacker replaying a stolen token: genuine reuse of a
+      // rotated-out token typically resurfaces well after rotation, not
+      // within the same instant. Only escalate to a full session wipe once
+      // we're clearly past that window.
+      const msSinceRevoked = Date.now() - storedToken.revokedAt.getTime();
+      if (msSinceRevoked > TokenService.REUSE_GRACE_MS) {
+        await this.sessionService.revokeAllSessions(storedToken.userId);
+        throw new UnauthorizedException({
+          code: ErrorCode.TOKEN_REVOKED,
+          message: 'Token reuse detected. All sessions revoked.',
+        });
+      }
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Refresh already in progress — retry with the latest token',
+      });
+    }
+
+    if (new Date() > storedToken.expiresAt) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Invalid or expired refresh token',
+      });
+    }
+
+    // Atomic claim: only the request that actually flips revoked_at from
+    // NULL proceeds. A concurrent request that loses this race falls into
+    // the grace-window branch above instead of both requests independently
+    // rotating the same token.
+    const claimed = await this.sessionService.claimRefreshToken(storedToken.id);
+    if (!claimed) {
+      throw new UnauthorizedException({
+        code: ErrorCode.TOKEN_INVALID,
+        message: 'Refresh already in progress — retry with the latest token',
+      });
+    }
 
     return this.generateTokens(storedToken.user, {
       ip: storedToken.ipAddress ?? undefined,
       userAgent: storedToken.userAgent ?? undefined,
       deviceName: storedToken.deviceName ?? undefined,
       provider: storedToken.provider ?? 'jwt-refresh',
-    });
+      // Carry the active workspace forward across rotation — otherwise every
+      // silent refresh would drop the user back to "no workspace selected".
+    }, workspaceId);
   }
 
   async logout(refreshToken: string, accessToken?: string) {

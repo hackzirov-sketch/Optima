@@ -4,8 +4,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { Project } from '../../database/entities/project.entity';
 import { ProjectColumn } from '../../database/entities/project-column.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
@@ -25,8 +24,7 @@ import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util'
 @Injectable()
 export class ProjectsService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly contentFilter: ContentFilterService,
     private readonly permission: PermissionService,
     private readonly audit: AuditService,
@@ -129,12 +127,8 @@ export class ProjectsService {
       );
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const savedRows: Project[] = await queryRunner.query(
+    const savedProject = await this.dataSource.withTransaction(async (query) => {
+      const savedRows: Project[] = await query(
         `INSERT INTO projects
            (workspace_id, group_id, name, slug, description,
             status, priority, start_date, deadline, created_by)
@@ -167,21 +161,16 @@ export class ProjectsService {
       ];
 
       for (const col of defaultColumns) {
-        await queryRunner.query(
+        await query(
           `INSERT INTO project_columns (project_id, name, position, is_default, maps_to_status)
            VALUES ($1, $2, $3, $4, $5::project_columns_maps_to_status_enum)`,
           [savedProject.id, col.name, col.position, col.isDefault, col.mapsToStatus],
         );
       }
 
-      await queryRunner.commitTransaction();
-      return this.findById(savedProject.id, userId);
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+      return savedProject;
+    });
+    return this.findById(savedProject.id, userId);
   }
 
   async findAllInWorkspace(

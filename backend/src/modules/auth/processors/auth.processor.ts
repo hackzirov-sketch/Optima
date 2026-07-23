@@ -1,7 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import { Logger } from '@nestjs/common';
 
 /**
@@ -16,8 +15,7 @@ export class AuthProcessor extends WorkerHost {
   private readonly logger = new Logger(AuthProcessor.name);
 
   constructor(
-    @InjectDataSource()
-    private dataSource: DataSource,
+    private dataSource: DatabaseService,
   ) {
     super();
   }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 
 export interface AuditLogEntry {
   workspaceId?: string | null;
@@ -26,8 +25,7 @@ export interface AuditLogEntry {
 @Injectable()
 export class AuditService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
   ) {}
 
   async log(entry: AuditLogEntry): Promise<void> {

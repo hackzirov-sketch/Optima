@@ -4,8 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 
 import { TaskPush } from '../../database/entities/task-push.entity';
@@ -38,8 +37,7 @@ const PUSH_COMMENT_COLUMNS_SQL = `
 @Injectable()
 export class PushesService {
   constructor(
-    @InjectDataSource()
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DatabaseService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
     private readonly permission: PermissionService,

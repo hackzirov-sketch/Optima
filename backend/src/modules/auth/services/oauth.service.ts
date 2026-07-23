@@ -1,8 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DatabaseService } from '../../../database/database.service';
 import * as crypto from 'crypto';
-import { UsersService } from '../../users/users.service';
+import { UsersService } from '../../users/services/users.service';
 import { RedisService } from '../../../redis/redis.service';
 import { EncryptionService } from '../../../common/services/encryption.service';
 import { User } from '../../../database/entities/user.entity';
@@ -31,8 +30,7 @@ export class OAuthService {
     private encryptionService: EncryptionService,
     private tokenService: TokenService,
     private deviceService: DeviceService,
-    @InjectDataSource()
-    private dataSource: DataSource,
+    private dataSource: DatabaseService,
     @InjectQueue('auth') private authQueue: Queue,
   ) {}
 

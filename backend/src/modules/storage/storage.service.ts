@@ -8,10 +8,8 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
-import { promises as fs } from 'fs';
-import * as path from 'path';
 
 export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings' | 'meeting-files';
 
@@ -26,7 +24,6 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
       'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
       // documents
       'application/pdf',
-      'application/octet-stream',
       'text/plain', 'text/csv',
       'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/x-7z-compressed',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -42,20 +39,7 @@ const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[
     ],
   },
   pushes:      { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
-  'meeting-files': {
-    maxBytes: 100 * 1024 * 1024,
-    mimeTypes: [
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-      'application/pdf', 'application/octet-stream', 'text/plain', 'text/csv',
-      'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed', 'application/x-7z-compressed',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
-      'video/mp4', 'video/webm', 'video/quicktime',
-      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/x-m4a',
-    ],
-  },
+  'meeting-files': { maxBytes: 100 * 1024 * 1024, mimeTypes: null },
   'meeting-recordings': {
     // 1-hour hard cap is enforced server-side on duration (see MeetingsService),
     // this is just a generous byte ceiling so a runaway/misbehaving client
@@ -196,6 +180,27 @@ export class StorageService {
     return { key, url: `${this.r2PublicUrl}/${key}` };
   }
 
+  /** Cloudinary has no dedicated "audio" resource type — audio files upload as 'video'. */
+  private cloudinaryResourceType(mimeType: string): 'image' | 'video' | 'raw' {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'video';
+    return 'raw';
+  }
+
+  private uploadBufferToCloudinary(
+    buffer: Buffer,
+    publicId: string,
+    resourceType: 'image' | 'video' | 'raw',
+  ): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { public_id: publicId, resource_type: resourceType },
+        (err, result) => (err || !result ? reject(err) : resolve(result)),
+      );
+      stream.end(buffer);
+    });
+  }
+
   async uploadChatAudio(buffer: Buffer, userId: string, mimeType: string) {
     const extensions: Record<string, string> = {
       'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a',
@@ -203,13 +208,13 @@ export class StorageService {
     };
     const extension = extensions[mimeType];
     if (!extension) throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'Unsupported audio format' });
-    const directory = path.resolve(process.cwd(), 'uploads', 'audio');
-    await fs.mkdir(directory, { recursive: true });
     const fileName = `${userId}-${uuidv4()}.${extension}`;
-    await fs.writeFile(path.join(directory, fileName), buffer, { mode: 0o600 });
-    return { storageKey: `audio/${fileName}`, storageUrl: `/uploads/audio/${fileName}`, fileName, fileSize: buffer.length, mimeType };
+    const publicId = `${this.baseFolder}/audio/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, 'video');
+    return { storageKey: result.public_id, storageUrl: result.secure_url, fileName, fileSize: buffer.length, mimeType };
   }
 
+  /** Direct server-side upload for chat files (buffered through the API, then pushed to Cloudinary). */
   async uploadChatAttachment(buffer: Buffer, userId: string, fileName: string, mimeType: string) {
     const limits = FOLDER_LIMITS.attachments;
     if (buffer.length > limits.maxBytes) {
@@ -218,18 +223,29 @@ export class StorageService {
     if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
       throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: 'This file type is not supported' });
     }
-    const extension = path.extname(fileName).replace(/[^.a-zA-Z0-9]/g, '').slice(0, 12);
-    const storedName = `${userId}-${uuidv4()}${extension}`;
-    const directory = path.resolve(process.cwd(), 'uploads', 'attachments');
-    await fs.mkdir(directory, { recursive: true });
-    await fs.writeFile(path.join(directory, storedName), buffer, { mode: 0o600 });
+    const publicId = `${this.baseFolder}/attachments/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, this.cloudinaryResourceType(mimeType));
     return {
-      storageKey: `attachments/${storedName}`,
-      storageUrl: `/uploads/attachments/${storedName}`,
+      storageKey: result.public_id,
+      storageUrl: result.secure_url,
       fileName,
       fileSize: buffer.length,
       mimeType,
     };
+  }
+
+  /** Direct server-side upload for a user's own avatar (buffered through the API, then pushed to Cloudinary). */
+  async uploadAvatar(buffer: Buffer, userId: string, mimeType: string) {
+    const limits = FOLDER_LIMITS.avatars;
+    if (buffer.length > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: `Avatar must be ${Math.round(limits.maxBytes / 1024 / 1024)}MB or smaller` });
+    }
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for avatars: ${limits.mimeTypes.join(', ')}` });
+    }
+    const publicId = `${this.baseFolder}/avatars/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, 'image');
+    return { storageKey: result.public_id, storageUrl: result.secure_url, fileSize: buffer.length, mimeType };
   }
 
   async uploadBase64(
