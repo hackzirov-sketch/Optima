@@ -300,6 +300,25 @@ export const api = {
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
   },
+  education: {
+    home: () => apiFetch<{ subjects: Array<{ id: string; name: string; description: string }>; trustedChannels: Array<{ id: string; name: string; handle?: string; avatarUrl?: string; subjects: string[]; examTypes: string[]; trustLevel: string }>; latest: any[]; continueLearning: any[]; saved: any[] }>("/education/home"),
+    dashboard: () => apiFetch<{ subjects: Array<{ subject: string; opened: number; completed: number; progress: number; watchSeconds: number }>; opened: number; completed: number; watchSeconds: number; saved: number; completionRate: number }>("/education/dashboard"),
+    videos: (params: { subject?: string; q?: string; page?: number } = {}) => {
+      const query = new URLSearchParams();
+      query.set("limit", "40");
+      if (params.subject) query.set("subject", params.subject);
+      if (params.q) query.set("q", params.q);
+      if (params.page) query.set("page", String(params.page));
+      return apiFetch<{ items: any[]; page: number; hasMore: boolean }>(`/education/videos?${query}`);
+    },
+    video: (id: string) => apiFetch<any>(`/education/videos/${encodeURIComponent(id)}`),
+    save: (id: string) => apiFetch<{ saved: boolean }>(`/education/videos/${encodeURIComponent(id)}/save`, { method: "POST" }),
+    unsave: (id: string) => apiFetch<{ saved: boolean }>(`/education/videos/${encodeURIComponent(id)}/save`, { method: "DELETE" }),
+    complete: (id: string) => apiFetch<{ completed: boolean }>(`/education/videos/${encodeURIComponent(id)}/complete`, { method: "POST" }),
+    progress: (id: string, watchProgressPercent: number, lastPositionSeconds: number) => apiFetch(`/education/videos/${encodeURIComponent(id)}/progress`, { method: "POST", body: JSON.stringify({ watchProgressPercent, lastPositionSeconds }) }),
+    addNote: (id: string, content: string, timestampSeconds?: number) => apiFetch(`/education/videos/${encodeURIComponent(id)}/notes`, { method: "POST", body: JSON.stringify({ content, timestampSeconds }) }),
+    mentor: (videoId: string, message: string) => apiFetch<{ reply: string; provider: string; contextSources: string[] }>("/education/mentor/chat", { method: "POST", body: JSON.stringify({ videoId, message }) }),
+  },
   notifications: {
     list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),
     readAll: () => apiFetch("/notifications/read-all", { method: "POST" }),

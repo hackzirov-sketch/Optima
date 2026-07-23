@@ -14,6 +14,7 @@ import { InvitePage } from "./pages/InvitePage";
 import { WorkspaceSetupPage } from "./pages/WorkspaceSetupPage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { EducationPage } from "./pages/EducationPage";
 
 function LoadingScreen() {
   return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Workspace yuklanmoqda</span></div>;
@@ -44,6 +45,10 @@ export function App() {
 
   const meetingMatch = location.match(/^\/meetings\/([^/]+)$/);
   if (meetingMatch) return <MeetingRoomPage meetingId={meetingMatch[1]} />;
+
+  if (location === "/education" || location.startsWith("/education/")) {
+    return <AppShell><div className="route-transition"><EducationPage /></div></AppShell>;
+  }
 
   return (
     <AppShell>

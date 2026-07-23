@@ -45,6 +45,7 @@ import { CommunityService } from './services/community.service';
     ChatReactionService,
     ChatPresenceService,
     ChatRoomInviteService,
+    ChatAiService,
   ],
 })
 export class ChatModule {}

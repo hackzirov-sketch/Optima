@@ -103,7 +103,12 @@ export class ChatRoomService {
     const myMembership = members.find((m) => m.userId === userId);
     let unreadCount = 0;
     if (myMembership) {
-      unreadCount = Math.max(0, room.messageSeq - myMembership.lastReadSeq);
+      const unreadRows = await this.dataSource.query(
+        `SELECT count(*)::int AS count FROM chat_messages
+         WHERE room_id = $1 AND sequence > $2 AND sender_id <> $3`,
+        [room.id, myMembership.lastReadSeq, userId],
+      );
+      unreadCount = Number(unreadRows[0]?.count || 0);
     }
 
     const lastMessage = room.lastMessageId
@@ -140,7 +145,10 @@ export class ChatRoomService {
     const myRooms: Array<
       ChatRoom & { myLastReadSeq: number; myStatus: string }
     > = await this.dataSource.query(
-      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
+      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus",
+              (SELECT count(*)::int FROM chat_messages unread
+               WHERE unread.room_id = r.id AND unread.sequence > cm.last_read_seq
+                 AND unread.sender_id <> $2) AS "unreadCount"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
        WHERE r.workspace_id = $1`,
@@ -184,7 +192,7 @@ export class ChatRoomService {
 
     return myRooms.map((room) => {
       const roomMemberIds = membersByRoom.get(room.id) ?? [];
-      const unreadCount = Math.max(0, room.messageSeq - room.myLastReadSeq);
+      const unreadCount = Math.max(0, Number((room as any).unreadCount || 0));
       const lastMsg = room.lastMessageId
         ? lastMsgMap.get(room.lastMessageId)
         : null;

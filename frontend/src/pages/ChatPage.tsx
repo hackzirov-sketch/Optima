@@ -315,7 +315,7 @@ export function ChatPage() {
     const onDisconnect = () => setConnected(false);
     const onMessage = (message: ChatMessage) => {
       if (message.roomId !== selectedId) {
-        setRooms((current) => current.map((room) => room.id === message.roomId ? { ...room, unreadCount: room.unreadCount + 1, lastMessage: { id: message.id, content: message.content, senderId: message.senderId, createdAt: message.createdAt } } : room));
+        setRooms((current) => current.map((room) => room.id === message.roomId ? { ...room, unreadCount: message.senderId === user?.id ? room.unreadCount : room.unreadCount + 1, lastMessage: { id: message.id, content: message.content, senderId: message.senderId, createdAt: message.createdAt } } : room));
         return;
       }
       setMessages((current) => {

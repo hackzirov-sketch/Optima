@@ -165,6 +165,10 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
+  YOUTUBE_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
   GOOGLE_VISION_API_KEY?: string;
 
   @IsNumber()

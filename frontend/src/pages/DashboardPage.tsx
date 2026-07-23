@@ -1,5 +1,5 @@
-import { ArrowUpRight, CalendarClock, MessageCircle, Plus, Trash2, UsersRound, Video } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Plus, Target, Trash2, UsersRound, Video } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
@@ -23,6 +23,7 @@ export function DashboardPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [education, setEducation] = useState<{ subjects: Array<{ subject: string; opened: number; completed: number; progress: number; watchSeconds: number }>; opened: number; completed: number; watchSeconds: number; saved: number; completionRate: number }>({ subjects: [], opened: 0, completed: 0, watchSeconds: 0, saved: 0, completionRate: 0 });
 
   useEffect(() => {
     if (!workspace) return;
@@ -35,6 +36,8 @@ export function DashboardPage() {
       })
       .finally(() => setLoading(false));
   }, [workspace]);
+
+  useEffect(() => { api.education.dashboard().then(setEducation).catch(() => undefined); }, []);
 
   const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
   const unread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
@@ -59,6 +62,14 @@ export function DashboardPage() {
         <article className="metric-card"><span className="metric-icon"><MessageCircle size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : rooms.length}</strong><small>Faol suhbatlar</small></div></article>
         <article className="metric-card"><span className="metric-icon"><CalendarClock size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : upcoming.length}</strong><small>Yaqin meetinglar</small></div></article>
         <article className="metric-card metric-card-accent"><span className="metric-icon"><ArrowUpRight size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : unread}</strong><small>O‘qilmagan xabar</small></div></article>
+      </section>
+
+      <section className="education-dashboard" aria-label="Education progressi">
+        <header className="panel-header"><div><span>OPTIMA EDUCATION</span><h2>O‘rganish progressi</h2><p>Tanlangan yo‘nalishlar bo‘yicha natijalaringiz</p></div><Link href="/education">Darslarga o‘tish <ArrowUpRight size={15} /></Link></header>
+        <div className="education-dashboard-grid">
+          <article className="education-donut-card"><div className="education-donut" style={{ "--progress": `${education.completionRate * 3.6}deg` } as React.CSSProperties}><div><strong>{education.completionRate}%</strong><small>yakunlandi</small></div></div><div className="education-donut-copy"><span><Target /> Umumiy natija</span><h3>{education.completed} ta dars tugallangan</h3><p>{education.opened ? `${education.opened} ta ochilgan darsdan` : "Birinchi darsingizni boshlang"}</p><div><span><BookOpen /> {education.saved} saqlangan</span><span><GraduationCap /> {Math.round(education.watchSeconds / 60)} daqiqa</span></div></div></article>
+          <article className="education-bars-card"><header><strong>Fanlar kesimida</strong><small>O‘rtacha progress</small></header>{education.subjects.length ? <div className="education-chart-bars">{education.subjects.map((item) => <div key={item.subject}><span><b>{({ ielts: "IELTS", cefr: "CEFR", mathematics: "Matematika", sat: "SAT" } as Record<string,string>)[item.subject] || item.subject}</b><small>{item.progress}%</small></span><i><b style={{ width: `${Math.min(100, item.progress)}%` }} /></i></div>)}</div> : <div className="education-chart-empty"><GraduationCap /><div><strong>Progress hali boshlanmagan</strong><small>Education’dan fan tanlab, birinchi darsni oching.</small></div></div>}</article>
+        </div>
       </section>
 
       <section className="dashboard-grid">
