@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Check, CheckCheck, Copy, Download, FileText, Hash, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Search, Send, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
-import { FormEvent, KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { AudioMessage } from "../components/AudioMessage";
@@ -100,12 +100,17 @@ export function ChatPage() {
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
+  const [roomSettingsName, setRoomSettingsName] = useState("");
+  const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
+  const [roomSettingsAvatar, setRoomSettingsAvatar] = useState<string | null>(null);
+  const [savingRoomSettings, setSavingRoomSettings] = useState(false);
+  const [uploadingRoomAvatar, setUploadingRoomAvatar] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
   const [detailMemberTotal, setDetailMemberTotal] = useState(0);
   const [detailMembers, setDetailMembers] = useState<Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
-  const [openingDirect, setOpeningDirect] = useState<string | null>(null);
   const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
@@ -120,12 +125,18 @@ export function ChatPage() {
   const aiShouldScroll = useRef(false);
   const preserveMessageScroll = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const roomAvatarInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
   const recordingChunks = useRef<Blob[]>([]);
   const cancelRecording = useRef(false);
   const recordingTimer = useRef<number | null>(null);
+  const swipeGesture = useRef<{ id: string; startX: number; startY: number; horizontal: boolean } | null>(null);
+  const pointerGesture = useRef<{ id: string; startX: number; startY: number; dragging: boolean } | null>(null);
+  const swipeCurrent = useRef<{ id: string; offset: number; armed: boolean } | null>(null);
+  const swipeResetTimer = useRef<number | null>(null);
+  const [swipingMessage, setSwipingMessage] = useState<{ id: string; offset: number; armed: boolean } | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || null;
   const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
@@ -513,6 +524,88 @@ export function ChatPage() {
     setReplyingTo(null);
   }
 
+  function startReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
+    if (event.touches.length !== 1 || message.id.startsWith("optimistic:")) return;
+    const touch = event.touches[0];
+    swipeGesture.current = { id: message.id, startX: touch.clientX, startY: touch.clientY, horizontal: false };
+    if (swipeResetTimer.current) window.clearTimeout(swipeResetTimer.current);
+  }
+
+  function moveReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
+    const gesture = swipeGesture.current;
+    if (!gesture || gesture.id !== message.id || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - gesture.startX;
+    const dy = touch.clientY - gesture.startY;
+    if (!gesture.horizontal) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        swipeGesture.current = null;
+        swipeCurrent.current = null;
+        setSwipingMessage(null);
+        return;
+      }
+      if (Math.abs(dx) < 7) return;
+      gesture.horizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!gesture.horizontal || dx >= 0) return;
+    const offset = -Math.min(76, Math.abs(dx) * 0.78);
+    const next = { id: message.id, offset, armed: Math.abs(offset) >= 48 };
+    swipeCurrent.current = next;
+    setSwipingMessage(next);
+  }
+
+  function finishReplySwipe(message: ChatMessage) {
+    const active = swipeCurrent.current?.id === message.id ? swipeCurrent.current : null;
+    swipeGesture.current = null;
+    swipeCurrent.current = null;
+    if (!active) return;
+    if (active.armed) {
+      setReplyingTo(message);
+      setEditing(null);
+      setActiveMenu(null);
+      navigator.vibrate?.(18);
+      window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());
+    }
+    setSwipingMessage({ id: message.id, offset: 0, armed: false });
+    swipeResetTimer.current = window.setTimeout(() => setSwipingMessage(null), 190);
+  }
+
+  function startPointerReply(event: PointerEvent<HTMLDivElement>, message: ChatMessage) {
+    if (event.pointerType !== "mouse" || event.button !== 0 || message.id.startsWith("optimistic:")) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, video, audio")) return;
+    pointerGesture.current = { id: message.id, startX: event.clientX, startY: event.clientY, dragging: false };
+  }
+
+  function movePointerReply(event: PointerEvent<HTMLDivElement>, message: ChatMessage) {
+    const gesture = pointerGesture.current;
+    if (!gesture || gesture.id !== message.id || event.pointerType !== "mouse") return;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.dragging) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+        pointerGesture.current = null;
+        return;
+      }
+      if (dx > -7 || Math.abs(dx) <= Math.abs(dy)) return;
+      gesture.dragging = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+    const offset = -Math.min(76, Math.abs(Math.min(0, dx)) * 0.78);
+    const next = { id: message.id, offset, armed: Math.abs(offset) >= 48 };
+    swipeCurrent.current = next;
+    setSwipingMessage(next);
+  }
+
+  function finishPointerReply(event: PointerEvent<HTMLDivElement>, message: ChatMessage) {
+    const gesture = pointerGesture.current;
+    if (!gesture || gesture.id !== message.id) return;
+    pointerGesture.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (gesture.dragging) finishReplySwipe(message);
+  }
+
   async function deleteMessage(message: ChatMessage) {
     setActiveMenu(null);
     try {
@@ -694,22 +787,6 @@ export function ChatPage() {
     }
   }
 
-  async function openDirectChat(publicId: string) {
-    if (!workspace || openingDirect) return;
-    setOpeningDirect(publicId);
-    try {
-      const room = await api.chat.createRoom(workspace.id, { type: "direct", targetPublicId: publicId });
-      setDetailsOpen(false);
-      setCatalog("direct");
-      await loadRooms(room.id);
-      show("Shaxsiy suhbat ochildi");
-    } catch (error) {
-      show(error instanceof Error ? error.message : "Shaxsiy suhbat ochilmadi", "error");
-    } finally {
-      setOpeningDirect(null);
-    }
-  }
-
   async function acceptInvite() {
     if (!selectedRoom) return;
     try {
@@ -817,6 +894,54 @@ export function ChatPage() {
       show(error instanceof Error ? error.message : "Sozlama saqlanmadi", "error");
     }
   }
+
+  function openRoomSettings() {
+    if (!selectedRoom || selectedRoom.type === "direct") return;
+    setRoomSettingsName(selectedRoom.name || "");
+    setRoomSettingsDescription(selectedRoom.description || "");
+    setRoomSettingsAvatar(selectedRoom.avatarUrl || null);
+    setDetailsOpen(false);
+    setRoomSettingsOpen(true);
+  }
+
+  async function uploadRoomAvatar(file?: File) {
+    if (!selectedRoom || !file) return;
+    if (!file.type.startsWith("image/")) return show("Faqat rasm fayli tanlang", "error");
+    if (file.size > 5 * 1024 * 1024) return show("Rasm hajmi 5 MB dan oshmasin", "error");
+    setUploadingRoomAvatar(true);
+    try {
+      const uploaded = await api.chat.uploadFile(selectedRoom.id, file);
+      const updated = await api.chat.updateRoomSettings(selectedRoom.id, { avatarUrl: uploaded.storageUrl });
+      setRoomSettingsAvatar(updated.avatarUrl || uploaded.storageUrl);
+      setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
+      show("Chat rasmi yangilandi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Rasm yuklanmadi", "error");
+    } finally {
+      setUploadingRoomAvatar(false);
+      if (roomAvatarInput.current) roomAvatarInput.current.value = "";
+    }
+  }
+
+  async function saveRoomSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRoom || !roomSettingsName.trim()) return;
+    setSavingRoomSettings(true);
+    try {
+      const updated = await api.chat.updateRoomSettings(selectedRoom.id, {
+        name: roomSettingsName.trim(),
+        description: roomSettingsDescription.trim(),
+        avatarUrl: roomSettingsAvatar,
+      });
+      setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
+      setRoomSettingsOpen(false);
+      show(selectedRoom.type === "channel" ? "Kanal sozlamalari saqlandi" : "Guruh sozlamalari saqlandi");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Sozlamalar saqlanmadi", "error");
+    } finally {
+      setSavingRoomSettings(false);
+    }
+  }
   async function forwardMessage(targetRoomId: string) {
     if (!forwardingMessage || forwarding) return;
     setForwarding(true);
@@ -877,7 +1002,7 @@ export function ChatPage() {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
               <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
-                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : <span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : <Hash size={17} />}</span>}
+                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? "Taklif kutilmoqda" : "Hali xabar yo‘q")}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
@@ -901,7 +1026,7 @@ export function ChatPage() {
           <>
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
-              {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : <span className="room-avatar room-avatar-sm">{selectedRoom.type === "channel" ? <Megaphone size={16} /> : <Hash size={16} />}</span>}
+              {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
               <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label="Suhbat ma'lumotlarini ochish"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
@@ -909,7 +1034,7 @@ export function ChatPage() {
                   <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
                   <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && !selectedRoom.isSystem && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu"><button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>{selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") && <button onClick={() => { setHeaderMenuOpen(false); openRoomSettings(); }}><Settings size={17} /><span><strong>{selectedRoom.type === "channel" ? "Kanalni sozlash" : "Guruhni sozlash"}</strong><small>Rasm, nom va tavsif</small></span></button>}{!selectedRoom.isSystem && <button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
               </div>
             </header>
             {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}
@@ -930,7 +1055,21 @@ export function ChatPage() {
                     return (
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
-                        <div id={`message-${message.id}`} className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""}`} onContextMenu={(event) => { event.preventDefault(); setActiveMenu(message.id); }}>
+                        <div
+                          id={`message-${message.id}`}
+                          className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""} ${swipingMessage?.id === message.id ? "message-swiping" : ""}`}
+                          style={swipingMessage?.id === message.id ? { transform: `translate3d(${swipingMessage.offset}px,0,0)` } : undefined}
+                          onTouchStart={(event) => startReplySwipe(event, message)}
+                          onTouchMove={(event) => moveReplySwipe(event, message)}
+                          onTouchEnd={() => finishReplySwipe(message)}
+                          onTouchCancel={() => finishReplySwipe(message)}
+                          onPointerDown={(event) => startPointerReply(event, message)}
+                          onPointerMove={(event) => movePointerReply(event, message)}
+                          onPointerUp={(event) => finishPointerReply(event, message)}
+                          onPointerCancel={(event) => finishPointerReply(event, message)}
+                          onContextMenu={(event) => { event.preventDefault(); setActiveMenu(message.id); }}
+                        >
+                          <span className={`swipe-reply-indicator ${swipingMessage?.id === message.id && swipingMessage.armed ? "armed" : ""}`} aria-hidden="true"><Reply size={18} /></span>
                           {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
@@ -972,13 +1111,14 @@ export function ChatPage() {
       <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? "Profil" : selectedRoom?.type === "channel" ? "Kanal ma'lumoti" : "Guruh ma'lumoti"} description={selectedRoom?.type === "direct" ? "Foydalanuvchi ma'lumotlari" : selectedRoom?.type === "channel" ? `${selectedRoom?.memberCount || 0} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
         <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
           <section className="chat-details-hero">
-            {detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="lg" /> : <span className="room-avatar">{selectedRoom?.type === "channel" ? <Megaphone size={28} /> : <Hash size={28} />}</span>}
+            {detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="lg" /> : selectedRoom?.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(selectedRoom?.name || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
             <div className="details-identity"><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? "Username o'rnatilmagan" : selectedRoom?.type === "channel" ? `${selectedRoom.memberCount} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`}</small>{selectedRoom?.description && <p>{selectedRoom.description}</p>}</div>
             <span className="details-kind">{selectedRoom?.type === "direct" ? "DM" : selectedRoom?.type === "channel" ? "KANAL" : "GURUH"}</span>
           </section>
           <div className="chat-details-actions">
             {selectedRoom?.type === "direct" && <><button onClick={() => setDetailsOpen(false)}><MessageCircle size={19} /><span>Xabar</span></button><button onClick={() => void startCall("audio")}><Phone size={19} /><span>Audio</span></button><button onClick={() => void startCall("video")}><Video size={19} /><span>Video</span></button></>}
             {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={19} /><span>Taklif</span></button>}
+            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") && <button onClick={openRoomSettings}><Settings size={19} /><span>Sozlash</span></button>}
             <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>Qidirish</span></button>
             <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? "Unmute" : "Mute"}</span></button>
           </div>
@@ -987,11 +1127,28 @@ export function ChatPage() {
           <div className="chat-details-content">
             {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? "Obunachilarni qidirish" : "A'zolarni qidirish"} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button><button className="detail-member-message" onClick={() => void openDirectChat(member.publicId)} disabled={openingDirect === member.publicId} aria-label={`${member.firstName}ga xabar yozish`} title="Shaxsiy xabar">{openingDirect === member.publicId ? <LoaderCircle className="spin" size={18} /> : <MessageCircle size={18} />}<span>Xabar</span></button></div>)}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)} aria-label={`${member.firstName} ${member.lastName} profilini ochish`}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
             {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>Hozircha bo'sh</strong><small>Ulashilgan kontent shu yerda ko'rinadi.</small></span></div>}
           </div>
         </div>
+      </Modal>
+
+      <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)} title={selectedRoom?.type === "channel" ? "Kanalni sozlash" : "Guruhni sozlash"} description="Rasm, nom va tavsif barcha a’zolarga ko‘rinadi." width="md">
+        <form className="room-settings-form" onSubmit={saveRoomSettings}>
+          <section className="room-avatar-editor">
+            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label="Chat rasmini almashtirish">
+              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt="Chat rasmi" /> : <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
+              <span>{uploadingRoomAvatar ? <LoaderCircle className="spin" size={20} /> : <Camera size={20} />}</span>
+            </button>
+            <div><strong>{selectedRoom?.type === "channel" ? "Kanal rasmi" : "Guruh rasmi"}</strong><small>JPG, PNG, WEBP yoki GIF · maksimum 5 MB</small><div><button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}><ImagePlus size={16} />{roomSettingsAvatar ? "Almashtirish" : "Rasm qo‘yish"}</button>{roomSettingsAvatar && <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />Olib tashlash</button>}</div></div>
+            <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
+          </section>
+          <label>{selectedRoom?.type === "channel" ? "Kanal nomi" : "Guruh nomi"}<input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder="Nom kiriting" /></label>
+          <label>Tavsif<textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={4} placeholder={selectedRoom?.type === "channel" ? "Kanal nima haqida?" : "Guruh nima haqida?"} /><small>{roomSettingsDescription.length}/1000</small></label>
+          <div className="room-settings-note"><ShieldCheck size={18} /><span><strong>Faqat administratorlar</strong><small>Bu ma’lumotlarni faqat chat egasi yoki admin o‘zgartira oladi.</small></span></div>
+          <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setRoomSettingsOpen(false)}>Bekor qilish</Button><Button type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} disabled={savingRoomSettings || !roomSettingsName.trim()}>Saqlash</Button></div>
+        </form>
       </Modal>
 
       <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)} title="Xabarni yuborish" description="Qabul qiluvchi chatni tanlang" width="md">

@@ -1,5 +1,6 @@
 const AUTH_EVENT_KEY = "optima_auth_event";
-const SESSION_HINT_COOKIE = "optima_has_session";
+const ACCESS_TOKEN_KEY = "optima_access_token";
+const REFRESH_TOKEN_KEY = "optima_refresh_token";
 
 /**
  * Auth now lives entirely in httpOnly cookies set by the backend — nothing
@@ -10,6 +11,20 @@ const SESSION_HINT_COOKIE = "optima_has_session";
  * rather than trusting any locally cached state.
  */
 export const session = {
+  accessToken() {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  },
+  refreshToken() {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+  save(accessToken: string, refreshToken: string) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  },
+  clear() {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  },
   notify() {
     try {
       localStorage.setItem(AUTH_EVENT_KEY, String(Date.now()));

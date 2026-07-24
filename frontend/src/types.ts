@@ -25,6 +25,8 @@ export interface User {
 }
 
 export interface AuthResult {
+  accessToken: string;
+  refreshToken: string;
   // Tokens are never in the response body — the backend sets them as httpOnly
   // cookies directly, so nothing JS-readable holds them.
   user: User;

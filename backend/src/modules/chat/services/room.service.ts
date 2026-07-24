@@ -313,6 +313,7 @@ export class ChatRoomService {
       scope?: RoomScope;
       name?: string;
       description?: string;
+      avatarUrl?: string | null;
       backgroundUrl?: string | null;
       backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
     },
@@ -351,8 +352,28 @@ export class ChatRoomService {
         message: 'Invalid backgroundType',
       });
 
+    if (dto.name !== undefined && (dto.name.trim().length < 1 || dto.name.trim().length > 200))
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Room name must be 1-200 characters' });
+    if (dto.description !== undefined && dto.description.length > 1000)
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Description must not exceed 1000 characters' });
+    if (dto.avatarUrl !== undefined && dto.avatarUrl !== null) {
+      try {
+        const avatar = new URL(dto.avatarUrl);
+        if (avatar.protocol !== 'https:') throw new Error();
+      } catch {
+        throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Avatar URL must be a valid HTTPS URL' });
+      }
+    }
+    const allowedUpdates = {
+      scope: dto.scope,
+      name: dto.name?.trim(),
+      description: dto.description?.trim(),
+      avatarUrl: dto.avatarUrl,
+      backgroundUrl: dto.backgroundUrl,
+      backgroundType: dto.backgroundType,
+    };
     const { setClause, values } = buildUpdateSet(
-      dto as Record<string, unknown>,
+      allowedUpdates as Record<string, unknown>,
       2,
     );
     let updated = room;

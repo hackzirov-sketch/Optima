@@ -286,6 +286,7 @@ export class ChatController {
       scope?: RoomScope;
       name?: string;
       description?: string;
+      avatarUrl?: string | null;
       backgroundUrl?: string | null;
       backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
     },

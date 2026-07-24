@@ -85,31 +85,31 @@ interface RefreshResult {
  * function to read, compare, or store; it only needs to know whether the
  * rotation succeeded. */
 async function renewSession(): Promise<RefreshResult> {
+  const refreshToken = session.refreshToken();
+  if (!refreshToken) return { ok: false, networkError: false };
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+    response = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn("[auth] POST /auth/refresh threw:", error);
     return { ok: false, networkError: true };
   }
-  if (response.ok) return { ok: true, networkError: false };
+  if (response.ok) {
+    const result = unwrapEnvelope<AuthResult>(await response.json());
+    session.save(result.accessToken, result.refreshToken);
+    return { ok: true, networkError: false };
+  }
 
   // Losing a concurrent-refresh race (another tab's request rotated the
   // cookie a beat before ours landed) surfaces as a benign 401 here — the
   // server intentionally distinguishes this from real token theft. Give the
   // winner a brief moment to finish, then retry once before giving up.
-  if (response.status === 401) {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    try {
-      const retry = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
-      if (retry.ok) return { ok: true, networkError: false };
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn("[auth] POST /auth/refresh retry threw:", error);
-      return { ok: false, networkError: true };
-    }
-  }
   const body = await response.text().catch(() => "");
   // eslint-disable-next-line no-console
   console.warn(`[auth] POST /auth/refresh -> ${response.status}: ${body}`);
@@ -128,6 +128,8 @@ export async function refreshSession(): Promise<RefreshResult> {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
+  const accessToken = session.accessToken();
+  if (!options.anonymous && accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: "include" });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
@@ -145,6 +147,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       // way, and re-fetching in response to each one is an infinite loop
       // that floods the server (session.ts's listener is responsible for
       // keeping this side-effect-free; see auth.tsx).
+      session.clear();
       session.notify();
     }
   }
@@ -205,12 +208,15 @@ export const api = {
       }),
     exchangeOAuthCode: (code: string) =>
       // Tokens never appear in the body — the response sets httpOnly cookies directly.
-      apiFetch<Record<string, never>>("/auth/exchange-code", {
+      apiFetch<AuthResult>("/auth/exchange-code", {
         method: "POST",
         anonymous: true,
         body: JSON.stringify({ code }),
       }),
-    logout: () => apiFetch<{ message: string }>("/auth/logout", { method: "POST" }),
+    logout: () => apiFetch<{ message: string }>("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: session.refreshToken() }),
+    }),
     /** The access token is an httpOnly cookie the frontend can't decode — this
      * is how it learns which workspace the current session is scoped to. */
     session: () => apiFetch<{ workspaceId: string | null }>("/auth/session"),
@@ -264,6 +270,8 @@ export const api = {
     community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
     updateRoomBackground: (roomId: string, data: { backgroundUrl: string | null; backgroundType: NonNullable<ChatRoom["backgroundType"]> }) =>
+      apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+    updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
     getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),
     getDraft: (roomId: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`),
