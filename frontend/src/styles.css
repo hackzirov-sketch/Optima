@@ -1641,6 +1641,9 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .composer-ai-assist header small { color: var(--muted); font-size: 10px; }
 .composer-ai-assist header > button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
 .composer-ai-assist header > button:hover { background: var(--surface-muted); color: var(--text); }
+.composer-ai-button { color: var(--brand-600); }
+.composer-ai-button:hover,
+.composer-ai-button.active { background: color-mix(in srgb, var(--brand-500) 14%, transparent); color: var(--brand-700); }
 .ai-assist-suggestions { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .ai-assist-suggestions::-webkit-scrollbar { display: none; }
 .ai-assist-suggestions button { flex: 0 0 auto; min-height: 30px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); color: var(--brand-700); font-size: 10px; font-weight: 700; }

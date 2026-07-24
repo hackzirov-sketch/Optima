@@ -74,6 +74,7 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAssistPrompt, setAiAssistPrompt] = useState("");
+  const [aiAssistOpen, setAiAssistOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
   const [aiDraft, setAiDraft] = useState("");
   const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
@@ -454,13 +455,14 @@ export function ChatPage() {
   }
 
   async function runComposerAi() {
-    const prompt = aiAssistPrompt.trim() || draft.replace(/^\/ai\s*/i, "").trim();
+    const prompt = aiAssistPrompt.trim();
     if (!prompt || aiThinking) return;
     setAiThinking(true);
     try {
       const result = await api.chat.ai(`Chatga yuborish uchun tayyor matn yarat. Faqat tayyor matnning o'zini qaytar, izoh va sarlavha qo'shma. Vazifa: ${prompt}`, []);
       setDraft(result.reply);
       setAiAssistPrompt("");
+      setAiAssistOpen(false);
     } catch (error) {
       show(error instanceof Error ? error.message : "AI matnni tayyorlamadi", "error");
     } finally {
@@ -471,10 +473,6 @@ export function ChatPage() {
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !selectedRoom) return;
-    if (/^\/ai(?:\s|$)/i.test(content)) {
-      await runComposerAi();
-      return;
-    }
     if (editing) {
       try {
         const updated = await api.chat.editMessage(editing.id, content);
@@ -1093,9 +1091,10 @@ export function ChatPage() {
                   {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
                 </div>
                 {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? "Unmute" : "Mute"}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
-                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { setDraft(""); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
+                  {aiAssistOpen && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { setAiAssistOpen(false); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
                   {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
-                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
+                  <button type="button" className={`icon-button composer-ai-button ${aiAssistOpen ? "active" : ""}`} onClick={() => { setAiAssistOpen((value) => !value); setEmojiOpen(false); }} aria-label="OPTIMA AI yordamchisi" title="OPTIMA AI" aria-expanded={aiAssistOpen}><Sparkles size={20} /></button>
+                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => { setEmojiOpen((value) => !value); setAiAssistOpen(false); }} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
                   <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
                   {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label="Fayl biriktirish">{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
                   {recording ? <div className="recording-status"><i /><strong>Audio yozilmoqda</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label="Yozuvni bekor qilish"><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder="Xabar yozing" rows={1} maxLength={1500} aria-label="Xabar matni" />}
