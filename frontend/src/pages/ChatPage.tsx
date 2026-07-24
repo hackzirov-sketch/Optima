@@ -487,13 +487,15 @@ export function ChatPage() {
       return;
     }
     setDraft("");
+    const replyToId = replyingTo?.id;
+    setReplyingTo(null);
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
       roomId: selectedRoom.id,
       senderId: user!.id,
       content,
-      replyToId: replyingTo?.id || null,
+      replyToId: replyToId || null,
       clientMessageId,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -505,15 +507,15 @@ export function ChatPage() {
     try {
       if (socket.connected) {
         await new Promise<void>((resolve, reject) => {
-          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve());
+          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId }, (error: Error | null) => error ? reject(error) : resolve());
         });
       } else {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyToId);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       }
     } catch {
       try {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyToId);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
         setMessages((current) => current.filter((item) => item.clientMessageId !== clientMessageId));
@@ -521,7 +523,6 @@ export function ChatPage() {
         show(error instanceof Error ? error.message : "Xabar yuborilmadi", "error");
       }
     }
-    setReplyingTo(null);
   }
 
   function startReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
