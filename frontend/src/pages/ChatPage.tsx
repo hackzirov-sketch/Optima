@@ -2,6 +2,7 @@ import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Co
 import { FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
+import { StarfieldBackground } from "../components/StarfieldBackground";
 import { AudioMessage } from "../components/AudioMessage";
 import { MeetingRoomPage } from "./MeetingRoomPage";
 import { useToast } from "../components/Toast";
@@ -986,6 +987,7 @@ export function ChatPage() {
 
   return (
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
+      <StarfieldBackground />
       {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label={t("chat.downloadImageAria")}><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label={t("chat.closeAria")}><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
         <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />{t("chat.openConversation")}</button>
@@ -998,7 +1000,7 @@ export function ChatPage() {
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("chat.searchChatPlaceholder")} aria-label={t("chat.searchChatPlaceholder")} />{search && <button onClick={() => setSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
         <nav className="chat-catalog" aria-label={t("chat.catalogAria")}>
           <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
-          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
+          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined} title={item.label}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
         </nav>
         <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}

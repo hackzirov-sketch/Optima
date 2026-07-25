@@ -115,6 +115,7 @@
   --card: #1A2235;
   --surface-muted: #202A40;
   --surface-strong: var(--lux-midnight);
+  --gray-100: #202A40;
   --text: #F8FAFC;
   --text-soft: #CBD5E1;
   --muted: #94A3B8;
@@ -127,6 +128,8 @@
   --success: #34D399;
   --warning: #FBBF24;
   --info: #60A5FA;
+  --danger-soft: rgba(248,113,113,.16);
+  --warning-soft: rgba(251,191,36,.16);
   --card-border: 1px solid rgba(255,255,255,.07);
   --shadow-sm: 0 0 18px rgba(98,96,255,.08);
   --shadow-md: 0 0 28px rgba(98,96,255,.12);
@@ -344,11 +347,13 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .public-profile-id { width: 100%; margin-top: 22px; padding: 8px 9px 8px 16px; display: flex; align-items: center; gap: 6px; border-radius: var(--radius-pill); background: var(--surface-muted); }
 .public-profile-id span { margin-right: auto; font-variant-numeric: tabular-nums; }
 .app-body { min-width: 0; }
-.topbar { height: 56px; position: sticky; top: 0; z-index: 20; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: rgba(245,245,242,.94); backdrop-filter: blur(12px); }
+.topbar { height: 56px; position: sticky; top: 16px; z-index: 20; max-width: 1240px; margin: 0 auto; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.6); backdrop-filter: blur(20px); box-shadow: 0 8px 28px rgba(50,66,112,.1); }
+.topbar-actions .icon-button:not(.language-toggle) { width: 36px; height: 36px; flex-basis: 36px; border-radius: 50%; }
+.topbar-context .brand-mark { background: linear-gradient(135deg, rgba(147,112,219,.9), rgba(180,100,220,.85)); }
 .topbar-context strong { font-size: 13px; }
 .topbar-actions { display: flex; gap: 2px; }
 .language-switcher { position: relative; }
-.language-switcher > .icon-button { width: auto; min-width: 44px; padding: 0 8px; gap: 6px; }
+.language-switcher > .icon-button { width: auto; min-width: 44px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .language-code { font-size: 9px; font-weight: 800; line-height: 1; }
 .flag-icon { display: inline-flex; flex: 0 0 auto; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.08); line-height: 0; }
 .flag-icon svg { display: block; }
@@ -361,7 +366,7 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .mobile-only, .mobile-nav, .sidebar-scrim { display: none; }
 
 /* Desktop liquid dock */
-.desktop-dock { position: fixed; z-index: 45; left: 50%; bottom: 14px; height: 58px; padding: 6px 9px; display: flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--brand-500) 18%, transparent); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 14px 38px rgba(50,66,112,.16); backdrop-filter: blur(18px); transform: translateX(-50%); }
+.desktop-dock { position: fixed; z-index: 45; left: 50%; bottom: 16px; height: 58px; padding: 6px 9px; display: flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--brand-500) 18%, transparent); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 14px 38px rgba(50,66,112,.16); backdrop-filter: blur(18px); transform: translateX(-50%); }
 .desktop-dock a { position: relative; isolation: isolate; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--text-soft); transition: color var(--motion-normal) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), box-shadow var(--motion-normal) var(--easing-standard); }
 .desktop-dock a::before { content: attr(data-label); position: absolute; z-index: 2; left: 50%; bottom: calc(100% + 11px); padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--card); color: var(--text); box-shadow: var(--shadow-md); font-size: 11px; font-weight: 750; white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-50%, 7px) scale(.92); transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring); }
 .desktop-dock a::after { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: 50% 50% 46% 46%; background: var(--surface-muted); transform: scale(.72); opacity: 0; transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), border-radius var(--motion-normal) var(--easing-standard); }
@@ -532,7 +537,6 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .main-nav a { min-height: 44px; border-radius: var(--radius-md); }
 .main-nav a:hover { background: rgba(98,96,255,.07); color: var(--brand-600); transform: translateX(2px); }
 .main-nav a.active { background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-brand); }
-.topbar { border-color: var(--line); background: color-mix(in srgb, var(--bg) 92%, transparent); }
 .eyebrow { color: var(--brand-600); font-family: var(--font-mono); letter-spacing: .06em; }
 .status-pill { border-radius: var(--radius-pill); }
 .live-dot, .presence-badge { background: var(--lux-aurora); box-shadow: var(--glow-teal); }
@@ -641,11 +645,64 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .chat-sidebar-header, .sidebar::before { background: var(--surface); }
 }
 
-:root[data-theme="dark"] .avatar { background: color-mix(in srgb, var(--brand-500) 24%, var(--surface-muted)); color: var(--accent-ink); border-color: var(--line); }
+:root[data-theme="dark"] .avatar { background: linear-gradient(135deg, rgba(147,112,219,.55), rgba(180,100,220,.5)); color: #fff; border-color: rgba(255,255,255,.14); }
 :root[data-theme="dark"] .room-avatar-image { background: var(--surface-muted); }
 :root[data-theme="dark"] .education-donut { background: conic-gradient(var(--brand-500) var(--progress), var(--surface-muted) 0); }
 :root[data-theme="dark"] .education-chart-bars i { background: var(--surface-muted); }
-:root[data-theme="dark"] .sidebar, :root[data-theme="dark"] .chat-sidebar, :root[data-theme="dark"] .conversation-header, :root[data-theme="dark"] .composer { background: var(--surface); }
+:root[data-theme="dark"] .sidebar { background: var(--surface); }
+:root[data-theme="dark"] .chat-sidebar,
+:root[data-theme="dark"] .conversation-header,
+:root[data-theme="dark"] .composer {
+  background: rgba(255,255,255,.035) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+:root[data-theme="dark"] .search-field {
+  background: rgba(255,255,255,.045) !important;
+  border-color: rgba(255,255,255,.09) !important;
+}
+:root[data-theme="dark"] .room-item { border-radius: 12px; }
+:root[data-theme="dark"] .room-item:hover { background: rgba(255,255,255,.06) !important; }
+:root[data-theme="dark"] .chat-catalog { background: rgba(255,255,255,.03); border-radius: 999px; border: 1px solid rgba(255,255,255,.07); padding: 3px; }
+:root[data-theme="dark"] .chat-catalog button { flex-direction: row; gap: 4px; min-height: 34px; border-radius: 999px; }
+/* 5 tabs in a narrow sidebar have no room for icon + full label without
+   truncation - keep the label for screen readers, hide it visually so only
+   the icon (and unread badge) show, like a compact Telegram-style tab. */
+:root[data-theme="dark"] .chat-catalog button > span {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+:root[data-theme="dark"] .chat-catalog button > b {
+  position: static;
+  margin: 0;
+}
+:root[data-theme="dark"] .chat-catalog .catalog-indicator { border-radius: 999px !important; background: linear-gradient(135deg, rgba(147,112,219,.55), rgba(180,100,220,.5)) !important; }
+:root[data-theme="dark"] .modal {
+  background: rgba(20,16,30,.55) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  border-color: rgba(255,255,255,.1) !important;
+}
+:root[data-theme="dark"] .modal-layer { background: rgba(5,5,10,.6); }
+:root[data-theme="dark"] .modal input,
+:root[data-theme="dark"] .modal textarea,
+:root[data-theme="dark"] .modal select {
+  background: rgba(255,255,255,.04) !important;
+  border-color: rgba(255,255,255,.1) !important;
+}
+:root[data-theme="dark"] .segmented-control { background: rgba(255,255,255,.04) !important; }
+:root[data-theme="dark"] .segmented-control button.active {
+  background: linear-gradient(135deg, rgba(147,112,219,.9), rgba(180,100,220,.85)) !important;
+  color: #fff !important;
+}
+:root[data-theme="dark"] .chat-details-tabs button.active { color: #E9A8FA !important; }
+:root[data-theme="dark"] .chat-details-tabs button.active::after { background: linear-gradient(135deg, #9370DB, #B464DC) !important; }
 :root[data-theme="dark"] .room-item.active, :root[data-theme="dark"] .chat-catalog button.active { background: rgba(98,96,255,.18); color: #E0E7FF; }
 :root[data-theme="dark"] .message-list { background: var(--night); }
 :root[data-theme="dark"] .message-bubble { background: var(--card); }
@@ -1338,10 +1395,40 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 @media (prefers-reduced-motion: reduce) { .route-loader-mark i { animation: none; } }
 
 /* Full-screen chat and stable message actions */
-.app-shell-chat .topbar, .app-shell-chat .desktop-dock, .app-shell-chat .mobile-nav { display: none; }
+.app-shell-chat .topbar, .app-shell-chat .mobile-nav { display: none; }
 .app-shell-chat .app-main { min-height: 100dvh; padding: 0; }
 .app-shell-chat .route-transition { min-height: 100dvh; }
 .app-shell-chat .chat-page { width: 100%; height: 100dvh; margin: 0; }
+/* The floating dock stays visible in chat too (it's already hidden below
+   821px via its own media query, where the mobile tab bar takes over), so
+   the chat column just needs to leave clear space above it. */
+@media (min-width: 821px) {
+  .app-shell-chat .chat-page { height: calc(100dvh - 78px); }
+}
+/* Desktop dark mode: chat becomes one floating glass card inset from the
+   viewport edges, so the starfield shows all the way around it - matches
+   how the header/dock already float. Mobile keeps the edge-to-edge full
+   screen layout (no room to spare there, and the dock is hidden anyway). */
+@media (min-width: 821px) {
+  :root[data-theme="dark"] .app-shell-chat .app-main { padding: 16px !important; }
+  :root[data-theme="dark"] .app-shell-chat .chat-page {
+    height: calc(100dvh - 32px - 78px);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.06) !important;
+    background: rgba(255,255,255,.02) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  }
+  :root[data-theme="dark"] .app-shell-chat .chat-sidebar,
+  :root[data-theme="dark"] .app-shell-chat .conversation-header,
+  :root[data-theme="dark"] .app-shell-chat .composer {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
 .chat-sidebar-header { display: grid; grid-template-columns: 44px minmax(0,1fr) 48px; gap: 10px; }
 .chat-home-back { display: grid; border: 0; background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-brand); }
 .chat-home-back:hover { background: var(--gradient-primary); color: var(--white); box-shadow: var(--glow-brand); }
@@ -1979,3 +2066,127 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   }
 }
 @media(prefers-reduced-motion:reduce){.education-video-card,.education-thumbnail img,.education-thumbnail b,.education-spark{animation:none!important;transition:none!important}}
+
+/* Dark theme corrections for surfaces left hardcoded to light literals */
+:root[data-theme="dark"] .form-error,
+:root[data-theme="dark"] .inline-notice { color: #FCA5A5; border-color: rgba(248,113,113,.3); }
+:root[data-theme="dark"] .status-pill.status-scheduled { color: #FCD34D; }
+:root[data-theme="dark"] .flag-icon { box-shadow: 0 0 0 1px rgba(255,255,255,.14); }
+/* The chat surfaces (chat-page/conversation/message-list) painted an opaque
+   color here, which blocked the fixed, negative-z-index starfield entirely -
+   glass panels inside them were only blurring that solid color, not stars. */
+:root[data-theme="dark"] .chat-page,
+:root[data-theme="dark"] .conversation,
+:root[data-theme="dark"] .message-list {
+  background: transparent !important;
+  background-image: none !important;
+}
+:root[data-theme="dark"] .room-item:hover { background: var(--surface-muted); }
+:root[data-theme="dark"] .message-reactions button { border-color: rgba(255,255,255,.14); background: var(--surface-muted); }
+:root[data-theme="dark"] .meeting-lobby { background: var(--night); }
+:root[data-theme="dark"] .meeting-lobby > header,
+:root[data-theme="dark"] .device-settings,
+:root[data-theme="dark"] .device-settings select,
+:root[data-theme="dark"] .lobby-meta span,
+:root[data-theme="dark"] .lobby-meta button { background: var(--surface); color: var(--text); border-color: var(--line); }
+:root[data-theme="dark"] .education-thumbnail { background: color-mix(in srgb, var(--brand-500) 22%, var(--surface-muted)); color: #C7D2FE; }
+:root[data-theme="dark"] .teacher-avatar,
+:root[data-theme="dark"] .mentor-panel > header > span { background: color-mix(in srgb, var(--brand-500) 24%, var(--surface-muted)); color: #C7D2FE; }
+:root[data-theme="dark"] .lesson-top button.active,
+:root[data-theme="dark"] .education-subjects button.active { background: rgba(98,96,255,.2); color: #C7D2FE; }
+:root[data-theme="dark"] .lesson-top small,
+:root[data-theme="dark"] .education-card-copy small,
+:root[data-theme="dark"] .verified-label { color: #A5B4FC !important; }
+:root[data-theme="dark"] .education-picker-copy > span { color: #A5B4FC; }
+:root[data-theme="dark"] .lesson-complete,
+:root[data-theme="dark"] .mentor-input button,
+:root[data-theme="dark"] .lesson-notes button,
+:root[data-theme="dark"] .education-state button { background: var(--brand-600); color: #fff; }
+:root[data-theme="dark"] .lesson-complete:disabled { background: var(--surface-muted); color: var(--muted); }
+
+/* Dashboard night-sky starfield (dark mode only): fixed full-viewport layer,
+   negative z-index so it always paints behind normal in-flow page content
+   without needing every ancestor to opt into a matching stacking context. */
+.starfield-canvas { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+
+/* Glassmorphism: let the starfield show through dashboard surfaces in dark mode
+   (each selector kept in its own rule on purpose: grouping them in one
+   comma-separated rule made esbuild's CSS minifier merge this block with an
+   unrelated earlier .metric-card rule and drop the dark-mode scoping from
+   the first selector in production builds) */
+:root[data-theme="dark"] .dashboard-page .metric-card { background: rgba(255,255,255,.06) !important; backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important; border-color: rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
+:root[data-theme="dark"] .dashboard-page .panel { background: rgba(255,255,255,.06) !important; backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important; border-color: rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
+:root[data-theme="dark"] .education-dashboard { background: rgba(255,255,255,.06) !important; backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important; border-color: rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
+:root[data-theme="dark"] .education-donut-card { background: rgba(255,255,255,.06) !important; backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important; border-color: rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
+:root[data-theme="dark"] .education-bars-card { background: rgba(255,255,255,.06) !important; backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important; border-color: rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px rgba(0,0,0,.28) !important; }
+:root[data-theme="dark"] .dashboard-page .metric-card-accent {
+  background: rgba(248,113,113,.09) !important;
+  border-color: rgba(248,113,113,.24) !important;
+}
+:root[data-theme="dark"] .dashboard-page .education-donut > div {
+  background: rgba(17,24,39,.55);
+}
+/* Icon backgrounds must always be a low-alpha tint of the icon's own hue in
+   dark mode, never plain white/gray - a colorless translucent fill reads as
+   a glaring bright patch against the near-black canvas. */
+:root[data-theme="dark"] .dashboard-page .room-avatar {
+  background: rgba(139,92,246,.14) !important;
+  color: #C4B5FD !important;
+}
+:root[data-theme="dark"] .dashboard-page .metric-grid .metric-card:nth-child(1) .metric-icon { background: rgba(139,92,246,.14) !important; color: #C4B5FD !important; }
+:root[data-theme="dark"] .dashboard-page .metric-grid .metric-card:nth-child(2) .metric-icon { background: rgba(217,70,239,.14) !important; color: #E9A8FA !important; }
+:root[data-theme="dark"] .dashboard-page .metric-grid .metric-card:nth-child(3) .metric-icon { background: rgba(236,72,153,.14) !important; color: #F9A8D4 !important; }
+:root[data-theme="dark"] .dashboard-page .metric-grid .metric-card:nth-child(4) .metric-icon { background: rgba(248,113,113,.14) !important; color: #FCA5A5 !important; }
+:root[data-theme="dark"] .dashboard-page .dashboard-list-row { border-bottom-color: rgba(255,255,255,.1); }
+:root[data-theme="dark"] .desktop-dock {
+  background: rgba(255,255,255,.045) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-color: rgba(255,255,255,.08) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.35) !important;
+}
+:root[data-theme="dark"] .desktop-dock a { color: rgba(255,255,255,.55) !important; }
+:root[data-theme="dark"] .desktop-dock a:hover,
+:root[data-theme="dark"] .desktop-dock a:focus-visible {
+  color: rgba(255,255,255,.92) !important;
+  transform: translateY(-2px) !important;
+  filter: none !important;
+}
+:root[data-theme="dark"] .desktop-dock a:hover::after,
+:root[data-theme="dark"] .desktop-dock a:focus-visible::after {
+  background: rgba(255,255,255,.08) !important;
+  border-radius: 50% !important;
+}
+:root[data-theme="dark"] .desktop-dock a:active { transform: scale(.94) !important; }
+:root[data-theme="dark"] .desktop-dock a.active {
+  color: #fff !important;
+  background: linear-gradient(135deg, rgba(147,112,219,.9), rgba(180,100,220,.85)) !important;
+  box-shadow: 0 4px 14px rgba(147,92,246,.4) !important;
+}
+:root[data-theme="dark"] .desktop-dock a.active::after { opacity: 0 !important; }
+:root[data-theme="dark"] .desktop-dock a::before {
+  background: rgba(26,34,53,.92) !important;
+  border-color: rgba(255,255,255,.1) !important;
+  color: #fff !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Topbar: same floating glass-pill language as the dock (shape/size in the
+   base rules above apply to both themes; only the glass tint differs). */
+:root[data-theme="dark"] .topbar {
+  background: rgba(255,255,255,.04) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-color: rgba(255,255,255,.08) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.3) !important;
+}
+:root[data-theme="dark"] .topbar-actions .icon-button {
+  color: rgba(255,255,255,.6) !important;
+  transition: background .25s ease, color .25s ease, transform .15s ease !important;
+}
+:root[data-theme="dark"] .topbar-actions .icon-button:hover {
+  background: rgba(255,255,255,.08) !important;
+  color: rgba(255,255,255,.9) !important;
+  transform: translateY(-1px);
+}
+:root[data-theme="dark"] .topbar-actions .icon-button:active { transform: translateY(0) scale(.95); }

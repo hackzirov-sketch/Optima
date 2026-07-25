@@ -2,6 +2,7 @@ import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Pl
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, Skeleton } from "../components/ui";
+import { StarfieldBackground } from "../components/StarfieldBackground";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
@@ -61,6 +62,7 @@ export function DashboardPage() {
 
   return (
     <div className="page dashboard-page">
+      <StarfieldBackground />
       <PageHeader eyebrow={workspace?.name} title={t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })} description={t("dashboard.description")} action={<Link href="/meetings" className="button button-primary"><Plus size={17} /> {t("dashboard.createMeeting")}</Link>} />
       <section className="metric-grid" aria-label={t("dashboard.statsAria")}>
         <article className="metric-card"><span className="metric-icon"><UsersRound size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : members.length}</strong><small>{t("dashboard.teamMembers")}</small></div></article>

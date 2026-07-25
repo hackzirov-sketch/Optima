@@ -1,4 +1,4 @@
-import { ArrowLeft, AtSign, Copy, Hash, Link2, LoaderCircle, MessageCircle, UserRound } from "lucide-react";
+import { ArrowLeft, AtSign, Copy, Link2, LoaderCircle, MessageCircle, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Logo } from "../components/ui";
@@ -66,7 +66,6 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
         {chatError && <p className="public-profile-error">{chatError}</p>}
         <div className="public-profile-info">
           <div><AtSign size={18} /><span><strong>{profile.username ? `@${profile.username}` : t("common.notSet")}</strong><small>{t("publicProfile.usernameLabel")}</small></span></div>
-          <div><Hash size={18} /><span><strong>{profile.publicId}</strong><small>{t("publicProfile.userId")}</small></span><button onClick={() => void copy(profile.publicId || "")} aria-label={t("publicProfile.copyIdAria")}><Copy size={17} /></button></div>
           <button onClick={() => void copy(window.location.href)}><Link2 size={18} /><span><strong>{t("publicProfile.profileLink")}</strong><small>{t("publicProfile.clickToCopy")}</small></span><Copy size={17} /></button>
         </div>
       </>}

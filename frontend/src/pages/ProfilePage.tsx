@@ -1,4 +1,4 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Copy, Globe2, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -152,7 +152,7 @@ export function ProfilePage() {
           </div>
           <h2>{user?.firstName} {user?.lastName}</h2>
           <p>{user?.username ? `@${user.username}` : t("profile.usernameNotSet")}</p>
-          <div className="public-id-block"><span>ID: <strong>{user?.publicId}</strong></span><button className="icon-button" onClick={() => user?.publicId && void copyProfileValue(user.publicId, t("profile.userIdCopied"))} aria-label={t("profile.copyUserId")}><Copy size={16} /></button><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")}><Link2 size={16} /></button></div>
+          <div className="public-id-block"><span>{profilePath}</span><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")}><Link2 size={16} /></button></div>
           <span className="role-badge">{user?.occupation ? t(`common.occupations.${user.occupation}`) : t("profile.teamMember")}</span>
           <dl className="profile-meta"><div><Mail size={16} /><span><small>{t("profile.email")}</small><strong>{user?.email}</strong></span></div><div><MapPin size={16} /><span><small>{t("profile.timezone")}</small><strong>{user?.timezone || "Asia/Tashkent"}</strong></span></div><div><ShieldCheck size={16} /><span><small>{t("profile.account")}</small><strong>{t("profile.verified")}</strong></span></div></dl>
           <Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>{t("profile.logoutButton")}</Button>

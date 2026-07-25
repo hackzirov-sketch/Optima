@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Settings, Sun, UserRound, Video, X } from "lucide-react";
+import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -131,7 +131,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </div>
             <button className="icon-button topbar-notifications" aria-label={t("shell.notifications")} title={t("shell.notifications")}><Bell size={19} /></button>
-            <Link href="/profile" className="icon-button" aria-label={t("shell.settings")} title={t("shell.settings")}><Settings size={19} /></Link>
           </div>
         </header>
         <main className="app-main">{children}</main>
