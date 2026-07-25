@@ -1,11 +1,14 @@
-# UPZ / Optima — System Design Document
+# UPZ / Optima — Architecture Reference
 
 > Workspace chat + video-meeting SaaS. Ushbu hujjat backend (NestJS) va frontend (React+Vite)
-> arxitekturasini, ma'lumotlar bazasi sxemasini, Redis ishlatilishini, REST API va WebSocket
-> event'larini, autentifikatsiya modelini va fon jarayonlarini to'liq hujjatlashtiradi.
+> arxitekturasining **joriy holatini** — ma'lumotlar bazasi sxemasi, Redis ishlatilishi, REST API
+> va WebSocket event'lari, autentifikatsiya modeli va fon jarayonlari — to'liq hujjatlashtiradi.
 >
 > Manba: barcha raqamlar/nomlar bevosita kod va `backend/docker/postgres/init.sql`dan olingan.
 > Oxirgi yangilanish konteksti: `setup_production` branch.
+>
+> Spec vs joriy holat taqqoslash, gap-analysis va kelajakdagi rejalar uchun
+> [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)ga qarang.
 
 ---
 

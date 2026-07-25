@@ -1,0 +1,9 @@
+
+# Local-only overrides, auto-merged by `docker compose up` on top of
+# docker-compose.yml. Keeps .env's FRONTEND_URL/TURN_PUBLIC_HOST pointed at
+# the real production values untouched — this file only exists on dev
+# machines and should NOT be deployed to the actual server.
+services:
+  backend:
+    environment:
+      FRONTEND_URL: http://localhost:5173

@@ -66,10 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const bootstrap = useCallback(async () => {
-    if (!session.accessToken()) {
-      setReady(true);
-      return;
-    }
+    // There's no client-readable token to check first — auth lives entirely
+    // in an httpOnly cookie, so the only way to know whether a session
+    // exists is to ask the server and see if it 401s.
     try {
       const [nextUser, items] = await Promise.all([
         api.users.me(),
@@ -79,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await applyWorkspaces(items, null);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        session.clear();
         setUser(null);
         setWorkspaces([]);
         setWorkspace(null);
@@ -171,15 +169,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Cookies are already set by the time this resolves (Set-Cookie on the
     // login/verify response) — nothing to store client-side, just adopt the
     // user and resolve which workspace is active.
-    session.save(result.accessToken, result.refreshToken);
     setUser(result.user);
     setReady(true);
     await refreshWorkspaces();
   }, [refreshWorkspaces]);
 
   const completeOAuth = useCallback(async (code: string) => {
-    const result = await api.auth.exchangeOAuthCode(code);
-    session.save(result.accessToken, result.refreshToken);
+    await api.auth.exchangeOAuthCode(code);
     try {
       const [nextUser, items] = await Promise.all([api.users.me(), api.workspaces.list()]);
       setUser(nextUser);
@@ -199,7 +195,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.auth.logout();
     } finally {
-      session.clear();
       setUser(null);
       setWorkspaces([]);
       setWorkspace(null);

@@ -1,6 +1,6 @@
 # UPZ (Optima)
 
-Workspace/jamoaviy hamkorlik platformasi: chat, video-meeting, task/project boshqaruvi (Kanban), GitHub integratsiyasi va bildirishnomalarni birlashtiradi. To'liq arxitektura tavsifi uchun [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)ga qarang.
+Workspace/jamoaviy hamkorlik platformasi: chat, video-meeting, task/project boshqaruvi (Kanban), GitHub integratsiyasi va bildirishnomalarni birlashtiradi. To'liq arxitektura tavsifi uchun [ARCHITECTURE.md](ARCHITECTURE.md)ga, spec vs joriy holat taqqoslash va roadmap uchun [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)ga qarang.
 
 ## Tarkib
 
@@ -146,3 +146,16 @@ npm run typecheck        # tsc -b
 | postgres | 5432 | debug/migratsiya uchun host'dan ham ochiq |
 | redis | — | faqat ichki tarmoq |
 | coturn | 3478 (UDP/TCP), 49160-49200 (UDP) | host tarmog'ida (`network_mode: host`) |
+
+## Hujjatlar
+
+| Fayl | Maqsad |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Joriy arxitektura — DB sxema, REST API, WebSocket event'lar, auth model, background job'lar |
+| [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) | Spec vs joriy holat taqqoslash, gap-analysis, keyingi qadamlar |
+| [MERGE_NOTES.md](MERGE_NOTES.md) | `UPZ-main` va `UPZ-setup_production` branch'larining birlashtirilishi tarixi |
+
+## Credits
+
+**Co-founded by**
+- Elbek Rustamjanov

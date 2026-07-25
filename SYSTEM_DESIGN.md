@@ -1,6 +1,9 @@
 # UPZ (Universal Productivity Zone) — System Design
 
 > Ushbu hujjat maqsad-spec (target) bilan hozirgi kod holatini solishtiradi, ayniqsa **workspace-optional** dizayn qarorini to'liq asoslaydi. Kod yozishdan oldingi reja hujjati — amalga oshirish tartibi 12-bo'limda.
+>
+> Joriy arxitekturaning to'liq tavsifi (DB sxema, REST API, WebSocket event'lar) uchun
+> [ARCHITECTURE.md](ARCHITECTURE.md)ga qarang.
 
 Status belgilari: ✅ mavjud va spec'ga mos | ⚠️ mavjud, lekin farqli/qisman | ❌ umuman yo'q | 🔧 taklif (yangi qaror, hali yozilmagan)
 

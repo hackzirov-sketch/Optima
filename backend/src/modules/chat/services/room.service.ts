@@ -34,7 +34,7 @@ export interface ChatRoomDto {
   isMember: boolean;
   groupId: string | null;
   projectId: string | null;
-  createdById: string;
+  createdById: string | null;
   createdAt: Date;
   updatedAt: Date;
   memberIds: string[];

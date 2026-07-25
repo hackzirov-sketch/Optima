@@ -80,31 +80,24 @@ interface RefreshResult {
   networkError: boolean;
 }
 
-/** Tokens live in httpOnly cookies now — the browser sends/receives them
+/** Tokens live in httpOnly cookies — the browser sends/receives them
  * automatically via `credentials: "include"`, so there's no token for this
  * function to read, compare, or store; it only needs to know whether the
- * rotation succeeded. */
+ * rotation succeeded (the refresh cookie itself is read server-side by
+ * `JwtRefreshGuard`, not sent in the body). */
 async function renewSession(): Promise<RefreshResult> {
-  const refreshToken = session.refreshToken();
-  if (!refreshToken) return { ok: false, networkError: false };
   let response: Response;
   try {
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
     });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.warn("[auth] POST /auth/refresh threw:", error);
     return { ok: false, networkError: true };
   }
-  if (response.ok) {
-    const result = unwrapEnvelope<AuthResult>(await response.json());
-    session.save(result.accessToken, result.refreshToken);
-    return { ok: true, networkError: false };
-  }
+  if (response.ok) return { ok: true, networkError: false };
 
   // Losing a concurrent-refresh race (another tab's request rotated the
   // cookie a beat before ours landed) surfaces as a benign 401 here — the
@@ -128,8 +121,6 @@ export async function refreshSession(): Promise<RefreshResult> {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
-  const accessToken = session.accessToken();
-  if (!options.anonymous && accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: "include" });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
@@ -147,7 +138,6 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       // way, and re-fetching in response to each one is an infinite loop
       // that floods the server (session.ts's listener is responsible for
       // keeping this side-effect-free; see auth.tsx).
-      session.clear();
       session.notify();
     }
   }
@@ -213,10 +203,7 @@ export const api = {
         anonymous: true,
         body: JSON.stringify({ code }),
       }),
-    logout: () => apiFetch<{ message: string }>("/auth/logout", {
-      method: "POST",
-      body: JSON.stringify({ refreshToken: session.refreshToken() }),
-    }),
+    logout: () => apiFetch<{ message: string }>("/auth/logout", { method: "POST" }),
     /** The access token is an httpOnly cookie the frontend can't decode — this
      * is how it learns which workspace the current session is scoped to. */
     session: () => apiFetch<{ workspaceId: string | null }>("/auth/session"),
