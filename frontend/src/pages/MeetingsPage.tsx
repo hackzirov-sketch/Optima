@@ -5,19 +5,15 @@ import { Button, EmptyState, Modal, PageHeader, Skeleton } from "../components/u
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting } from "../types";
 
-function dateTime(value: string) {
-  return new Intl.DateTimeFormat("uz-UZ", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function statusLabel(status: Meeting["status"]) {
-  return ({ scheduled: "Rejalashtirilgan", live: "Jonli", ended: "Yakunlangan", cancelled: "Bekor qilingan" })[status];
-}
+const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
 export function MeetingsPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
+  const { t, locale } = useI18n();
   const [, navigate] = useLocation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +22,14 @@ export function MeetingsPage() {
   const [saving, setSaving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+
+  function dateTime(value: string) {
+    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  }
+
+  function statusLabel(status: Meeting["status"]) {
+    return ({ scheduled: t("meetings.statusScheduled"), live: t("meetings.statusLive"), ended: t("meetings.statusEnded"), cancelled: t("meetings.statusCancelled") })[status];
+  }
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code");
@@ -39,14 +43,14 @@ export function MeetingsPage() {
     const url = `${window.location.origin}/meetings/${meeting.id}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: meeting.title, text: `OPTIMA meeting kodi: ${meeting.code}`, url });
+        await navigator.share({ title: meeting.title, text: t("meetings.shareTextTemplate", { code: meeting.code }), url });
       } else {
         await navigator.clipboard.writeText(url);
-        show("Meeting havolasi nusxalandi");
+        show(t("meetings.linkCopied"));
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      show("Havolani ulashib bo‘lmadi", "error");
+      show(t("meetings.shareFailed"), "error");
     }
   }
 
@@ -56,7 +60,7 @@ export function MeetingsPage() {
     try {
       setMeetings(await api.meetings.list(workspace.id));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Meetinglar yuklanmadi", "error");
+      show(error instanceof Error ? error.message : t("meetings.loadFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -86,10 +90,10 @@ export function MeetingsPage() {
       });
       setCreateOpen(false);
       await load();
-      show("Meeting yaratildi");
+      show(t("meetings.meetingCreated"));
       navigate(`/meetings/${meeting.id}`);
     } catch (error) {
-      show(error instanceof Error ? error.message : "Meeting yaratilmadi", "error");
+      show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -104,20 +108,20 @@ export function MeetingsPage() {
       setJoinOpen(false);
       navigate(`/meetings/${meeting.id}`);
     } catch (error) {
-      show(error instanceof Error ? error.message : "Kod bo‘yicha meeting topilmadi", "error");
+      show(error instanceof Error ? error.message : t("meetings.codeNotFound"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function removeMeeting(meeting: Meeting) {
-    if (!window.confirm(`“${meeting.title}” meetingini o‘chirishni tasdiqlaysizmi?`)) return;
+    if (!window.confirm(t("meetings.deleteConfirm", { title: meeting.title }))) return;
     try {
       await api.meetings.remove(meeting.id);
       setMeetings((current) => current.filter((item) => item.id !== meeting.id));
-      show("Meeting o‘chirildi");
+      show(t("meetings.meetingDeleted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Meeting o‘chirilmadi", "error");
+      show(error instanceof Error ? error.message : t("meetings.deleteFailed"), "error");
     }
   }
 
@@ -126,41 +130,41 @@ export function MeetingsPage() {
 
   return (
     <div className="page meetings-page">
-      <PageHeader eyebrow={workspace?.name} title="Meetinglar" description="Rejalashtiring, kod bilan qo‘shiling va jamoa bilan video suhbat qiling." action={<div className="button-row"><Button variant="secondary" onClick={() => setJoinOpen(true)} icon={<Search size={17} />}>Kod bilan kirish</Button><Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Meeting yaratish</Button></div>} />
+      <PageHeader eyebrow={workspace?.name} title={t("meetings.pageTitle")} description={t("meetings.pageDescription")} action={<div className="button-row"><Button variant="secondary" onClick={() => setJoinOpen(true)} icon={<Search size={17} />}>{t("meetings.joinByCode")}</Button><Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button></div>} />
 
       {loading ? <div className="meeting-card-grid">{[1, 2, 3].map((item) => <Skeleton key={item} className="skeleton-card" />)}</div> : active.length === 0 ? (
-        <section className="panel meeting-empty-panel"><EmptyState icon={<Video size={28} />} title="Hozircha meeting yo‘q" description="Jamoangiz uchun birinchi video meetingni rejalashtiring." action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Meeting yaratish</Button>} /></section>
+        <section className="panel meeting-empty-panel"><EmptyState icon={<Video size={28} />} title={t("meetings.emptyTitle")} description={t("meetings.emptyDescription")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button>} /></section>
       ) : (
         <section className="meeting-card-grid">
           {active.map((meeting) => (
             <article className={`meeting-card ${meeting.status === "live" ? "meeting-live" : ""}`} key={meeting.id}>
-              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show("Meeting kodi nusxalandi"); }} aria-label="Kodni nusxalash"><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label="Meeting havolasini ulashish"><Link2 size={15} /></button>{meeting.hostId === user?.id && <button className="icon-button icon-button-sm icon-button-danger" onClick={() => void removeMeeting(meeting)} aria-label="Meetingni o‘chirish"><Trash2 size={15} /></button>}</div></header>
-              <div className="meeting-card-body"><h2>{meeting.title}</h2><p>{meeting.description || "Jamoa video suhbati"}</p></div>
-              <dl><div><dt><CalendarDays size={16} /> Vaqt</dt><dd>{dateTime(meeting.startTime)}</dd></div><div><dt><UsersRound size={16} /> Qatnashchilar</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl>
-              <footer><code>{meeting.code}</code><Button onClick={() => navigate(`/meetings/${meeting.id}`)} icon={<ArrowRight size={17} />}>{meeting.status === "live" ? "Hozir qo‘shilish" : "Meetingni ochish"}</Button></footer>
+              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show(t("meetings.codeCopied")); }} aria-label={t("meetings.copyCodeAria")}><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label={t("meetings.shareAria")}><Link2 size={15} /></button>{meeting.hostId === user?.id && <button className="icon-button icon-button-sm icon-button-danger" onClick={() => void removeMeeting(meeting)} aria-label={t("meetings.deleteAria")}><Trash2 size={15} /></button>}</div></header>
+              <div className="meeting-card-body"><h2>{meeting.title}</h2><p>{meeting.description || t("meetings.defaultDescription")}</p></div>
+              <dl><div><dt><CalendarDays size={16} /> {t("meetings.time")}</dt><dd>{dateTime(meeting.startTime)}</dd></div><div><dt><UsersRound size={16} /> {t("meetings.participants")}</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl>
+              <footer><code>{meeting.code}</code><Button onClick={() => navigate(`/meetings/${meeting.id}`)} icon={<ArrowRight size={17} />}>{meeting.status === "live" ? t("meetings.joinNow") : t("meetings.openMeeting")}</Button></footer>
             </article>
           ))}
         </section>
       )}
 
-      {history.length > 0 && <section className="meeting-history-wrap"><button className="history-toggle" onClick={() => setHistoryOpen((value) => !value)} aria-expanded={historyOpen}><span><strong>Meeting tarixi</strong><small>{history.length} ta yakunlangan meeting</small></span>{historyOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>{historyOpen && <div className="panel meeting-history"><div className="history-table">{history.map((meeting) => <button key={meeting.id} onClick={() => navigate(`/meetings/${meeting.id}`)}><span className={`meeting-status status-${meeting.status}`} /><span><strong>{meeting.title}</strong><small>{dateTime(meeting.startTime)}</small></span><span>{meeting.participantCount} qatnashchi</span><ArrowRight size={16} /></button>)}</div></div>}</section>}
+      {history.length > 0 && <section className="meeting-history-wrap"><button className="history-toggle" onClick={() => setHistoryOpen((value) => !value)} aria-expanded={historyOpen}><span><strong>{t("meetings.historyTitle")}</strong><small>{t("meetings.historyCount", { count: history.length })}</small></span>{historyOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>{historyOpen && <div className="panel meeting-history"><div className="history-table">{history.map((meeting) => <button key={meeting.id} onClick={() => navigate(`/meetings/${meeting.id}`)}><span className={`meeting-status status-${meeting.status}`} /><span><strong>{meeting.title}</strong><small>{dateTime(meeting.startTime)}</small></span><span>{t("meetings.participantCount", { count: meeting.participantCount })}</span><ArrowRight size={16} /></button>)}</div></div>}</section>}
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Yangi meeting" description="Vaqt va kirish darajasini belgilang." width="md">
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("meetings.newMeetingTitle")} description={t("meetings.newMeetingDesc")} width="md">
         <form className="modal-form" onSubmit={create}>
-          <label>Meeting nomi<input name="title" placeholder="Haftalik product sync" maxLength={200} autoFocus required /></label>
-          <label>Qisqa izoh<textarea name="description" placeholder="Nimalarni muhokama qilamiz?" rows={3} /></label>
-          <label>Boshlanish vaqti<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
-          <p className="field-hint"><Clock3 size={15} /> Meeting muddati cheklanmagan. Host yakunlaguncha davom etadi.</p>
-          <label>Maksimal qatnashchi<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Bekor qilish</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>Yaratish</Button></div>
+          <label>{t("meetings.meetingNameLabel")}<input name="title" placeholder={t("meetings.meetingNamePlaceholder")} maxLength={200} autoFocus required /></label>
+          <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={3} /></label>
+          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
+          <p className="field-hint"><Clock3 size={15} /> {t("meetings.durationHint")}</p>
+          <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t("meetings.cancel")}</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>{t("meetings.create")}</Button></div>
         </form>
       </Modal>
 
-      <Modal open={joinOpen} onClose={() => setJoinOpen(false)} title="Meetingga qo‘shilish" description="Host yuborgan meeting kodini kiriting.">
+      <Modal open={joinOpen} onClose={() => setJoinOpen(false)} title={t("meetings.joinModalTitle")} description={t("meetings.joinModalDesc")}>
         <form className="modal-form join-code-form" onSubmit={joinByCode}>
-          <label>Meeting kodi<input className="code-input code-input-small" name="code" value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} placeholder="OPTIMA-ABC-1234" autoComplete="off" autoFocus required /></label>
-          <p className="field-hint"><Clock3 size={15} /> Kod katta-kichik harflarga bog‘liq emas.</p>
-          <Button type="submit" loading={saving} icon={<ArrowRight size={17} />}>Meetingni ochish</Button>
+          <label>{t("meetings.meetingCodeLabel")}<input className="code-input code-input-small" name="code" value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} placeholder="OPTIMA-ABC-1234" autoComplete="off" autoFocus required /></label>
+          <p className="field-hint"><Clock3 size={15} /> {t("meetings.codeCaseHint")}</p>
+          <Button type="submit" loading={saving} icon={<ArrowRight size={17} />}>{t("meetings.openMeeting")}</Button>
         </form>
       </Modal>
     </div>

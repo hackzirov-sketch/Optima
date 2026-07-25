@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 *.tar.gz
+*.log
 .env
 .env.*
 !.env.example

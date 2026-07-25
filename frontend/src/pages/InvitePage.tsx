@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Button, Logo } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n/i18n";
 
 interface InvitePageProps {
   kind: "chat" | "workspace";
@@ -12,6 +13,7 @@ interface InvitePageProps {
 
 export function InvitePage({ kind, token }: InvitePageProps) {
   const { refreshWorkspaces, selectWorkspace } = useAuth();
+  const { t } = useI18n();
   const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +37,7 @@ export function InvitePage({ kind, token }: InvitePageProps) {
       if (target) selectWorkspace(target);
       navigate("/");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Taklifni qabul qilib bo‘lmadi");
+      setError(caught instanceof Error ? caught.message : t("invite.acceptFailed"));
     } finally {
       setLoading(false);
     }
@@ -47,12 +49,12 @@ export function InvitePage({ kind, token }: InvitePageProps) {
       <header><Logo /></header>
       <section className="invite-panel">
         <span className="invite-panel-icon">{chat ? <Link2 size={26} /> : <MailCheck size={26} />}</span>
-        <p className="eyebrow">OPTIMA TAKLIFI</p>
-        <h1>{chat ? "Guruhga qo‘shiling" : "Workspace’ga qo‘shiling"}</h1>
-        <p>{chat ? "Bu havola sizni guruh suhbatiga olib kiradi. Avval shu workspace a’zosi bo‘lishingiz kerak." : "Taklif email manzilingizga bog‘langan. Qabul qilingach jamoa darhol ochiladi."}</p>
+        <p className="eyebrow">{t("invite.eyebrow")}</p>
+        <h1>{chat ? t("invite.chatTitle") : t("invite.workspaceTitle")}</h1>
+        <p>{chat ? t("invite.chatDescription") : t("invite.workspaceDescription")}</p>
         {error && <div className="form-error" role="alert">{error}</div>}
-        <Button onClick={() => void accept()} loading={loading} icon={loading ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}>Taklifni qabul qilish</Button>
-        <button className="invite-skip" onClick={() => navigate("/")}>Hozir emas <ArrowRight size={15} /></button>
+        <Button onClick={() => void accept()} loading={loading} icon={loading ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}>{t("invite.acceptButton")}</Button>
+        <button className="invite-skip" onClick={() => navigate("/")}>{t("invite.skip")} <ArrowRight size={15} /></button>
       </section>
     </main>
   );

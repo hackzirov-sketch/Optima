@@ -4,12 +4,14 @@ import { useLocation } from "wouter";
 import { Avatar, Logo } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n/i18n";
 import type { User } from "../types";
 
 type PublicProfile = Pick<User, "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">;
 
 export function PublicProfilePage({ identifier }: { identifier: string }) {
   const { user, workspace } = useAuth();
+  const { t } = useI18n();
   const [, navigate] = useLocation();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [failed, setFailed] = useState(false);
@@ -36,7 +38,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
       const room = await api.chat.createRoom(workspace.id, { type: "direct", targetPublicId: profile.publicId });
       window.location.assign(`/chat?room=${encodeURIComponent(room.id)}`);
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : "Shaxsiy suhbat ochilmadi");
+      setChatError(error instanceof Error ? error.message : t("publicProfile.chatOpenFailed"));
     } finally {
       setOpeningChat(false);
     }
@@ -44,28 +46,28 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
 
   return <main className="public-profile-page">
     <header>
-      <button className="public-profile-back" onClick={() => window.history.length > 1 ? window.history.back() : navigate("/chat")} aria-label="Ortga qaytish"><ArrowLeft size={20} /></button>
+      <button className="public-profile-back" onClick={() => window.history.length > 1 ? window.history.back() : navigate("/chat")} aria-label={t("publicProfile.backAria")}><ArrowLeft size={20} /></button>
       <Logo />
     </header>
     <section className="public-profile-card">
       {!profile && !failed && <LoaderCircle className="spin" size={24} />}
-      {failed && <><UserRound size={32} /><h1>Profil topilmadi</h1><p>Havolani tekshirib qayta urinib ko‘ring.</p></>}
+      {failed && <><UserRound size={32} /><h1>{t("publicProfile.notFoundTitle")}</h1><p>{t("publicProfile.notFoundDesc")}</p></>}
       {profile && <>
         <div className="public-profile-hero">
           <Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />
           <span className="public-profile-presence" />
           <h1>{profile.firstName} {profile.lastName}</h1>
-          <p>{profile.username ? `@${profile.username}` : "Username o‘rnatilmagan"}</p>
+          <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
         </div>
         {user && <button className="public-profile-message" onClick={() => void openChat()} disabled={!workspace || openingChat}>
           {openingChat ? <LoaderCircle className="spin" size={19} /> : <MessageCircle size={19} />}
-          <span><strong>Suhbat</strong><small>{String(profile.publicId) === String(user.publicId) ? "Chatlarga qaytish" : "Shaxsiy suhbatni ochish"}</small></span>
+          <span><strong>{t("publicProfile.chatTitle")}</strong><small>{String(profile.publicId) === String(user.publicId) ? t("publicProfile.backToChats") : t("publicProfile.openPersonalChat")}</small></span>
         </button>}
         {chatError && <p className="public-profile-error">{chatError}</p>}
         <div className="public-profile-info">
-          <div><AtSign size={18} /><span><strong>{profile.username ? `@${profile.username}` : "O‘rnatilmagan"}</strong><small>Username</small></span></div>
-          <div><Hash size={18} /><span><strong>{profile.publicId}</strong><small>Foydalanuvchi ID</small></span><button onClick={() => void copy(profile.publicId || "")} aria-label="ID ni nusxalash"><Copy size={17} /></button></div>
-          <button onClick={() => void copy(window.location.href)}><Link2 size={18} /><span><strong>Profil havolasi</strong><small>Nusxalash uchun bosing</small></span><Copy size={17} /></button>
+          <div><AtSign size={18} /><span><strong>{profile.username ? `@${profile.username}` : t("common.notSet")}</strong><small>{t("publicProfile.usernameLabel")}</small></span></div>
+          <div><Hash size={18} /><span><strong>{profile.publicId}</strong><small>{t("publicProfile.userId")}</small></span><button onClick={() => void copy(profile.publicId || "")} aria-label={t("publicProfile.copyIdAria")}><Copy size={17} /></button></div>
+          <button onClick={() => void copy(window.location.href)}><Link2 size={18} /><span><strong>{t("publicProfile.profileLink")}</strong><small>{t("publicProfile.clickToCopy")}</small></span><Copy size={17} /></button>
         </div>
       </>}
     </section>

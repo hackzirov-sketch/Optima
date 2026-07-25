@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { CheckCircle2, CircleAlert, X } from "lucide-react";
+import { useI18n } from "../lib/i18n/i18n";
 
 type ToastKind = "success" | "error";
 interface ToastItem { id: number; message: string; kind: ToastKind }
@@ -7,6 +8,7 @@ interface ToastItem { id: number; message: string; kind: ToastKind }
 const ToastContext = createContext<{ show: (message: string, kind?: ToastKind) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<ToastItem[]>([]);
   const show = useCallback((message: string, kind: ToastKind = "success") => {
     const id = Date.now() + Math.random();
@@ -22,7 +24,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div className={`toast toast-${item.kind}`} key={item.id}>
             {item.kind === "success" ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
             <span>{item.message}</span>
-            <button className="icon-button icon-button-sm" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} aria-label="Xabarni yopish">
+            <button className="icon-button icon-button-sm" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} aria-label={t("toast.close")}>
               <X size={15} />
             </button>
           </div>

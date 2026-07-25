@@ -2,24 +2,26 @@ import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Github, LoaderCircle, LockKe
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, oauthStartUrl, type OAuthProvider } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n/i18n";
 import { Button, Logo } from "../components/ui";
 import { useToast } from "../components/Toast";
 
 type Mode = "login" | "register" | "verify" | "forgot" | "resetCode" | "newPassword" | "oauth";
 
 function SocialAuthButtons({ disabled }: { disabled: boolean }) {
+  const { t } = useI18n();
   const start = (provider: OAuthProvider) => {
     window.location.assign(oauthStartUrl(provider));
   };
   return (
-    <div className="social-auth" aria-label="Ijtimoiy tarmoq orqali kirish">
+    <div className="social-auth" aria-label={t("auth.socialAria")}>
       <button type="button" onClick={() => start("google")} disabled={disabled}>
         <span className="google-mark" aria-hidden="true">G</span>
-        Google orqali davom etish
+        {t("auth.googleContinue")}
       </button>
       <button type="button" onClick={() => start("github")} disabled={disabled}>
         <Github size={18} aria-hidden="true" />
-        GitHub orqali davom etish
+        {t("auth.githubContinue")}
       </button>
     </div>
   );
@@ -40,6 +42,7 @@ function detailValue(error: ApiError, key: string): string | undefined {
 }
 
 export function AuthPage() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -62,7 +65,7 @@ export function AuthPage() {
     window.history.replaceState({}, "", "/");
     if (!/^[0-9a-f-]{36}$/i.test(code)) {
       setMode("login");
-      setError("Ijtimoiy tarmoq orqali kirish yakunlanmadi. Qayta urinib ko‘ring.");
+      setError(t("auth.oauthCallbackFailed"));
       return;
     }
     setMode("oauth");
@@ -70,20 +73,20 @@ export function AuthPage() {
     void completeOAuth(code)
       .catch(() => {
         setMode("login");
-        setError("Google yoki GitHub orqali kirishda xatolik yuz berdi. Qayta urinib ko‘ring.");
+        setError(t("auth.oauthError"));
       })
       .finally(() => setLoading(false));
-  }, [completeOAuth]);
+  }, [completeOAuth, t]);
 
   const title = useMemo(() => ({
-    login: "Xush kelibsiz",
-    register: "Yangi hisob yarating",
-    verify: "Emailni tasdiqlang",
-    forgot: "Parolni tiklash",
-    resetCode: "Kodni kiriting",
-    newPassword: "Yangi parol",
-    oauth: "Hisob tekshirilmoqda",
-  })[mode], [mode]);
+    login: t("auth.titleLogin"),
+    register: t("auth.titleRegister"),
+    verify: t("auth.titleVerify"),
+    forgot: t("auth.titleForgot"),
+    resetCode: t("auth.titleResetCode"),
+    newPassword: t("auth.titleNewPassword"),
+    oauth: t("auth.titleOauth"),
+  })[mode], [mode, t]);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -112,7 +115,7 @@ export function AuthPage() {
           setMode("verify");
           setError("");
         } else setError(caught.message);
-      } else setError("Server bilan aloqa bo‘lmadi");
+      } else setError(t("auth.serverUnreachable"));
     } finally {
       setLoading(false);
     }
@@ -126,7 +129,7 @@ export function AuthPage() {
     const email = String(data.get("email") || "").trim();
     const password = String(data.get("password") || "");
     if (password !== String(data.get("confirmation") || "")) {
-      setError("Parollar bir xil emas");
+      setError(t("auth.passwordsMismatch"));
       setLoading(false);
       return;
     }
@@ -143,9 +146,9 @@ export function AuthPage() {
       setVerificationEmail(email);
       setDevVerificationCode(result.devVerificationCode || "");
       setMode("verify");
-      show("Tasdiqlash kodi yuborildi");
+      show(t("auth.verificationSent"));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Ro‘yxatdan o‘tib bo‘lmadi");
+      setError(caught instanceof Error ? caught.message : t("auth.registerFailed"));
     } finally {
       setLoading(false);
     }
@@ -158,9 +161,9 @@ export function AuthPage() {
     const data = new FormData(event.currentTarget);
     try {
       await completeAuth(await api.auth.verify(verifyToken, String(data.get("code") || "").replace(/\D/g, "")));
-      show("Email tasdiqlandi");
+      show(t("auth.emailVerified"));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Kod noto‘g‘ri");
+      setError(caught instanceof Error ? caught.message : t("auth.codeInvalid"));
     } finally {
       setLoading(false);
     }
@@ -180,7 +183,7 @@ export function AuthPage() {
         setMode("resetCode");
       } else setMode("login");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "So‘rov yuborilmadi");
+      setError(caught instanceof Error ? caught.message : t("auth.requestFailed"));
     } finally {
       setLoading(false);
     }
@@ -196,7 +199,7 @@ export function AuthPage() {
       setConfirmedToken(result.confirmedToken);
       setMode("newPassword");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Kod noto‘g‘ri");
+      setError(caught instanceof Error ? caught.message : t("auth.codeInvalid"));
     } finally {
       setLoading(false);
     }
@@ -210,7 +213,7 @@ export function AuthPage() {
     const password = String(data.get("password") || "");
     const confirmation = String(data.get("confirmation") || "");
     if (password !== confirmation) {
-      setError("Parollar bir xil emas");
+      setError(t("auth.passwordsMismatch"));
       setLoading(false);
       return;
     }
@@ -219,7 +222,7 @@ export function AuthPage() {
       show(result.message);
       setMode("login");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Parol yangilanmadi");
+      setError(caught instanceof Error ? caught.message : t("auth.passwordNotUpdated"));
     } finally {
       setLoading(false);
     }
@@ -233,9 +236,9 @@ export function AuthPage() {
       const result = await api.auth.resendVerification(verificationEmail);
       setVerifyToken(result.verifyToken);
       setDevVerificationCode(result.devVerificationCode || "");
-      show("Yangi tasdiqlash kodi yuborildi");
+      show(t("auth.newCodeSent"));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Kod qayta yuborilmadi");
+      setError(caught instanceof Error ? caught.message : t("auth.codeResendFailed"));
     } finally {
       setLoading(false);
     }
@@ -243,33 +246,33 @@ export function AuthPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-story" aria-label="Optima haqida">
+      <section className="auth-story" aria-label="Optima">
         <Logo />
         <div className="auth-story-copy">
-          <p className="eyebrow">Birgalikda oson ishlang</p>
-          <h1>Suhbat va uchrashuvlar,<br />barchasi bir joyda.</h1>
-          <p>Jamoangiz bilan yozing, video uchrashuvlar o‘tkazing va ishlarni tartibli boshqaring.</p>
+          <p className="eyebrow">{t("auth.storyEyebrow")}</p>
+          <h1>{t("auth.storyTitleLine1")}<br />{t("auth.storyTitleLine2")}</h1>
+          <p>{t("auth.storyDescription")}</p>
         </div>
         <div className="auth-proof">
-          <span><UsersRound size={18} /> Guruh va shaxsiy chat</span>
-          <span><Video size={18} /> Jonli video uchrashuv</span>
-          <span><ShieldCheck size={18} /> Xavfsiz kirish</span>
+          <span><UsersRound size={18} /> {t("auth.proofGroupChat")}</span>
+          <span><Video size={18} /> {t("auth.proofVideo")}</span>
+          <span><ShieldCheck size={18} /> {t("auth.proofSecurity")}</span>
         </div>
       </section>
       <section className="auth-panel">
         <div className="auth-card">
-          {mode !== "login" && <button className="back-button" onClick={() => switchMode("login")}><ArrowLeft size={17} /> Kirishga qaytish</button>}
+          {mode !== "login" && <button className="back-button" onClick={() => switchMode("login")}><ArrowLeft size={17} /> {t("auth.backToLogin")}</button>}
           <header className="auth-heading">
             <span className="auth-kicker">OPTIMA</span>
             <h2>{title}</h2>
             <p>
-              {mode === "login" && "Hisobingizga kirish uchun ma’lumotlaringizni kiriting."}
-              {mode === "register" && "Bir necha qadamda Optima hisobingizni yarating."}
-              {mode === "verify" && <>{verificationEmail} manziliga yuborilgan 6 xonali kodni kiriting.</>}
-              {mode === "forgot" && "Emailni kiriting. Tiklash kodi shu manzilga yuboriladi."}
-              {mode === "resetCode" && "Emailga yuborilgan 6 xonali kodni kiriting."}
-              {mode === "newPassword" && "Hisobingiz uchun kuchli yangi parol belgilang."}
-              {mode === "oauth" && "Xavfsiz kirish yakunlanmoqda. Bu oynani yopmang."}
+              {mode === "login" && t("auth.subtitleLogin")}
+              {mode === "register" && t("auth.subtitleRegister")}
+              {mode === "verify" && t("auth.subtitleVerify", { email: verificationEmail })}
+              {mode === "forgot" && t("auth.subtitleForgot")}
+              {mode === "resetCode" && t("auth.subtitleResetCode")}
+              {mode === "newPassword" && t("auth.subtitleNewPassword")}
+              {mode === "oauth" && t("auth.subtitleOauth")}
             </p>
           </header>
 
@@ -278,65 +281,72 @@ export function AuthPage() {
           {mode === "login" && (
             <form className="auth-form" onSubmit={submitLogin}>
               <SocialAuthButtons disabled={loading} />
-              <div className="auth-divider"><span>yoki</span></div>
-              <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
-              <label>Parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Parolingiz" required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
-              <button type="button" className="text-button auth-forgot" onClick={() => switchMode("forgot")}>Parol esdan chiqdimi?</button>
-              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Kirish</Button>
-              <p className="auth-switch">Hisobingiz yo‘qmi? <button type="button" onClick={() => switchMode("register")}>Ro‘yxatdan o‘ting</button></p>
+              <div className="auth-divider"><span>{t("auth.or")}</span></div>
+              <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
+              <label>{t("auth.passwordLabel")}<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder={t("auth.passwordPlaceholder")} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+              <button type="button" className="text-button auth-forgot" onClick={() => switchMode("forgot")}>{t("auth.forgotPassword")}</button>
+              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>{t("auth.loginButton")}</Button>
+              <p className="auth-switch">{t("auth.noAccount")} <button type="button" onClick={() => switchMode("register")}>{t("auth.registerLink")}</button></p>
             </form>
           )}
 
           {mode === "register" && (
             <form className="auth-form" onSubmit={submitRegister}>
               <SocialAuthButtons disabled={loading} />
-              <div className="auth-divider"><span>yoki</span></div>
-              <div className="form-grid-2"><label>Ism<input name="firstName" autoComplete="given-name" required maxLength={50} /></label><label>Familiya<input name="lastName" autoComplete="family-name" required maxLength={50} /></label></div>
-              <label>Username <small>Ixtiyoriy</small><input name="username" autoComplete="username" placeholder="ahmad_dev" pattern="[A-Za-z0-9_-]{3,50}" /></label>
-              <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
-              <label>Kasbingiz<select name="occupation" defaultValue="developer"><option value="developer">Dasturchi</option><option value="designer">Dizayner</option><option value="project_manager">Project manager</option><option value="freelancer">Freelancer</option><option value="student">Talaba</option><option value="other">Boshqa</option></select></label>
-              <label>Parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} placeholder="Kamida 8 belgi" required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Parolni ko‘rsatish"><Eye size={18} /></button></span><small>1 katta harf, 1 kichik harf, raqam va maxsus belgi.</small></label>
-              <label>Parolni takrorlang<input name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /></label>
-              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Hisob yaratish</Button>
+              <div className="auth-divider"><span>{t("auth.or")}</span></div>
+              <div className="form-grid-2"><label>{t("auth.firstNameLabel")}<input name="firstName" autoComplete="given-name" required maxLength={50} /></label><label>{t("auth.lastNameLabel")}<input name="lastName" autoComplete="family-name" required maxLength={50} /></label></div>
+              <label>{t("auth.usernameLabel")} <small>{t("common.optional")}</small><input name="username" autoComplete="username" placeholder={t("auth.usernamePlaceholder")} pattern="[A-Za-z0-9_-]{3,50}" /></label>
+              <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
+              <label>{t("auth.occupationLabel")}<select name="occupation" defaultValue="developer">
+                <option value="developer">{t("common.occupations.developer")}</option>
+                <option value="designer">{t("common.occupations.designer")}</option>
+                <option value="project_manager">{t("common.occupations.project_manager")}</option>
+                <option value="freelancer">{t("common.occupations.freelancer")}</option>
+                <option value="student">{t("common.occupations.student")}</option>
+                <option value="other">{t("common.occupations.other")}</option>
+              </select></label>
+              <label>{t("auth.passwordLabel")}<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} placeholder={t("auth.passwordMinPlaceholder")} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={t("auth.showPassword")}><Eye size={18} /></button></span><small>{t("auth.passwordHint")}</small></label>
+              <label>{t("auth.repeatPassword")}<input name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /></label>
+              <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>{t("auth.createAccount")}</Button>
             </form>
           )}
 
           {mode === "oauth" && (
             <div className="oauth-loading" role="status" aria-live="polite">
               <LoaderCircle className="spin" size={24} />
-              <span>Session yaratilmoqda…</span>
+              <span>{t("auth.sessionCreating")}</span>
             </div>
           )}
 
           {mode === "verify" && (
             <form className="auth-form verify-form" onSubmit={submitVerify}>
-              <label>Tasdiqlash kodi<input key={devVerificationCode} className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" defaultValue={devVerificationCode} autoFocus required /></label>
-              <Button type="submit" loading={loading} icon={<Check size={17} />}>Tasdiqlash va davom etish</Button>
-              <button type="button" className="text-button resend-button" onClick={() => void resendVerification()} disabled={loading}>Kodni qayta yuborish</button>
-              <p className="security-note"><LockKeyhole size={16} /> Kod 10 daqiqa amal qiladi.</p>
+              <label>{t("auth.verificationCodeLabel")}<input key={devVerificationCode} className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" defaultValue={devVerificationCode} autoFocus required /></label>
+              <Button type="submit" loading={loading} icon={<Check size={17} />}>{t("auth.verifyContinue")}</Button>
+              <button type="button" className="text-button resend-button" onClick={() => void resendVerification()} disabled={loading}>{t("auth.resendCode")}</button>
+              <p className="security-note"><LockKeyhole size={16} /> {t("auth.codeValidMinutes", { minutes: 10 })}</p>
             </form>
           )}
 
           {mode === "forgot" && (
             <form className="auth-form" onSubmit={submitForgot}>
-              <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
-              <Button type="submit" loading={loading} icon={<Mail size={17} />}>Tiklash kodini yuborish</Button>
+              <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
+              <Button type="submit" loading={loading} icon={<Mail size={17} />}>{t("auth.sendResetCode")}</Button>
             </form>
           )}
 
           {mode === "resetCode" && (
             <form className="auth-form verify-form" onSubmit={submitResetCode}>
-              <label>Tiklash kodi<input key={devResetCode} className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" defaultValue={devResetCode} autoFocus required /></label>
-              <Button type="submit" loading={loading} icon={<Check size={17} />}>Kodni tasdiqlash</Button>
-              <p className="security-note"><LockKeyhole size={16} /> Kod 15 daqiqa amal qiladi.</p>
+              <label>{t("auth.resetCodeLabel")}<input key={devResetCode} className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" defaultValue={devResetCode} autoFocus required /></label>
+              <Button type="submit" loading={loading} icon={<Check size={17} />}>{t("auth.confirmCode")}</Button>
+              <p className="security-note"><LockKeyhole size={16} /> {t("auth.codeValidMinutes", { minutes: 15 })}</p>
             </form>
           )}
 
           {mode === "newPassword" && (
             <form className="auth-form" onSubmit={submitNewPassword}>
-              <label>Yangi parol<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span><small>1 katta harf, 1 kichik harf, raqam va maxsus belgi.</small></label>
-              <label>Parolni takrorlang<input name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /></label>
-              <Button type="submit" loading={loading} icon={<Check size={17} />}>Parolni yangilash</Button>
+              <label>{t("auth.newPasswordLabel")}<span className="password-input"><input name="password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span><small>{t("auth.passwordHint")}</small></label>
+              <label>{t("auth.repeatPassword")}<input name="confirmation" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={32} required /></label>
+              <Button type="submit" loading={loading} icon={<Check size={17} />}>{t("auth.updatePassword")}</Button>
             </form>
           )}
         </div>

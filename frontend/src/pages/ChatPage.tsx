@@ -8,28 +8,20 @@ import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
+import { useI18n, type TranslateFn } from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
 
-function memberUser(member: WorkspaceMember): User {
+const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+
+function memberUser(member: WorkspaceMember, t: TranslateFn): User {
   return (member.user || {
     id: member.userId,
-    firstName: member.firstName || "User",
+    firstName: member.firstName || t("chat.userFallback"),
     lastName: member.lastName || "",
     username: member.username || "user",
     email: member.email || "",
     avatarUrl: member.avatarUrl,
   }) as User;
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function formatDay(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  if (date.toDateString() === today.toDateString()) return "Bugun";
-  return new Intl.DateTimeFormat("uz-UZ", { day: "numeric", month: "long" }).format(date);
 }
 
 const quickEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👏", "✅", "🙏"];
@@ -55,6 +47,7 @@ function loadAiConversation(userId?: string): AiConversationMessage[] {
 export function ChatPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
+  const { t, locale } = useI18n();
   const [, navigate] = useLocation();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -74,7 +67,6 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAssistPrompt, setAiAssistPrompt] = useState("");
-  const [aiAssistOpen, setAiAssistOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
   const [aiDraft, setAiDraft] = useState("");
   const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
@@ -141,12 +133,25 @@ export function ChatPage() {
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || null;
   const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
+
+  function formatTime(value: string) {
+    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  }
+
+  function formatDay(value: string) {
+    const date = new Date(value);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) return t("chat.today");
+    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { day: "numeric", month: "long" }).format(date);
+  }
+
   const memberMap = useMemo(() => {
     const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>();
-    members.forEach((member) => result.set(member.userId, memberUser(member)));
+    members.forEach((member) => result.set(member.userId, memberUser(member, t)));
     rooms.flatMap((room) => room.memberProfiles || []).forEach((profile) => result.set(profile.id, profile));
     globalUsers.forEach((profile) => result.set(profile.id, profile));
     return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, rooms, globalUsers]);
   const detailPeer = selectedRoom?.type === "direct"
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
@@ -165,9 +170,9 @@ export function ChatPage() {
     if (room.name) return room.name;
     if (room.type === "direct") {
       const other = room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
-      return other ? `${other.firstName} ${other.lastName}`.trim() : "Shaxsiy suhbat";
+      return other ? `${other.firstName} ${other.lastName}`.trim() : t("chat.personalChatLabel");
     }
-    return "Nomsiz guruh";
+    return t("chat.unnamedGroup");
   }
 
   function chooseRoom(id: string) {
@@ -203,7 +208,7 @@ export function ChatPage() {
       setAiMessages(completed);
       if (user?.id) localStorage.setItem(`optima-ai-conversation:${user.id}`, JSON.stringify(completed));
     } catch (error) {
-      show(error instanceof Error ? error.message : "AI javob bermadi", "error");
+      show(error instanceof Error ? error.message : t("chat.aiNotResponding"), "error");
     } finally {
       setAiThinking(false);
     }
@@ -216,7 +221,7 @@ export function ChatPage() {
 
   async function deleteSelectedRoom() {
     if (!selectedRoom || selectedRoom.isSystem || selectedRoom.type === "direct") return;
-    if (!window.confirm(`“${roomTitle(selectedRoom)}” guruhini barcha xabarlari bilan o‘chirasizmi?`)) return;
+    if (!window.confirm(t("chat.deleteGroupConfirm", { title: roomTitle(selectedRoom) }))) return;
     try {
       await api.chat.deleteRoom(selectedRoom.id);
       const remaining = rooms.filter((room) => room.id !== selectedRoom.id);
@@ -224,23 +229,23 @@ export function ChatPage() {
       setHeaderMenuOpen(false);
       if (remaining[0]) chooseRoom(remaining[0].id);
       else { setSelectedId(null); navigate("/chat"); }
-      show("Guruh o‘chirildi");
+      show(t("chat.groupDeleted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Guruh o‘chirilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.groupDeleteFailed"), "error");
     }
   }
 
   async function deleteRoomFromContext(room: ChatRoom) {
-    if (!window.confirm(`“${roomTitle(room)}” guruhini barcha xabarlari bilan o‘chirasizmi?`)) return;
+    if (!window.confirm(t("chat.deleteGroupConfirm", { title: roomTitle(room) }))) return;
     try {
       await api.chat.deleteRoom(room.id);
       const remaining = rooms.filter((item) => item.id !== room.id);
       setRooms(remaining);
       setRoomContext(null);
       if (selectedId === room.id) remaining[0] ? chooseRoom(remaining[0].id) : setSelectedId(null);
-      show("Guruh o‘chirildi");
+      show(t("chat.groupDeleted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Guruh o‘chirilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.groupDeleteFailed"), "error");
     }
   }
 
@@ -266,7 +271,7 @@ export function ChatPage() {
     setLoadingRooms(true);
     void loadRooms().catch((error) => {
       setLoadingRooms(false);
-      show(error instanceof Error ? error.message : "Chatlar yuklanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.loadRoomsFailed"), "error");
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace?.id]);
@@ -287,7 +292,7 @@ export function ChatPage() {
         setMessages([...result.data].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt))));
         setHasOlderMessages((result.total || 0) > result.data.length);
       })
-      .catch((error) => show(error instanceof Error ? error.message : "Xabarlar yuklanmadi", "error"))
+      .catch((error) => show(error instanceof Error ? error.message : t("chat.loadMessagesFailed"), "error"))
       .finally(() => setLoadingMessages(false));
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
@@ -310,7 +315,7 @@ export function ChatPage() {
         if (list) list.scrollTop += list.scrollHeight - previousHeight;
       });
     } catch (error) {
-      show(error instanceof Error ? error.message : "Eski xabarlar yuklanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.loadOlderFailed"), "error");
     } finally {
       setLoadingOlderMessages(false);
     }
@@ -416,7 +421,7 @@ export function ChatPage() {
     const request = detailsTab === "members"
       ? api.chat.roomMembers(selectedId, detailMemberSearch.trim()).then((result) => { setDetailMembers(result.items); setDetailMemberTotal(result.total); setSharedItems([]); })
       : api.chat.shared(selectedId, detailsTab).then((items) => { setSharedItems(items); setDetailMembers([]); });
-    void request.catch((error) => show(error instanceof Error ? error.message : "Ma'lumot yuklanmadi", "error")).finally(() => setDetailsLoading(false));
+    void request.catch((error) => show(error instanceof Error ? error.message : t("chat.loadDetailsFailed"), "error")).finally(() => setDetailsLoading(false));
   }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
 
   useEffect(() => {
@@ -439,7 +444,7 @@ export function ChatPage() {
     const timer = window.setTimeout(() => {
       api.search.global(query)
         .then((result) => setGlobalUsers(result.users.filter((entry) => entry.id !== user?.id)))
-        .catch((error) => show(error instanceof Error ? error.message : "Foydalanuvchilar topilmadi", "error"))
+        .catch((error) => show(error instanceof Error ? error.message : t("chat.usersNotFound"), "error"))
         .finally(() => setSearchingUsers(false));
     }, 280);
     return () => window.clearTimeout(timer);
@@ -455,16 +460,15 @@ export function ChatPage() {
   }
 
   async function runComposerAi() {
-    const prompt = aiAssistPrompt.trim();
+    const prompt = aiAssistPrompt.trim() || draft.replace(/^\/ai\s*/i, "").trim();
     if (!prompt || aiThinking) return;
     setAiThinking(true);
     try {
-      const result = await api.chat.ai(`Chatga yuborish uchun tayyor matn yarat. Faqat tayyor matnning o'zini qaytar, izoh va sarlavha qo'shma. Vazifa: ${prompt}`, []);
+      const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), []);
       setDraft(result.reply);
       setAiAssistPrompt("");
-      setAiAssistOpen(false);
     } catch (error) {
-      show(error instanceof Error ? error.message : "AI matnni tayyorlamadi", "error");
+      show(error instanceof Error ? error.message : t("chat.aiComposeFailed"), "error");
     } finally {
       setAiThinking(false);
     }
@@ -473,6 +477,10 @@ export function ChatPage() {
   async function sendMessage() {
     const content = draft.trim();
     if (!content || !selectedRoom) return;
+    if (/^\/ai(?:\s|$)/i.test(content)) {
+      await runComposerAi();
+      return;
+    }
     if (editing) {
       try {
         const updated = await api.chat.editMessage(editing.id, content);
@@ -480,20 +488,18 @@ export function ChatPage() {
         setDraft("");
         setEditing(null);
       } catch (error) {
-        show(error instanceof Error ? error.message : "Xabar tahrirlanmadi", "error");
+        show(error instanceof Error ? error.message : t("chat.editMessageFailed"), "error");
       }
       return;
     }
     setDraft("");
-    const replyToId = replyingTo?.id;
-    setReplyingTo(null);
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
       roomId: selectedRoom.id,
       senderId: user!.id,
       content,
-      replyToId: replyToId || null,
+      replyToId: replyingTo?.id || null,
       clientMessageId,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -505,22 +511,23 @@ export function ChatPage() {
     try {
       if (socket.connected) {
         await new Promise<void>((resolve, reject) => {
-          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId }, (error: Error | null) => error ? reject(error) : resolve());
+          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve());
         });
       } else {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyToId);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       }
     } catch {
       try {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyToId);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
         setMessages((current) => current.filter((item) => item.clientMessageId !== clientMessageId));
         setDraft(content);
-        show(error instanceof Error ? error.message : "Xabar yuborilmadi", "error");
+        show(error instanceof Error ? error.message : t("chat.sendMessageFailed"), "error");
       }
     }
+    setReplyingTo(null);
   }
 
   function startReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
@@ -610,9 +617,9 @@ export function ChatPage() {
     try {
       await api.chat.deleteMessage(message.id);
       setMessages((current) => current.filter((item) => item.id !== message.id));
-      show("Xabar o‘chirildi");
+      show(t("chat.messageDeleted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Xabar o‘chirilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.messageDeleteFailed"), "error");
     }
   }
 
@@ -620,10 +627,10 @@ export function ChatPage() {
     setActiveMenu(null);
     try {
       const socket = getSocket();
-      if (!socket.connected) throw new Error("Real-time aloqa mavjud emas");
+      if (!socket.connected) throw new Error(t("chat.realtimeUnavailable"));
       socket.emit("add_reaction", { roomId: message.roomId, messageId: message.id, emoji });
     } catch (error) {
-      show(error instanceof Error ? error.message : "Reaction qo‘shilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.reactionFailed"), "error");
     }
   }
 
@@ -644,7 +651,7 @@ export function ChatPage() {
       setDraft("");
       setReplyingTo(null);
     } catch (error) {
-      show(error instanceof Error ? error.message : "Fayl yuborilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.fileSendFailed"), "error");
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -654,7 +661,7 @@ export function ChatPage() {
   async function startCall(kind: "audio" | "video") {
     if (!workspace || !selectedRoom || startingCall) return;
     if (selectedRoom.type !== "direct" || !detailPeer) {
-      show("Direct qo'ng'iroq faqat shaxsiy suhbatda mavjud.", "error");
+      show(t("chat.directCallOnlyPersonal"), "error");
       return;
     }
     setStartingCall(kind);
@@ -670,7 +677,7 @@ export function ChatPage() {
       setDirectCall(call);
       getSocket().emit("call:invite", { meetingId: call.meetingId, roomId: call.roomId, targetUserId: call.peerId, kind: call.kind });
     } catch (error) {
-      show(error instanceof Error ? error.message : "Qo‘ng‘iroq boshlanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.callStartFailed"), "error");
       setStartingCall(null);
     }
   }
@@ -706,7 +713,7 @@ export function ChatPage() {
         }
       } else await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
     } catch (error) {
-      show(error instanceof Error ? error.message : "Audio xabar yuborilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.voiceSendFailed"), "error");
     } finally {
       setSending(false);
     }
@@ -738,7 +745,7 @@ export function ChatPage() {
         return value + 1;
       }), 1000);
     } catch {
-      show("Mikrofonga ruxsat berilmadi", "error");
+      show(t("chat.micPermissionDenied"), "error");
     }
   }
 
@@ -778,9 +785,9 @@ export function ChatPage() {
       setCreateOpen(false);
       setSelectedMembers([]);
       setMemberSearch("");
-      show(createMode === "direct" ? "Shaxsiy suhbat ochildi" : "Guruh yaratildi");
+      show(createMode === "direct" ? t("chat.directChatOpened") : t("chat.groupCreated"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Suhbat yaratilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.conversationCreateFailed"), "error");
     } finally {
       setCreating(false);
     }
@@ -791,9 +798,9 @@ export function ChatPage() {
     try {
       await api.chat.acceptInvite(selectedRoom.id);
       await loadRooms(selectedRoom.id);
-      show("Taklif qabul qilindi");
+      show(t("chat.inviteAccepted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Taklif qabul qilinmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.inviteAcceptFailed"), "error");
     }
   }
 
@@ -805,9 +812,9 @@ export function ChatPage() {
     try {
       await api.workspaces.invite(workspace.id, String(data.get("email") || "").trim(), String(data.get("role") || "junior"));
       setWorkspaceInviteOpen(false);
-      show("Workspace taklifi emailga yuborildi");
+      show(t("chat.workspaceInviteSent"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Taklif yuborilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.inviteSendFailed"), "error");
     } finally {
       setInvitingWorkspace(false);
     }
@@ -821,7 +828,7 @@ export function ChatPage() {
     try {
       setRoomInvites(await api.chat.listInvites(selectedRoom.id));
     } catch (error) {
-      setInviteError(error instanceof Error ? error.message : "Taklif havolalari yuklanmadi");
+      setInviteError(error instanceof Error ? error.message : t("chat.inviteLinksLoadFailed"));
     } finally {
       setLoadingInvites(false);
     }
@@ -840,9 +847,9 @@ export function ChatPage() {
         ...(expiresInHours > 0 ? { expiresInHours } : {}),
       });
       setRoomInvites((current) => [created, ...current]);
-      show("Taklif havolasi yaratildi");
+      show(t("chat.inviteLinkCreated"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Havola yaratilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.linkCreateFailed"), "error");
     } finally {
       setCreatingInvite(false);
     }
@@ -852,9 +859,9 @@ export function ChatPage() {
     const url = new URL(`/join/chat/${code}`, window.location.origin).toString();
     try {
       await navigator.clipboard.writeText(url);
-      show("Taklif havolasi nusxalandi");
+      show(t("chat.inviteLinkCopied"));
     } catch {
-      show("Havolani nusxalab bo‘lmadi", "error");
+      show(t("chat.linkCopyFailed"), "error");
     }
   }
 
@@ -863,9 +870,9 @@ export function ChatPage() {
     try {
       await api.chat.revokeInvite(selectedRoom.id, inviteId);
       setRoomInvites((current) => current.map((entry) => entry.id === inviteId ? { ...entry, isActive: false, revokedAt: new Date().toISOString() } : entry));
-      show("Taklif havolasi bekor qilindi");
+      show(t("chat.inviteLinkRevoked"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Havola bekor qilinmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.linkRevokeFailed"), "error");
     }
   }
 
@@ -880,7 +887,7 @@ export function ChatPage() {
       chooseRoom(discussion.roomId);
       window.setTimeout(() => document.getElementById(`message-${discussion.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
     } catch (error) {
-      show(error instanceof Error ? error.message : "Muhokama ochilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.discussionOpenFailed"), "error");
     }
   }
   async function toggleChannelMute() {
@@ -888,9 +895,9 @@ export function ChatPage() {
     try {
       const result = await api.chat.mute(selectedRoom.id, !selectedRoom.isMuted);
       setRooms((current) => current.map((room) => room.id === selectedRoom.id ? { ...room, isMuted: result.isMuted } : room));
-      show(result.isMuted ? "Kanal ovozsiz qilindi" : "Kanal ovozi yoqildi");
+      show(result.isMuted ? t("chat.channelMuted") : t("chat.channelUnmuted"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Sozlama saqlanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.settingSaveFailed"), "error");
     }
   }
 
@@ -905,17 +912,17 @@ export function ChatPage() {
 
   async function uploadRoomAvatar(file?: File) {
     if (!selectedRoom || !file) return;
-    if (!file.type.startsWith("image/")) return show("Faqat rasm fayli tanlang", "error");
-    if (file.size > 5 * 1024 * 1024) return show("Rasm hajmi 5 MB dan oshmasin", "error");
+    if (!file.type.startsWith("image/")) return show(t("chat.imageOnlyError"), "error");
+    if (file.size > 5 * 1024 * 1024) return show(t("chat.imageSizeError"), "error");
     setUploadingRoomAvatar(true);
     try {
       const uploaded = await api.chat.uploadFile(selectedRoom.id, file);
       const updated = await api.chat.updateRoomSettings(selectedRoom.id, { avatarUrl: uploaded.storageUrl });
       setRoomSettingsAvatar(updated.avatarUrl || uploaded.storageUrl);
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
-      show("Chat rasmi yangilandi");
+      show(t("chat.chatPhotoUpdated"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Rasm yuklanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.photoUploadFailed"), "error");
     } finally {
       setUploadingRoomAvatar(false);
       if (roomAvatarInput.current) roomAvatarInput.current.value = "";
@@ -934,9 +941,9 @@ export function ChatPage() {
       });
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
       setRoomSettingsOpen(false);
-      show(selectedRoom.type === "channel" ? "Kanal sozlamalari saqlandi" : "Guruh sozlamalari saqlandi");
+      show(selectedRoom.type === "channel" ? t("chat.channelSettingsSaved") : t("chat.groupSettingsSaved"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Sozlamalar saqlanmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.settingsSaveFailed"), "error");
     } finally {
       setSavingRoomSettings(false);
     }
@@ -954,97 +961,97 @@ export function ChatPage() {
       }));
       await api.chat.send(targetRoomId, forwardingMessage.content, crypto.randomUUID(), undefined, attachments);
       setForwardingMessage(null);
-      show("Xabar yuborildi");
+      show(t("chat.messageForwarded"));
     } catch (error) {
-      show(error instanceof Error ? error.message : "Xabar yuborilmadi", "error");
+      show(error instanceof Error ? error.message : t("chat.sendMessageFailed"), "error");
     } finally {
       setForwarding(false);
     }
   }
   const catalogItems = [
-    { id: "all" as const, label: "Barchasi", icon: MessagesSquare, count: rooms.reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "direct" as const, label: "Shaxsiy", icon: UserIcon, count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "group" as const, label: "Guruhlar", icon: Users, count: rooms.filter((room) => roomCatalog(room) === "group").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "channel" as const, label: "Kanallar", icon: RadioTower, count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "bot" as const, label: "Botlar", icon: Bot, count: 0 },
+    { id: "all" as const, label: t("chat.catalogAll"), icon: MessagesSquare, count: rooms.reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "direct" as const, label: t("chat.catalogDirect"), icon: UserIcon, count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "group" as const, label: t("chat.catalogGroups"), icon: Users, count: rooms.filter((room) => roomCatalog(room) === "group").reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "channel" as const, label: t("chat.catalogChannels"), icon: RadioTower, count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0) },
+    { id: "bot" as const, label: t("chat.catalogBots"), icon: Bot, count: 0 },
   ];
   const filteredRooms = rooms.filter((room) => (catalog === "all" || roomCatalog(room) === catalog) && roomTitle(room).toLowerCase().includes(search.toLowerCase()));
   const visibleMessages = messageSearch.trim()
     ? messages.filter((message) => `${message.content} ${message.attachments?.map((attachment) => attachment.fileName).join(" ") || ""}`.toLowerCase().includes(messageSearch.trim().toLowerCase()))
     : messages;
-  const availableMembers = members.map(memberUser).filter((member) => member.id !== user?.id);
+  const availableMembers = members.map((member) => memberUser(member, t)).filter((member) => member.id !== user?.id);
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
   const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
 
   return (
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
-      {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label="Rasmni yuklab olish"><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label="Yopish"><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
+      {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label={t("chat.downloadImageAria")}><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label={t("chat.closeAria")}><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
-        <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />Suhbatni ochish</button>
-        <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />Kategoriyada ko‘rsatish</button>
-        {contextRoom.type !== "direct" && !contextRoom.isSystem && <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); window.setTimeout(() => void openRoomInvites(), 0); }}><UserPlus size={17} />Guruhga taklif</button>}
-        {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2 size={17} />Guruhni o‘chirish</button>}
+        <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />{t("chat.openConversation")}</button>
+        <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />{t("chat.showInCategory")}</button>
+        {contextRoom.type !== "direct" && !contextRoom.isSystem && <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); window.setTimeout(() => void openRoomInvites(), 0); }}><UserPlus size={17} />{t("chat.inviteToGroup")}</button>}
+        {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2 size={17} />{t("chat.deleteGroup")}</button>}
       </div>}
       <aside className="chat-sidebar">
-        <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label="Bosh sahifaga qaytish" title="Bosh sahifa"><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>Xabarlar</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label="Yangi suhbat" title="Yangi suhbat"><Plus size={19} /></button></header>
-        <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chat qidirish" aria-label="Chat qidirish" />{search && <button onClick={() => setSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
-        <nav className="chat-catalog" aria-label="Chat kataloglari">
+        <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} /></button></header>
+        <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("chat.searchChatPlaceholder")} aria-label={t("chat.searchChatPlaceholder")} />{search && <button onClick={() => setSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
+        <nav className="chat-catalog" aria-label={t("chat.catalogAria")}>
           <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
           {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
         </nav>
         <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-          {!loadingRooms && catalog === "bot" && <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span className="room-avatar"><Bot size={18} /></span><span className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>Gemini va Groq yordamchisi</small></span></span></button>}
-          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "channel" ? "Kanal topilmadi" : "Suhbat topilmadi"}</p><button onClick={() => setCreateOpen(true)}>Yangi chat ochish</button></div>}
+          {!loadingRooms && catalog === "bot" && <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span className="room-avatar"><Bot size={18} /></span><span className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>{t("chat.aiRoomSubtitle")}</small></span></span></button>}
+          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p><button onClick={() => setCreateOpen(true)}>{t("chat.newChatButton")}</button></div>}
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
               <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? "Taklif kutilmoqda" : "Hali xabar yo‘q")}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
           })}
         </div>
-        <footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? "Real-time ulangan" : "Qayta ulanmoqda..."}</small></footer>
+        <footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small></footer>
       </aside>
 
       <section className="conversation">
-        {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title="Suhbatni tanlang" description="Guruh yoki jamoa a’zosi bilan yozishishni boshlang." action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>Yangi suhbat</Button>} />}
+        {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")} description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("chat.newConversationButton")}</Button>} />}
         {aiOpen && <div className="ai-conversation">
-          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label="Botlar ro'yxatiga qaytish"><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? "javob tayyorlamoqda..." : "onlayn yordamchi"}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> xavfsiz</span></header>
+          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span></header>
           <div ref={aiMessageList} className="message-list ai-message-list" aria-live="polite">
-            {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>Savol bering, matn yozdiring yoki yangi ma'lumotni tekshirtiring.</p></div>}
-            {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>Manbalar</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
+            {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>{t("chat.aiEmptyDesc")}</p></div>}
+            {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>{t("chat.sourcesLabel")}</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
             {aiThinking && <div className="typing-bubble ai-typing"><Bot size={16} /><i /><i /><i /></div>}
           </div>
-          <div className="composer ai-composer"><textarea value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiMessage(); } }} placeholder="OPTIMA AI ga yozing" rows={1} maxLength={6000} aria-label="AI uchun savol" /><button className="send-button" onClick={() => void sendAiMessage()} disabled={!aiDraft.trim() || aiThinking} aria-label="Savolni yuborish">{aiThinking ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button></div>
+          <div className="composer ai-composer"><textarea value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiMessage(); } }} placeholder={t("chat.aiComposerPlaceholder")} rows={1} maxLength={6000} aria-label={t("chat.aiQuestionAria")} /><button className="send-button" onClick={() => void sendAiMessage()} disabled={!aiDraft.trim() || aiThinking} aria-label={t("chat.sendQuestionAria")}>{aiThinking ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button></div>
         </div>}
         {selectedRoom && (
           <>
             <header className="conversation-header">
-              <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label="Chatlar ro‘yxatiga qaytish" title="Chatlar"><ArrowLeft size={20} /></button>
+              <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
               {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-              <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label="Suhbat ma'lumotlarini ochish"><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? "yozmoqda..." : selectedRoom.type === "direct" ? (connected ? "online" : "offline") : `${selectedRoom.memberCount} a’zo`}</p></button>
+              <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? (connected ? t("chat.onlineStatus") : t("chat.offlineStatus")) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p></button>
               <div className="conversation-tools">
-                <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label="Xabarlardan qidirish" title="Qidirish"><Search size={18} /></button>
+                <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
                 {selectedRoom.type === "direct" && <>
-                  <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Audio qo‘ng‘iroq" title="Audio qo‘ng‘iroq">{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
-                  <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label="Video qo‘ng‘iroq" title="Video qo‘ng‘iroq">{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
+                  <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")} title={t("chat.audioCallAria")}>{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
+                  <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.videoCallAria")} title={t("chat.videoCallAria")}>{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label="Suhbat menyusi" aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") && <button onClick={() => { setHeaderMenuOpen(false); openRoomSettings(); }}><Settings size={17} /><span><strong>{selectedRoom.type === "channel" ? "Kanalni sozlash" : "Guruhni sozlash"}</strong><small>Rasm, nom va tavsif</small></span></button>}{!selectedRoom.isSystem && <button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>Guruhga taklif</strong><small>Havola yaratish va boshqarish</small></span></button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>Guruhni o‘chirish</strong><small>Barcha xabarlar bilan o‘chadi</small></span></button>}</div>}</div>}
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label={t("chat.conversationMenuAria")} aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") && <button onClick={() => { setHeaderMenuOpen(false); openRoomSettings(); }}><Settings size={17} /><span><strong>{selectedRoom.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}</strong><small>{t("chat.photoNameDescHint")}</small></span></button>}{!selectedRoom.isSystem && <button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>{t("chat.inviteToGroup")}</strong><small>{t("chat.createManageLinkHint")}</small></span></button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>{t("chat.deleteGroup")}</strong><small>{t("chat.deletesAllMessagesHint")}</small></span></button>}</div>}</div>}
               </div>
             </header>
-            {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Xabar yoki fayl nomini qidiring" autoFocus /><span>{messageSearch ? `${visibleMessages.length} natija` : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label="Qidiruvni yopish"><X size={17} /></button></div>}
+            {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder={t("chat.searchMessagePlaceholder")} autoFocus /><span>{messageSearch ? t("chat.resultsCount", { count: visibleMessages.length }) : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label={t("chat.closeSearchAria")}><X size={17} /></button></div>}
             {selectedRoom.memberStatus === "pending" ? (
-              <div className="invite-state"><UsersRound size={28} /><h3>Suhbatga taklif</h3><p>Yozishishni boshlash uchun taklifni qabul qiling.</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>Qabul qilish</Button></div>
+              <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3><p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>{t("chat.acceptButton")}</Button></div>
             ) : (
               <>
                 <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); if (node.scrollTop < 90) void loadOlderMessages(); }}>
-                  {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin" size={18} /> Eski xabarlar yuklanmoqda</div>}
+                  {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin" size={18} /> {t("chat.loadingOlderMessages")}</div>}
                   {loadingMessages && <div className="center-loader"><LoaderCircle className="spin" size={24} /></div>}
-                  {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? "Xabar topilmadi" : "Suhbatni boshlang"}</h3><p>{messageSearch ? "Boshqa so‘z bilan qidirib ko‘ring." : "Birinchi xabarni yuboring."}</p></div>}
+                  {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? t("chat.messageNotFound") : t("chat.startConversationTitle")}</h3><p>{messageSearch ? t("chat.tryOtherSearch") : t("chat.sendFirstMessage")}</p></div>}
                   {visibleMessages.map((message, index) => {
                     const mine = message.senderId === user?.id;
                     const sender = message.sender || memberMap.get(message.senderId);
@@ -1072,15 +1079,15 @@ export function ChatPage() {
                           {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
-                            {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || "Javob berilgan xabar"}</span></button>}
-                            {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : "Jamoa a’zosi"}</strong>}
+                            {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span></button>}
+                            {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && <p>{message.content}</p>}
-                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.fileSize / 1024))} KB · Yuklab olish</small></span><Download size={17} /></a>)}
+                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
-                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>tahrirlangan</small>}{mine && <CheckCheck size={14} />}</span>
-                            {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> Muhokama</button>}
-                            <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label="Xabar amallari" aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />Javob berish</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />Boshqa chatga yuborish</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />Nusxalash</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />Tahrirlash</button>}<button disabled><Pin size={16} />Mahkamlash <small>tez orada</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />O‘chirish</button>}</div>}
+                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && <CheckCheck size={14} />}</span>
+                            {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
+                            <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
+                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />{t("chat.replyAction")}</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />{t("chat.forwardAction")}</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />{t("chat.copyAction")}</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />{t("chat.editAction")}</button>}<button disabled><Pin size={16} />{t("chat.pinAction")} <small>{t("chat.comingSoon")}</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />{t("chat.deleteAction")}</button>}</div>}
                           </div>
                         </div>
                       </div>
@@ -1088,17 +1095,16 @@ export function ChatPage() {
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
-                  {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label="Eng yangi xabarga o‘tish"><ArrowDown size={19} /></button>}
+                  {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
                 </div>
-                {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? "Unmute" : "Mute"}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
-                  {aiAssistOpen && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>OPTIMA AI bilan yozish</strong><small>Natija xabar maydoniga joylanadi</small></div><button type="button" onClick={() => { setAiAssistOpen(false); setAiAssistPrompt(""); }} aria-label="AI yordamchini yopish"><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt("Quyidagi mavzu bo'yicha qisqa va tushunarli matn yoz: ")}>Matn yozish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matnni tahrirla va imlo xatolarini tuzat: ")}>Xatoni tuzatish</button><button type="button" onClick={() => setAiAssistPrompt("Quyidagi matndagi yetishmagan ma'lumotlar va sanalarni mantiqan to'ldir: ")}>Ma’lumotni to‘ldirish</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder="AI uchun buyruq va matnni yozing..." rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label="AI buyrug'ini bajarish">{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
-                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? "Xabarni tahrirlash" : "Javob berish"}</strong><small>{(editing || replyingTo)?.content || "Media xabar"}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label="Bekor qilish"><X size={17} /></button></div>}
-                  <button type="button" className={`icon-button composer-ai-button ${aiAssistOpen ? "active" : ""}`} onClick={() => { setAiAssistOpen((value) => !value); setEmojiOpen(false); }} aria-label="OPTIMA AI yordamchisi" title="OPTIMA AI" aria-expanded={aiAssistOpen}><Sparkles size={20} /></button>
-                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => { setEmojiOpen((value) => !value); setAiAssistOpen(false); }} aria-label="Emoji tanlash" aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label="Tezkor emojilar">{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={`${emoji} emojisini qo‘shish`}>{emoji}</button>)}</span>}</span>
+                {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>{t("chat.aiAssistTitle")}</strong><small>{t("chat.aiAssistHint")}</small></div><button type="button" onClick={() => { setDraft(""); setAiAssistPrompt(""); }} aria-label={t("chat.closeAiAssistAria")}><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestWriteTextPrompt"))}>{t("chat.suggestWriteText")}</button><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestFixTextPrompt"))}>{t("chat.suggestFixText")}</button><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestFillInfoPrompt"))}>{t("chat.suggestFillInfo")}</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder={t("chat.aiAssistPlaceholder")} rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label={t("chat.runAiAssistAria")}>{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
+                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? t("chat.editingMessageLabel") : t("chat.replyingLabel")}</strong><small>{(editing || replyingTo)?.content || t("chat.mediaMessageFallback")}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label={t("chat.cancelAria")}><X size={17} /></button></div>}
+                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label={t("chat.chooseEmojiAria")} aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label={t("chat.quickEmojisAria")}>{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={t("chat.addEmojiAria", { emoji })}>{emoji}</button>)}</span>}</span>
                   <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
-                  {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label="Fayl biriktirish">{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
-                  {recording ? <div className="recording-status"><i /><strong>Audio yozilmoqda</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label="Yozuvni bekor qilish"><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder="Xabar yozing" rows={1} maxLength={1500} aria-label="Xabar matni" />}
-                  {draft.trim() && !recording ? <button className="send-button" onClick={() => void sendMessage()} disabled={sending} aria-label="Xabarni yuborish">{sending ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> : <button className={`send-button voice-button ${recording ? "recording" : ""}`} onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending} aria-label={recording ? "Audio xabarni yuborish" : "Audio xabar yozish"}>{sending ? <LoaderCircle className="spin" size={19} /> : recording ? <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
+                  {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label={t("chat.attachFileAria")}>{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
+                  {recording ? <div className="recording-status"><i /><strong>{t("chat.recordingInProgress")}</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label={t("chat.cancelRecordingAria")}><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder={t("chat.messagePlaceholder")} rows={1} maxLength={1500} aria-label={t("chat.messageTextAria")} />}
+                  {draft.trim() && !recording ? <button className="send-button" onClick={() => void sendMessage()} disabled={sending} aria-label={t("chat.sendMessageAria")}>{sending ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> : <button className={`send-button voice-button ${recording ? "recording" : ""}`} onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending} aria-label={recording ? t("chat.sendVoiceAria") : t("chat.recordVoiceAria")}>{sending ? <LoaderCircle className="spin" size={19} /> : recording ? <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
                 </div>}
               </>
             )}
@@ -1106,88 +1112,89 @@ export function ChatPage() {
         )}
       </section>
 
-      {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true" aria-label="Direct qo'ng'iroq">{directCall.phase === "active" ? <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> : <section className="direct-call-ringing"><div className="direct-call-glow" /><Avatar firstName={memberMap.get(directCall.peerId)?.firstName || "User"} lastName={memberMap.get(directCall.peerId)?.lastName} url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> : <Phone size={17} />}{directCall.kind === "video" ? "Video qo'ng'iroq" : "Audio qo'ng'iroq"}</span><h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : "Foydalanuvchi"}</h2><p>{directCall.phase === "incoming" ? "Sizga qo'ng'iroq qilmoqda..." : "Ulanish kutilmoqda..."}</p><div className="direct-call-ringing-actions"><button className="decline" onClick={closeDirectCall}><PhoneOff size={23} /><span>{directCall.phase === "incoming" ? "Rad etish" : "Bekor qilish"}</span></button>{directCall.phase === "incoming" && <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> : <Phone size={23} />}<span>Qabul qilish</span></button>}</div><small><ShieldCheck size={15} /> Ulanish kaliti qo'ng'iroqda emoji bilan tekshiriladi</small></section>}</div>}
+      {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true" aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ? <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> : <section className="direct-call-ringing"><div className="direct-call-glow" /><Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")} lastName={memberMap.get(directCall.peerId)?.lastName} url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> : <Phone size={17} />}{directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}</span><h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : t("chat.userFallback")}</h2><p>{directCall.phase === "incoming" ? t("chat.incomingCallText") : t("chat.connectingText")}</p><div className="direct-call-ringing-actions"><button className="decline" onClick={closeDirectCall}><PhoneOff size={23} /><span>{directCall.phase === "incoming" ? t("chat.declineLabel") : t("chat.cancelCallLabel")}</span></button>{directCall.phase === "incoming" && <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> : <Phone size={23} />}<span>{t("chat.acceptButton")}</span></button>}</div><small><ShieldCheck size={15} /> {t("chat.callSecurityHint")}</small></section>}</div>}
 
-      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? "Profil" : selectedRoom?.type === "channel" ? "Kanal ma'lumoti" : "Guruh ma'lumoti"} description={selectedRoom?.type === "direct" ? "Foydalanuvchi ma'lumotlari" : selectedRoom?.type === "channel" ? `${selectedRoom?.memberCount || 0} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`} width="lg">
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")} description={selectedRoom?.type === "direct" ? t("chat.userInfoDesc") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom?.memberCount || 0 }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })} width="lg">
         <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
           <section className="chat-details-hero">
             {detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="lg" /> : selectedRoom?.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(selectedRoom?.name || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-            <div className="details-identity"><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? "Username o'rnatilmagan" : selectedRoom?.type === "channel" ? `${selectedRoom.memberCount} obunachi` : `${selectedRoom?.memberCount || 0} a'zo`}</small>{selectedRoom?.description && <p>{selectedRoom.description}</p>}</div>
-            <span className="details-kind">{selectedRoom?.type === "direct" ? "DM" : selectedRoom?.type === "channel" ? "KANAL" : "GURUH"}</span>
+            <div className="details-identity"><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? t("chat.usernameNotSet") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}</small>{selectedRoom?.description && <p>{selectedRoom.description}</p>}</div>
+            <span className="details-kind">{selectedRoom?.type === "direct" ? t("chat.dmLabel") : selectedRoom?.type === "channel" ? t("chat.channelLabel") : t("chat.groupLabel")}</span>
           </section>
           <div className="chat-details-actions">
-            {selectedRoom?.type === "direct" && <><button onClick={() => setDetailsOpen(false)}><MessageCircle size={19} /><span>Xabar</span></button><button onClick={() => void startCall("audio")}><Phone size={19} /><span>Audio</span></button><button onClick={() => void startCall("video")}><Video size={19} /><span>Video</span></button></>}
-            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={19} /><span>Taklif</span></button>}
-            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") && <button onClick={openRoomSettings}><Settings size={19} /><span>Sozlash</span></button>}
-            <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>Qidirish</span></button>
-            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? "Unmute" : "Mute"}</span></button>
+            {selectedRoom?.type === "direct" && <><button onClick={() => setDetailsOpen(false)}><MessageCircle size={19} /><span>{t("chat.messageActionLabel")}</span></button><button onClick={() => void startCall("audio")}><Phone size={19} /><span>{t("chat.audioActionLabel")}</span></button><button onClick={() => void startCall("video")}><Video size={19} /><span>{t("chat.videoActionLabel")}</span></button></>}
+            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={19} /><span>{t("chat.inviteActionLabel")}</span></button>}
+            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") && <button onClick={openRoomSettings}><Settings size={19} /><span>{t("chat.configureActionLabel")}</span></button>}
+            <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>{t("chat.searchActionLabel")}</span></button>
+            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
           </div>
-          {selectedRoom?.type === "direct" && <section className="direct-profile-info"><button onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}><UserRound size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : "Username o'rnatilmagan"}</strong><small>Username</small></span><Copy size={16} /></button><div><RadioTower size={19} /><span><strong>{connected ? "Online" : "Offline"}</strong><small>Faollik holati</small></span></div></section>}
-          <nav className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: selectedRoom?.type === "channel" ? "Obunachilar" : "A'zolar", media: "Media", files: "Fayllar", links: "Linklar", music: "Musiqa", voice: "Voice" })[tab]}</button>)}</nav>
+          {selectedRoom?.type === "direct" && <section className="direct-profile-info"><button onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}><UserRound size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button><div><RadioTower size={19} /><span><strong>{connected ? t("chat.onlineStatus") : t("chat.offlineStatus")}</strong><small>{t("chat.activityStatusLabel")}</small></span></div></section>}
+          <nav className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"), media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab") })[tab]}</button>)}</nav>
           <div className="chat-details-content">
-            {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? "Obunachilarni qidirish" : "A'zolarni qidirish"} /><span>{detailMemberTotal}</span></label>}
+            {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)} aria-label={`${member.firstName} ${member.lastName} profilini ochish`}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
-            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || "Ulashilgan kontent"}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
-            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>Hozircha bo'sh</strong><small>Ulashilgan kontent shu yerda ko'rinadi.</small></span></div>}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
+            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
+            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span></div>}
           </div>
         </div>
       </Modal>
 
-      <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)} title={selectedRoom?.type === "channel" ? "Kanalni sozlash" : "Guruhni sozlash"} description="Rasm, nom va tavsif barcha a’zolarga ko‘rinadi." width="md">
+      <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)} title={selectedRoom?.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")} description={t("chat.roomSettingsDesc")} width="md">
         <form className="room-settings-form" onSubmit={saveRoomSettings}>
           <section className="room-avatar-editor">
-            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label="Chat rasmini almashtirish">
-              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt="Chat rasmi" /> : <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
+            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
+              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt={t("chat.chatPhotoAlt")} /> : <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
               <span>{uploadingRoomAvatar ? <LoaderCircle className="spin" size={20} /> : <Camera size={20} />}</span>
             </button>
-            <div><strong>{selectedRoom?.type === "channel" ? "Kanal rasmi" : "Guruh rasmi"}</strong><small>JPG, PNG, WEBP yoki GIF · maksimum 5 MB</small><div><button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}><ImagePlus size={16} />{roomSettingsAvatar ? "Almashtirish" : "Rasm qo‘yish"}</button>{roomSettingsAvatar && <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />Olib tashlash</button>}</div></div>
+            <div><strong>{selectedRoom?.type === "channel" ? t("chat.channelPhotoLabel") : t("chat.groupPhotoLabel")}</strong><small>{t("chat.photoFormatHint")}</small><div><button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}><ImagePlus size={16} />{roomSettingsAvatar ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>{roomSettingsAvatar && <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div></div>
             <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
           </section>
-          <label>{selectedRoom?.type === "channel" ? "Kanal nomi" : "Guruh nomi"}<input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder="Nom kiriting" /></label>
-          <label>Tavsif<textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={4} placeholder={selectedRoom?.type === "channel" ? "Kanal nima haqida?" : "Guruh nima haqida?"} /><small>{roomSettingsDescription.length}/1000</small></label>
-          <div className="room-settings-note"><ShieldCheck size={18} /><span><strong>Faqat administratorlar</strong><small>Bu ma’lumotlarni faqat chat egasi yoki admin o‘zgartira oladi.</small></span></div>
-          <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setRoomSettingsOpen(false)}>Bekor qilish</Button><Button type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} disabled={savingRoomSettings || !roomSettingsName.trim()}>Saqlash</Button></div>
+          <label>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder={t("chat.namePlaceholder")} /></label>
+          <label>{t("chat.descriptionLabel")}<textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={4} placeholder={selectedRoom?.type === "channel" ? t("chat.channelAboutPlaceholder") : t("chat.groupAboutPlaceholder")} /><small>{roomSettingsDescription.length}/1000</small></label>
+          <div className="room-settings-note"><ShieldCheck size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span></div>
+          <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</Button><Button type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} disabled={savingRoomSettings || !roomSettingsName.trim()}>{t("common.save")}</Button></div>
         </form>
       </Modal>
 
-      <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)} title="Xabarni yuborish" description="Qabul qiluvchi chatni tanlang" width="md">
-        <div className="forward-preview"><Reply size={16} /><span><strong>{forwardingMessage?.content || forwardingMessage?.attachments?.[0]?.fileName || "Media xabar"}</strong><small>{forwardingMessage?.attachments?.length ? `${forwardingMessage.attachments.length} ta biriktirma` : "Matnli xabar"}</small></span></div>
-        <div className="forward-room-list">{rooms.filter((room) => room.memberStatus !== "pending").map((room) => <button key={room.id} disabled={forwarding} onClick={() => void forwardMessage(room.id)}><span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : room.type === "direct" ? <UserRound size={17} /> : <Hash size={17} />}</span><span><strong>{roomTitle(room)}</strong><small>{room.type === "direct" ? "Shaxsiy suhbat" : `${room.memberCount} a'zo`}</small></span>{forwarding ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
+      <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)} title={t("chat.forwardMessageTitle")} description={t("chat.forwardMessageDesc")} width="md">
+        <div className="forward-preview"><Reply size={16} /><span><strong>{forwardingMessage?.content || forwardingMessage?.attachments?.[0]?.fileName || t("chat.mediaMessageFallback")}</strong><small>{forwardingMessage?.attachments?.length ? t("chat.attachmentsCount", { count: forwardingMessage.attachments.length }) : t("chat.textMessageFallback")}</small></span></div>
+        <div className="forward-room-list">{rooms.filter((room) => room.memberStatus !== "pending").map((room) => <button key={room.id} disabled={forwarding} onClick={() => void forwardMessage(room.id)}><span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : room.type === "direct" ? <UserRound size={17} /> : <Hash size={17} />}</span><span><strong>{roomTitle(room)}</strong><small>{room.type === "direct" ? t("chat.personalChatLabel") : t("chat.membersCountDesc", { count: room.memberCount })}</small></span>{forwarding ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
       </Modal>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Yangi suhbat" description="Guruh oching yoki jamoa a’zosi bilan shaxsiy yozishing.">
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")} description={t("chat.newConversationModalDesc")}>
         <form className="modal-form" onSubmit={createConversation}>
-          <div className="segmented-control"><button type="button" className={createMode === "group" ? "active" : ""} onClick={() => { setCreateMode("group"); setSelectedMembers([]); }}><UsersRound size={17} /> Guruh</button><button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => { setCreateMode("direct"); setSelectedMembers([]); }}><UserRound size={17} /> Shaxsiy</button></div>
-          {createMode === "group" && <label>Guruh nomi<input name="name" placeholder="Masalan: Product team" required maxLength={200} /></label>}
-          <label className="search-field member-search"><Search size={17} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={createMode === "direct" ? "Ism yoki username bo‘yicha qidiring" : "Workspace a’zolarini qidiring"} aria-label="Foydalanuvchi qidirish" />{searchingUsers ? <LoaderCircle className="spin" size={16} /> : memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label="Qidiruvni tozalash"><X size={15} /></button>}</label>
-          <fieldset className="member-picker"><legend>{createMode === "group" ? "A’zolarni tanlang" : "Kim bilan yozishasiz?"}</legend>{pickerCandidates.length === 0 && <p className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? "Global qidiruv uchun kamida 2 harf yozing." : "Foydalanuvchi topilmadi."}</p>}{pickerCandidates.map((member) => { const checked = selectedMembers.includes(member.id); return <label key={member.id} className={checked ? "checked" : ""}><input type={createMode === "direct" ? "radio" : "checkbox"} name="members" value={member.id} checked={checked} onChange={() => setSelectedMembers((current) => createMode === "direct" ? [member.id] : current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} /><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check size={16} /></label>; })}</fieldset>
-          <button type="button" className="invite-email-prompt" onClick={() => { setCreateOpen(false); setWorkspaceInviteOpen(true); }}><MailPlus size={18} /><span><strong>Yangi odamni taklif qilish</strong><small>Email orqali workspace’ga qo‘shing</small></span></button>
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>Bekor qilish</Button><Button type="submit" loading={creating} disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? "Guruh yaratish" : "Chat ochish"}</Button></div>
+          <div className="segmented-control"><button type="button" className={createMode === "group" ? "active" : ""} onClick={() => { setCreateMode("group"); setSelectedMembers([]); }}><UsersRound size={17} /> {t("chat.groupWord")}</button><button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => { setCreateMode("direct"); setSelectedMembers([]); }}><UserRound size={17} /> {t("chat.personalWord")}</button></div>
+          {createMode === "group" && <label>{t("chat.groupNameLabel")}<input name="name" placeholder={t("chat.groupNamePlaceholder")} required maxLength={200} /></label>}
+          <label className="search-field member-search"><Search size={17} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")} aria-label={t("chat.searchUserAria")} />{searchingUsers ? <LoaderCircle className="spin" size={16} /> : memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
+          <fieldset className="member-picker"><legend>{createMode === "group" ? t("chat.selectMembersLegend") : t("chat.whoToChatLegend")}</legend>{pickerCandidates.length === 0 && <p className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}{pickerCandidates.map((member) => { const checked = selectedMembers.includes(member.id); return <label key={member.id} className={checked ? "checked" : ""}><input type={createMode === "direct" ? "radio" : "checkbox"} name="members" value={member.id} checked={checked} onChange={() => setSelectedMembers((current) => createMode === "direct" ? [member.id] : current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} /><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check size={16} /></label>; })}</fieldset>
+          <button type="button" className="invite-email-prompt" onClick={() => { setCreateOpen(false); setWorkspaceInviteOpen(true); }}><MailPlus size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span></button>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button type="submit" loading={creating} disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : t("chat.openChatButton")}</Button></div>
         </form>
       </Modal>
 
-      <Modal open={workspaceInviteOpen} onClose={() => setWorkspaceInviteOpen(false)} title="Workspace’ga taklif" description="Yangi foydalanuvchi email orqali jamoaga qo‘shiladi.">
+      <Modal open={workspaceInviteOpen} onClose={() => setWorkspaceInviteOpen(false)} title={t("chat.workspaceInviteTitle")} description={t("chat.workspaceInviteDesc")}>
         <form className="modal-form" onSubmit={inviteToWorkspace}>
-          <label>Email<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
-          <label>Rol<select name="role" defaultValue="junior"><option value="lead">Lead</option><option value="senior">Senior</option><option value="middle">Middle</option><option value="junior">Junior</option><option value="guest">Guest</option></select></label>
-          <p className="field-hint">Taklif qabul qilingach, foydalanuvchini guruhga qo‘shishingiz yoki guruh havolasini yuborishingiz mumkin.</p>
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => { setWorkspaceInviteOpen(false); setCreateOpen(true); }}>Orqaga</Button><Button type="submit" loading={invitingWorkspace} icon={<MailPlus size={17} />}>Taklif yuborish</Button></div>
+          <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
+          <label>{t("chat.roleLabel")}<select name="role" defaultValue="junior"><option value="lead">Lead</option><option value="senior">Senior</option><option value="middle">Middle</option><option value="junior">Junior</option><option value="guest">Guest</option></select></label>
+          <p className="field-hint">{t("chat.workspaceInviteHint")}</p>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => { setWorkspaceInviteOpen(false); setCreateOpen(true); }}>{t("chat.backButton")}</Button><Button type="submit" loading={invitingWorkspace} icon={<MailPlus size={17} />}>{t("chat.sendInviteButton")}</Button></div>
         </form>
       </Modal>
 
-      <Modal open={roomInfoOpen} onClose={() => setRoomInfoOpen(false)} title="Guruhga taklif" description="Havolaga muddat va foydalanish chegarasini belgilang." width="md">
+      <Modal open={roomInfoOpen} onClose={() => setRoomInfoOpen(false)} title={t("chat.inviteToGroup")} description={t("chat.inviteLinkModalDesc")} width="md">
         <form className="modal-form invite-link-form" onSubmit={createRoomInvite}>
-          <div className="form-grid-2"><label>Foydalanish soni<input name="maxUses" type="number" min="1" max="100000" defaultValue="25" /></label><label>Amal qilish muddati<select name="expiresInHours" defaultValue="168"><option value="24">1 kun</option><option value="168">7 kun</option><option value="720">30 kun</option><option value="">Cheklanmagan</option></select></label></div>
-          <Button type="submit" loading={creatingInvite} icon={<Link2 size={17} />}>Yangi havola yaratish</Button>
+          <div className="form-grid-2"><label>{t("chat.maxUsesLabel")}<input name="maxUses" type="number" min="1" max="100000" defaultValue="25" /></label><label>{t("chat.expiresLabel")}<select name="expiresInHours" defaultValue="168"><option value="24">{t("chat.day1")}</option><option value="168">{t("chat.day7")}</option><option value="720">{t("chat.day30")}</option><option value="">{t("chat.unlimited")}</option></select></label></div>
+          <Button type="submit" loading={creatingInvite} icon={<Link2 size={17} />}>{t("chat.createNewLinkButton")}</Button>
         </form>
         <div className="invite-link-list" aria-live="polite">
           {loadingInvites && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
           {!loadingInvites && inviteError && <div className="inline-notice" role="alert">{inviteError}</div>}
-          {!loadingInvites && !inviteError && roomInvites.length === 0 && <div className="invite-link-empty"><Link2 size={21} /><p>Hali taklif havolasi yaratilmagan.</p></div>}
+          {!loadingInvites && !inviteError && roomInvites.length === 0 && <div className="invite-link-empty"><Link2 size={21} /><p>{t("chat.noInviteLinksYet")}</p></div>}
           {roomInvites.map((invite) => {
             const url = new URL(`/join/chat/${invite.code}`, window.location.origin).toString();
-            return <div className={`invite-link-row ${invite.isActive ? "" : "inactive"}`} key={invite.id}><span className="invite-link-icon"><Link2 size={17} /></span><span className="invite-link-copy"><strong>{invite.isActive ? url : "Bekor qilingan havola"}</strong><small>{invite.maxUses ? `${invite.usesCount}/${invite.maxUses} marta` : `${invite.usesCount} marta`} · {invite.expiresAt ? new Intl.DateTimeFormat("uz-UZ", { day: "numeric", month: "short", year: "numeric" }).format(new Date(invite.expiresAt)) + " gacha" : "muddatsiz"}</small></span>{invite.isActive && <><button type="button" className="icon-button" onClick={() => void copyInvite(invite.code)} aria-label="Havolani nusxalash" title="Nusxalash"><Copy size={17} /></button><button type="button" className="icon-button icon-button-danger" onClick={() => void revokeRoomInvite(invite.id)} aria-label="Havolani bekor qilish" title="Bekor qilish"><Trash2 size={17} /></button></>}</div>;
+            const expiryDate = invite.expiresAt ? new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { day: "numeric", month: "short", year: "numeric" }).format(new Date(invite.expiresAt)) : "";
+            return <div className={`invite-link-row ${invite.isActive ? "" : "inactive"}`} key={invite.id}><span className="invite-link-icon"><Link2 size={17} /></span><span className="invite-link-copy"><strong>{invite.isActive ? url : t("chat.revokedLinkLabel")}</strong><small>{invite.maxUses ? t("chat.usesWithMax", { used: invite.usesCount, max: invite.maxUses }) : t("chat.usesOnly", { used: invite.usesCount })} · {invite.expiresAt ? t("chat.untilDate", { date: expiryDate }) : t("chat.noExpiry")}</small></span>{invite.isActive && <><button type="button" className="icon-button" onClick={() => void copyInvite(invite.code)} aria-label={t("chat.copyLinkAria")} title={t("chat.copyTitle")}><Copy size={17} /></button><button type="button" className="icon-button icon-button-danger" onClick={() => void revokeRoomInvite(invite.id)} aria-label={t("chat.revokeLinkAria")} title={t("chat.revokeTitle")}><Trash2 size={17} /></button></>}</div>;
           })}
         </div>
       </Modal>

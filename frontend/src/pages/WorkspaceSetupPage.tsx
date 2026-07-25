@@ -2,6 +2,7 @@ import { ArrowRight, Building2, CheckCircle2, MessageCircle, Video } from "lucid
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Logo } from "../components/ui";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n/i18n";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -9,6 +10,7 @@ function slugify(value: string) {
 
 export function WorkspaceSetupPage() {
   const { user, createWorkspace, logout } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -28,7 +30,7 @@ export function WorkspaceSetupPage() {
     event.preventDefault();
     const workspaceName = name.trim();
     if (!workspaceName) {
-      setError("Workspace nomini kiriting");
+      setError(t("workspaceSetup.nameRequired"));
       return;
     }
     setLoading(true);
@@ -36,7 +38,7 @@ export function WorkspaceSetupPage() {
     try {
       await createWorkspace({ name: workspaceName, slug: slug || `${slugify(workspaceName)}-${Date.now().toString(36)}` });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Workspace yaratilmadi");
+      setError(caught instanceof Error ? caught.message : t("workspaceSetup.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -44,26 +46,26 @@ export function WorkspaceSetupPage() {
 
   return (
     <main className="setup-page">
-      <header className="setup-top"><Logo /><button className="text-button" onClick={() => void logout()}>Boshqa hisob</button></header>
+      <header className="setup-top"><Logo /><button className="text-button" onClick={() => void logout()}>{t("workspaceSetup.switchAccount")}</button></header>
       <section className="setup-layout">
         <div className="setup-copy">
-          <p className="eyebrow">Salom, {user?.firstName}</p>
-          <h1>Birinchi workspace’ingizni yarating.</h1>
-          <p>Jamoa a’zolari, chatlar va meetinglar shu joyda birlashadi.</p>
+          <p className="eyebrow">{t("workspaceSetup.greeting", { name: user?.firstName || "" })}</p>
+          <h1>{t("workspaceSetup.heading")}</h1>
+          <p>{t("workspaceSetup.description")}</p>
           <ul>
-            <li><CheckCircle2 size={18} /> `general` chat avtomatik yaratiladi</li>
-            <li><MessageCircle size={18} /> Guruh va shaxsiy suhbatlar</li>
-            <li><Video size={18} /> Kamera va mikrofonli meeting</li>
+            <li><CheckCircle2 size={18} /> {t("workspaceSetup.bulletGeneralChat")}</li>
+            <li><MessageCircle size={18} /> {t("workspaceSetup.bulletConversations")}</li>
+            <li><Video size={18} /> {t("workspaceSetup.bulletMeetings")}</li>
           </ul>
         </div>
         <form className="setup-form" onSubmit={submit}>
           <span className="setup-icon"><Building2 size={24} /></span>
-          <h2>Workspace ma’lumoti</h2>
-          <p>Keyinroq sozlamalardan o‘zgartira olasiz.</p>
+          <h2>{t("workspaceSetup.formTitle")}</h2>
+          <p>{t("workspaceSetup.formDescription")}</p>
           {error && <div className="form-error" role="alert">{error}</div>}
-          <label>Nomi<input value={name} onChange={(event) => { setName(event.target.value); if (!slugEdited) setSlug(slugify(event.target.value)); }} placeholder="Masalan: Optima Team" maxLength={100} autoFocus required /></label>
-          <label>Manzil<span className="slug-input"><span>optima.app/</span><input value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.target.value)); }} placeholder="optima-team" maxLength={100} required /></span></label>
-          <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>Workspace yaratish</Button>
+          <label>{t("workspaceSetup.nameLabel")}<input value={name} onChange={(event) => { setName(event.target.value); if (!slugEdited) setSlug(slugify(event.target.value)); }} placeholder={t("workspaceSetup.namePlaceholder")} maxLength={100} autoFocus required /></label>
+          <label>{t("workspaceSetup.addressLabel")}<span className="slug-input"><span>optima.app/</span><input value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.target.value)); }} placeholder={t("workspaceSetup.addressPlaceholder")} maxLength={100} required /></span></label>
+          <Button type="submit" loading={loading} icon={<ArrowRight size={17} />}>{t("workspaceSetup.createButton")}</Button>
         </form>
       </section>
     </main>

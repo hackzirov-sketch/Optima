@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { LoaderCircle, X } from "lucide-react";
+import { useI18n } from "../lib/i18n/i18n";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -57,6 +58,7 @@ export function EmptyState({ icon, title, description, action }: { icon: ReactNo
 }
 
 export function Modal({ open, title, description, onClose, children, width = "sm" }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; width?: "sm" | "md" | "lg" }) {
+  const { t } = useI18n();
   const modalRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -98,7 +100,7 @@ export function Modal({ open, title, description, onClose, children, width = "sm
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Oynani yopish"><X size={19} /></button>
+          <button className="icon-button" onClick={onClose} aria-label={t("common.closeWindow")}><X size={19} /></button>
         </header>
         {children}
       </section>
