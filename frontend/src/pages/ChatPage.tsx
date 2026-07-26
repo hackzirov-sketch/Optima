@@ -113,6 +113,8 @@ export function ChatPage() {
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
+  const catalogNav = useRef<HTMLElement>(null);
+  const [catalogIndicator, setCatalogIndicator] = useState({ left: 0, width: 0 });
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
   const aiMessageList = useRef<HTMLDivElement>(null);
@@ -976,6 +978,19 @@ export function ChatPage() {
     { id: "channel" as const, label: t("chat.catalogChannels"), icon: RadioTower, count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0) },
     { id: "bot" as const, label: t("chat.catalogBots"), icon: Bot, count: 0 },
   ];
+  useEffect(() => {
+    function measure() {
+      const nav = catalogNav.current;
+      if (!nav) return;
+      const index = catalogItems.findIndex((item) => item.id === catalog);
+      const button = nav.querySelectorAll("button")[index] as HTMLElement | undefined;
+      if (button) setCatalogIndicator({ left: button.offsetLeft, width: button.offsetWidth });
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
   const filteredRooms = rooms.filter((room) => (catalog === "all" || roomCatalog(room) === catalog) && roomTitle(room).toLowerCase().includes(search.toLowerCase()));
   const visibleMessages = messageSearch.trim()
     ? messages.filter((message) => `${message.content} ${message.attachments?.map((attachment) => attachment.fileName).join(" ") || ""}`.toLowerCase().includes(messageSearch.trim().toLowerCase()))
@@ -998,9 +1013,9 @@ export function ChatPage() {
       <aside className="chat-sidebar">
         <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} /></button></header>
         <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("chat.searchChatPlaceholder")} aria-label={t("chat.searchChatPlaceholder")} />{search && <button onClick={() => setSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
-        <nav className="chat-catalog" aria-label={t("chat.catalogAria")}>
-          <span className={`catalog-indicator catalog-${catalog}`} aria-hidden="true" />
-          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined} title={item.label}><Icon size={16} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
+        <nav className="chat-catalog" ref={catalogNav} aria-label={t("chat.catalogAria")}>
+          <span className="catalog-indicator" aria-hidden="true" style={{ transform: `translateX(${catalogIndicator.left}px)`, width: `${catalogIndicator.width}px` }} />
+          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined} aria-label={item.label} title={item.label}><Icon size={18} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
         </nav>
         <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
