@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Megaphone, MessageCircle, MessagesSquare, Mic, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Maximize2, Megaphone, MessageCircle, MessagesSquare, Mic, Minus, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
 import { FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
@@ -9,6 +9,7 @@ import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
+import { setUnreadTotal } from "../lib/chatUnread";
 import { useI18n, type TranslateFn } from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
 
@@ -49,7 +50,16 @@ export function ChatPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
   const { t, locale } = useI18n();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const [minimized, setMinimized] = useState(false);
+  const [miniUnreadOnly, setMiniUnreadOnly] = useState(false);
+  const [miniWidth, setMiniWidth] = useState(320);
+  const [miniHeight, setMiniHeight] = useState(480);
+  const [miniPos, setMiniPos] = useState(() => ({ x: window.innerWidth - 340, y: window.innerHeight - 570 }));
+  const [miniResizing, setMiniResizing] = useState(false);
+  const miniResizeStart = useRef<{ x: number; y: number; width: number; height: number; posX: number; posY: number; dir: string }>({ x: 0, y: 0, width: 320, height: 480, posX: 0, posY: 0, dir: "nw" });
+  const [miniDragging, setMiniDragging] = useState(false);
+  const miniDragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -161,6 +171,10 @@ export function ChatPage() {
     : null;
 
   useEffect(() => {
+    setUnreadTotal(rooms.reduce((sum, room) => sum + room.unreadCount, 0));
+  }, [rooms]);
+
+  useEffect(() => {
     const socket = getSocket();
     const incoming = (data: { meetingId: string; roomId: string; fromUserId: string; kind: "audio" | "video" }) => setDirectCall({ meetingId: data.meetingId, roomId: data.roomId, peerId: data.fromUserId, kind: data.kind, phase: "incoming" });
     const accepted = (data: { meetingId: string }) => setDirectCall((current) => current?.meetingId === data.meetingId ? { ...current, phase: "active" } : current);
@@ -168,6 +182,86 @@ export function ChatPage() {
     socket.on("call:incoming", incoming); socket.on("call:accepted", accepted); socket.on("call:declined", closed); socket.on("call:ended", closed);
     return () => { socket.off("call:incoming", incoming); socket.off("call:accepted", accepted); socket.off("call:declined", closed); socket.off("call:ended", closed); };
   }, []);
+
+  useEffect(() => {
+    if (location !== "/chat" || (!selectedRoom && !aiOpen)) return;
+    const anyModalOpen = detailsOpen || roomSettingsOpen || createOpen || workspaceInviteOpen || roomInfoOpen || Boolean(forwardingMessage) || Boolean(mediaPreview);
+    if (anyModalOpen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      // Escape backs out of the open conversation (personal or group) to
+      // the room list, like Telegram - it never leaves the /chat route or
+      // minimizes the widget on its own.
+      if (aiOpen) { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }
+      else setSelectedId(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, createOpen, workspaceInviteOpen, roomInfoOpen, forwardingMessage, mediaPreview]);
+
+  useEffect(() => {
+    if (!miniResizing) return;
+    function onMove(event: globalThis.PointerEvent) {
+      const s = miniResizeStart.current;
+      const dx = event.clientX - s.x;
+      const dy = event.clientY - s.y;
+      const maxWidth = window.innerWidth - 20;
+      const maxHeight = window.innerHeight - 20;
+      if (s.dir.includes("w")) {
+        const newWidth = Math.min(maxWidth, Math.max(280, s.width - dx));
+        setMiniWidth(newWidth);
+        setMiniPos((current) => ({ ...current, x: s.posX + s.width - newWidth }));
+      } else if (s.dir.includes("e")) {
+        setMiniWidth(Math.min(maxWidth, Math.max(280, s.width + dx)));
+      }
+      if (s.dir.includes("n")) {
+        const newHeight = Math.min(maxHeight, Math.max(260, s.height - dy));
+        setMiniHeight(newHeight);
+        setMiniPos((current) => ({ ...current, y: s.posY + s.height - newHeight }));
+      } else if (s.dir.includes("s")) {
+        setMiniHeight(Math.min(maxHeight, Math.max(260, s.height + dy)));
+      }
+    }
+    function onUp() { setMiniResizing(false); }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [miniResizing]);
+
+  useEffect(() => {
+    if (!miniDragging) return;
+    function onMove(event: globalThis.PointerEvent) {
+      const s = miniDragStart.current;
+      const x = Math.min(window.innerWidth - 80, Math.max(-miniWidth + 80, s.posX + (event.clientX - s.x)));
+      const y = Math.min(window.innerHeight - 60, Math.max(0, s.posY + (event.clientY - s.y)));
+      setMiniPos({ x, y });
+    }
+    function onUp() { setMiniDragging(false); }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [miniDragging, miniWidth]);
+
+  function startMiniDrag(event: MouseEvent<HTMLElement>) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    miniDragStart.current = { x: event.clientX, y: event.clientY, posX: miniPos.x, posY: miniPos.y };
+    setMiniDragging(true);
+  }
+
+  function startMiniResize(dir: string) {
+    return (event: MouseEvent<HTMLSpanElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      miniResizeStart.current = { x: event.clientX, y: event.clientY, width: miniWidth, height: miniHeight, posX: miniPos.x, posY: miniPos.y, dir };
+      setMiniResizing(true);
+    };
+  }
 
   function roomTitle(room: ChatRoom) {
     if (room.name) return room.name;
@@ -178,11 +272,16 @@ export function ChatPage() {
     return t("chat.unnamedGroup");
   }
 
-  function chooseRoom(id: string) {
+  function chooseRoom(id: string, options?: { silent?: boolean }) {
     setAiOpen(false);
     setSelectedId(id);
     setRooms((current) => current.map((room) => room.id === id ? { ...room, unreadCount: 0 } : room));
-    window.history.replaceState({}, "", `/chat?room=${id}`);
+    // wouter's location hook reads window.location on every render, so
+    // touching the URL here (even via replaceState, with no navigation)
+    // flips isChatRoute on the very next render - which used to bounce the
+    // mini widget's inline view out to the full /chat layout. The widget's
+    // own room list calls this with silent:true to stay put.
+    if (!options?.silent) window.history.replaceState({}, "", `/chat?room=${id}`);
   }
 
   function chooseAi() {
@@ -1000,6 +1099,84 @@ export function ChatPage() {
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
   const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
 
+  const isChatRoute = location === "/chat";
+  if (!isChatRoute) {
+    // Mounted at the app root (see App.tsx) so navigating away never tears
+    // down the socket/message state. Off the /chat route we render nothing
+    // unless the user explicitly minimized instead of closing it - in that
+    // case a small floating widget lists every conversation, like the full
+    // sidebar, so nothing is hidden away in the collapsed state.
+    if (!minimized) return null;
+    const expand = (roomId?: string) => {
+      setMinimized(false);
+      if (roomId) chooseRoom(roomId);
+      navigate(roomId ? `/chat?room=${roomId}` : "/chat");
+    };
+    const resizeHandles = <>
+      <span className="chat-mini-resize chat-mini-resize-w" onMouseDown={startMiniResize("w")} aria-hidden="true" />
+      <span className="chat-mini-resize chat-mini-resize-e" onMouseDown={startMiniResize("e")} aria-hidden="true" />
+      <span className="chat-mini-resize chat-mini-resize-n" onMouseDown={startMiniResize("n")} aria-hidden="true" />
+      <span className="chat-mini-resize chat-mini-resize-s" onMouseDown={startMiniResize("s")} aria-hidden="true" />
+      <span className="chat-mini-resize chat-mini-resize-nw" onMouseDown={startMiniResize("nw")} aria-hidden="true" />
+      <span className="chat-mini-resize chat-mini-resize-se" onMouseDown={startMiniResize("se")} aria-hidden="true" />
+    </>;
+    if (selectedRoom) {
+      // Opening a chat from the mini widget stays inline instead of jumping
+      // to /chat - only the explicit expand button leaves the widget.
+      const other = selectedRoom.type === "direct" ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
+      return (
+        <div className="chat-mini-widget chat-mini-conversation" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
+          {resizeHandles}
+          <header onMouseDown={startMiniDrag}>
+            <button className="icon-button" onClick={() => setSelectedId(null)} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={16} /></button>
+            {selectedRoom.type === "direct" && other ? <Avatar firstName={other.firstName} lastName={other.lastName} url={other.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || "G").trim().charAt(0).toUpperCase()}</span>}
+            <strong>{roomTitle(selectedRoom)}</strong>
+            <button className="icon-button" onClick={() => expand(selectedRoom.id)} aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} /></button>
+            <button className="icon-button" onClick={() => setMinimized(false)} aria-label={t("chat.closeMiniChatAria")} title={t("chat.closeMiniChatAria")}><X size={16} /></button>
+          </header>
+          <div className="chat-mini-messages">
+            {messages.map((message) => (
+              <div key={message.id} className={`chat-mini-message ${message.senderId === user?.id ? "mine" : ""}`}>
+                <p>{message.content || (message.attachments?.length ? `📎 ${message.attachments[0].fileName}` : "")}</p>
+              </div>
+            ))}
+          </div>
+          <form className="chat-mini-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+            <input value={draft} onChange={(event) => announceTyping(event.target.value)} placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} />
+            <button type="submit" disabled={!draft.trim()} aria-label={t("chat.sendMessageAria")}><Send size={16} /></button>
+          </form>
+        </div>
+      );
+    }
+    const miniRooms = miniUnreadOnly ? rooms.filter((room) => room.unreadCount > 0) : rooms;
+    return (
+      <div className="chat-mini-widget" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
+        {resizeHandles}
+        <header onMouseDown={startMiniDrag}>
+          <strong>{t("chat.messagesTitle")}</strong>
+          <button className="icon-button" onClick={() => expand()} aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} /></button>
+          <button className="icon-button" onClick={() => setMinimized(false)} aria-label={t("chat.closeMiniChatAria")} title={t("chat.closeMiniChatAria")}><X size={16} /></button>
+        </header>
+        <label className="chat-mini-filter"><input type="checkbox" checked={miniUnreadOnly} onChange={(event) => setMiniUnreadOnly(event.target.checked)} />{t("chat.unreadOnlyFilter")}</label>
+        <div className="chat-mini-list">
+          {miniRooms.length === 0 && <p className="chat-mini-empty">{t("chat.conversationNotFound")}</p>}
+          {miniRooms.map((room) => {
+            const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
+            return (
+              <button key={room.id} className="chat-mini-row" onClick={() => chooseRoom(room.id, { silent: true })}>
+                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} size="sm" /> : room.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                <span className="chat-mini-copy">
+                  <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
+                  <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
       <StarfieldBackground />
@@ -1024,7 +1201,7 @@ export function ChatPage() {
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
-              <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
+              <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
@@ -1035,9 +1212,10 @@ export function ChatPage() {
       </aside>
 
       <section className="conversation">
+        {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty"><button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button></header>}
         {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")} description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("chat.newConversationButton")}</Button>} />}
         {aiOpen && <div className="ai-conversation">
-          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span></header>
+          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span><button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button></header>
           <div ref={aiMessageList} className="message-list ai-message-list" aria-live="polite">
             {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>{t("chat.aiEmptyDesc")}</p></div>}
             {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>{t("chat.sourcesLabel")}</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
@@ -1053,6 +1231,7 @@ export function ChatPage() {
               <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? (connected ? t("chat.onlineStatus") : t("chat.offlineStatus")) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
+                <button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
                 {selectedRoom.type === "direct" && <>
                   <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")} title={t("chat.audioCallAria")}>{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
                   <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.videoCallAria")} title={t("chat.videoCallAria")}>{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>

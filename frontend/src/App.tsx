@@ -44,24 +44,36 @@ export function App() {
   if (!workspace) return <WorkspaceSetupPage />;
 
   const meetingMatch = location.match(/^\/meetings\/([^/]+)$/);
-  if (meetingMatch) return <MeetingRoomPage meetingId={meetingMatch[1]} />;
+  const isEducation = location === "/education" || location.startsWith("/education/");
+  const isChat = location === "/chat";
 
-  if (location === "/education" || location.startsWith("/education/")) {
-    return <AppShell><div className="route-transition" key="/education"><EducationPage /></div></AppShell>;
-  }
-
-  return (
+  const mainContent = meetingMatch ? (
+    <MeetingRoomPage meetingId={meetingMatch[1]} />
+  ) : (
     <AppShell>
-      <div className="route-transition" key={location}>
-        <Switch>
-          <Route path="/" component={DashboardPage} />
-          <Route path="/chat" component={ChatPage} />
-          <Route path="/meetings" component={MeetingsPage} />
-          <Route path="/library" component={LibraryPage} />
-          <Route path="/profile" component={ProfilePage} />
-          <Route><DashboardPage /></Route>
-        </Switch>
+      <div className="route-transition" key={isEducation ? "/education" : location}>
+        {isEducation ? <EducationPage /> : isChat ? null : (
+          <Switch>
+            <Route path="/" component={DashboardPage} />
+            <Route path="/meetings" component={MeetingsPage} />
+            <Route path="/library" component={LibraryPage} />
+            <Route path="/profile" component={ProfilePage} />
+            <Route><DashboardPage /></Route>
+          </Switch>
+        )}
       </div>
     </AppShell>
+  );
+
+  return (
+    <>
+      {mainContent}
+      {/* Always the second child of this same fragment, in a stable
+          position regardless of which branch mainContent takes (meeting
+          room vs. the normal app shell) - that's what lets React keep this
+          one instance mounted (socket, messages, minimized state and all)
+          instead of remounting it when navigating into/out of a meeting. */}
+      <ChatPage />
+    </>
   );
 }

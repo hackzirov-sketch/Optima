@@ -2,6 +2,7 @@ import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, Log
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
+import { useUnreadTotal } from "../lib/chatUnread";
 import { locales, localeMeta, useI18n, type Locale } from "../lib/i18n/i18n";
 import { Avatar, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
@@ -25,6 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { locale, setLocale, t } = useI18n();
   const [languageOpen, setLanguageOpen] = useState(false);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
+  const unreadTotal = useUnreadTotal();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
 
   function chooseLanguage(next: Locale) {
@@ -118,13 +120,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <span className="dock-indicator" style={{ transform: `translateX(${nav.findIndex((item) => active(item.href)) * 50}px)`, opacity: nav.some((item) => active(item.href)) ? 1 : 0 }} aria-hidden="true" />
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} /></Link>;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}</Link>;
         })}
       </nav>
       <nav className="mobile-nav" aria-label={t("shell.mobileNav")}>
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{t(`shell.${item.key}`)}</span></Link>;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
         })}
       </nav>
     </div>
