@@ -47,12 +47,12 @@ export function App() {
   if (meetingMatch) return <MeetingRoomPage meetingId={meetingMatch[1]} />;
 
   if (location === "/education" || location.startsWith("/education/")) {
-    return <AppShell><div className="route-transition"><EducationPage /></div></AppShell>;
+    return <AppShell><div className="route-transition" key="/education"><EducationPage /></div></AppShell>;
   }
 
   return (
     <AppShell>
-      <div className="route-transition">
+      <div className="route-transition" key={location}>
         <Switch>
           <Route path="/" component={DashboardPage} />
           <Route path="/chat" component={ChatPage} />

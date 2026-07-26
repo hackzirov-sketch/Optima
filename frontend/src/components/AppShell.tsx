@@ -1,5 +1,5 @@
 import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { locales, localeMeta, useI18n, type Locale } from "../lib/i18n/i18n";
@@ -18,39 +18,18 @@ const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const [location, navigate] = useLocation();
+  const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [mobilePulse, setMobilePulse] = useState<string | null>(null);
   const { locale, setLocale, t } = useI18n();
   const [languageOpen, setLanguageOpen] = useState(false);
-  const routeTimers = useRef<number[]>([]);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
-
-  useEffect(() => () => routeTimers.current.forEach(window.clearTimeout), []);
 
   function chooseLanguage(next: Locale) {
     setLocale(next);
     setLanguageOpen(false);
-  }
-
-  function openSection(event: MouseEvent<HTMLAnchorElement>, href: string) {
-    if (active(href) || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    routeTimers.current.forEach(window.clearTimeout);
-    setMobileOpen(false);
-    setRouteLoading(true);
-    const mobile = window.innerWidth <= 820;
-    const leavingLibrary = location.startsWith("/library");
-    if (mobile) setMobilePulse(href);
-    routeTimers.current = [
-      window.setTimeout(() => navigate(href), leavingLibrary ? 80 : mobile ? 620 : 260),
-      window.setTimeout(() => setMobilePulse(null), leavingLibrary ? 180 : mobile ? 680 : 380),
-      window.setTimeout(() => setRouteLoading(false), leavingLibrary ? 260 : mobile ? 820 : 520),
-    ];
   }
 
   function toggleTheme() {
@@ -136,18 +115,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="app-main">{children}</main>
       </div>
       <nav className="desktop-dock" aria-label={t("shell.mainNav")}>
+        <span className="dock-indicator" style={{ transform: `translateX(${nav.findIndex((item) => active(item.href)) * 50}px)`, opacity: nav.some((item) => active(item.href)) ? 1 : 0 }} aria-hidden="true" />
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} /></Link>;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} /></Link>;
         })}
       </nav>
       <nav className="mobile-nav" aria-label={t("shell.mobileNav")}>
         {nav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} onClick={(event) => openSection(event, item.href)} className={`${active(item.href) ? "active" : ""} ${mobilePulse === item.href ? "tap-pulse" : ""}`}><Icon size={20} /><span>{t(`shell.${item.key}`)}</span></Link>;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} /><span>{t(`shell.${item.key}`)}</span></Link>;
         })}
       </nav>
-      {routeLoading && <div className="route-loader" role="status" aria-label={t("shell.loading")}><div className="route-loader-mark" aria-hidden="true"><i /><i /><i /></div><strong>OPTIMA</strong></div>}
     </div>
   );
 }

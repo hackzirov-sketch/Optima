@@ -19,6 +19,8 @@ export function StarfieldBackground() {
     if (!canvas || !ctx) return;
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const starColor = getComputedStyle(document.documentElement).getPropertyValue("--chat-star-color").trim();
+    const starRgb = starColor.match(/[\d.]+/g)?.slice(0, 3).join(",") ?? "226,232,240";
     let width = 0;
     let height = 0;
     let stars: Star[] = [];
@@ -59,7 +61,7 @@ export function StarfieldBackground() {
         const dy = pointer.y * star.parallax;
         ctx!.beginPath();
         ctx!.arc(star.x + dx, star.y + dy, star.radius, 0, Math.PI * 2);
-        ctx!.fillStyle = `rgba(226,232,240,${alpha.toFixed(3)})`;
+        ctx!.fillStyle = `rgba(${starRgb},${alpha.toFixed(3)})`;
         ctx!.fill();
       }
     }
