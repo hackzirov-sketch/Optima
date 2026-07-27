@@ -217,9 +217,10 @@ export class EventsGateway
     client.data.workspaceIds = wsIds;
     wsIds.forEach((wsId) => client.join(`workspace:${wsId}`));
 
-    // Redis presence: multi-device connection counter - only the 0->1
-    // transition actually flips status to online (see ChatPresenceService).
-    const { status, isNewlyOnline } = await this.presenceService.connect(user.id);
+    // Redis presence: per-socket freshness tracking (self-healing against
+    // orphaned entries from a dead process) - only the 0->1+ transition
+    // actually flips status to online (see ChatPresenceService).
+    const { status, isNewlyOnline } = await this.presenceService.connect(user.id, client.id);
     if (isNewlyOnline) {
       wsIds.forEach((wsId) =>
         this.server.to(`workspace:${wsId}`).emit('presence_update', {
@@ -249,7 +250,7 @@ export class EventsGateway
   async handleHeartbeat(@ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
-    await this.presenceService.refresh(userId);
+    await this.presenceService.refresh(userId, client.id);
     // Cheap, already-debounced (30s) DB write - keeps users.last_seen fresh
     // for the "last seen" history column without hammering Postgres.
     void this.usersService.updateLastSeen(userId);
@@ -276,13 +277,14 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) return;
 
-    // The Redis connections counter (ChatPresenceService) is decremented
-    // atomically and independently of Socket.IO's own room bookkeeping, so -
-    // unlike the old fetchSockets-based check this replaced - there's no need
-    // to wait/guess whether other tabs are still around: a multi-device user
-    // simply won't hit isNowOffline until their last connection drops.
+    // Removes just this socket's freshness entry (ChatPresenceService),
+    // independent of Socket.IO's own room bookkeeping - unlike the old
+    // fetchSockets-based check this replaced, there's no need to wait/guess
+    // whether other tabs are still around: a multi-device user simply won't
+    // hit isNowOffline until their last connection drops, and even a
+    // never-cleaned-up entry (process crash) self-heals via its TTL.
     try {
-      const { isNowOffline } = await this.presenceService.disconnect(userId);
+      const { isNowOffline } = await this.presenceService.disconnect(userId, client.id);
       if (isNowOffline) {
         void this.usersService.updateLastSeen(userId);
         const wsIds: string[] = client.data?.workspaceIds || [];

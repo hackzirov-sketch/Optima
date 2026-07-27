@@ -21,6 +21,17 @@ function MemberPresenceDot({ userId }: { userId: string }) {
   return <i className={isPresenceActive(presence) ? `online presence-${presence?.status}` : ""} />;
 }
 
+/** Telegram-style presence dot pinned to the corner of a DM's avatar in the room list. */
+function DirectRoomAvatar({ peer, size = "md" }: { peer?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null; size?: "sm" | "md" }) {
+  const presence = usePresence(peer?.id);
+  return (
+    <span className={`room-avatar-presence-wrap ${size === "sm" ? "room-avatar-presence-wrap-sm" : ""}`}>
+      <Avatar firstName={peer?.firstName} lastName={peer?.lastName} url={peer?.avatarUrl} size={size} />
+      {isPresenceActive(presence) && <i className={`room-avatar-presence-dot presence-${presence?.status}`} />}
+    </span>
+  );
+}
+
 function memberUser(member: WorkspaceMember, t: TranslateFn): User {
   return (member.user || {
     id: member.userId,
@@ -1321,7 +1332,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
               <button key={room.id} className="chat-mini-row" onClick={() => chooseRoom(room.id, { silent: true })}>
-                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} size="sm" /> : room.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                {room.type === "direct" ? <DirectRoomAvatar peer={other} size="sm" /> : room.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
                 <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
                   <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span>
@@ -1361,7 +1372,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
               <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
-                {room.type === "direct" ? <Avatar firstName={other?.firstName} lastName={other?.lastName} url={other?.avatarUrl} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
