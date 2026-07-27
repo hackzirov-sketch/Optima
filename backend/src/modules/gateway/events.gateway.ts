@@ -418,7 +418,7 @@ export class EventsGateway
 
     // Broadcast saved message to everyone in the room (including sender)
     // saved.content is already plaintext (decrypted by ChatService.sendMessage)
-    this.server.to(`room:${data.roomId}`).emit('new_message', {
+    const messagePayload = {
       id: saved.id,
       roomId: saved.roomId,
       senderId: saved.senderId,
@@ -433,9 +433,28 @@ export class EventsGateway
       createdAt: saved.createdAt,
       reactions: [],
       sender: saved.sender ?? null,
-    });
+    };
+    this.server.to(`room:${data.roomId}`).emit('new_message', messagePayload);
+    // Members only join `room:X` while that room is actually open, so a
+    // room-only broadcast misses everyone browsing elsewhere (sidebar preview
+    // and unread badges going stale until a manual reload). Every socket
+    // auto-joins its own `user:<id>` on connect (see handleConnection), so
+    // fan this out there too - that's what actually reaches a member
+    // regardless of which room, if any, they currently have open.
+    await this.broadcastToRoomMembers(data.roomId, 'new_message', messagePayload);
 
     return { event: 'message_sent', messageId: saved.id };
+  }
+
+  /** Emits an event to every active member's personal `user:<id>` channel — see handleSendMessage. */
+  private async broadcastToRoomMembers(roomId: string, event: string, payload: unknown) {
+    const members: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT user_id AS "userId" FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
+      [roomId],
+    );
+    for (const { userId } of members) {
+      this.server.to(`user:${userId}`).emit(event, payload);
+    }
   }
 
   // ─── Thread reply (Slack-style, §14.13) — separate event so it never lands
@@ -548,12 +567,17 @@ export class EventsGateway
     );
     if (!result) return;
 
-    this.server.to(`room:${data.roomId}`).emit('message_read', {
+    const readPayload = {
       userId,
       roomId: data.roomId,
       messageId: data.messageId,
       lastReadSeq: result.lastReadSeq,
-    });
+    };
+    this.server.to(`room:${data.roomId}`).emit('message_read', readPayload);
+    // Same reasoning as new_message: the sender may not have this room's
+    // Socket.IO room joined right now (or at all), so the checkmark update
+    // needs to reach their personal channel too, not just room:X.
+    await this.broadcastToRoomMembers(data.roomId, 'message_read', readPayload);
   }
 
   // ─── Meeting: join ───────────────────────────────────

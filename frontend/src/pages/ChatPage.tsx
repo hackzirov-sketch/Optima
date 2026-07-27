@@ -63,6 +63,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [miniDragging, setMiniDragging] = useState(false);
   const miniDragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const roomsRef = useRef<ChatRoom[]>([]);
+  useEffect(() => { roomsRef.current = rooms; }, [rooms]);
+  const [messageToasts, setMessageToasts] = useState<Array<{ id: string; roomId: string; title: string; preview: string; avatarUrl?: string | null; senderFirstName?: string; senderLastName?: string }>>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
@@ -173,6 +176,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, rooms, globalUsers]);
+  const memberMapRef = useRef(memberMap);
+  useEffect(() => { memberMapRef.current = memberMap; }, [memberMap]);
   const detailPeer = selectedRoom?.type === "direct"
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
@@ -496,6 +501,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const onMessage = (message: ChatMessage) => {
       if (message.roomId !== selectedId) {
         setRooms((current) => current.map((room) => room.id === message.roomId ? { ...room, unreadCount: message.senderId === user?.id ? room.unreadCount : room.unreadCount + 1, lastMessage: { id: message.id, content: message.content, senderId: message.senderId, createdAt: message.createdAt } } : room));
+        if (message.senderId !== user?.id) {
+          const room = roomsRef.current.find((entry) => entry.id === message.roomId);
+          if (room && !room.isMuted) {
+            const sender = message.sender || memberMapRef.current.get(message.senderId);
+            const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.userFallback");
+            const title = room.type === "direct" ? senderName : `${senderName} · ${room.name || t("chat.unnamedGroup")}`;
+            const preview = message.content || (message.attachments?.length ? t("chat.mediaMessageFallback") : "");
+            setMessageToasts((current) => [...current.filter((item) => item.id !== message.id), { id: message.id, roomId: message.roomId, title, preview, avatarUrl: sender?.avatarUrl, senderFirstName: sender?.firstName, senderLastName: sender?.lastName }].slice(-4));
+            window.setTimeout(() => setMessageToasts((current) => current.filter((item) => item.id !== message.id)), 6000);
+          }
+        }
         return;
       }
       setMessages((current) => {
@@ -1210,6 +1226,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
   const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
 
+  function openMessageToast(toast: { id: string; roomId: string }) {
+    setMessageToasts((current) => current.filter((item) => item.id !== toast.id));
+    setMinimized(false);
+    chooseRoom(toast.roomId);
+  }
+  const messageToastStack = messageToasts.length > 0 ? (
+    <div className="message-toast-stack" aria-live="polite">
+      {messageToasts.map((toast) => (
+        <button key={toast.id} className="message-toast" onClick={() => openMessageToast(toast)}>
+          <Avatar firstName={toast.senderFirstName} lastName={toast.senderLastName} url={toast.avatarUrl} size="sm" />
+          <span><strong>{toast.title}</strong><small>{toast.preview}</small></span>
+          <span className="icon-button icon-button-sm" onClick={(event) => { event.stopPropagation(); setMessageToasts((current) => current.filter((item) => item.id !== toast.id)); }} aria-label={t("chat.dismissAria")}><X size={14} /></span>
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   const isChatRoute = location === "/chat" || Boolean(routeTarget);
   if (!isChatRoute) {
     // Mounted at the app root (see App.tsx) so navigating away never tears
@@ -1217,7 +1250,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     // unless the user explicitly minimized instead of closing it - in that
     // case a small floating widget lists every conversation, like the full
     // sidebar, so nothing is hidden away in the collapsed state.
-    if (!minimized) return null;
+    if (!minimized) return messageToastStack;
     const expand = (roomId?: string) => {
       setMinimized(false);
       if (roomId) chooseRoom(roomId);
@@ -1236,6 +1269,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       // to /chat - only the explicit expand button leaves the widget.
       const other = selectedRoom.type === "direct" ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
       return (
+        <>
+        {messageToastStack}
         <div className="chat-mini-widget chat-mini-conversation" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
           {resizeHandles}
           <header onMouseDown={startMiniDrag}>
@@ -1257,10 +1292,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <button type="submit" disabled={!draft.trim()} aria-label={t("chat.sendMessageAria")}><Send size={16} /></button>
           </form>
         </div>
+        </>
       );
     }
     const miniRooms = miniUnreadOnly ? rooms.filter((room) => room.unreadCount > 0) : rooms;
     return (
+      <>
+      {messageToastStack}
       <div className="chat-mini-widget" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
         {resizeHandles}
         <header onMouseDown={startMiniDrag}>
@@ -1285,11 +1323,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           })}
         </div>
       </div>
+      </>
     );
   }
 
   return (
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
+      {messageToastStack}
       <StarfieldBackground />
       {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label={t("chat.downloadImageAria")}><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label={t("chat.closeAria")}><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
       {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>

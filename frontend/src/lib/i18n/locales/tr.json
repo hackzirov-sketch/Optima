@@ -498,6 +498,7 @@
     "realtimeUnavailable": "Gerçek zamanlı bağlantı mevcut değil",
     "downloadImageAria": "Resmi indir",
     "closeAria": "Kapat",
+    "dismissAria": "Bildirimi kapat",
     "openConversation": "Sohbeti aç",
     "showInCategory": "Kategoride göster",
     "inviteToGroup": "Gruba davet et",

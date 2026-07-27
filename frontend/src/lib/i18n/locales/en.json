@@ -498,6 +498,7 @@
     "realtimeUnavailable": "Real-time connection unavailable",
     "downloadImageAria": "Download image",
     "closeAria": "Close",
+    "dismissAria": "Dismiss notification",
     "openConversation": "Open conversation",
     "showInCategory": "Show in category",
     "inviteToGroup": "Invite to group",

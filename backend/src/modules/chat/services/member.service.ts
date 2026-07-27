@@ -84,7 +84,7 @@ export class ChatMemberService {
     const rows = await this.dataSource.query(
       `UPDATE chat_members cm SET
          last_read_seq = GREATEST(cm.last_read_seq, m.sequence),
-         last_read_message_id = CASE WHEN m.sequence >= cm.last_read_seq THEN m.id ELSE cm.last_read_message_id END,
+         last_read_message_id = CASE WHEN m.sequence >= cm.last_read_seq THEN m.id::varchar ELSE cm.last_read_message_id END,
          last_read_at = now()
        FROM chat_messages m
        WHERE cm.room_id = $1 AND cm.user_id = $2 AND cm.left_at IS NULL

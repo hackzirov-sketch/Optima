@@ -3017,9 +3017,11 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- Disabled: new accounts no longer get auto-enrolled into the OTIMA Community
+-- channel/group. The function/trigger definitions are kept (dropped, not
+-- deleted from history) only so this file stays idempotent against older
+-- databases that still have the trigger installed.
 DROP TRIGGER IF EXISTS trg_users_otima_memberships ON public.users;
-CREATE TRIGGER trg_users_otima_memberships
-  AFTER INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION public.ensure_otima_system_memberships();
 
 INSERT INTO public.chat_members (room_id, user_id, status, role, joined_at)
 SELECT r.id, u.id, 'active',
