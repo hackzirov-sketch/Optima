@@ -152,6 +152,12 @@ export class ChatController {
     return this.communityService.listMembers(roomId, userId, q, Number(page) || 1, Number(limit) || 30);
   }
 
+  @Get('chat/rooms/:roomId/read-receipts')
+  @ApiOperation({ summary: "Other active members' read position (last_read_seq) in a room" })
+  getReadReceipts(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+    return this.memberService.getReadReceipts(roomId, userId);
+  }
+
   @Get('chat/rooms/:roomId/shared')
   @ApiOperation({ summary: 'List shared media/files/links/music/voice in a room' })
   listRoomShared(

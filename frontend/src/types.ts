@@ -10,6 +10,7 @@ export interface User {
   lastName: string;
   avatarUrl?: string | null;
   backgroundUrl?: string | null;
+  accountVisibility?: "public" | "private";
   phoneNumber?: number | null;
   occupation?: string | null;
   language?: UserLanguage;

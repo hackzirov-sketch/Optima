@@ -289,6 +289,14 @@ export class ChatMessageService {
     );
     const saved: any = savedRows[0];
 
+    // The sender has implicitly "read" up to their own message - keeps their
+    // own unread badge for this room from lagging behind what they just sent.
+    await this.dataSource.query(
+      `UPDATE chat_members SET last_read_seq = GREATEST(last_read_seq, $3), last_read_message_id = $4, last_read_at = now()
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [roomId, userId, sequence, saved.id],
+    );
+
     if (dto.isThreadReply && dto.replyToId) {
       const threadRows: Array<{ replyCount: number }> = await this.dataSource.query(
         `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
@@ -349,7 +357,13 @@ export class ChatMessageService {
         this.chatQueue.add(
           'update-room-metadata',
           { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
-          { jobId: roomId }, // Dedup by roomId
+          // jobId dedupes bursts of messages in the same room into one job, but
+          // BullMQ treats a jobId as permanently taken once that job exists -
+          // without removeOnComplete/removeOnFail, only the very first message
+          // ever sent in a room would actually update message_seq, since every
+          // later add() with the same jobId silently no-ops against the
+          // already-completed job instead of enqueuing a new one.
+          { jobId: roomId, removeOnComplete: true, removeOnFail: true },
         ),
       );
     }

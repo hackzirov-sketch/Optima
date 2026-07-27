@@ -124,8 +124,16 @@ export class UsersService {
     return { ...user, settings: settings[0] ?? null, workspaces: memberships }
   }
 
+  /**
+   * Fuzzy user search for the "start a DM" / member picker. Respects account
+   * privacy: a PRIVATE account is excluded from fuzzy matches (name/username/
+   * email substring), but still resolves on an *exact* @username or public_id
+   * match — the "findable by direct link, not by browsing" rule.
+   */
   async searchPublic(q: string, limit = 20) {
     const term = `%${q.replace(/%/g, '\%').replace(/_/g, '\_')}%`
+    const exactUsername = q.replace(/^@/, '')
+    const exactPublicId = /^\d+$/.test(q) ? Number(q) : null
     // If the query looks like an email, include email search (exact match or ILIKE)
     const isEmail = q.includes('@')
     const rows: any[] = isEmail
@@ -133,19 +141,29 @@ export class UsersService {
         `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
            WHERE deleted_at IS NULL AND (email ILIKE $1 OR first_name ILIKE $2 OR last_name ILIKE $2 OR username ILIKE $2)
+             AND (account_visibility = 'public' OR lower(username) = lower($4) OR public_id = $5)
            ORDER BY CASE WHEN email ILIKE $1 THEN 0 WHEN username ILIKE $2 THEN 1 ELSE 2 END, last_name ASC
            LIMIT $3`,
-        [q, term, limit],
+        [q, term, limit, exactUsername, exactPublicId],
       )
       : await this.dataSource.query(
         `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
            WHERE deleted_at IS NULL AND (first_name ILIKE $1 OR last_name ILIKE $1 OR username ILIKE $1)
+             AND (account_visibility = 'public' OR lower(username) = lower($3) OR public_id = $4)
            ORDER BY CASE WHEN username ILIKE $1 THEN 0 ELSE 1 END, last_name ASC
            LIMIT $2`,
-        [term, limit],
+        [term, limit, exactUsername, exactPublicId],
       )
     return rows
+  }
+
+  async updateAccountVisibility(userId: string, visibility: 'public' | 'private'): Promise<User> {
+    await this.dataSource.query(`UPDATE users SET account_visibility = $2 WHERE id = $1`, [
+      userId,
+      visibility,
+    ])
+    return this.findById(userId)
   }
 
   async findByEmail(email: string): Promise<User | null> {

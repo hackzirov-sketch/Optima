@@ -69,6 +69,50 @@ export class ChatMemberService {
     };
   }
 
+  /**
+   * Persists how far into a room the calling member has read, by message id.
+   * Monotonic (GREATEST) so an out-of-order/late "read" event for an older
+   * message can never rewind a newer read position. Returns the resulting
+   * seq so the caller can broadcast it — null if the message wasn't found in
+   * this room (e.g. deleted) or the user isn't an active member.
+   */
+  async markRead(
+    roomId: string,
+    userId: string,
+    messageId: string,
+  ): Promise<{ lastReadSeq: number } | null> {
+    const rows = await this.dataSource.query(
+      `UPDATE chat_members cm SET
+         last_read_seq = GREATEST(cm.last_read_seq, m.sequence),
+         last_read_message_id = CASE WHEN m.sequence >= cm.last_read_seq THEN m.id ELSE cm.last_read_message_id END,
+         last_read_at = now()
+       FROM chat_messages m
+       WHERE cm.room_id = $1 AND cm.user_id = $2 AND cm.left_at IS NULL
+         AND m.id = $3 AND m.room_id = $1
+       RETURNING cm.last_read_seq AS "lastReadSeq"`,
+      [roomId, userId, messageId],
+    );
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Every active member's read position in a room (excluding the caller) -
+   * used to render "read" checkmarks / "Seen by N" without a per-message
+   * reads table, per the room's chat_members.last_read_seq column.
+   */
+  async getReadReceipts(
+    roomId: string,
+    userId: string,
+  ): Promise<Array<{ userId: string; lastReadSeq: number }>> {
+    await this.assertRoomMember(roomId, userId);
+    return this.dataSource.query(
+      `SELECT user_id AS "userId", last_read_seq AS "lastReadSeq"
+       FROM chat_members
+       WHERE room_id = $1 AND user_id != $2 AND left_at IS NULL AND status = 'active'`,
+      [roomId, userId],
+    );
+  }
+
   /** Mute/unmute notifications for a room, for the calling member only. */
   async setMuted(roomId: string, userId: string, muted: boolean): Promise<{ isMuted: boolean }> {
     const rows = await this.dataSource.query(

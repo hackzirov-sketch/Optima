@@ -249,6 +249,10 @@ export const api = {
       return apiFetch<User>("/users/me/background/upload", { method: "POST", body });
     },
     removeBackground: () => apiFetch<User>("/users/me/background", { method: "DELETE" }),
+    updateAccountVisibility: (visibility: "public" | "private") =>
+      apiFetch<User>("/users/me/account-visibility", { method: "PATCH", body: JSON.stringify({ visibility }) }),
+    search: (query: string, limit = 20) =>
+      apiFetch<{ data: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">> }>(`/users/search?q=${encodeURIComponent(query)}&limit=${limit}`),
     settings: (data: Record<string, boolean>) =>
       apiFetch<User>("/users/me/settings", { method: "PATCH", body: JSON.stringify(data) }),
   },
@@ -287,6 +291,7 @@ export const api = {
     updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
       apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
     roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
+    readReceipts: (roomId: string) => apiFetch<Array<{ userId: string; lastReadSeq: number }>>(`/chat/rooms/${roomId}/read-receipts`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
     rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
     createRoom: (workspaceId: string, data: Record<string, unknown>) =>

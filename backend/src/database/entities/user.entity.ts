@@ -27,6 +27,9 @@ export interface User {
   /** Profile-level default chat wallpaper — fallback background when a room has no per-user override. */
   backgroundUrl: string | null;
 
+  /** 'public' shows up in fuzzy user search; 'private' only via exact @username/public_id. */
+  accountVisibility: 'public' | 'private';
+
   language: UserLanguage;
 
   timezone: string;

@@ -1,4 +1,4 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, Lock, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -30,7 +30,8 @@ export function ProfilePage() {
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [settingsSection, setSettingsSection] = useState<"profile" | "notifications" | "sessions">("profile");
+  const [settingsSection, setSettingsSection] = useState<"profile" | "notifications" | "privacy" | "sessions">("profile");
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [revokingAll, setRevokingAll] = useState(false);
   const [notifications, setNotifications] = useState({
     notificationsEnabled: user?.notificationsEnabled ?? true,
@@ -132,6 +133,20 @@ export function ProfilePage() {
     }
   }
 
+  async function setAccountVisibility(visibility: "public" | "private") {
+    if (savingVisibility || user?.accountVisibility === visibility) return;
+    setSavingVisibility(true);
+    try {
+      await api.users.updateAccountVisibility(visibility);
+      await refreshUser();
+      show(visibility === "public" ? t("profile.visibilityPublicSet") : t("profile.visibilityPrivateSet"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("profile.visibilitySaveFailed"), "error");
+    } finally {
+      setSavingVisibility(false);
+    }
+  }
+
   async function toggleNotification(key: keyof typeof notifications) {
     const next = { ...notifications, [key]: !notifications[key] };
     setNotifications(next);
@@ -194,6 +209,7 @@ export function ProfilePage() {
           <nav className="settings-tabs" aria-label={t("profile.sectionsAria")}>
             <button className={settingsSection === "profile" ? "active" : ""} onClick={() => setSettingsSection("profile")}><UserRound size={18} /><span><strong>{t("profile.tabProfile")}</strong><small>{t("profile.tabProfileHint")}</small></span></button>
             <button className={settingsSection === "notifications" ? "active" : ""} onClick={() => setSettingsSection("notifications")}><BellRing size={18} /><span><strong>{t("profile.tabNotifications")}</strong><small>{t("profile.tabNotificationsHint")}</small></span></button>
+            <button className={settingsSection === "privacy" ? "active" : ""} onClick={() => setSettingsSection("privacy")}><UsersRound size={18} /><span><strong>{t("profile.tabPrivacy")}</strong><small>{t("profile.tabPrivacyHint")}</small></span></button>
             <button className={settingsSection === "sessions" ? "active" : ""} onClick={() => setSettingsSection("sessions")}><ShieldCheck size={18} /><span><strong>{t("profile.tabSessions")}</strong><small>{t("profile.tabSessionsHint")}</small></span></button>
           </nav>
           {settingsSection === "profile" && <section className="panel settings-panel settings-section-enter">
@@ -230,6 +246,22 @@ export function ProfilePage() {
               <button onClick={() => void toggleNotification("emailNotifications")}><span className="setting-icon"><Mail size={18} /></span><span><strong>{t("profile.emailNotifications")}</strong><small>{t("profile.emailNotificationsDesc")}</small></span><i className={notifications.emailNotifications ? "on" : ""}><b /></i></button>
               <button onClick={() => void toggleNotification("pushNotifications")}><span className="setting-icon"><Smartphone size={18} /></span><span><strong>{t("profile.pushNotifications")}</strong><small>{t("profile.pushNotificationsDesc")}</small></span><i className={notifications.pushNotifications ? "on" : ""}><b /></i></button>
               <button onClick={() => void toggleNotification("notifyMentions")}><span className="setting-icon"><Globe2 size={18} /></span><span><strong>{t("profile.mentions")}</strong><small>{t("profile.mentionsDesc")}</small></span><i className={notifications.notifyMentions ? "on" : ""}><b /></i></button>
+            </div>
+          </section>}
+
+          {settingsSection === "privacy" && <section className="panel settings-panel settings-section-enter">
+            <header className="settings-header"><span><Lock size={20} /></span><div><h2>{t("profile.privacyTitle")}</h2><p>{t("profile.privacyDesc")}</p></div></header>
+            <div className="visibility-picker">
+              <button type="button" className={`visibility-option ${(user?.accountVisibility ?? "public") === "public" ? "active" : ""}`} disabled={savingVisibility} onClick={() => void setAccountVisibility("public")}>
+                <UsersRound size={20} />
+                <span><strong>{t("profile.visibilityPublicTitle")}</strong><small>{t("profile.visibilityPublicDesc")}</small></span>
+                {(user?.accountVisibility ?? "public") === "public" && <Check size={16} />}
+              </button>
+              <button type="button" className={`visibility-option ${user?.accountVisibility === "private" ? "active" : ""}`} disabled={savingVisibility} onClick={() => void setAccountVisibility("private")}>
+                <Lock size={20} />
+                <span><strong>{t("profile.visibilityPrivateTitle")}</strong><small>{t("profile.visibilityPrivateDesc")}</small></span>
+                {user?.accountVisibility === "private" && <Check size={16} />}
+              </button>
             </div>
           </section>}
 

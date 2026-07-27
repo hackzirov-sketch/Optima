@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Maximize2, Megaphone, MessageCircle, MessagesSquare, Mic, Minus, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, Eye, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Maximize2, Megaphone, MessageCircle, MessagesSquare, Mic, Minus, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
 import { type CSSProperties, FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
@@ -87,6 +87,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [readReceipts, setReadReceipts] = useState<Map<string, number>>(new Map());
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
@@ -435,6 +436,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   useEffect(() => {
     if (!selectedId) {
       setMessages([]);
+      setReadReceipts(new Map());
       return;
     }
     if (selectedRoom?.memberStatus === "pending") {
@@ -450,6 +452,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       })
       .catch((error) => show(error instanceof Error ? error.message : t("chat.loadMessagesFailed"), "error"))
       .finally(() => setLoadingMessages(false));
+    // Other members' read positions - fetched fresh on open (not just live socket
+    // events) so "read" checkmarks survive a reload instead of resetting to unread.
+    api.chat.readReceipts(selectedId)
+      .then((rows) => setReadReceipts(new Map(rows.map((row) => [row.userId, row.lastReadSeq]))))
+      .catch(() => setReadReceipts(new Map()));
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
   async function loadOlderMessages() {
@@ -523,11 +530,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const onError = (data: { code?: string; message?: string }) => {
       if (data?.code) show(data.message || "Real-time xatolik", "error");
     };
+    const onMessageRead = (data: { roomId: string; userId: string; lastReadSeq?: number }) => {
+      if (data.roomId !== selectedId || data.userId === user?.id || typeof data.lastReadSeq !== "number") return;
+      setReadReceipts((current) => {
+        if ((current.get(data.userId) ?? 0) >= data.lastReadSeq!) return current;
+        return new Map(current).set(data.userId, data.lastReadSeq!);
+      });
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("new_message", onMessage);
     socket.on("typing", onTyping);
     socket.on("reaction_updated", onReaction);
+    socket.on("message_read", onMessageRead);
     socket.on("error", onError);
     if (socket.connected) onConnect();
     return () => {
@@ -536,6 +551,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("new_message", onMessage);
       socket.off("typing", onTyping);
       socket.off("reaction_updated", onReaction);
+      socket.off("message_read", onMessageRead);
       socket.off("error", onError);
     };
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -598,8 +614,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     setSearchingUsers(true);
     const timer = window.setTimeout(() => {
-      api.search.global(query)
-        .then((result) => setGlobalUsers(result.users.filter((entry) => entry.id !== user?.id)))
+      api.users.search(query)
+        .then((result) => setGlobalUsers(result.data.filter((entry) => entry.id !== user?.id)))
         .catch((error) => show(error instanceof Error ? error.message : t("chat.usersNotFound"), "error"))
         .finally(() => setSearchingUsers(false));
     }, 280);
@@ -1356,6 +1372,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   {visibleMessages.map((message, index) => {
                     const mine = message.senderId === user?.id;
                     const sender = message.sender || memberMap.get(message.senderId);
+                    const readByCount = mine && !message.id.startsWith("optimistic:") && message.sequence
+                      ? [...readReceipts.values()].filter((seq) => seq >= message.sequence!).length
+                      : 0;
                     const previous = visibleMessages[index - 1];
                     const showDay = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
                     const grouped = previous?.senderId === message.senderId && !showDay;
@@ -1385,7 +1404,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             {message.content && <p>{message.content}</p>}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
-                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && <CheckCheck size={14} />}</span>
+                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && (
+                              selectedRoom.type === "direct"
+                                ? (readByCount > 0 ? <CheckCheck size={14} className="message-read" aria-label={t("chat.readStatusRead")} /> : <Check size={14} className="message-sent-check" aria-label={t("chat.readStatusSent")} />)
+                                : (readByCount > 0 ? <span className="message-seen-count" aria-label={t("chat.readStatusSeenBy", { count: readByCount })}><Eye size={13} />{readByCount}</span> : <Check size={14} className="message-sent-check" aria-label={t("chat.readStatusSent")} />)
+                            )}</span>
                             {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
                             <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
                             {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />{t("chat.replyAction")}</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />{t("chat.forwardAction")}</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />{t("chat.copyAction")}</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />{t("chat.editAction")}</button>}<button disabled><Pin size={16} />{t("chat.pinAction")} <small>{t("chat.comingSoon")}</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />{t("chat.deleteAction")}</button>}</div>}

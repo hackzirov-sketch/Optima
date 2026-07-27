@@ -3419,4 +3419,11 @@ CREATE TABLE IF NOT EXISTS public.chat_room_slug_history (
 );
 CREATE INDEX IF NOT EXISTS "IDX_chat_room_slug_history_slug" ON public.chat_room_slug_history (lower(old_slug));
 
+-- Account privacy: PUBLIC users show up in fuzzy user search (Ctrl+K / "start a
+-- DM" picker); PRIVATE users are hidden from fuzzy search but stay reachable by
+-- an exact @username or public_id match (profile link, invite, existing chat) -
+-- so privacy blocks casual discovery without breaking sharing/invites.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS account_visibility varchar(20) NOT NULL DEFAULT 'public';
+
 

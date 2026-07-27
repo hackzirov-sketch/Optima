@@ -20,6 +20,7 @@ import { parseCookie } from 'cookie';
 import { ACCESS_COOKIE } from '../../common/utils/auth-cookies.util';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
+import { ChatMemberService } from '../chat/services/member.service';
 import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
 
@@ -99,6 +100,7 @@ export class EventsGateway
     private readonly configService: ConfigService,
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
+    private readonly memberService: ChatMemberService,
     private readonly violationService: ViolationService,
     private readonly dataSource: DatabaseService,
     @Inject(forwardRef(() => MeetingsService))
@@ -522,18 +524,35 @@ export class EventsGateway
 
   // ─── Message read receipt ────────────────────────────
   @SubscribeMessage('message_read')
-  handleMessageRead(
+  async handleMessageRead(
     @MessageBody() data: { roomId: string; messageId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
-    if (!client.rooms.has(`room:${data.roomId}`)) return;
+    // No client.rooms.has(...) socket-room gate here on purpose: join_room's
+    // membership check is async, so a message_read sent right after join_room
+    // (the normal case - see ChatPage's join-on-select effect) can arrive
+    // before that join actually lands, and used to be silently dropped here,
+    // leaving last_read_seq stuck at 0 forever. markRead's own WHERE clause
+    // (room_id + user_id + left_at IS NULL) already enforces membership.
 
-    client.to(`room:${data.roomId}`).emit('message_read', {
+    // Persists the read position (chat_members.last_read_seq/last_read_message_id) -
+    // without this the "read" checkmarks and unread counts revert on every
+    // reload, since they're recomputed from this column, not from the socket
+    // event itself.
+    const result = await this.memberService.markRead(
+      data.roomId,
+      userId,
+      data.messageId,
+    );
+    if (!result) return;
+
+    this.server.to(`room:${data.roomId}`).emit('message_read', {
       userId,
       roomId: data.roomId,
       messageId: data.messageId,
+      lastReadSeq: result.lastReadSeq,
     });
   }
 

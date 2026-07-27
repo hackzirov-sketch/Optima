@@ -104,6 +104,15 @@ export class UsersController {
     return this.usersService.updateBackground(userId, null)
   }
 
+  @Patch('me/account-visibility')
+  @ApiOperation({ summary: 'Set account visibility (public: searchable; private: only via exact @username/public_id)' })
+  updateAccountVisibility(@CurrentUser('id') userId: string, @Body('visibility') visibility: string) {
+    if (visibility !== 'public' && visibility !== 'private') {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'visibility must be "public" or "private"' })
+    }
+    return this.usersService.updateAccountVisibility(userId, visibility)
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search users (global) - minimal public fields' })
   async searchUsers(@Query('q') q: string, @Query('limit') limitStr?: string) {
