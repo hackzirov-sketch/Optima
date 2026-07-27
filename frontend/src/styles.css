@@ -535,19 +535,19 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .mobile-only, .mobile-nav, .sidebar-scrim { display: none; }
 
 /* Desktop liquid dock */
-.desktop-dock { position: fixed; z-index: 45; left: 50%; bottom: 16px; height: 58px; padding: 6px 9px; display: flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--brand-500) 18%, transparent); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 14px 38px rgba(50,66,112,.16); backdrop-filter: blur(18px); transform: translateX(-50%); }
+.desktop-dock { position: fixed; z-index: 45; left: 50%; bottom: 16px; height: 58px; padding: 6px 9px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(15,23,42,.08); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 14px 38px rgba(50,66,112,.16); backdrop-filter: blur(18px); transform: translateX(-50%); }
 .desktop-dock a { position: relative; isolation: isolate; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--text-soft); transition: color var(--motion-normal) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), box-shadow var(--motion-normal) var(--easing-standard); }
 .dock-badge { position: absolute; z-index: 3; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; border: 2px solid var(--surface); background: var(--chat-unread-badge-bg); color: var(--chat-unread-badge-text); font-size: 9px; font-weight: 700; line-height: 1; font-style: normal; }
 :root[data-theme="dark"] .dock-badge { border-color: var(--night); background: var(--chat-dock-active); box-shadow: 0 2px 8px rgba(99,102,241,.4); }
 .mobile-nav a .dock-badge { top: 2px; right: calc(50% - 18px); }
-.desktop-dock a::before { content: attr(data-label); position: absolute; z-index: 2; left: 50%; bottom: calc(100% + 11px); padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--card); color: var(--text); box-shadow: var(--shadow-md); font-size: 11px; font-weight: 750; white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-50%, 7px) scale(.92); transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring); }
-.desktop-dock a::after { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: 50% 50% 46% 46%; background: var(--surface-muted); transform: scale(.72); opacity: 0; transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), border-radius var(--motion-normal) var(--easing-standard); }
+.desktop-dock a::before { content: attr(data-label); position: absolute; z-index: 2; left: 50%; bottom: calc(100% + 11px); padding: 5px 10px; border: 1px solid rgba(15,23,42,.12); border-radius: var(--radius-pill); background: var(--card); color: var(--text); box-shadow: var(--shadow-md); font-size: 11px; font-weight: 750; white-space: nowrap; opacity: 0; pointer-events: none; transform: translate(-50%, 7px) scale(.92); transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring); }
+.desktop-dock a::after { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: 50%; background: var(--surface-muted); transform: scale(.72); opacity: 0; transition: opacity var(--motion-fast) var(--easing-standard), transform var(--motion-normal) var(--easing-spring), border-radius var(--motion-normal) var(--easing-standard); }
 .desktop-dock a.active { color: var(--brand-700); }
 .dock-indicator { position: absolute; z-index: 0; top: 7px; left: 9px; width: 44px; height: 44px; border-radius: 50%; background: var(--brand-100); box-shadow: inset 0 0 0 1px rgba(94,114,178,.12); transition: transform 420ms var(--easing-standard), opacity var(--motion-normal) var(--easing-standard); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .dock-indicator { transition: opacity var(--motion-normal) var(--easing-standard); } }
 .desktop-dock a:hover, .desktop-dock a:focus-visible { color: #fff; transform: translateY(-13px) scale(1.06); filter: drop-shadow(0 9px 12px rgba(94,114,178,.24)); }
 .desktop-dock a:hover::before, .desktop-dock a:focus-visible::before { opacity: 1; transform: translate(-50%, 0) scale(1); }
-.desktop-dock a:hover::after, .desktop-dock a:focus-visible::after { opacity: 1; border-radius: 52% 52% 48% 48% / 58% 58% 42% 42%; background: var(--gradient-primary); transform: scale(1); }
+.desktop-dock a:hover::after, .desktop-dock a:focus-visible::after { opacity: 1; border-radius: 50%; background: var(--gradient-primary); transform: scale(1); }
 .desktop-dock a svg { position: relative; z-index: 1; }
 .topbar-context { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .topbar-context .brand { flex: 0 0 auto; }
@@ -1133,6 +1133,13 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .avatar-edit-trigger:hover { background: var(--accent-hover); transform: scale(1.06); }
 .avatar-edit-trigger.is-loading { cursor: wait; opacity: .75; }
 .avatar-edit-trigger input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.chat-background-picker { display: flex; align-items: center; gap: 16px; }
+.chat-background-preview { width: 100px; height: 66px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid var(--line); background-color: var(--surface-muted); background-size: cover; background-position: center; color: var(--text-soft); }
+.chat-background-actions { display: flex; align-items: center; gap: 10px; }
+.bg-upload-trigger { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: #fff; cursor: pointer; box-shadow: var(--shadow-sm); transition: background var(--motion-fast) var(--easing-standard), transform var(--motion-fast) var(--easing-standard); }
+.bg-upload-trigger:hover { background: var(--accent-hover); transform: scale(1.06); }
+.bg-upload-trigger.is-loading { cursor: wait; opacity: .75; }
+.bg-upload-trigger input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .profile-summary h2 { margin-bottom: 4px; font-size: 18px; }.profile-summary > p { margin-bottom: 10px; color: var(--muted); font-size: 11px; }
 .role-badge { padding: 5px 8px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-ink); font-size: 9px; font-weight: 750; text-transform: capitalize; }
 .profile-meta { margin: 20px 16px 15px; padding: 12px 0; display: grid; gap: 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; }
@@ -1482,6 +1489,13 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .room-avatar-editor > div > div { justify-content: center; }
 .room-avatar-editor > div button { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .room-settings-form input, .room-settings-form textarea { border-radius: 9px; background: var(--surface); }
+.room-background-editor { padding: 14px; display: grid; grid-template-columns: 84px minmax(0,1fr); align-items: center; gap: 15px; border-radius: var(--radius-xl); background: var(--surface-muted); }
+.room-background-preview { width: 84px; height: 64px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 14px; background-color: var(--surface); background-size: cover; background-position: center; color: var(--text-soft); }
+.room-background-editor > div { min-width: 0; display: grid; gap: 4px; }
+.room-background-editor > div > small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.room-background-editor > div > div { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
+.room-background-editor > div button { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--brand-700); font-size: 10px; font-weight: 800; }
+.room-background-editor > div button.danger { color: var(--danger); }
 .room-settings-note { border: 1px solid var(--line); border-radius: 9px; background: var(--surface-muted); }
 @media (max-width:560px) {
   .chat-details { margin: -8px; border-width: 0; border-radius: 0; }
@@ -2451,6 +2465,14 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 :root[data-theme="dark"] .message-list {
   background: transparent !important;
   background-image: none !important;
+}
+/* A room/profile chat wallpaper (set via inline style + --conversation-bg) must win over the
+   starfield transparency above — user-chosen background takes priority over the ambient theme. */
+.conversation.conversation-has-bg,
+:root[data-theme="dark"] .conversation.conversation-has-bg {
+  background-image: var(--conversation-bg) !important;
+  background-size: cover !important;
+  background-position: center !important;
 }
 :root[data-theme="dark"] .room-item:hover { background: var(--surface-muted); }
 :root[data-theme="dark"] .message-reactions button { border-color: rgba(255,255,255,.14); background: var(--surface-muted); }

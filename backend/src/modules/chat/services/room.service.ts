@@ -41,6 +41,8 @@ export interface ChatRoomDto {
   memberCount: number;
   backgroundUrl: string | null;
   backgroundType: string;
+  publicId: number;
+  slug: string | null;
   lastMessage: {
     id: string;
     content: string;
@@ -132,6 +134,8 @@ export class ChatRoomService {
       memberCount: members.length,
       backgroundUrl: room.backgroundUrl ?? null,
       backgroundType: room.backgroundType ?? 'DEFAULT',
+      publicId: room.publicId,
+      slug: room.slug ?? null,
       lastMessage,
       unreadCount,
       isMember: true,
@@ -213,6 +217,8 @@ export class ChatRoomService {
         memberCount: roomMemberIds.length,
         backgroundUrl: room.backgroundUrl ?? null,
         backgroundType: room.backgroundType ?? 'DEFAULT',
+        publicId: room.publicId,
+        slug: room.slug ?? null,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -270,6 +276,8 @@ export class ChatRoomService {
       updatedAt: r.updatedAt,
       memberIds: [],
       memberCount: 0,
+      publicId: r.publicId,
+      slug: r.slug ?? null,
       lastMessage: null,
       unreadCount: 0,
       isMember: false,
@@ -316,6 +324,7 @@ export class ChatRoomService {
       avatarUrl?: string | null;
       backgroundUrl?: string | null;
       backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
+      slug?: string | null;
     },
   ) {
     const room = await this.findRoomById(roomId);
@@ -341,6 +350,30 @@ export class ChatRoomService {
           ? 'Only the room owner/admin can change the background'
           : 'Only the creator can update room settings',
       });
+    if (dto.slug !== undefined && dto.slug !== null) {
+      const slug = dto.slug.trim().toLowerCase();
+      if (!/^[a-z0-9-]{3,60}$/.test(slug))
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Slug must be 3-60 lowercase letters, digits or hyphens',
+        });
+      const clash = await this.dataSource.query(
+        `SELECT id FROM chat_rooms WHERE lower(slug) = $1 AND id != $2`,
+        [slug, roomId],
+      );
+      if (clash[0])
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'This slug is already taken',
+        });
+      dto.slug = slug;
+      if (room.slug && room.slug !== slug) {
+        await this.dataSource.query(
+          `INSERT INTO chat_room_slug_history (room_id, old_slug) VALUES ($1, $2)`,
+          [roomId, room.slug],
+        );
+      }
+    }
     if (
       dto.backgroundType &&
       !['DEFAULT', 'IMAGE', 'COLOR', 'GRADIENT', 'PATTERN'].includes(
@@ -371,6 +404,7 @@ export class ChatRoomService {
       avatarUrl: dto.avatarUrl,
       backgroundUrl: dto.backgroundUrl,
       backgroundType: dto.backgroundType,
+      slug: dto.slug,
     };
     const { setClause, values } = buildUpdateSet(
       allowedUpdates as Record<string, unknown>,
@@ -387,6 +421,66 @@ export class ChatRoomService {
       updated = rows[0];
     }
     return this.enrichRoom(updated, userId);
+  }
+
+  /**
+   * Resolves a group/channel route identifier (slug, falling back to the
+   * 6-digit public_id) to its internal room — the only place `/g/:x` and
+   * `/ch/:x` should ever be turned into a UUID. Also checks
+   * chat_room_slug_history so a stale link after an admin rename still lands
+   * somewhere (as a redirect) instead of 404ing.
+   */
+  async resolveRoomIdentifier(
+    identifier: string,
+    userId: string,
+  ): Promise<
+    | { roomId: string; type: string; slug: string | null; publicId: number }
+    | { redirectSlug: string }
+  > {
+    const isNumeric = /^\d+$/.test(identifier);
+    const rows: ChatRoom[] = await this.dataSource.query(
+      isNumeric
+        ? `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE public_id = $1`
+        : `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE lower(slug) = lower($1)`,
+      [isNumeric ? Number(identifier) : identifier],
+    );
+    let room = rows[0];
+
+    if (!room && !isNumeric) {
+      const history = await this.dataSource.query(
+        `SELECT room_id AS "roomId" FROM chat_room_slug_history
+         WHERE lower(old_slug) = lower($1) ORDER BY created_at DESC LIMIT 1`,
+        [identifier],
+      );
+      if (history[0]) {
+        const current = await this.findRoomById(history[0].roomId);
+        if (current?.slug) return { redirectSlug: current.slug };
+      }
+    }
+
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
+
+    const membership = await this.dataSource.query(
+      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [room.id, userId],
+    );
+    if (!membership[0] && room.scope !== RoomScope.PUBLIC) {
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
+    }
+
+    return {
+      roomId: room.id,
+      type: room.type,
+      slug: room.slug ?? null,
+      publicId: room.publicId,
+    };
   }
 
   /**

@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Maximize2, Megaphone, MessageCircle, MessagesSquare, Mic, Minus, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
-import { FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button, EmptyState, Modal } from "../components/ui";
 import { StarfieldBackground } from "../components/StarfieldBackground";
@@ -46,7 +46,9 @@ function loadAiConversation(userId?: string): AiConversationMessage[] {
   }
 }
 
-export function ChatPage() {
+type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: string } | null;
+
+export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
   const { user, workspace } = useAuth();
   const { show } = useToast();
   const { t, locale } = useI18n();
@@ -107,9 +109,12 @@ export function ChatPage() {
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
+  const [roomSettingsSlug, setRoomSettingsSlug] = useState("");
   const [roomSettingsAvatar, setRoomSettingsAvatar] = useState<string | null>(null);
+  const [roomSettingsBackground, setRoomSettingsBackground] = useState<string | null>(null);
   const [savingRoomSettings, setSavingRoomSettings] = useState(false);
   const [uploadingRoomAvatar, setUploadingRoomAvatar] = useState(false);
+  const [uploadingRoomBackground, setUploadingRoomBackground] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
@@ -132,6 +137,7 @@ export function ChatPage() {
   const preserveMessageScroll = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const roomAvatarInput = useRef<HTMLInputElement>(null);
+  const roomBackgroundInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
@@ -159,7 +165,7 @@ export function ChatPage() {
   }
 
   const memberMap = useMemo(() => {
-    const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>();
+    const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl" | "publicId">>();
     members.forEach((member) => result.set(member.userId, memberUser(member, t)));
     rooms.flatMap((room) => room.memberProfiles || []).forEach((profile) => result.set(profile.id, profile));
     globalUsers.forEach((profile) => result.set(profile.id, profile));
@@ -272,16 +278,29 @@ export function ChatPage() {
     return t("chat.unnamedGroup");
   }
 
+  /** The public route for a room — /u/<username-or-publicId>, /g/<slug-or-publicId>,
+   *  /ch/<slug-or-publicId>. Never the internal UUID (see chat route redesign). */
+  function canonicalRoute(room: ChatRoom): string {
+    if (room.type === "direct") {
+      const other = room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
+      const identifier = other?.username || (other?.publicId != null ? String(other.publicId) : null);
+      return identifier ? `/u/${identifier}` : `/chat?room=${room.id}`;
+    }
+    const identifier = room.slug || (room.publicId != null ? String(room.publicId) : null);
+    if (!identifier) return `/chat?room=${room.id}`;
+    return room.type === "channel" ? `/ch/${identifier}` : `/g/${identifier}`;
+  }
+
   function chooseRoom(id: string, options?: { silent?: boolean }) {
     setAiOpen(false);
     setSelectedId(id);
     setRooms((current) => current.map((room) => room.id === id ? { ...room, unreadCount: 0 } : room));
-    // wouter's location hook reads window.location on every render, so
-    // touching the URL here (even via replaceState, with no navigation)
-    // flips isChatRoute on the very next render - which used to bounce the
-    // mini widget's inline view out to the full /chat layout. The widget's
-    // own room list calls this with silent:true to stay put.
-    if (!options?.silent) window.history.replaceState({}, "", `/chat?room=${id}`);
+    if (options?.silent) return;
+    // A real navigate() (not replaceState) so the browser Back/Forward
+    // buttons move between rooms too - the old query-param scheme only ever
+    // wrote history, it never let the browser walk it.
+    const room = rooms.find((entry) => entry.id === id);
+    navigate(room ? canonicalRoute(room) : `/chat?room=${id}`);
   }
 
   function chooseAi() {
@@ -364,7 +383,9 @@ export function ChatPage() {
     setMembers(nextMembers);
     const target = preferredId || selectedId;
     if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
-    else if (mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
+    // A pending routeTarget (deep link, e.g. /g/backend-team) resolves and picks its own
+    // room shortly after - don't let the "open the first room" fallback race ahead of it.
+    else if (!routeTarget && mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
     else setSelectedId(null);
     setLoadingRooms(false);
   }
@@ -377,6 +398,39 @@ export function ChatPage() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace?.id]);
+
+  // Resolves a deep-link route (/u/:id, /g/:slug-or-publicId, /ch/:slug-or-publicId) to
+  // its internal room id - the one place a public route ever turns into a UUID.
+  useEffect(() => {
+    if (!routeTarget || !workspace) return;
+    const matchesCurrent = selectedRoom && (routeTarget.type === "direct"
+      ? selectedRoom.type === "direct" && (() => {
+          const other = selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
+          return other?.username === routeTarget.identifier || (other?.publicId != null && String(other.publicId) === routeTarget.identifier);
+        })()
+      : selectedRoom.slug === routeTarget.identifier || (selectedRoom.publicId != null && String(selectedRoom.publicId) === routeTarget.identifier));
+    if (matchesCurrent) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await api.chat.resolveRoute(workspace.id, routeTarget.type, routeTarget.identifier);
+        if (cancelled) return;
+        if ("redirectSlug" in result) {
+          navigate(`${routeTarget.type === "channel" ? "/ch" : "/g"}/${result.redirectSlug}`, { replace: true });
+          return;
+        }
+        setSelectedId(result.roomId);
+        if (!rooms.some((room) => room.id === result.roomId)) await loadRooms(result.roomId);
+      } catch (error) {
+        if (cancelled) return;
+        show(error instanceof Error ? error.message : t("chat.roomNotFound"), "error");
+        navigate("/chat", { replace: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1008,6 +1062,8 @@ export function ChatPage() {
     setRoomSettingsName(selectedRoom.name || "");
     setRoomSettingsDescription(selectedRoom.description || "");
     setRoomSettingsAvatar(selectedRoom.avatarUrl || null);
+    setRoomSettingsBackground(selectedRoom.backgroundUrl || null);
+    setRoomSettingsSlug(selectedRoom.slug || "");
     setDetailsOpen(false);
     setRoomSettingsOpen(true);
   }
@@ -1031,19 +1087,58 @@ export function ChatPage() {
     }
   }
 
+  async function uploadRoomBackground(file?: File) {
+    if (!selectedRoom || !file) return;
+    if (!file.type.startsWith("image/")) return show(t("chat.imageOnlyError"), "error");
+    if (file.size > 8 * 1024 * 1024) return show(t("chat.imageSizeError"), "error");
+    setUploadingRoomBackground(true);
+    try {
+      const uploaded = await api.chat.uploadFile(selectedRoom.id, file);
+      const updated = await api.chat.updateRoomBackground(selectedRoom.id, { backgroundUrl: uploaded.storageUrl, backgroundType: "IMAGE" });
+      setRoomSettingsBackground(updated.backgroundUrl || uploaded.storageUrl);
+      setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
+      show(t("chat.chatBackgroundUpdated"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.backgroundUploadFailed"), "error");
+    } finally {
+      setUploadingRoomBackground(false);
+      if (roomBackgroundInput.current) roomBackgroundInput.current.value = "";
+    }
+  }
+
+  async function removeRoomBackground() {
+    if (!selectedRoom) return;
+    setUploadingRoomBackground(true);
+    try {
+      const updated = await api.chat.updateRoomBackground(selectedRoom.id, { backgroundUrl: null, backgroundType: "DEFAULT" });
+      setRoomSettingsBackground(null);
+      setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
+      show(t("chat.chatBackgroundRemoved"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.backgroundUploadFailed"), "error");
+    } finally {
+      setUploadingRoomBackground(false);
+    }
+  }
+
   async function saveRoomSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedRoom || !roomSettingsName.trim()) return;
     setSavingRoomSettings(true);
     try {
+      const trimmedSlug = roomSettingsSlug.trim().toLowerCase();
       const updated = await api.chat.updateRoomSettings(selectedRoom.id, {
         name: roomSettingsName.trim(),
         description: roomSettingsDescription.trim(),
         avatarUrl: roomSettingsAvatar,
+        ...(trimmedSlug !== (selectedRoom.slug || "") ? { slug: trimmedSlug || null } : {}),
       });
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
       setRoomSettingsOpen(false);
       show(selectedRoom.type === "channel" ? t("chat.channelSettingsSaved") : t("chat.groupSettingsSaved"));
+      if (updated.slug && updated.slug !== selectedRoom.slug) {
+        navigate(`${selectedRoom.type === "channel" ? "/ch" : "/g"}/${updated.slug}`, { replace: true });
+      }
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.settingsSaveFailed"), "error");
     } finally {
@@ -1099,7 +1194,7 @@ export function ChatPage() {
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
   const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
 
-  const isChatRoute = location === "/chat";
+  const isChatRoute = location === "/chat" || Boolean(routeTarget);
   if (!isChatRoute) {
     // Mounted at the app root (see App.tsx) so navigating away never tears
     // down the socket/message state. Off the /chat route we render nothing
@@ -1211,7 +1306,17 @@ export function ChatPage() {
         <footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small></footer>
       </aside>
 
-      <section className="conversation">
+      <section
+        className={`conversation ${(() => {
+          const roomBg = selectedRoom && selectedRoom.type !== "direct" ? selectedRoom.backgroundUrl : null;
+          return selectedRoom && (roomBg || user?.backgroundUrl) ? "conversation-has-bg" : "";
+        })()}`}
+        style={(() => {
+          const roomBg = selectedRoom && selectedRoom.type !== "direct" ? selectedRoom.backgroundUrl : null;
+          const bg = roomBg || user?.backgroundUrl;
+          return selectedRoom && bg ? ({ "--conversation-bg": `url("${bg}")` } as CSSProperties) : undefined;
+        })()}
+      >
         {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty"><button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button></header>}
         {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")} description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("chat.newConversationButton")}</Button>} />}
         {aiOpen && <div className="ai-conversation">
@@ -1329,7 +1434,7 @@ export function ChatPage() {
           <div className="chat-details-content">
             {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(member.username ? `/u/${member.username}` : `/user/${member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
             {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span></div>}
           </div>
@@ -1346,8 +1451,16 @@ export function ChatPage() {
             <div><strong>{selectedRoom?.type === "channel" ? t("chat.channelPhotoLabel") : t("chat.groupPhotoLabel")}</strong><small>{t("chat.photoFormatHint")}</small><div><button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}><ImagePlus size={16} />{roomSettingsAvatar ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>{roomSettingsAvatar && <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div></div>
             <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
           </section>
+          <section className="room-background-editor">
+            <div className="room-background-preview" style={roomSettingsBackground ? { backgroundImage: `url(${roomSettingsBackground})` } : undefined}>
+              {!roomSettingsBackground && <ImagePlus size={20} />}
+            </div>
+            <div><strong>{t("chat.chatBackgroundLabel")}</strong><small>{t("chat.backgroundFormatHint")}</small><div><button type="button" onClick={() => roomBackgroundInput.current?.click()} disabled={uploadingRoomBackground}>{uploadingRoomBackground ? <LoaderCircle className="spin" size={16} /> : <ImagePlus size={16} />}{roomSettingsBackground ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>{roomSettingsBackground && <button type="button" className="danger" onClick={() => void removeRoomBackground()} disabled={uploadingRoomBackground}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div></div>
+            <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
+          </section>
           <label>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder={t("chat.namePlaceholder")} /></label>
           <label>{t("chat.descriptionLabel")}<textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={4} placeholder={selectedRoom?.type === "channel" ? t("chat.channelAboutPlaceholder") : t("chat.groupAboutPlaceholder")} /><small>{roomSettingsDescription.length}/1000</small></label>
+          <label>{t("chat.slugLabel")} <small>{t("chat.slugHint")}</small><input value={roomSettingsSlug} onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} maxLength={60} placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
           <div className="room-settings-note"><ShieldCheck size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span></div>
           <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</Button><Button type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} disabled={savingRoomSettings || !roomSettingsName.trim()}>{t("common.save")}</Button></div>
         </form>

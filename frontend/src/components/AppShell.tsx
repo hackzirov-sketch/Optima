@@ -27,7 +27,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [languageOpen, setLanguageOpen] = useState(false);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const unreadTotal = useUnreadTotal();
-  const active = (href: string) => href === "/" ? location === "/" : location.startsWith(href);
+  const active = (href: string) =>
+    href === "/"
+      ? location === "/"
+      : href === "/chat"
+        ? /^\/(chat|u|g|ch)(\/|$)/.test(location)
+        : location.startsWith(href);
 
   function chooseLanguage(next: Locale) {
     setLocale(next);
@@ -42,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={`app-shell ${location.startsWith("/chat") ? "app-shell-chat" : ""}`}>
+    <div className={`app-shell ${/^\/(chat|u|g|ch)(\/|$)/.test(location) ? "app-shell-chat" : ""}`}>
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <Logo />

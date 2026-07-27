@@ -269,6 +269,17 @@ export class UsersService {
     return this.findById(userId)
   }
 
+  async updateBackground(userId: string, backgroundUrl: string | null): Promise<User> {
+    if (backgroundUrl) {
+      await this.imageModeration.filterImageUrl(backgroundUrl, userId)
+    }
+    await this.dataSource.query(`UPDATE users SET background_url = $2 WHERE id = $1`, [
+      userId,
+      backgroundUrl,
+    ])
+    return this.findById(userId)
+  }
+
   async softDeleteAccount(userId: string): Promise<void> {
     await this.findById(userId)
     // Block all active access tokens before revoking refresh tokens.

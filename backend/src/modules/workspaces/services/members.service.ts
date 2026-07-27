@@ -54,7 +54,7 @@ export class MembersService {
          wm.id AS "id", wm.workspace_id AS "workspaceId", wm.user_id AS "userId",
          wm.role, wm.joined_at AS "joinedAt", wm.created_at AS "createdAt",
          wm.updated_at AS "updatedAt",
-         u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
+         u.id AS "u_id", u.public_id AS "u_publicId", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
          u.username AS "u_username", u.email AS "u_email", u.avatar_url AS "u_avatarUrl",
          u.last_seen AS "u_lastSeen"
        FROM workspace_members wm
@@ -67,11 +67,12 @@ export class MembersService {
   }
 
   private mapWithUser(row: any) {
-    const { u_id, u_firstName, u_lastName, u_username, u_email, u_avatarUrl, u_lastSeen, ...member } = row;
+    const { u_id, u_publicId, u_firstName, u_lastName, u_username, u_email, u_avatarUrl, u_lastSeen, ...member } = row;
     return {
       ...member,
       user: {
         id: u_id,
+        publicId: u_publicId,
         firstName: u_firstName,
         lastName: u_lastName,
         username: u_username,

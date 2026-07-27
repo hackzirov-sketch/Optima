@@ -23,9 +23,11 @@ import type { User } from '../../../database/entities/user.entity'
 import { UpdateProfileDto } from '../schemas/update-profile.schema'
 import { UpdateSettingsDto } from '../schemas/update-settings.schema'
 import { UpdateAvatarDto } from '../schemas/update-avatar.schema'
+import { UpdateBackgroundDto } from '../schemas/update-background.schema'
 import { Public } from '../../../common/decorators/public.decorator'
 
 const ALLOWED_AVATAR_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const ALLOWED_BACKGROUND_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
@@ -73,6 +75,33 @@ export class UsersController {
     }
     const result = await this.storageService.uploadAvatar(file.buffer, userId, mimeType)
     return this.usersService.updateAvatar(userId, result.storageUrl)
+  }
+
+  @Patch('me/background')
+  @ApiOperation({ summary: 'Update current user profile-level chat background URL' })
+  updateBackground(@CurrentUser() user: User, @Body() dto: UpdateBackgroundDto) {
+    return this.usersService.updateBackground(user.id, dto.backgroundUrl)
+  }
+
+  @Post('me/background/upload')
+  @ApiOperation({ summary: 'Upload current user profile-level chat background through the API' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
+  async uploadBackground(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number },
+  ) {
+    const mimeType = file?.mimetype?.split(';')[0]
+    if (!file?.buffer || !mimeType || !ALLOWED_BACKGROUND_MIME_TYPES.has(mimeType)) {
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A valid image (jpeg, png, webp, gif) is required' })
+    }
+    const result = await this.storageService.uploadBackground(file.buffer, userId, mimeType)
+    return this.usersService.updateBackground(userId, result.storageUrl)
+  }
+
+  @Delete('me/background')
+  @ApiOperation({ summary: 'Remove current user profile-level chat background' })
+  removeBackground(@CurrentUser('id') userId: string) {
+    return this.usersService.updateBackground(userId, null)
   }
 
   @Get('search')

@@ -1,4 +1,4 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -27,6 +27,7 @@ export function ProfilePage() {
   const { t, locale } = useI18n();
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [settingsSection, setSettingsSection] = useState<"profile" | "notifications" | "sessions">("profile");
@@ -80,7 +81,7 @@ export function ProfilePage() {
     }
   }
 
-  const profilePath = user?.username ? `/u/${user.username}` : `/user/${user?.publicId || ""}`;
+  const profilePath = `/profile/${user?.username || user?.publicId || ""}`;
 
   async function uploadAvatar(file?: File) {
     if (!file) return;
@@ -97,6 +98,37 @@ export function ProfilePage() {
       show(error instanceof Error ? error.message : t("profile.avatarUploadFailed"), "error");
     } finally {
       setUploadingAvatar(false);
+    }
+  }
+
+  async function uploadBackground(file?: File) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      show(t("profile.backgroundTooLarge"), "error");
+      return;
+    }
+    setUploadingBackground(true);
+    try {
+      await api.users.uploadBackground(file);
+      await refreshUser();
+      show(t("profile.backgroundUpdated"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("profile.backgroundUploadFailed"), "error");
+    } finally {
+      setUploadingBackground(false);
+    }
+  }
+
+  async function removeBackground() {
+    setUploadingBackground(true);
+    try {
+      await api.users.removeBackground();
+      await refreshUser();
+      show(t("profile.backgroundRemoved"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("profile.backgroundUploadFailed"), "error");
+    } finally {
+      setUploadingBackground(false);
     }
   }
 
@@ -173,6 +205,22 @@ export function ProfilePage() {
               <div className="form-grid-2"><label>{t("profile.languageLabel")}<select name="language" defaultValue={user?.language || "uz"}><option value="uz">O‘zbekcha</option><option value="ru">Русский</option><option value="en">English</option></select></label><label>{t("profile.timezoneLabel")}<select name="timezone" defaultValue={user?.timezone || "Asia/Tashkent"}><option value="Asia/Tashkent">Tashkent (UTC+5)</option><option value="Asia/Almaty">Almaty (UTC+5)</option><option value="Europe/Moscow">Moscow (UTC+3)</option><option value="UTC">UTC</option></select></label></div>
               <div className="settings-actions"><Button type="submit" loading={saving} icon={<Save size={17} />}>{t("profile.saveChanges")}</Button></div>
             </form>
+          </section>}
+
+          {settingsSection === "profile" && <section className="panel settings-panel settings-section-enter">
+            <header className="settings-header"><span><ImageIcon size={20} /></span><div><h2>{t("profile.chatBackgroundTitle")}</h2><p>{t("profile.chatBackgroundDesc")}</p></div></header>
+            <div className="chat-background-picker">
+              <div className="chat-background-preview" style={user?.backgroundUrl ? { backgroundImage: `url(${user.backgroundUrl})` } : undefined}>
+                {!user?.backgroundUrl && <ImageIcon size={22} />}
+              </div>
+              <div className="chat-background-actions">
+                <label className={`bg-upload-trigger ${uploadingBackground ? "is-loading" : ""}`} aria-label={t("profile.changeBackground")} title={t("profile.changeBackground")} aria-busy={uploadingBackground}>
+                  {uploadingBackground ? <LoaderCircle className="spin" size={15} /> : <ImageIcon size={15} />}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label={t("profile.selectBackgroundAria")} disabled={uploadingBackground} onChange={(event) => { void uploadBackground(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                </label>
+                {user?.backgroundUrl && <Button variant="secondary" disabled={uploadingBackground} onClick={() => void removeBackground()} icon={<Trash2 size={16} />}>{t("profile.removeBackground")}</Button>}
+              </div>
+            </div>
           </section>}
 
           {settingsSection === "notifications" && <section className="panel settings-panel settings-section-enter">

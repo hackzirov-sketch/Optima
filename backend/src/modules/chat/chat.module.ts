@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
+import { UsersModule } from '../users/users.module';
 
 import { ChatController } from './chat.controller';
 import { ChatEncryptionService } from './chat-encryption.service';
@@ -23,6 +24,7 @@ import { CommunityService } from './services/community.service';
     forwardRef(() => WorkspacesModule),
     ModerationModule,
     StorageModule,
+    UsersModule,
   ],
   controllers: [ChatController],
   providers: [

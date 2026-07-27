@@ -10,6 +10,7 @@ import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatMemberService } from './services/member.service';
 import { CommunityService } from './services/community.service';
+import { UsersService } from '../users/services/users.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateChatRoomDto } from './dto/create-chat-room.dto';
@@ -20,7 +21,7 @@ import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { AiRequestDto } from './dto/ai-request.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
-import { RoomScope } from '../../common/enums';
+import { RoomScope, ChatRoomType } from '../../common/enums';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -35,6 +36,7 @@ export class ChatController {
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
     private readonly communityService: CommunityService,
+    private readonly usersService: UsersService,
   ) {}
 
   // ── OTIMA community (ported from main) ────────────────────────────────────
@@ -96,6 +98,34 @@ export class ChatController {
   @ApiOperation({ summary: 'Create chat room in a workspace' })
   createRoom(@Param('workspaceId') workspaceId: string, @CurrentUser('id') userId: string, @Body() dto: CreateChatRoomDto) {
     return this.roomService.createRoom(workspaceId, userId, dto);
+  }
+
+  @Get('workspaces/:workspaceId/chat/resolve/:type/:identifier')
+  @ApiOperation({
+    summary:
+      'Resolve a /u, /g or /ch route identifier (username, slug or public_id) to its internal room — the only entry point that ever turns a public route into a room UUID',
+  })
+  @ApiParam({ name: 'type', enum: ['direct', 'group', 'channel'] })
+  async resolveRoute(
+    @Param('workspaceId') workspaceId: string,
+    @Param('type') type: string,
+    @Param('identifier') identifier: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    if (type === 'direct') {
+      const target = await this.usersService.findPublic(identifier);
+      const room = await this.roomService.createRoom(workspaceId, userId, {
+        type: ChatRoomType.DIRECT,
+        targetUserId: target.id,
+      } as CreateChatRoomDto);
+      return {
+        roomId: room.id,
+        type: room.type,
+        slug: room.slug ?? null,
+        publicId: room.publicId,
+      };
+    }
+    return this.roomService.resolveRoomIdentifier(identifier, userId);
   }
 
   @Post('chat/rooms')

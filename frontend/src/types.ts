@@ -9,6 +9,7 @@ export interface User {
   firstName: string;
   lastName: string;
   avatarUrl?: string | null;
+  backgroundUrl?: string | null;
   phoneNumber?: number | null;
   occupation?: string | null;
   language?: UserLanguage;
@@ -90,6 +91,8 @@ export interface ChatRoom {
   linkedRoomId?: string | null;
   myRole?: "member" | "admin" | "owner";
   isMuted?: boolean;
+  /** Stable 6-digit public identifier for /g, /ch, /u routes — never the internal UUID. */
+  publicId?: number;
   /** Admin/owner-managed background shown to every member (see SYSTEM_DESIGN.md §14.10). */
   backgroundUrl?: string | null;
   backgroundType?: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN";

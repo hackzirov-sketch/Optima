@@ -243,6 +243,12 @@ export const api = {
       body.append("file", file);
       return apiFetch<User>("/users/me/avatar/upload", { method: "POST", body });
     },
+    uploadBackground: (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      return apiFetch<User>("/users/me/background/upload", { method: "POST", body });
+    },
+    removeBackground: () => apiFetch<User>("/users/me/background", { method: "DELETE" }),
     settings: (data: Record<string, boolean>) =>
       apiFetch<User>("/users/me/settings", { method: "PATCH", body: JSON.stringify(data) }),
   },
@@ -271,8 +277,10 @@ export const api = {
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
     updateRoomBackground: (roomId: string, data: { backgroundUrl: string | null; backgroundType: NonNullable<ChatRoom["backgroundType"]> }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
-    updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null }) =>
+    updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null; slug?: string | null }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+    resolveRoute: (workspaceId: string, type: "direct" | "group" | "channel", identifier: string) =>
+      apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/workspaces/${workspaceId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
     getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),
     getDraft: (roomId: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`),
     saveDraft: (roomId: string, content: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify({ content }) }),

@@ -24,6 +24,9 @@ export interface User {
 
   avatarUrl: string | null;
 
+  /** Profile-level default chat wallpaper — fallback background when a room has no per-user override. */
+  backgroundUrl: string | null;
+
   language: UserLanguage;
 
   timezone: string;

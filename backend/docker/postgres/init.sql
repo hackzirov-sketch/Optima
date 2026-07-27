@@ -3341,4 +3341,82 @@ CREATE TABLE IF NOT EXISTS public.education_video_reports (
   UNIQUE (user_id, video_id)
 );
 
+-- Profile-level default chat wallpaper — used as the fallback background for a
+-- user's chats when no per-room user_chat_settings.background_url override exists.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS background_url text;
+
+-- ── Chat route redesign: chat_rooms.public_id + slug (mirrors users.public_id,
+-- see init.sql "public_user_id_registry" above) so group/channel/DM URLs never
+-- expose the internal UUID (/g/<slug-or-public_id>, /ch/..., /u/<username-or-public_id>).
+CREATE TABLE IF NOT EXISTS public.chat_room_public_id_registry (
+  public_id integer PRIMARY KEY CHECK (public_id BETWEEN 100000 AND 999999),
+  room_id uuid NOT NULL UNIQUE,
+  assigned_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.chat_rooms ADD COLUMN IF NOT EXISTS public_id integer;
+
+CREATE OR REPLACE FUNCTION public.reserve_six_digit_room_public_id(target_room uuid)
+RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE candidate integer;
+BEGIN
+  LOOP
+    candidate := floor(random() * 900000 + 100000)::integer;
+    INSERT INTO public.chat_room_public_id_registry(public_id, room_id)
+    VALUES (candidate, target_room) ON CONFLICT DO NOTHING;
+    IF FOUND THEN RETURN candidate; END IF;
+  END LOOP;
+END $$;
+
+-- Backfill any pre-existing rooms (no-op on a fresh database)
+DO $$ DECLARE current_room_row record; assigned integer;
+BEGIN
+  FOR current_room_row IN SELECT id FROM public.chat_rooms WHERE public_id IS NULL LOOP
+    assigned := public.reserve_six_digit_room_public_id(current_room_row.id);
+    UPDATE public.chat_rooms SET public_id = assigned WHERE id = current_room_row.id;
+  END LOOP;
+END $$;
+
+ALTER TABLE public.chat_rooms ALTER COLUMN public_id SET NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.protect_room_public_id() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.public_id IS DISTINCT FROM OLD.public_id THEN RAISE EXCEPTION 'Room public ID is immutable'; END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.assign_random_room_public_id()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.public_id IS NULL THEN NEW.public_id := public.reserve_six_digit_room_public_id(NEW.id); ELSE
+    INSERT INTO public.chat_room_public_id_registry(public_id, room_id) VALUES (NEW.public_id, NEW.id);
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_assign_random_room_public_id ON public.chat_rooms;
+CREATE TRIGGER trg_assign_random_room_public_id
+  BEFORE INSERT ON public.chat_rooms FOR EACH ROW EXECUTE FUNCTION public.assign_random_room_public_id();
+
+DROP TRIGGER IF EXISTS trg_protect_room_public_id ON public.chat_rooms;
+CREATE TRIGGER trg_protect_room_public_id
+  BEFORE UPDATE ON public.chat_rooms FOR EACH ROW EXECUTE FUNCTION public.protect_room_public_id();
+
+-- chat_rooms.slug already exists (see "OTIMA community" block above), but was only
+-- unique for is_system rows. Widen it to every room with a slug set (admin-settable,
+-- optional — /g and /ch fall back to public_id when unset).
+CREATE UNIQUE INDEX IF NOT EXISTS "UQ_chat_rooms_slug"
+  ON public.chat_rooms (lower(slug)) WHERE slug IS NOT NULL;
+
+-- Records an old slug whenever an admin renames a room, so a stale /g/<old-slug> or
+-- /ch/<old-slug> link can still be resolved and redirected to the current one.
+CREATE TABLE IF NOT EXISTS public.chat_room_slug_history (
+  id uuid PRIMARY KEY DEFAULT public.uuid_generate_v4(),
+  room_id uuid NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
+  old_slug varchar(100) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS "IDX_chat_room_slug_history_slug" ON public.chat_room_slug_history (lower(old_slug));
+
 

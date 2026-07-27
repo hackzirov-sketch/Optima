@@ -15,8 +15,6 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
   const [, navigate] = useLocation();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [failed, setFailed] = useState(false);
-  const [openingChat, setOpeningChat] = useState(false);
-  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
     api.users.publicProfile(identifier).then(setProfile).catch(() => setFailed(true));
@@ -26,22 +24,15 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
     await navigator.clipboard.writeText(value);
   }
 
-  async function openChat() {
-    if (!profile?.publicId || !workspace || openingChat) return;
+  function openChat() {
+    if (!profile?.publicId || !workspace) return;
     if (String(profile.publicId) === String(user?.publicId)) {
       navigate("/chat");
       return;
     }
-    setChatError("");
-    setOpeningChat(true);
-    try {
-      const room = await api.chat.createRoom(workspace.id, { type: "direct", targetPublicId: profile.publicId });
-      window.location.assign(`/chat?room=${encodeURIComponent(room.id)}`);
-    } catch (error) {
-      setChatError(error instanceof Error ? error.message : t("publicProfile.chatOpenFailed"));
-    } finally {
-      setOpeningChat(false);
-    }
+    // /u/:identifier resolves (and find-or-creates) the DM room itself - see
+    // the chat route redesign's GET /chat/resolve/direct/:identifier.
+    navigate(`/u/${profile.username || profile.publicId}`);
   }
 
   return <main className="public-profile-page">
@@ -59,11 +50,10 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
           <h1>{profile.firstName} {profile.lastName}</h1>
           <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
         </div>
-        {user && <button className="public-profile-message" onClick={() => void openChat()} disabled={!workspace || openingChat}>
-          {openingChat ? <LoaderCircle className="spin" size={19} /> : <MessageCircle size={19} />}
+        {user && <button className="public-profile-message" onClick={openChat} disabled={!workspace}>
+          <MessageCircle size={19} />
           <span><strong>{t("publicProfile.chatTitle")}</strong><small>{String(profile.publicId) === String(user.publicId) ? t("publicProfile.backToChats") : t("publicProfile.openPersonalChat")}</small></span>
         </button>}
-        {chatError && <p className="public-profile-error">{chatError}</p>}
         <div className="public-profile-info">
           <div><AtSign size={18} /><span><strong>{profile.username ? `@${profile.username}` : t("common.notSet")}</strong><small>{t("publicProfile.usernameLabel")}</small></span></div>
           <button onClick={() => void copy(window.location.href)}><Link2 size={18} /><span><strong>{t("publicProfile.profileLink")}</strong><small>{t("publicProfile.clickToCopy")}</small></span><Copy size={17} /></button>

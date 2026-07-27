@@ -29,7 +29,10 @@ export function App() {
       : "light";
   }, [user]);
   if (!ready) return <LoadingScreen />;
-  const publicProfileMatch = location.match(/^\/(?:u|user)\/([^/?#]+)$/);
+  // /profile/:id is the public profile view. /user/:id is kept as a legacy alias
+  // (old shared links) — it used to also serve /u/:id, but that prefix now opens
+  // a DM (see chatUserMatch below), per the chat route redesign.
+  const publicProfileMatch = location.match(/^\/(?:profile|user)\/([^/?#]+)$/);
   if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
   if (!user) return <AuthPage />;
 
@@ -45,7 +48,19 @@ export function App() {
 
   const meetingMatch = location.match(/^\/meetings\/([^/]+)$/);
   const isEducation = location === "/education" || location.startsWith("/education/");
-  const isChat = location === "/chat";
+  // Chat route redesign: /u/:id (DM), /g/:slug-or-publicId (group), /ch/:slug-or-publicId
+  // (channel) — resolved to an internal room id inside ChatPage, never used directly as one.
+  const chatUserMatch = location.match(/^\/u\/([^/?#]+)/);
+  const chatGroupMatch = location.match(/^\/g\/([^/?#]+)/);
+  const chatChannelMatch = location.match(/^\/ch\/([^/?#]+)/);
+  const chatRouteTarget = chatUserMatch
+    ? { type: "direct" as const, identifier: decodeURIComponent(chatUserMatch[1]) }
+    : chatGroupMatch
+    ? { type: "group" as const, identifier: decodeURIComponent(chatGroupMatch[1]) }
+    : chatChannelMatch
+    ? { type: "channel" as const, identifier: decodeURIComponent(chatChannelMatch[1]) }
+    : null;
+  const isChat = location === "/chat" || Boolean(chatRouteTarget);
 
   const mainContent = meetingMatch ? (
     <MeetingRoomPage meetingId={meetingMatch[1]} />
@@ -73,7 +88,7 @@ export function App() {
           room vs. the normal app shell) - that's what lets React keep this
           one instance mounted (socket, messages, minimized state and all)
           instead of remounting it when navigating into/out of a meeting. */}
-      <ChatPage />
+      <ChatPage routeTarget={chatRouteTarget} />
     </>
   );
 }

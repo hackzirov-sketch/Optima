@@ -52,6 +52,9 @@ export interface ChatRoom {
 
   updatedAt: Date;
 
+  /** Stable 6-digit public identifier for /g, /ch, /u routes — never the internal UUID. */
+  publicId: number;
+
   /** OTIMA community fields (ported from main) — only set on the two system rooms. */
   slug: string | null;
 

@@ -11,10 +11,11 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 
-export type UploadFolder = 'avatars' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings' | 'meeting-files';
+export type UploadFolder = 'avatars' | 'backgrounds' | 'attachments' | 'workspace' | 'pushes' | 'meeting-recordings' | 'meeting-files';
 
 const FOLDER_LIMITS: Record<UploadFolder, { maxBytes: number; mimeTypes: string[] | null }> = {
   avatars:     { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
+  backgrounds: { maxBytes: 8 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] },
   workspace:   { maxBytes: 5 * 1024 * 1024,  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
   attachments: {
     // Telegram-style chat attachments — everything except round "video message" circles.
@@ -244,6 +245,20 @@ export class StorageService {
       throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for avatars: ${limits.mimeTypes.join(', ')}` });
     }
     const publicId = `${this.baseFolder}/avatars/${userId}/${uuidv4()}`;
+    const result = await this.uploadBufferToCloudinary(buffer, publicId, 'image');
+    return { storageKey: result.public_id, storageUrl: result.secure_url, fileSize: buffer.length, mimeType };
+  }
+
+  /** Direct server-side upload for a user's own profile-level chat background wallpaper. */
+  async uploadBackground(buffer: Buffer, userId: string, mimeType: string) {
+    const limits = FOLDER_LIMITS.backgrounds;
+    if (buffer.length > limits.maxBytes) {
+      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: `Background must be ${Math.round(limits.maxBytes / 1024 / 1024)}MB or smaller` });
+    }
+    if (limits.mimeTypes && !limits.mimeTypes.includes(mimeType)) {
+      throw new BadRequestException({ code: ErrorCode.STORAGE_INVALID_MIME, message: `Allowed types for backgrounds: ${limits.mimeTypes.join(', ')}` });
+    }
+    const publicId = `${this.baseFolder}/backgrounds/${userId}/${uuidv4()}`;
     const result = await this.uploadBufferToCloudinary(buffer, publicId, 'image');
     return { storageKey: result.public_id, storageUrl: result.secure_url, fileSize: buffer.length, mimeType };
   }
