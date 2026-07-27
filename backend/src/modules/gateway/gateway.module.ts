@@ -5,6 +5,7 @@ import { EventsGateway } from './events.gateway';
 import { ChatModule } from '../chat/chat.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { MeetingsModule } from '../meetings/meetings.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MeetingsModule } from '../meetings/meetings.module';
     }),
     ChatModule,
     ModerationModule,
+    UsersModule,
     // MeetingsModule -> NotificationsModule -> GatewayModule closes a cycle,
     // so this edge must be wrapped in forwardRef() to defer resolution.
     forwardRef(() => MeetingsModule),

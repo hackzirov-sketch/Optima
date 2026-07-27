@@ -50,6 +50,7 @@
     "settings": "Settings",
     "notifications": "Notifications",
     "language": "Change language",
+    "statusPicker": "Set status",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "loading": "Loading page",
@@ -724,6 +725,19 @@
       "speedAria": "Playback speed",
       "downloadAria": "Download audio"
     }
+  },
+  "presence": {
+    "online": "Online",
+    "away": "Away",
+    "busy": "Busy",
+    "dnd": "Do not disturb",
+    "inMeeting": "In a meeting",
+    "offline": "Offline",
+    "lastSeenJustNow": "Last seen just now",
+    "lastSeenMinutesAgo": "Last seen {{count}}m ago",
+    "lastSeenHoursAgo": "Last seen {{count}}h ago",
+    "lastSeenDaysAgo": "Last seen {{count}}d ago",
+    "invisible": "Invisible"
   },
   "meetingRoom": {
     "loadFailed": "Meeting didn’t load",

@@ -9,11 +9,17 @@ import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
+import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal } from "../lib/chatUnread";
 import { useI18n, type TranslateFn } from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+
+function MemberPresenceDot({ userId }: { userId: string }) {
+  const presence = usePresence(userId);
+  return <i className={isPresenceActive(presence) ? `online presence-${presence?.status}` : ""} />;
+}
 
 function memberUser(member: WorkspaceMember, t: TranslateFn): User {
   return (member.user || {
@@ -123,7 +129,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
   const [detailMemberTotal, setDetailMemberTotal] = useState(0);
-  const [detailMembers, setDetailMembers] = useState<Array<{ publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
+  const [detailMembers, setDetailMembers] = useState<Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
   const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
@@ -181,6 +187,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const detailPeer = selectedRoom?.type === "direct"
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
+  const peerPresence = usePresence(detailPeer?.id);
 
   useEffect(() => {
     setUnreadTotal(rooms.reduce((sum, room) => sum + room.unreadCount, 0));
@@ -492,6 +499,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   useEffect(() => {
     if (!workspace) return;
     const socket = getSocket();
+    initPresence();
     const onConnect = () => {
       setConnected(true);
       socket.emit("join_workspace", { workspaceId: workspace.id });
@@ -1389,7 +1397,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <header className="conversation-header">
               <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
               {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-              <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? (connected ? t("chat.onlineStatus") : t("chat.offlineStatus")) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p></button>
+              <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? formatPresenceLabel(peerPresence, t) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p></button>
               <div className="conversation-tools">
                 <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
                 <button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
@@ -1492,12 +1500,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>{t("chat.searchActionLabel")}</span></button>
             <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
           </div>
-          {selectedRoom?.type === "direct" && <section className="direct-profile-info"><button onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}><UserRound size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button><div><RadioTower size={19} /><span><strong>{connected ? t("chat.onlineStatus") : t("chat.offlineStatus")}</strong><small>{t("chat.activityStatusLabel")}</small></span></div></section>}
+          {selectedRoom?.type === "direct" && <section className="direct-profile-info"><button onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}><UserRound size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button><div><RadioTower size={19} /><span><strong>{formatPresenceLabel(peerPresence, t)}</strong><small>{t("chat.activityStatusLabel")}</small></span></div></section>}
           <nav className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"), media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab") })[tab]}</button>)}</nav>
           <div className="chat-details-content">
             {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><i className={member.lastSeen && Date.now() - new Date(member.lastSeen).getTime() < 300000 ? "online" : ""} /></button></div>)}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot userId={member.id} /></button></div>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
             {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span></div>}
           </div>

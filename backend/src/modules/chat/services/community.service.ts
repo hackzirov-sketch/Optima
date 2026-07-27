@@ -49,7 +49,7 @@ export class CommunityService {
       searchSql = `AND (u.first_name ILIKE $4 OR u.last_name ILIKE $4 OR u.username ILIKE $4)`;
     }
     const items = await this.dataSource.query(
-      `SELECT u.public_id AS "publicId", u.first_name AS "firstName", u.last_name AS "lastName", u.username,
+      `SELECT u.id AS "id", u.public_id AS "publicId", u.first_name AS "firstName", u.last_name AS "lastName", u.username,
               u.avatar_url AS "avatarUrl", u.last_seen AS "lastSeen", cm.role, cm.joined_at AS "joinedAt"
        FROM chat_members cm JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = $1 AND cm.status = 'active' AND cm.left_at IS NULL

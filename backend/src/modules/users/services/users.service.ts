@@ -124,6 +124,16 @@ export class UsersService {
     return { ...user, settings: settings[0] ?? null, workspaces: memberships }
   }
 
+  /** Bulk last_seen lookup — the durable "history" half of presence (see ChatPresenceService for the live half). */
+  async getLastSeenBulk(userIds: string[]): Promise<Record<string, string | null>> {
+    if (userIds.length === 0) return {}
+    const rows: Array<{ id: string; lastSeen: string | null }> = await this.dataSource.query(
+      `SELECT id, last_seen AS "lastSeen" FROM users WHERE id = ANY($1::uuid[])`,
+      [userIds],
+    )
+    return Object.fromEntries(rows.map((row) => [row.id, row.lastSeen]))
+  }
+
   /**
    * Fuzzy user search for the "start a DM" / member picker. Respects account
    * privacy: a PRIVATE account is excluded from fuzzy matches (name/username/

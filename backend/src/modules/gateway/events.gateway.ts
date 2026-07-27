@@ -21,8 +21,10 @@ import { ACCESS_COOKIE } from '../../common/utils/auth-cookies.util';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ChatMemberService } from '../chat/services/member.service';
+import { ChatPresenceService, PresenceStatus } from '../chat/services/presence.service';
 import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
+import { UsersService } from '../users/services/users.service';
 
 export interface WsUser {
   id: string;
@@ -101,8 +103,10 @@ export class EventsGateway
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly memberService: ChatMemberService,
+    private readonly presenceService: ChatPresenceService,
     private readonly violationService: ViolationService,
     private readonly dataSource: DatabaseService,
+    private readonly usersService: UsersService,
     @Inject(forwardRef(() => MeetingsService))
     private readonly meetingsService: MeetingsService,
   ) {}
@@ -202,58 +206,93 @@ export class EventsGateway
     // Auto-join personal room for direct notifications
     client.join(`user:${user.id}`);
 
-    // Load workspace memberships → join scoped rooms + broadcast user_online
+    // Load workspace memberships → join scoped rooms
     const memberships: Array<{ workspaceId: string }> = await this.dataSource.query(
       `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
       [user.id],
     );
     const wsIds = memberships.map((m) => m.workspaceId);
-    
+
     // Store workspace memberships in socket data for cleanup on disconnect
     client.data.workspaceIds = wsIds;
+    wsIds.forEach((wsId) => client.join(`workspace:${wsId}`));
 
-    // Parallel: har workspace uchun fetchSockets'ni bir vaqtda chaqiramiz
-    const onlineInMyWorkspaces = new Set<string>();
+    // Redis presence: multi-device connection counter - only the 0->1
+    // transition actually flips status to online (see ChatPresenceService).
+    const { status, isNewlyOnline } = await this.presenceService.connect(user.id);
+    if (isNewlyOnline) {
+      wsIds.forEach((wsId) =>
+        this.server.to(`workspace:${wsId}`).emit('presence_update', {
+          userId: user.id,
+          status: this.presenceService.maskForOthers(status),
+        }),
+      );
+    }
+
+    // Bulk presence snapshot for everyone in my workspaces, in one shot.
+    const peerIds = new Set<string>();
     await Promise.all(
       wsIds.map(async (wsId) => {
-        client.join(`workspace:${wsId}`);
-        client.to(`workspace:${wsId}`).emit('user_online', { userId: user.id });
-
         const sockets = await this.server.in(`workspace:${wsId}`).fetchSockets();
         for (const s of sockets) {
-          if (s.data?.userId && s.data.userId !== user.id) {
-            onlineInMyWorkspaces.add(s.data.userId);
-          }
+          if (s.data?.userId && s.data.userId !== user.id) peerIds.add(s.data.userId);
         }
       }),
     );
-
-    // Send filtered online list only (workspace-scoped, not global)
-    client.emit('online_users', { userIds: Array.from(onlineInMyWorkspaces) });
+    const snapshot = await this.presenceService.getPresenceBulk(Array.from(peerIds));
+    client.emit('presence_snapshot', { presence: snapshot });
 
     this.logger.log(`Client connected: ${client.id} → userId=${user.id}`);
+  }
+
+  @SubscribeMessage('heartbeat')
+  async handleHeartbeat(@ConnectedSocket() client: Socket) {
+    const userId = client.data?.userId;
+    if (!userId) return;
+    await this.presenceService.refresh(userId);
+    // Cheap, already-debounced (30s) DB write - keeps users.last_seen fresh
+    // for the "last seen" history column without hammering Postgres.
+    void this.usersService.updateLastSeen(userId);
+  }
+
+  @SubscribeMessage('presence.set_status')
+  async handleSetStatus(
+    @MessageBody() data: { status: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId) return;
+    if (!Object.values(PresenceStatus).includes(data.status as PresenceStatus)) return;
+    if (data.status === PresenceStatus.OFFLINE) return; // offline is derived, never set directly
+    await this.presenceService.setStatus(userId, data.status as PresenceStatus);
+    const wsIds: string[] = client.data?.workspaceIds || [];
+    const masked = this.presenceService.maskForOthers(data.status as PresenceStatus);
+    wsIds.forEach((wsId) =>
+      this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: masked }),
+    );
   }
 
   async handleDisconnect(client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
 
-    // Wait a brief moment to see if they have other active sockets (e.g. multiple tabs)
-    // before broadcasting them as offline
-    setTimeout(async () => {
-      try {
-        const sockets = await this.server.in(`user:${userId}`).fetchSockets();
-        if (sockets.length === 0) {
-          // User has completely disconnected from the cluster
-          const wsIds = client.data?.workspaceIds || [];
-          for (const wsId of wsIds) {
-            this.server.to(`workspace:${wsId}`).emit('user_offline', { userId });
-          }
+    // The Redis connections counter (ChatPresenceService) is decremented
+    // atomically and independently of Socket.IO's own room bookkeeping, so -
+    // unlike the old fetchSockets-based check this replaced - there's no need
+    // to wait/guess whether other tabs are still around: a multi-device user
+    // simply won't hit isNowOffline until their last connection drops.
+    try {
+      const { isNowOffline } = await this.presenceService.disconnect(userId);
+      if (isNowOffline) {
+        void this.usersService.updateLastSeen(userId);
+        const wsIds: string[] = client.data?.workspaceIds || [];
+        for (const wsId of wsIds) {
+          this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.OFFLINE });
         }
-      } catch (err) {
-        this.logger.error(`Error during disconnect cleanup for ${userId}`, err);
       }
-    }, 2000);
+    } catch (err) {
+      this.logger.error(`Error during presence disconnect cleanup for ${userId}`, err);
+    }
 
     // Clean up meeting presence if this socket was in a meeting — but only
     // after a reconnect grace period (see MEETING_RECONNECT_GRACE_MS), not
@@ -642,6 +681,14 @@ export class EventsGateway
     // Notify everyone else that this user joined
     client.to(`meeting:${meetingId}`).emit('meeting:user-joined', { meetingId, userId });
 
+    // Auto-presence: joining a call is a strong, unambiguous "in a meeting"
+    // signal - no reason to make the user set this by hand.
+    await this.presenceService.setStatus(userId, PresenceStatus.IN_MEETING);
+    const wsIds: string[] = client.data?.workspaceIds || [];
+    wsIds.forEach((wsId) =>
+      this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.IN_MEETING }),
+    );
+
     this.logger.log(`User ${userId} joined meeting ${meetingId}`);
   }
 
@@ -767,6 +814,12 @@ export class EventsGateway
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
       client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
       this.logger.log(`User ${userId} left meeting ${meetingId}`);
+
+      await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
+      const wsIds: string[] = client.data?.workspaceIds || [];
+      wsIds.forEach((wsId) =>
+        this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
+      );
     }
   }
 

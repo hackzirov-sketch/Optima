@@ -10,6 +10,7 @@ import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatMemberService } from './services/member.service';
 import { CommunityService } from './services/community.service';
+import { ChatPresenceService, PresenceStatus } from './services/presence.service';
 import { UsersService } from '../users/services/users.service';
 import { StorageService } from '../storage/storage.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -37,6 +38,7 @@ export class ChatController {
     private readonly storageService: StorageService,
     private readonly communityService: CommunityService,
     private readonly usersService: UsersService,
+    private readonly presenceService: ChatPresenceService,
   ) {}
 
   // ── OTIMA community (ported from main) ────────────────────────────────────
@@ -150,6 +152,20 @@ export class ChatController {
     @Query('limit') limit?: string,
   ) {
     return this.communityService.listMembers(roomId, userId, q, Number(page) || 1, Number(limit) || 30);
+  }
+
+  @Get('chat/presence')
+  @ApiOperation({ summary: 'Bulk presence lookup (status + last-seen fallback) for a set of user ids — DMs can be cross-workspace, so this is not workspace-scoped' })
+  async getPresenceBulk(@Query('ids') ids: string) {
+    const userIds = (ids || '').split(',').map((id) => id.trim()).filter(Boolean).slice(0, 200)
+    const [statuses, lastSeenById] = await Promise.all([
+      this.presenceService.getPresenceBulk(userIds),
+      this.usersService.getLastSeenBulk(userIds),
+    ])
+    return userIds.reduce((acc, id) => {
+      acc[id] = { status: statuses[id] ?? PresenceStatus.OFFLINE, lastSeenAt: lastSeenById[id] ?? null }
+      return acc
+    }, {} as Record<string, { status: PresenceStatus; lastSeenAt: string | null }>)
   }
 
   @Get('chat/rooms/:roomId/read-receipts')

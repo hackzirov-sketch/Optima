@@ -50,6 +50,7 @@
     "settings": "Sozlamalar",
     "notifications": "Bildirishnomalar",
     "language": "Tilni o‘zgartirish",
+    "statusPicker": "Holatni tanlash",
     "openMenu": "Menyuni ochish",
     "closeMenu": "Menyuni yopish",
     "loading": "Sahifa ochilmoqda",
@@ -724,6 +725,19 @@
       "speedAria": "Ijro tezligi",
       "downloadAria": "Audioni yuklab olish"
     }
+  },
+  "presence": {
+    "online": "Onlayn",
+    "away": "Chetda",
+    "busy": "Band",
+    "dnd": "Bezovta qilinmasin",
+    "inMeeting": "Yig‘ilishda",
+    "offline": "Oflayn",
+    "lastSeenJustNow": "Hozirgina online edi",
+    "lastSeenMinutesAgo": "{{count}} daqiqa oldin online edi",
+    "lastSeenHoursAgo": "{{count}} soat oldin online edi",
+    "lastSeenDaysAgo": "{{count}} kun oldin online edi",
+    "invisible": "Ko‘rinmas"
   },
   "meetingRoom": {
     "loadFailed": "Meeting ochilmadi",

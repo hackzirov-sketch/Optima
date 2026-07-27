@@ -50,6 +50,7 @@
     "settings": "Ayarlar",
     "notifications": "Bildirimler",
     "language": "Dili değiştir",
+    "statusPicker": "Durum seç",
     "openMenu": "Menüyü aç",
     "closeMenu": "Menüyü kapat",
     "loading": "Sayfa açılıyor",
@@ -724,6 +725,19 @@
       "speedAria": "Oynatma hızı",
       "downloadAria": "Sesi indir"
     }
+  },
+  "presence": {
+    "online": "Çevrimiçi",
+    "away": "Uzakta",
+    "busy": "Meşgul",
+    "dnd": "Rahatsız etmeyin",
+    "inMeeting": "Toplantıda",
+    "offline": "Çevrimdışı",
+    "lastSeenJustNow": "Az önce çevrimiçiydi",
+    "lastSeenMinutesAgo": "{{count}} dakika önce çevrimiçiydi",
+    "lastSeenHoursAgo": "{{count}} saat önce çevrimiçiydi",
+    "lastSeenDaysAgo": "{{count}} gün önce çevrimiçiydi",
+    "invisible": "Görünmez"
   },
   "meetingRoom": {
     "loadFailed": "Toplantı açılamadı",

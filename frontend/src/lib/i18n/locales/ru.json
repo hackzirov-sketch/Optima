@@ -50,6 +50,7 @@
     "settings": "Настройки",
     "notifications": "Уведомления",
     "language": "Изменить язык",
+    "statusPicker": "Выбрать статус",
     "openMenu": "Открыть меню",
     "closeMenu": "Закрыть меню",
     "loading": "Страница загружается",
@@ -724,6 +725,19 @@
       "speedAria": "Скорость воспроизведения",
       "downloadAria": "Скачать аудио"
     }
+  },
+  "presence": {
+    "online": "В сети",
+    "away": "Отошёл",
+    "busy": "Занят",
+    "dnd": "Не беспокоить",
+    "inMeeting": "На встрече",
+    "offline": "Не в сети",
+    "lastSeenJustNow": "Был(а) в сети только что",
+    "lastSeenMinutesAgo": "Был(а) в сети {{count}} мин. назад",
+    "lastSeenHoursAgo": "Был(а) в сети {{count}} ч. назад",
+    "lastSeenDaysAgo": "Был(а) в сети {{count}} дн. назад",
+    "invisible": "Невидимый"
   },
   "meetingRoom": {
     "loadFailed": "Встреча не открылась",

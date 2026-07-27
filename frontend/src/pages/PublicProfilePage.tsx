@@ -5,9 +5,10 @@ import { Avatar, Logo } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
+import { formatPresenceLabel, isPresenceActive, usePresence } from "../lib/presence";
 import type { User } from "../types";
 
-type PublicProfile = Pick<User, "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">;
+type PublicProfile = Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">;
 
 export function PublicProfilePage({ identifier }: { identifier: string }) {
   const { user, workspace } = useAuth();
@@ -15,6 +16,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
   const [, navigate] = useLocation();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [failed, setFailed] = useState(false);
+  const presence = usePresence(profile?.id);
 
   useEffect(() => {
     api.users.publicProfile(identifier).then(setProfile).catch(() => setFailed(true));
@@ -46,9 +48,10 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
       {profile && <>
         <div className="public-profile-hero">
           <Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />
-          <span className="public-profile-presence" />
+          {isPresenceActive(presence) && <span className="public-profile-presence" />}
           <h1>{profile.firstName} {profile.lastName}</h1>
           <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
+          <p className="public-profile-status">{formatPresenceLabel(presence, t)}</p>
         </div>
         {user && <button className="public-profile-message" onClick={openChat} disabled={!workspace}>
           <MessageCircle size={19} />

@@ -4,8 +4,17 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
 import { locales, localeMeta, useI18n, type Locale } from "../lib/i18n/i18n";
+import { setMyPresenceStatus, type PresenceStatus } from "../lib/presence";
 import { Avatar, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
+
+const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_meeting">; dotClass: string }> = [
+  { value: "online", dotClass: "status-dot-online" },
+  { value: "away", dotClass: "status-dot-away" },
+  { value: "busy", dotClass: "status-dot-busy" },
+  { value: "dnd", dotClass: "status-dot-dnd" },
+  { value: "invisible", dotClass: "status-dot-invisible" },
+];
 
 type TextKey = "home" | "chat" | "meetings" | "library" | "education" | "profile";
 
@@ -27,6 +36,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [languageOpen, setLanguageOpen] = useState(false);
   const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
   const unreadTotal = useUnreadTotal();
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  // Not read back from the server: /chat/presence masks INVISIBLE -> OFFLINE
+  // for everyone (including the owner) since it can't tell who's asking, so
+  // the only reliable "what did I pick" source is the choice itself.
+  const [myStatus, setMyStatus] = useState<Exclude<PresenceStatus, "offline" | "in_meeting">>("online");
   const active = (href: string) =>
     href === "/"
       ? location === "/"
@@ -37,6 +51,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   function chooseLanguage(next: Locale) {
     setLocale(next);
     setLanguageOpen(false);
+  }
+
+  function chooseStatus(status: Exclude<PresenceStatus, "offline" | "in_meeting">) {
+    setMyStatus(status);
+    setMyPresenceStatus(status);
+    setStatusMenuOpen(false);
   }
 
   function toggleTheme() {
@@ -87,9 +107,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <div className="sidebar-profile">
           <Link href="/profile" className="profile-link">
-            <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} />
+            <span className="profile-link-avatar-wrap">
+              <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} />
+              <i className={`status-dot status-dot-${myStatus}`} aria-hidden="true" />
+            </span>
             <span><strong>{user?.firstName} {user?.lastName}</strong><small>@{user?.username}</small></span>
           </Link>
+          <div className="status-picker">
+            <button className="icon-button" onClick={() => setStatusMenuOpen((value) => !value)} aria-label={t("shell.statusPicker")} title={t(`presence.${myStatus === "dnd" ? "dnd" : myStatus}`)} aria-expanded={statusMenuOpen}>
+              <i className={`status-dot status-dot-${myStatus}`} aria-hidden="true" />
+            </button>
+            {statusMenuOpen && (
+              <div className="status-menu" role="menu">
+                {STATUS_OPTIONS.map((option) => (
+                  <button key={option.value} onClick={() => chooseStatus(option.value)} role="menuitem">
+                    <i className={`status-dot status-dot-${option.value}`} aria-hidden="true" />
+                    <span>{t(`presence.${option.value}`)}</span>
+                    {myStatus === option.value && <Check size={15} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button className="icon-button" onClick={() => void logout()} aria-label={t("shell.logout")} title={t("shell.logout")}><LogOut size={18} /></button>
         </div>
       </aside>
