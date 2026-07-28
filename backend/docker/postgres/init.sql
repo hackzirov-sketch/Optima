@@ -813,27 +813,6 @@ CREATE TABLE public.meetings (
 
 
 --
--- Name: meeting_join_requests; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.meeting_join_requests (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    meeting_id uuid NOT NULL REFERENCES public.meetings(id) ON DELETE CASCADE,
-    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    status public.meeting_join_request_status_enum DEFAULT 'pending'::public.meeting_join_request_status_enum NOT NULL,
-    requested_at timestamp with time zone DEFAULT now() NOT NULL,
-    reviewed_by uuid REFERENCES public.users(id),
-    reviewed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT uq_meeting_join_requests_meeting_user UNIQUE (meeting_id, user_id)
-);
-
-CREATE INDEX idx_meeting_join_requests_meeting_status
-    ON public.meeting_join_requests (meeting_id, status);
-
-
---
 -- Name: message_attachments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3473,5 +3452,27 @@ CREATE INDEX IF NOT EXISTS "IDX_chat_room_slug_history_slug" ON public.chat_room
 -- so privacy blocks casual discovery without breaking sharing/invites.
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS account_visibility varchar(20) NOT NULL DEFAULT 'public';
+
+-- Meeting Join Policy: waiting room (request/approve/reject). Placed here,
+-- after every PRIMARY KEY constraint in the file (meetings/users' PKs are
+-- only added much further up, in the ALTER TABLE ... ADD CONSTRAINT section)
+-- — a FOREIGN KEY can't reference a column before it has a unique/PK
+-- constraint, so this table must not sit right next to meetings' CREATE
+-- TABLE like the rest of this file's tables do.
+CREATE TABLE IF NOT EXISTS public.meeting_join_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    meeting_id uuid NOT NULL REFERENCES public.meetings(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    status public.meeting_join_request_status_enum DEFAULT 'pending'::public.meeting_join_request_status_enum NOT NULL,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    reviewed_by uuid REFERENCES public.users(id),
+    reviewed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT uq_meeting_join_requests_meeting_user UNIQUE (meeting_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_join_requests_meeting_status
+    ON public.meeting_join_requests (meeting_id, status);
 
 
