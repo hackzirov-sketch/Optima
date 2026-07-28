@@ -24,6 +24,8 @@ export const RedisKeys = {
   cachedUser: (userId: string) => `upz:user_cache:${userId}`,
   lastSeen: (userId: string) => `upz:last_seen:${userId}`,
   workspaceMember: (workspaceId: string, userId: string) => `upz:ws_member:${workspaceId}:${userId}`,
+  /** Sorted set of userIds waiting for host approval, score = requestedAt epoch ms — fast count/order path for the meeting Waiting Room, mirrors meeting_join_requests (Postgres stays the source of truth). */
+  meetingWaiting: (meetingId: string) => `upz:meeting_waiting:${meetingId}`,
 
   // ── Email verification ───────────────────────────────────────────────────────
   // Keyed by a long, unguessable, globally-unique token — NOT by the 6-digit code.

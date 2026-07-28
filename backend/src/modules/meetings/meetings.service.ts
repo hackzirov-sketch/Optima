@@ -15,12 +15,16 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import {
   MeetingStatus,
   MeetingParticipantRole,
+  MeetingJoinPolicy,
+  MeetingJoinRequestStatus,
 } from '../../common/enums/meeting.enum';
 import { NotificationType, RoomScope } from '../../common/enums';
 import { MembersService } from '../workspaces/services/members.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { StorageService } from '../storage/storage.service';
+import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import {
   buildUpdateSet,
@@ -39,10 +43,27 @@ export const MEETING_AUTO_END_GRACE_SECONDS = 20;
 
 const MEETING_COLUMNS_SQL = `
   id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
-  meeting_code AS "meetingCode", status, scope, start_time AS "startTime", end_time AS "endTime",
+  meeting_code AS "meetingCode", status, scope, join_policy AS "joinPolicy", locked,
+  start_time AS "startTime", end_time AS "endTime",
   max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
+
+const JOIN_REQUEST_COLUMNS_SQL = `
+  id, meeting_id AS "meetingId", user_id AS "userId", status,
+  requested_at AS "requestedAt", reviewed_by AS "reviewedBy", reviewed_at AS "reviewedAt"
+`;
+
+/**
+ * Default join policy when the client doesn't specify one explicitly:
+ * PRIVATE meetings default to a waiting room (matches "Request to Join" UX),
+ * everything else defaults to instant join.
+ */
+function defaultJoinPolicy(scope: RoomScope): MeetingJoinPolicy {
+  return scope === RoomScope.PRIVATE
+    ? MeetingJoinPolicy.REQUEST_APPROVAL
+    : MeetingJoinPolicy.AUTO;
+}
 
 const PARTICIPANT_COLUMNS_SQL = `
   id, meeting_id AS "meetingId", user_id AS "userId", role, joined_at AS "joinedAt",
@@ -66,6 +87,24 @@ function generateMeetingCode(): string {
   return `OPTIMA-${segment(3)}-${segment(4)}`;
 }
 
+export interface MeetingAccess {
+  isHost: boolean;
+  isParticipant: boolean;
+  /** True if calling join() right now will succeed immediately. */
+  canJoin: boolean;
+  /** True if calling requestToJoin() right now makes sense (not already pending). */
+  canRequest: boolean;
+  requestStatus: MeetingJoinRequestStatus | null;
+  deniedReason?: 'workspace_only' | 'invite_only' | 'locked';
+}
+
+type AccessDecision =
+  | { kind: 'host' }
+  | { kind: 'participant' }
+  | { kind: 'auto' }
+  | { kind: 'approval'; joinRequest: { id: string; status: MeetingJoinRequestStatus } | null }
+  | { kind: 'denied'; reason: 'workspace_only' | 'invite_only' | 'locked' };
+
 @Injectable()
 export class MeetingsService {
   constructor(
@@ -83,7 +122,46 @@ export class MeetingsService {
     @InjectQueue(MEETING_LIFECYCLE_QUEUE)
     private readonly lifecycleQueue: Queue,
     private readonly storageService: StorageService,
+    private readonly redisService: RedisService,
   ) {}
+
+  // ── Waiting Room Redis fast path ──────────────────────────────────────────
+  // meeting_join_requests (Postgres) stays the source of truth; this sorted
+  // set exists purely so "how many/who is waiting right now" is an O(log n)
+  // Redis read instead of a Postgres round trip on every socket event /
+  // badge render. Best-effort: a Redis outage falls back to Postgres-only
+  // (see listJoinRequests), it never blocks the actual approve/reject flow.
+
+  private async markWaiting(meetingId: string, userId: string) {
+    try {
+      await this.redisService
+        .getClient()
+        ?.zadd(RedisKeys.meetingWaiting(meetingId), Date.now(), userId);
+    } catch {
+      // fail open — Postgres is still authoritative
+    }
+  }
+
+  private async unmarkWaiting(meetingId: string, userIds: string[]) {
+    if (!userIds.length) return;
+    try {
+      await this.redisService
+        .getClient()
+        ?.zrem(RedisKeys.meetingWaiting(meetingId), ...userIds);
+    } catch {
+      // fail open
+    }
+  }
+
+  /** Fast count for badges; falls back to null (caller should treat as "unknown") if Redis is down. */
+  async getWaitingCount(meetingId: string): Promise<number | null> {
+    try {
+      const count = await this.redisService.getClient()?.zcard(RedisKeys.meetingWaiting(meetingId));
+      return count ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   private async findMeeting(meetingId: string) {
     const rows = await this.dataSource.query(
@@ -116,6 +194,106 @@ export class MeetingsService {
     };
   }
 
+  /**
+   * Central Meeting Join Policy decision point — used by both getOne() (view
+   * access) and join()/requestToJoin() (join access) so the two can never
+   * drift out of sync. Visibility (meeting.scope) decides who is even
+   * eligible; joinPolicy decides whether an eligible user joins instantly
+   * or lands in the waiting room. A meeting_join_requests row with
+   * status='approved' (host pre-invite, or a prior approval) always
+   * short-circuits straight to instant join.
+   */
+  private async resolveAccess(meeting: any, userId: string): Promise<AccessDecision> {
+    if (meeting.hostId === userId) return { kind: 'host' };
+
+    const participantRows = await this.dataSource.query(
+      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+      [meeting.id, userId],
+    );
+    if (participantRows[0]) return { kind: 'participant' };
+
+    // Lock Meeting blocks any NEW join outright, regardless of visibility/join
+    // policy/pre-approval — existing participants (caught above) can still
+    // reconnect, matching the "host locked the door, but people already
+    // inside stay inside" mental model.
+    if (meeting.locked) return { kind: 'denied', reason: 'locked' };
+
+    let isWorkspaceMember = false;
+    if (meeting.workspaceId) {
+      const memberRows = await this.dataSource.query(
+        `SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+        [meeting.workspaceId, userId],
+      );
+      isWorkspaceMember = !!memberRows[0];
+    }
+
+    const joinReqRows = await this.dataSource.query(
+      `SELECT ${JOIN_REQUEST_COLUMNS_SQL} FROM meeting_join_requests WHERE meeting_id = $1 AND user_id = $2`,
+      [meeting.id, userId],
+    );
+    const joinRequest = joinReqRows[0] ?? null;
+    const preApproved = joinRequest?.status === MeetingJoinRequestStatus.APPROVED;
+
+    switch (meeting.scope) {
+      case RoomScope.WORKSPACE_ONLY:
+        if (!isWorkspaceMember) return { kind: 'denied', reason: 'workspace_only' };
+        if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO) return { kind: 'auto' };
+        return { kind: 'approval', joinRequest };
+
+      case RoomScope.PUBLIC:
+        if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO) return { kind: 'auto' };
+        return { kind: 'approval', joinRequest };
+
+      case RoomScope.PRIVATE:
+        // PRIVATE always behaves as REQUEST_APPROVAL for non-invited users,
+        // regardless of joinPolicy — "Request to Join" is the whole point.
+        if (preApproved) return { kind: 'auto' };
+        return { kind: 'approval', joinRequest };
+
+      case RoomScope.INVITE_ONLY:
+        // No request fallback — either you were pre-approved (invited) or you're out.
+        if (preApproved) return { kind: 'auto' };
+        return { kind: 'denied', reason: 'invite_only' };
+
+      default:
+        return { kind: 'denied', reason: 'workspace_only' };
+    }
+  }
+
+  private describeAccess(decision: AccessDecision): MeetingAccess {
+    switch (decision.kind) {
+      case 'host':
+        return { isHost: true, isParticipant: true, canJoin: true, canRequest: false, requestStatus: null };
+      case 'participant':
+        return { isHost: false, isParticipant: true, canJoin: true, canRequest: false, requestStatus: null };
+      case 'auto':
+        return { isHost: false, isParticipant: false, canJoin: true, canRequest: false, requestStatus: null };
+      case 'approval':
+        return {
+          isHost: false,
+          isParticipant: false,
+          canJoin: false,
+          canRequest: decision.joinRequest?.status !== MeetingJoinRequestStatus.PENDING,
+          requestStatus: decision.joinRequest?.status ?? null,
+        };
+      case 'denied':
+        return {
+          isHost: false,
+          isParticipant: false,
+          canJoin: false,
+          canRequest: false,
+          requestStatus: null,
+          deniedReason: decision.reason,
+        };
+    }
+  }
+
+  private accessDeniedMessage(reason: 'workspace_only' | 'invite_only' | 'locked'): string {
+    if (reason === 'workspace_only') return 'This meeting is available only for workspace members.';
+    if (reason === 'locked') return 'The host has locked this meeting — no new participants can join right now.';
+    return "You don't have access to this meeting.";
+  }
+
   private async findParticipants(meetingId: string) {
     return this.dataSource.query(
       `SELECT ${PARTICIPANT_COLUMNS_SQL} FROM meeting_participants WHERE meeting_id = $1`,
@@ -138,7 +316,7 @@ export class MeetingsService {
     return m;
   }
 
-  private enrichMeeting(meeting: any, participants: any[]) {
+  private enrichMeeting(meeting: any, participants: any[], access?: MeetingAccess) {
     return {
       id: meeting.id,
       workspaceId: meeting.workspaceId,
@@ -148,6 +326,9 @@ export class MeetingsService {
       description: meeting.description ?? null,
       code: meeting.meetingCode,
       status: meeting.status,
+      scope: meeting.scope,
+      joinPolicy: meeting.joinPolicy,
+      locked: meeting.locked ?? false,
       startTime: meeting.startTime,
       endTime: meeting.endTime ?? null,
       maxParticipants: meeting.maxParticipants,
@@ -166,6 +347,7 @@ export class MeetingsService {
       })),
       createdAt: meeting.createdAt,
       updatedAt: meeting.updatedAt,
+      ...(access ? { access } : {}),
     };
   }
 
@@ -253,6 +435,7 @@ export class MeetingsService {
         end_time,
         max_participants,
         is_recurring,
+        join_policy,
         ...meetingRest
       } = m;
       const host = h_id
@@ -273,6 +456,7 @@ export class MeetingsService {
           endTime: end_time,
           maxParticipants: max_participants,
           isRecurring: is_recurring,
+          joinPolicy: join_policy,
           host,
         },
         byMeeting.get(m.id) ?? [],
@@ -286,6 +470,7 @@ export class MeetingsService {
     dto: CreateMeetingDto,
   ) {
     const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    const joinPolicy = dto.joinPolicy ?? defaultJoinPolicy(scope);
     if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
@@ -317,8 +502,8 @@ export class MeetingsService {
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
            (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
-            max_participants, is_recurring, agenda, scope)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 100), COALESCE($9, false), $10, $11)
+            max_participants, is_recurring, agenda, scope, join_policy)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 100), COALESCE($9, false), $10, $11, $12)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
           workspaceId,
@@ -332,6 +517,7 @@ export class MeetingsService {
           dto.isRecurring ?? null,
           dto.agenda ?? null,
           scope,
+          joinPolicy,
         ],
       );
       saved = rows[0];
@@ -373,8 +559,24 @@ export class MeetingsService {
         message: 'Meeting not found',
       });
 
+    const decision = await this.resolveAccess(meeting, userId);
+    if (decision.kind === 'denied') {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ACCESS_DENIED,
+        message: this.accessDeniedMessage(decision.reason),
+      });
+    }
+
     const participants = await this.findParticipants(meetingId);
-    return this.enrichMeeting(meeting, participants);
+    const enriched = this.enrichMeeting(meeting, participants, this.describeAccess(decision));
+
+    const canManage =
+      decision.kind === 'host' ||
+      participants.some((p) => p.userId === userId && p.role === MeetingParticipantRole.CO_HOST && !p.leftAt);
+    if (canManage) {
+      (enriched as any).waitingCount = await this.getWaitingCount(meetingId);
+    }
+    return enriched;
   }
 
   async update(meetingId: string, userId: string, dto: UpdateMeetingDto) {
@@ -395,6 +597,8 @@ export class MeetingsService {
 
     const { setClause, values } = buildUpdateSet(patch, 2, {
       status: 'meeting_status_enum',
+      scope: 'room_scope_enum',
+      join_policy: 'meeting_join_policy_enum',
     });
     let saved = meeting;
     if (setClause) {
@@ -428,6 +632,29 @@ export class MeetingsService {
     this.reminderScheduler.cancelMeetingReminders(meetingId).catch(() => {});
   }
 
+  /** Host-only: block any further NEW joins ("🔒 Lock Meeting"). Existing participants can still reconnect. */
+  async lockMeeting(meetingId: string, userId: string) {
+    await this.assertHost(meetingId, userId);
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meetings SET locked = true WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
+        [meetingId],
+      ),
+    );
+    return rows[0];
+  }
+
+  async unlockMeeting(meetingId: string, userId: string) {
+    await this.assertHost(meetingId, userId);
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meetings SET locked = false WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
+        [meetingId],
+      ),
+    );
+    return rows[0];
+  }
+
   async join(meetingId: string, userId: string) {
     const meeting = await this.findMeeting(meetingId);
     if (!meeting)
@@ -450,12 +677,27 @@ export class MeetingsService {
     );
     const existing = existingRows[0];
     if (existing) {
-      // Re-joining after leaving
+      // Re-joining after leaving — already vetted the first time they joined.
       await this.dataSource.query(
         `UPDATE meeting_participants SET joined_at = now(), left_at = NULL WHERE id = $1`,
         [existing.id],
       );
       return this.getOne(meetingId, userId);
+    }
+
+    const decision = await this.resolveAccess(meeting, userId);
+    if (decision.kind === 'denied') {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ACCESS_DENIED,
+        message: this.accessDeniedMessage(decision.reason),
+      });
+    }
+    if (decision.kind === 'approval') {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_APPROVAL_REQUIRED,
+        message: 'This meeting requires host approval. Send a request to join instead.',
+        requestStatus: decision.joinRequest?.status ?? null,
+      });
     }
 
     const activeCountRows = await this.dataSource.query(
@@ -631,24 +873,222 @@ export class MeetingsService {
     return meeting;
   }
 
-  async joinByCode(code: string, userId: string) {
+  private async findMeetingIdByCode(code: string): Promise<string> {
     const rows = await this.dataSource.query(
-      `SELECT ${MEETING_COLUMNS_SQL} FROM meetings WHERE meeting_code = $1`,
+      `SELECT id FROM meetings WHERE meeting_code = $1`,
       [code.toUpperCase()],
     );
-    const meeting = rows[0];
-    if (!meeting)
+    if (!rows[0])
       throw new NotFoundException({
         code: ErrorCode.MEETING_CODE_INVALID,
         message: 'Invalid meeting code',
       });
-    return this.join(meeting.id, userId);
+    return rows[0].id;
   }
 
+  /**
+   * Unconditionally tries to join — only correct for AUTO-eligible meetings.
+   * Kept for backwards compatibility; the "Join by code" UI now calls
+   * resolveByCode() + the normal getOne()-driven lobby flow instead, so a
+   * REQUEST_APPROVAL/locked/denied meeting surfaces "Request to Join" /
+   * an access message rather than a raw 403 from a forced join attempt.
+   */
+  async joinByCode(code: string, userId: string) {
+    const meetingId = await this.findMeetingIdByCode(code);
+    return this.join(meetingId, userId);
+  }
+
+  /** Resolve a meeting code to full meeting + access info, without forcing a join. */
+  async resolveByCode(code: string, userId: string) {
+    const meetingId = await this.findMeetingIdByCode(code);
+    return this.getOne(meetingId, userId);
+  }
+
+  // ─────────────────────────────────────────────
+  //  Meeting Join Policy — waiting room (request/approve/reject)
+  // ─────────────────────────────────────────────
+
+  private async assertCanManageJoinRequests(meetingId: string, userId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting)
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_FOUND,
+        message: 'Meeting not found',
+      });
+    if (meeting.hostId === userId) return meeting;
+
+    const participantRows = await this.dataSource.query(
+      `SELECT role FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [meetingId, userId],
+    );
+    if (participantRows[0]?.role !== MeetingParticipantRole.CO_HOST) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_HOST_ONLY,
+        message: 'Only the host or a co-host can manage join requests',
+      });
+    }
+    return meeting;
+  }
+
+  /**
+   * Called by a guest who is not eligible for instant join. If they're
+   * actually eligible (visibility allows it, or they were pre-approved via
+   * an earlier invite), this just joins them directly instead of making
+   * them wait on a request that would be auto-approved anyway.
+   */
+  async requestToJoin(meetingId: string, userId: string) {
+    const meeting = await this.findMeeting(meetingId);
+    if (!meeting)
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_FOUND,
+        message: 'Meeting not found',
+      });
+    if (
+      meeting.status === MeetingStatus.ENDED ||
+      meeting.status === MeetingStatus.CANCELLED
+    ) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ENDED,
+        message: 'Meeting is no longer active',
+      });
+    }
+
+    const existingRows = await this.dataSource.query(
+      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+      [meetingId, userId],
+    );
+    if (existingRows[0]) {
+      return { status: 'already_joined' as const, meeting: await this.getOne(meetingId, userId) };
+    }
+
+    const decision = await this.resolveAccess(meeting, userId);
+    if (decision.kind === 'denied') {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_ACCESS_DENIED,
+        message: this.accessDeniedMessage(decision.reason),
+      });
+    }
+    if (decision.kind === 'host' || decision.kind === 'participant' || decision.kind === 'auto') {
+      return { status: 'joined' as const, meeting: await this.join(meetingId, userId) };
+    }
+
+    // decision.kind === 'approval'
+    if (decision.joinRequest?.status === MeetingJoinRequestStatus.PENDING) {
+      return { status: 'pending' as const, requestId: decision.joinRequest.id };
+    }
+
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at)
+         VALUES ($1, $2, 'pending', now())
+         ON CONFLICT (meeting_id, user_id)
+         DO UPDATE SET status = 'pending', requested_at = now(), reviewed_by = NULL, reviewed_at = NULL
+         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
+        [meetingId, userId],
+      ),
+    );
+    await this.markWaiting(meetingId, userId);
+    return { status: 'pending' as const, requestId: rows[0].id };
+  }
+
+  /** Requester cancels their own pending request (e.g. gave up waiting). */
+  async cancelMyJoinRequest(meetingId: string, userId: string) {
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meeting_join_requests
+         SET status = 'cancelled', reviewed_at = now()
+         WHERE meeting_id = $1 AND user_id = $2 AND status = 'pending'
+         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
+        [meetingId, userId],
+      ),
+    );
+    if (!rows[0]) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_JOIN_REQUEST_NOT_FOUND,
+        message: 'No pending join request to cancel',
+      });
+    }
+    await this.unmarkWaiting(meetingId, [userId]);
+    return rows[0];
+  }
+
+  /** Host/co-host: pending requests for the waiting-room sidebar. */
+  async listJoinRequests(meetingId: string, userId: string) {
+    await this.assertCanManageJoinRequests(meetingId, userId);
+    return this.dataSource.query(
+      `SELECT r.id, r.meeting_id AS "meetingId", r.user_id AS "userId", r.status,
+              r.requested_at AS "requestedAt",
+              u.first_name AS "firstName", u.last_name AS "lastName", u.avatar_url AS "avatarUrl"
+       FROM meeting_join_requests r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.meeting_id = $1 AND r.status = 'pending'
+       ORDER BY r.requested_at ASC`,
+      [meetingId],
+    );
+  }
+
+  /** Host/co-host: accept or reject a single waiting-room request (✓ / ✕). */
+  async reviewJoinRequest(
+    meetingId: string,
+    requestId: string,
+    reviewerId: string,
+    decision: 'approved' | 'rejected',
+  ) {
+    await this.assertCanManageJoinRequests(meetingId, reviewerId);
+
+    const rows = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meeting_join_requests
+         SET status = $3::meeting_join_request_status_enum, reviewed_by = $4, reviewed_at = now()
+         WHERE id = $1 AND meeting_id = $2 AND status = 'pending'
+         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
+        [requestId, meetingId, decision, reviewerId],
+      ),
+    );
+    const updated = rows[0];
+    if (!updated) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_JOIN_REQUEST_NOT_FOUND,
+        message: 'Join request not found or already reviewed',
+      });
+    }
+    await this.unmarkWaiting(meetingId, [updated.userId]);
+    return updated;
+  }
+
+  /** Host/co-host: "Accept All" / "Reject All" batch action. */
+  async batchReviewJoinRequests(
+    meetingId: string,
+    reviewerId: string,
+    decision: 'approved' | 'rejected',
+  ) {
+    await this.assertCanManageJoinRequests(meetingId, reviewerId);
+    const updated = normalizeReturning(
+      await this.dataSource.query(
+        `UPDATE meeting_join_requests
+         SET status = $2::meeting_join_request_status_enum, reviewed_by = $3, reviewed_at = now()
+         WHERE meeting_id = $1 AND status = 'pending'
+         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
+        [meetingId, decision, reviewerId],
+      ),
+    );
+    await this.unmarkWaiting(meetingId, updated.map((row: any) => row.userId));
+    return updated;
+  }
+
+  /**
+   * Invites people to a meeting by workspace member id and/or email address.
+   * An email invite resolves to an existing registered account — this does
+   * not send an email to non-users; it just gives a second lookup path for
+   * "I know their email, not their workspace member id", which matters most
+   * for PRIVATE/INVITE_ONLY meetings where the target may not be a member
+   * of any shared workspace yet.
+   */
   async inviteMembers(
     meetingId: string,
     inviterId: string,
     targetUserIds: string[],
+    targetEmails: string[] = [],
   ) {
     const meeting = await this.findMeeting(meetingId);
     if (!meeting)
@@ -657,30 +1097,81 @@ export class MeetingsService {
         message: 'Meeting not found',
       });
 
-    // Ensure inviter is a member of the workspace
-    await this.membersService.assertMember(meeting.workspaceId, inviterId);
+    // Workspace meetings: any workspace member can invite. Standalone
+    // (workspace-less) meetings have no membership list to check against —
+    // only the host may invite there.
+    if (meeting.workspaceId) {
+      await this.membersService.assertMember(meeting.workspaceId, inviterId);
+    } else if (meeting.hostId !== inviterId) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_HOST_ONLY,
+        message: 'Only the host can invite people to this meeting',
+      });
+    }
+
+    const normalizedEmails = Array.from(
+      new Set(targetEmails.map((email) => email.trim().toLowerCase()).filter(Boolean)),
+    );
+    const emailRows: Array<{ id: string; email: string }> = normalizedEmails.length
+      ? await this.dataSource.query(
+          `SELECT id, email FROM users WHERE lower(email) = ANY($1::text[])`,
+          [normalizedEmails],
+        )
+      : [];
+    const foundEmails = new Set(emailRows.map((row) => row.email.toLowerCase()));
+    const notFoundEmails = normalizedEmails.filter((email) => !foundEmails.has(email));
 
     // Server-side guard: never let the inviter invite themself, and
     // de-duplicate. The frontend also filters the host out of the invite
     // list, but that filter must not be the only line of defense — a
     // stale UI, another client, or a direct API call could still send
     // the inviter's own id.
-    const targetIds = Array.from(new Set(targetUserIds)).filter(
+    const targetIds = Array.from(new Set([...targetUserIds, ...emailRows.map((row) => row.id)])).filter(
       (uid) => uid !== inviterId,
     );
 
-    // Filter valid workspace members
-    const validMembers = await Promise.all(
-      targetIds.map(async (uid) => {
-        try {
-          await this.membersService.assertMember(meeting.workspaceId, uid);
-          return uid;
-        } catch {
-          return null;
-        }
-      }),
+    let validUserIds: string[];
+    if (meeting.workspaceId && meeting.scope === RoomScope.WORKSPACE_ONLY) {
+      // WORKSPACE_ONLY is the one scope where membership IS the access
+      // control — inviting a non-member here would be a promise the meeting
+      // can't keep (they'd hit the workspace-membership wall in resolveAccess
+      // anyway), so filter to actual members.
+      const validMembers = await Promise.all(
+        targetIds.map(async (uid) => {
+          try {
+            await this.membersService.assertMember(meeting.workspaceId, uid);
+            return uid;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      validUserIds = validMembers.filter(Boolean) as string[];
+    } else {
+      // PRIVATE/INVITE_ONLY/PUBLIC: the invite itself IS the access grant —
+      // workspace membership is irrelevant here by design (that's the whole
+      // point of these scopes), so any resolved user id (explicit id or a
+      // matched email, workspace member or not) is invitable.
+      validUserIds = targetIds;
+    }
+
+    // Explicit host invite = pre-approved: PRIVATE/INVITE_ONLY meetings only
+    // let invited users join directly, no waiting room. Approving here (rather
+    // than inserting a participant row) keeps join() as the single place that
+    // actually admits someone (capacity checks, auto-start, etc.).
+    await Promise.all(
+      validUserIds.map((uid) =>
+        this.dataSource.query(
+          `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
+           VALUES ($1, $2, 'approved', now(), $3, now())
+           ON CONFLICT (meeting_id, user_id) DO UPDATE
+             SET status = 'approved', reviewed_by = $3, reviewed_at = now()
+             WHERE meeting_join_requests.status <> 'approved'`,
+          [meetingId, uid, inviterId],
+        ),
+      ),
     );
-    const validUserIds = validMembers.filter(Boolean) as string[];
+    await this.unmarkWaiting(meetingId, validUserIds);
 
     const notifications = validUserIds.map((uid) =>
       this.notificationsService.create({
@@ -697,7 +1188,7 @@ export class MeetingsService {
     );
 
     await Promise.all(notifications);
-    return { success: true, invitedCount: validUserIds.length };
+    return { success: true, invitedCount: validUserIds.length, notFoundEmails };
   }
 
   // ─────────────────────────────────────────────

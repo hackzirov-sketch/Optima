@@ -99,6 +99,16 @@ export class MeetingsController {
     return this.meetingsService.joinByCode(dto.code, userId);
   }
 
+  @Post('meetings/resolve-by-code')
+  @UseGuards(IpRateLimitGuard)
+  @ApiOperation({ summary: 'Look up a meeting by its code without joining — lets the client route through the normal access/waiting-room flow' })
+  resolveByCode(
+    @CurrentUser('id') userId: string,
+    @Body() dto: JoinByCodeDto,
+  ) {
+    return this.meetingsService.resolveByCode(dto.code, userId);
+  }
+
   // ─── Single-meeting endpoints ─────────────────────────────────────────────
 
   @Get('meetings/:meetingId')
@@ -169,15 +179,143 @@ export class MeetingsController {
     return meeting;
   }
 
+  @Post('meetings/:meetingId/lock')
+  @ApiOperation({ summary: 'Lock the meeting — blocks any new joins (host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async lock(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const meeting = await this.meetingsService.lockMeeting(meetingId, userId);
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:locked', { meetingId });
+    return meeting;
+  }
+
+  @Post('meetings/:meetingId/unlock')
+  @ApiOperation({ summary: 'Unlock the meeting (host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async unlock(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const meeting = await this.meetingsService.unlockMeeting(meetingId, userId);
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:unlocked', { meetingId });
+    return meeting;
+  }
+
+  // ─── Join Policy: waiting room (request / approve / reject) ──────────────
+
+  @Post('meetings/:meetingId/join-requests')
+  @ApiOperation({ summary: 'Request to join a meeting that requires host approval' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async requestToJoin(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const result = await this.meetingsService.requestToJoin(meetingId, userId);
+    if (result.status === 'pending') {
+      const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
+      this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:created', {
+        meetingId,
+        requestId: result.requestId,
+        waitingCount,
+      });
+    }
+    return result;
+  }
+
+  @Delete('meetings/:meetingId/join-requests/me')
+  @ApiOperation({ summary: 'Cancel my own pending join request' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  cancelMyJoinRequest(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.meetingsService.cancelMyJoinRequest(meetingId, userId);
+  }
+
+  @Get('meetings/:meetingId/join-requests')
+  @ApiOperation({ summary: 'List pending join requests (host/co-host only) — the Waiting Room' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  listJoinRequests(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.meetingsService.listJoinRequests(meetingId, userId);
+  }
+
+  @Post('meetings/:meetingId/join-requests/:requestId/approve')
+  @ApiOperation({ summary: 'Approve a join request (host/co-host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  @ApiParam({ name: 'requestId', format: 'uuid' })
+  async approveJoinRequest(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const request = await this.meetingsService.reviewJoinRequest(meetingId, requestId, userId, 'approved');
+    this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', { meetingId, requestId });
+    const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
+    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, requestId, waitingCount });
+    return request;
+  }
+
+  @Post('meetings/:meetingId/join-requests/:requestId/reject')
+  @ApiOperation({ summary: 'Reject a join request (host/co-host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  @ApiParam({ name: 'requestId', format: 'uuid' })
+  async rejectJoinRequest(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const request = await this.meetingsService.reviewJoinRequest(meetingId, requestId, userId, 'rejected');
+    this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', { meetingId, requestId });
+    const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
+    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, requestId, waitingCount });
+    return request;
+  }
+
+  @Post('meetings/:meetingId/join-requests/approve-all')
+  @ApiOperation({ summary: 'Approve all pending join requests (host/co-host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async approveAllJoinRequests(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const requests = await this.meetingsService.batchReviewJoinRequests(meetingId, userId, 'approved');
+    for (const request of requests) {
+      this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', { meetingId, requestId: request.id });
+    }
+    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, waitingCount: 0 });
+    return requests;
+  }
+
+  @Post('meetings/:meetingId/join-requests/reject-all')
+  @ApiOperation({ summary: 'Reject all pending join requests (host/co-host only)' })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  async rejectAllJoinRequests(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const requests = await this.meetingsService.batchReviewJoinRequests(meetingId, userId, 'rejected');
+    for (const request of requests) {
+      this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', { meetingId, requestId: request.id });
+    }
+    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, waitingCount: 0 });
+    return requests;
+  }
+
   @Post('meetings/:meetingId/invite')
-  @ApiOperation({ summary: 'Invite members to a meeting' })
+  @ApiOperation({ summary: 'Invite members to a meeting, by workspace member id and/or email address' })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   invite(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
     @Body('userIds') userIds: string[],
+    @Body('emails') emails: string[],
   ) {
-    return this.meetingsService.inviteMembers(meetingId, userId, userIds || []);
+    return this.meetingsService.inviteMembers(meetingId, userId, userIds || [], emails || []);
   }
 
   // ─── Shared files (ported from main) ───────────────────────────────────────

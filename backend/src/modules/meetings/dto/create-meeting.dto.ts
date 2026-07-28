@@ -11,6 +11,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { RoomScope } from '../../../common/enums';
+import { MeetingJoinPolicy } from '../../../common/enums/meeting.enum';
 
 export class CreateMeetingDto {
   @ApiProperty()
@@ -53,4 +54,15 @@ export class CreateMeetingDto {
   @IsOptional()
   @IsEnum(RoomScope)
   scope?: RoomScope;
+
+  @ApiPropertyOptional({
+    enum: MeetingJoinPolicy,
+    description:
+      'AUTO joins instantly once visibility allows it; REQUEST_APPROVAL puts the ' +
+      'user in a waiting room until the host/co-host accepts. Defaults to REQUEST_APPROVAL ' +
+      'for PRIVATE meetings and AUTO for everything else.',
+  })
+  @IsOptional()
+  @IsEnum(MeetingJoinPolicy)
+  joinPolicy?: MeetingJoinPolicy;
 }

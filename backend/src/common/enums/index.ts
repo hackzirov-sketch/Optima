@@ -123,13 +123,19 @@ export enum ChatMemberStatus {
  * concept). Determines both who can see/join the room and whether a
  * workspace is required:
  *  - WORKSPACE_ONLY: workspace_id required, visible only to workspace members
- *  - PRIVATE:        workspace_id optional, only explicitly invited users
+ *  - PRIVATE:        workspace_id optional, host + invited users join directly,
+ *                     anyone else with the link can send a "request to join"
  *  - PUBLIC:         workspace_id optional, discoverable in global search
+ *  - INVITE_ONLY:    workspace_id optional, not discoverable at all — only
+ *                     the host + explicitly invited users can join; unlike
+ *                     PRIVATE there is no "request to join" fallback
+ *                     (meetings-only today; see MeetingJoinPolicy)
  */
 export enum RoomScope {
   WORKSPACE_ONLY = 'workspace_only',
   PRIVATE = 'private',
   PUBLIC = 'public',
+  INVITE_ONLY = 'invite_only',
 }
 
 export enum UserPresence {

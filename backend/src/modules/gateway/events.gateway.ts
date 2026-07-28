@@ -25,6 +25,7 @@ import { ChatPresenceService, PresenceStatus } from '../chat/services/presence.s
 import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
 import { UsersService } from '../users/services/users.service';
+import { RedisService } from '../../redis/redis.service';
 
 export interface WsUser {
   id: string;
@@ -107,6 +108,7 @@ export class EventsGateway
     private readonly violationService: ViolationService,
     private readonly dataSource: DatabaseService,
     private readonly usersService: UsersService,
+    private readonly redisService: RedisService,
     @Inject(forwardRef(() => MeetingsService))
     private readonly meetingsService: MeetingsService,
   ) {}
@@ -738,32 +740,89 @@ export class EventsGateway
   }
 
   // ─── Direct (1:1) audio/video call signaling (ported from main) ───────
+  private callKey(meetingId: string) {
+    return `call:${meetingId}`;
+  }
+
   @SubscribeMessage('call:invite')
-  handleDirectCallInvite(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallInvite(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
     if (!userId || !data.meetingId || !data.roomId || !data.targetUserId) return;
+    const redis = this.redisService.getClient();
+    if (redis) {
+      const pipeline = redis.pipeline();
+      pipeline.hset(this.callKey(data.meetingId), {
+        callerId: userId,
+        calleeId: data.targetUserId,
+        roomId: data.roomId,
+        kind: data.kind,
+        startedAt: Date.now(),
+      });
+      pipeline.expire(this.callKey(data.meetingId), 3600);
+      await pipeline.exec();
+    }
     this.server.to(`user:${data.targetUserId}`).emit('call:incoming', { ...data, fromUserId: userId });
   }
 
   @SubscribeMessage('call:accept')
-  handleDirectCallAccept(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallAccept(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
+    const redis = this.redisService.getClient();
+    if (redis) await redis.hset(this.callKey(data.meetingId), 'answeredAt', Date.now());
     this.server.to(`user:${data.targetUserId}`).emit('call:accepted', { ...data, fromUserId: userId });
   }
 
   @SubscribeMessage('call:decline')
-  handleDirectCallDecline(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallDecline(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
+    await this.finalizeDirectCall(data.meetingId, 'declined');
     this.server.to(`user:${data.targetUserId}`).emit('call:declined', { ...data, fromUserId: userId });
   }
 
   @SubscribeMessage('call:end')
-  handleDirectCallEnd(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallEnd(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
     const userId = client.data?.userId;
     if (!userId) return;
+    await this.finalizeDirectCall(data.meetingId, 'ended');
     this.server.to(`user:${data.targetUserId}`).emit('call:ended', { ...data, fromUserId: userId });
+  }
+
+  /**
+   * Writes the Telegram-style call outcome into the room's message history -
+   * "Missed call" / "Declined call" / "Call ended · 3:24" - depending on
+   * whether the callee ever accepted (answeredAt), read from the state
+   * call:invite/call:accept wrote to Redis. Idempotent: the key is deleted
+   * after the first finalize, so an accidental double-fire is a no-op.
+   */
+  private async finalizeDirectCall(meetingId: string, reason: 'declined' | 'ended') {
+    const redis = this.redisService.getClient();
+    if (!redis) return;
+    const state = await redis.hgetall(this.callKey(meetingId));
+    if (!state.callerId) return;
+    await redis.del(this.callKey(meetingId));
+
+    const { callerId, roomId, kind, answeredAt } = state;
+    let systemMetadata: Record<string, unknown>;
+    let content: string;
+    if (answeredAt) {
+      const durationSeconds = Math.max(0, Math.round((Date.now() - Number(answeredAt)) / 1000));
+      systemMetadata = { kind: 'call_ended', callType: kind, durationSeconds };
+      content = `Call ended (${durationSeconds}s)`;
+    } else {
+      const outcomeKind = reason === 'declined' ? 'declined_call' : 'missed_call';
+      systemMetadata = { kind: outcomeKind, callType: kind };
+      content = outcomeKind === 'declined_call' ? 'Declined call' : 'Missed call';
+    }
+
+    try {
+      const message = await this.messageService.createSystemMessage(roomId, callerId, content, 'call', systemMetadata);
+      this.server.to(`room:${roomId}`).emit('new_message', message);
+      await this.broadcastToRoomMembers(roomId, 'new_message', message);
+    } catch (err) {
+      this.logger.error(`Failed to record call outcome for meeting ${meetingId}`, err);
+    }
   }
 
   // ─── Meeting: ICE candidate ───────────────────────────
@@ -840,6 +899,25 @@ export class EventsGateway
   /** Send a notification to a specific user across all their sockets */
   sendNotification(userId: string, payload: Record<string, unknown>) {
     this.server?.to(`user:${userId}`)?.emit('notification', payload);
+  }
+
+  /** Emit an arbitrary event to a specific user's personal channel across all their sockets */
+  sendToUser(userId: string, event: string, payload: unknown) {
+    this.server?.to(`user:${userId}`)?.emit(event, payload);
+  }
+
+  /** Notify the meeting host + any co-hosts (e.g. a new waiting-room join request). */
+  async notifyMeetingHosts(meetingId: string, event: string, payload: unknown) {
+    const rows: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT host_id AS "userId" FROM meetings WHERE id = $1
+       UNION
+       SELECT user_id AS "userId" FROM meeting_participants
+       WHERE meeting_id = $1 AND role = 'co_host' AND left_at IS NULL`,
+      [meetingId],
+    );
+    for (const { userId } of rows) {
+      this.sendToUser(userId, event, payload);
+    }
   }
 
   /** Broadcast a message to all members of a chat room */

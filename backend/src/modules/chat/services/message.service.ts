@@ -33,6 +33,48 @@ export class ChatMessageService {
     @InjectQueue('chat') private readonly chatQueue: Queue,
   ) {}
 
+  /**
+   * A non-user-authored chat entry (currently: call outcomes — missed/
+   * declined/ended with duration). Rendered by the frontend as a centered
+   * system row, not a normal bubble, per `isSystem`/`systemMetadata`.
+   */
+  async createSystemMessage(
+    roomId: string,
+    senderId: string,
+    content: string,
+    contentType: string,
+    systemMetadata: Record<string, unknown>,
+  ) {
+    const redisClient = this.redisService.getClient();
+    let sequence = 1;
+    if (redisClient) {
+      sequence = await redisClient.incr(`room:${roomId}:seq`);
+    } else {
+      const maxRes: Array<{ max: number | null }> = await this.dataSource.query(
+        `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
+        [roomId],
+      );
+      sequence = (maxRes[0]?.max || 0) + 1;
+    }
+
+    const savedRows: ChatMessage[] = await this.dataSource.query(
+      `INSERT INTO chat_messages
+         (room_id, sender_id, sequence, content, content_type, is_system, system_metadata, metadata)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7)
+       RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
+      [roomId, senderId, sequence, content, contentType, systemMetadata, {}],
+    );
+    const saved = savedRows[0];
+
+    await this.chatQueue.add(
+      'update-room-metadata',
+      { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
+      { jobId: roomId, removeOnComplete: true, removeOnFail: true },
+    );
+
+    return this.mapToResponse(saved, content, []);
+  }
+
   async listMessages(roomId: string, userId: string, page = 1, limit = 50, cursor?: number) {
     await this.chatMemberService.assertRoomMember(roomId, userId);
 
@@ -61,7 +103,7 @@ export class ChatMessageService {
          m.id AS "id", m.room_id AS "roomId", m.sender_id AS "senderId",
          m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
          m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
-         m.is_system AS "isSystem", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
+         m.is_system AS "isSystem", m.system_metadata AS "systemMetadata", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
          m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
          u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
          u.avatar_url AS "s_avatarUrl",
@@ -132,6 +174,7 @@ export class ChatMessageService {
       isEdited: msg.isEdited,
       editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
       isSystem: msg.isSystem,
+      systemMetadata: msg.systemMetadata,
       createdAt: msg.createdAt,
       updatedAt: msg.updatedAt,
       reactions: this.chatReactionService.groupReactions(reactionsByMsg.get(msg.id) ?? []),
@@ -475,6 +518,8 @@ export class ChatMessageService {
       isEdited: msg.isEdited ?? false,
       editedAt: msg.editedAt ?? null,
       createdAt: msg.createdAt,
+      isSystem: msg.isSystem ?? false,
+      systemMetadata: msg.systemMetadata ?? null,
       reactions: [],
       sender: sender
         ? {

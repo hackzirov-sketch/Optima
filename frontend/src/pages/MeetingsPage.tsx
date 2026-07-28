@@ -6,9 +6,10 @@ import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting } from "../types";
+import type { Meeting, MeetingVisibility } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+const VISIBILITY_OPTIONS: MeetingVisibility[] = ["workspace_only", "private", "public", "invite_only"];
 
 export function MeetingsPage() {
   const { user, workspace } = useAuth();
@@ -22,6 +23,26 @@ export function MeetingsPage() {
   const [saving, setSaving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [visibility, setVisibility] = useState<MeetingVisibility>("workspace_only");
+  const [joinPolicy, setJoinPolicy] = useState<"auto" | "request_approval">("auto");
+
+  function visibilityLabel(value: MeetingVisibility) {
+    return ({
+      workspace_only: t("meetings.visibilityWorkspace"),
+      private: t("meetings.visibilityPrivate"),
+      public: t("meetings.visibilityPublic"),
+      invite_only: t("meetings.visibilityInviteOnly"),
+    })[value];
+  }
+
+  function visibilityHint(value: MeetingVisibility) {
+    return ({
+      workspace_only: t("meetings.visibilityWorkspaceHint"),
+      private: t("meetings.visibilityPrivateHint"),
+      public: t("meetings.visibilityPublicHint"),
+      invite_only: t("meetings.visibilityInviteOnlyHint"),
+    })[value];
+  }
 
   function dateTime(value: string) {
     return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -87,8 +108,12 @@ export function MeetingsPage() {
         description: String(form.get("description") || "").trim() || undefined,
         startTime: start.toISOString(),
         maxParticipants: Number(form.get("maxParticipants") || 20),
+        scope: visibility,
+        joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
       });
       setCreateOpen(false);
+      setVisibility("workspace_only");
+      setJoinPolicy("auto");
       await load();
       show(t("meetings.meetingCreated"));
       navigate(`/meetings/${meeting.id}`);
@@ -104,7 +129,7 @@ export function MeetingsPage() {
     setSaving(true);
     const form = new FormData(event.currentTarget);
     try {
-      const meeting = await api.meetings.joinByCode(String(form.get("code") || "").trim().toUpperCase());
+      const meeting = await api.meetings.resolveByCode(String(form.get("code") || "").trim().toUpperCase());
       setJoinOpen(false);
       navigate(`/meetings/${meeting.id}`);
     } catch (error) {
@@ -156,6 +181,20 @@ export function MeetingsPage() {
           <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
           <p className="field-hint"><Clock3 size={15} /> {t("meetings.durationHint")}</p>
           <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
+          <label>{t("meetings.visibilityLabel")}
+            <select value={visibility} onChange={(event) => setVisibility(event.target.value as MeetingVisibility)}>
+              {VISIBILITY_OPTIONS.map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+            </select>
+          </label>
+          <p className="field-hint">{visibilityHint(visibility)}</p>
+          {visibility !== "invite_only" && visibility !== "private" && (
+            <label>{t("meetings.joinPolicyLabel")}
+              <select value={joinPolicy} onChange={(event) => setJoinPolicy(event.target.value as "auto" | "request_approval")}>
+                <option value="auto">{t("meetings.joinPolicyAuto")}</option>
+                <option value="request_approval">{t("meetings.joinPolicyApproval")}</option>
+              </select>
+            </label>
+          )}
           <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t("meetings.cancel")}</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>{t("meetings.create")}</Button></div>
         </form>
       </Modal>

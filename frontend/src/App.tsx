@@ -46,7 +46,6 @@ export function App() {
 
   if (!workspace) return <WorkspaceSetupPage />;
 
-  const meetingMatch = location.match(/^\/meetings\/([^/]+)$/);
   const isEducation = location === "/education" || location.startsWith("/education/");
   // Chat route redesign: /u/:id (DM), /g/:slug-or-publicId (group), /ch/:slug-or-publicId
   // (channel) — resolved to an internal room id inside ChatPage, never used directly as one.
@@ -62,9 +61,7 @@ export function App() {
     : null;
   const isChat = location === "/chat" || Boolean(chatRouteTarget);
 
-  const mainContent = meetingMatch ? (
-    <MeetingRoomPage meetingId={meetingMatch[1]} />
-  ) : (
+  const mainContent = (
     <AppShell>
       <div className="route-transition" key={isEducation ? "/education" : location}>
         {isEducation ? <EducationPage /> : isChat ? null : (
@@ -83,6 +80,13 @@ export function App() {
   return (
     <>
       {mainContent}
+      {/* MeetingRoomPage (no meetingId prop = the standalone instance) is
+          mounted here unconditionally, same reasoning as ChatPage below: it
+          renders its own full-screen UI on top of everything via CSS when
+          on /meetings/:id, a small floating widget when the user has
+          navigated elsewhere mid-call, and nothing otherwise — never
+          torn down by a route change, so leaving the page doesn't hang up. */}
+      <MeetingRoomPage />
       {/* Always the second child of this same fragment, in a stable
           position regardless of which branch mainContent takes (meeting
           room vs. the normal app shell) - that's what lets React keep this

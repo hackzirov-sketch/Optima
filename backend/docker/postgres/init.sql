@@ -226,7 +226,30 @@ CREATE TYPE public.projects_visibility_enum AS ENUM (
 CREATE TYPE public.room_scope_enum AS ENUM (
     'workspace_only',
     'private',
-    'public'
+    'public',
+    'invite_only'
+);
+
+
+--
+-- Name: meeting_join_policy_enum; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.meeting_join_policy_enum AS ENUM (
+    'auto',
+    'request_approval'
+);
+
+
+--
+-- Name: meeting_join_request_status_enum; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.meeting_join_request_status_enum AS ENUM (
+    'pending',
+    'approved',
+    'rejected',
+    'cancelled'
 );
 
 
@@ -783,8 +806,31 @@ CREATE TABLE public.meetings (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     scope public.room_scope_enum DEFAULT 'workspace_only'::public.room_scope_enum NOT NULL,
+    join_policy public.meeting_join_policy_enum DEFAULT 'auto'::public.meeting_join_policy_enum NOT NULL,
+    locked boolean DEFAULT false NOT NULL,
     CONSTRAINT chk_meetings_scope_workspace CHECK (((scope <> 'workspace_only'::public.room_scope_enum) OR (workspace_id IS NOT NULL)))
 );
+
+
+--
+-- Name: meeting_join_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.meeting_join_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    meeting_id uuid NOT NULL REFERENCES public.meetings(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    status public.meeting_join_request_status_enum DEFAULT 'pending'::public.meeting_join_request_status_enum NOT NULL,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    reviewed_by uuid REFERENCES public.users(id),
+    reviewed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT uq_meeting_join_requests_meeting_user UNIQUE (meeting_id, user_id)
+);
+
+CREATE INDEX idx_meeting_join_requests_meeting_status
+    ON public.meeting_join_requests (meeting_id, status);
 
 
 --

@@ -10,7 +10,8 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { MeetingStatus } from '../../../common/enums/meeting.enum';
+import { MeetingStatus, MeetingJoinPolicy } from '../../../common/enums/meeting.enum';
+import { RoomScope } from '../../../common/enums';
 
 export class UpdateMeetingDto {
   @ApiPropertyOptional()
@@ -55,4 +56,14 @@ export class UpdateMeetingDto {
   @IsOptional()
   @IsString()
   agenda?: string;
+
+  @ApiPropertyOptional({ enum: RoomScope })
+  @IsOptional()
+  @IsEnum(RoomScope)
+  scope?: RoomScope;
+
+  @ApiPropertyOptional({ enum: MeetingJoinPolicy })
+  @IsOptional()
+  @IsEnum(MeetingJoinPolicy)
+  joinPolicy?: MeetingJoinPolicy;
 }

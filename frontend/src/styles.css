@@ -1141,9 +1141,12 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .video-tile video { width: 100%; height: 100%; object-fit: cover; transform: none; }
 .video-tile-mirrored video { transform: scaleX(-1); }
 .video-tile-pinned { grid-column: 1 / -1; order: -1; border-color: #bac6ea; box-shadow: 0 0 0 2px rgba(186,198,234,.3); }
-.tile-pin, .tile-hand { position: absolute; top: 10px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(18,22,20,.76); color: #fff; backdrop-filter: blur(8px); }
+.video-tile-speaking { border-color: #5fd67a; box-shadow: 0 0 0 2px rgba(95,214,122,.45); }
+.tile-pin, .tile-hand, .tile-pip { position: absolute; top: 10px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(18,22,20,.76); color: #fff; backdrop-filter: blur(8px); }
 .tile-pin { right: 10px; opacity: 0; transform: translateY(-3px); }
+.tile-pip { right: 48px; opacity: 0; transform: translateY(-3px); }
 .video-tile:hover .tile-pin, .tile-pin:focus-visible, .tile-pin.active { opacity: 1; transform: none; }
+.video-tile:hover .tile-pip, .tile-pip:focus-visible { opacity: 1; transform: none; }
 .tile-pin.active { background: #bac6ea; color: #17213a; }
 .tile-hand { left: 10px; background: #fff6e9; color: #384d8c; animation: hand-rise 280ms var(--easing-spring); }
 .video-tile .video-placeholder { width: 100%; height: 100%; display: grid; place-items: center; }
@@ -1304,9 +1307,41 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .meeting-room-header small { color: #aeb7b1; }
 .meeting-header-actions { margin-left: auto; display: flex; gap: 7px; }
 .meeting-header-actions button { min-width: 42px; height: 42px; padding: 0 11px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 50%; background: #303632; color: #f6f7f6; }
+.meeting-header-actions button.active { background: var(--brand-600); color: #fff; }
+.locked-badge { margin-left: 8px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: color-mix(in srgb, #d64545 20%, transparent); color: #ff8a8a; font-size: .68rem; font-weight: 700; vertical-align: middle; }
+.settings-divider { margin: 20px 0; border: 0; border-top: 1px solid var(--line); }
+/* Standalone meeting instance (mounted once at the app root, see App.tsx) —
+   its "full" state must overlay the AppShell content sitting underneath it,
+   since that content is no longer conditionally unmounted while on the
+   meeting's own route. Below .direct-call-overlay/.message-toast-stack so
+   a direct call and toasts still take priority. */
+.meeting-standalone-overlay { position: fixed; inset: 0; z-index: 120; }
+.meeting-floating-widget { position: fixed; right: 20px; bottom: 20px; z-index: 130; width: 260px; border-radius: 14px; overflow: hidden; background: #202421; color: #f6f7f6; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.meeting-floating-widget .floating-widget-video { position: relative; height: 146px; cursor: pointer; background: #171c19; }
+.meeting-floating-widget .floating-widget-video .video-tile, .meeting-floating-widget .floating-widget-video .video-placeholder { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.meeting-floating-widget header { padding: 8px 10px; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.25); }
+.meeting-floating-widget header strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .78rem; }
+.meeting-floating-widget header button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.meeting-floating-widget header button:hover { background: rgba(255,255,255,.1); }
+.floating-widget-controls { padding: 8px 10px; display: flex; justify-content: center; gap: 8px; }
+.floating-widget-controls button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #303632; color: #f6f7f6; }
+.floating-widget-controls button.off { background: #4a3030; }
+.floating-widget-controls button.leave-control { background: #d64545; }
+@media (max-width: 640px) {
+  .meeting-floating-widget { right: 10px; bottom: 76px; width: 200px; }
+  .meeting-floating-widget .floating-widget-video { height: 112px; }
+}
 .meeting-stage { min-height: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; padding: 0 14px 10px; }
 .meeting-stage.panel-open { grid-template-columns: minmax(0,1fr) 340px; }
 .video-grid { min-height: 0; height: 100%; padding: 0; gap: 8px; background: transparent; }
+.meeting-stage-focus { min-height: 0; height: 100%; display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 8px; }
+.meeting-stage-focus .stage-main { min-height: 0; }
+.meeting-stage-focus .stage-main .video-tile { width: 100%; height: 100%; }
+.meeting-stage-focus .stage-filmstrip { min-height: 0; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.meeting-stage-focus .stage-filmstrip .video-tile { flex: 0 0 auto; width: 168px; height: 100px; }
+@media (max-width: 820px) {
+  .meeting-stage-focus .stage-filmstrip .video-tile { width: 120px; height: 72px; }
+}
 .video-tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid #3a403c; border-radius: 8px; background: #2b302d; }
 .video-tile video { width: 100%; height: 100%; object-fit: cover; }
 .video-tile video.video-audio-only { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -1339,6 +1374,27 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .meeting-file-upload:hover:not(:disabled) { border-color: var(--brand-500); background: color-mix(in srgb,var(--brand-100) 72%,var(--surface)); transform: translateY(-1px); }
 .meeting-files-empty { min-height: 240px; display: grid; place-content: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }.meeting-files-empty strong { color: var(--text); }.meeting-files-empty small { max-width: 230px; line-height: 1.5; }
 .meeting-file-list { margin-top: 10px; display: grid; gap: 4px; }.meeting-file-list a { min-width: 0; min-height: 62px; padding: 8px; display: grid; grid-template-columns: 38px minmax(0,1fr) 24px; align-items: center; gap: 9px; border-radius: 8px; color: var(--text); }.meeting-file-list a:hover { background: var(--surface-muted); }.meeting-file-list a > span:first-child { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; background: var(--brand-100); color: var(--brand-700); }.meeting-file-list a > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }.meeting-file-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.meeting-file-list small { color: var(--muted); }
+
+/* Meeting Join Policy — waiting room + request-to-join lobby state */
+.join-request-pending { margin-top: 4px; padding: 14px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); text-align: left; }
+.join-request-pending > svg { flex: none; color: var(--brand-600); }
+.join-request-pending div { display: grid; gap: 2px; margin-right: auto; }
+.join-request-pending small { color: var(--muted); }
+.join-request-rejected > svg { color: var(--danger,#d64545); }
+.spin-slow { animation: spin 2.4s linear infinite; }
+.waiting-room-panel { min-height: 0; overflow: auto; padding: 12px; }
+.waiting-room-batch { display: flex; gap: 8px; margin-bottom: 10px; }
+.waiting-room-batch .button { flex: 1; justify-content: center; }
+.waiting-room-list { display: grid; gap: 4px; }
+.waiting-room-item { min-height: 58px; padding: 8px; display: grid; grid-template-columns: 38px minmax(0,1fr) 34px 34px; align-items: center; gap: 8px; border-radius: 8px; }
+.waiting-room-item:hover { background: var(--surface-muted); }
+.waiting-room-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waiting-room-item button { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; }
+.waiting-room-accept { background: var(--brand-600); color: #fff; }
+.waiting-room-accept:hover:not(:disabled) { background: var(--brand-700); }
+.waiting-room-reject { background: var(--surface-muted); color: var(--text-soft); }
+.waiting-room-reject:hover:not(:disabled) { background: color-mix(in srgb, var(--danger,#d64545) 16%, var(--surface-muted)); color: var(--danger,#d64545); }
+.waiting-room-item button:disabled { opacity: .6; cursor: default; }
 
 /* Stable Telegram-like message rhythm across short text, media and replies. */
 .conversation > .message-list .message { width: 100%; max-width: none; margin: 3px 0; }

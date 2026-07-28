@@ -1,18 +1,78 @@
-import { ArrowDown, ArrowLeft, Bell, BellOff, Bot, Camera, Check, CheckCheck, Copy, Download, Eye, FileText, Hash, ImagePlus, Link2, LoaderCircle, MailPlus, Maximize2, Megaphone, MessageCircle, MessagesSquare, Mic, Minus, MoreVertical, Paperclip, Pencil, Phone, PhoneOff, Pin, Plus, RadioTower, Reply, Save, Search, Send, Settings, ShieldCheck, Smile, Sparkles, Square, Trash2, User as UserIcon, UserPlus, UserRound, Users, UsersRound, Video, X } from "lucide-react";
-import { type CSSProperties, FormEvent, KeyboardEvent, type MouseEvent, type PointerEvent, type TouchEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "wouter";
-import { Avatar, Button, EmptyState, Modal } from "../components/ui";
-import { StarfieldBackground } from "../components/StarfieldBackground";
-import { AudioMessage } from "../components/AudioMessage";
-import { MeetingRoomPage } from "./MeetingRoomPage";
-import { useToast } from "../components/Toast";
-import { api } from "../lib/api";
-import { useAuth } from "../lib/auth";
-import { getSocket } from "../lib/socket";
+import {
+  ArrowDown,
+  ArrowLeft,
+  Bell,
+  BellOff,
+  Bot,
+  Camera,
+  Check,
+  CheckCheck,
+  Copy,
+  Download,
+  Eye,
+  FileText,
+  Hash,
+  ImagePlus,
+  Link2,
+  LoaderCircle,
+  MailPlus,
+  Maximize2,
+  Megaphone,
+  MessageCircle,
+  MessagesSquare,
+  Mic,
+  Minus,
+  MoreVertical,
+  Paperclip,
+  Pencil,
+  Phone,
+  PhoneOff,
+  Pin,
+  Plus,
+  RadioTower,
+  Reply,
+  Save,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Smile,
+  Sparkles,
+  Square,
+  Trash2,
+  User as UserIcon,
+  UserPlus,
+  UserRound,
+  Users,
+  UsersRound,
+  Video,
+  X
+}                                                                           from "lucide-react";
+import {
+  type CSSProperties,
+  FormEvent,
+  KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type TouchEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+}                                                                           from "react";
+import { useLocation }                                                      from "wouter";
+import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
+import { StarfieldBackground }                                              from "../components/StarfieldBackground";
+import { AudioMessage }                                                     from "../components/AudioMessage";
+import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
+import { useToast }                                                         from "../components/Toast";
+import { api }                                                              from "../lib/api";
+import { useAuth }                                                          from "../lib/auth";
+import { getSocket }                                                        from "../lib/socket";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
-import { setUnreadTotal } from "../lib/chatUnread";
-import { useI18n, type TranslateFn } from "../lib/i18n/i18n";
-import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember } from "../types";
+import { setUnreadTotal }                                                   from "../lib/chatUnread";
+import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
+import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
@@ -22,7 +82,10 @@ function MemberPresenceDot({ userId }: { userId: string }) {
 }
 
 /** Telegram-style presence dot pinned to the corner of a DM's avatar in the room list. */
-function DirectRoomAvatar({ peer, size = "md" }: { peer?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null; size?: "sm" | "md" }) {
+function DirectRoomAvatar({ peer, size = "md" }: {
+  peer?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  size?: "sm" | "md"
+}) {
   const presence = usePresence(peer?.id);
   return (
     <span className={`room-avatar-presence-wrap ${size === "sm" ? "room-avatar-presence-wrap-sm" : ""}`}>
@@ -39,7 +102,7 @@ function memberUser(member: WorkspaceMember, t: TranslateFn): User {
     lastName: member.lastName || "",
     username: member.username || "user",
     email: member.email || "",
-    avatarUrl: member.avatarUrl,
+    avatarUrl: member.avatarUrl
   }) as User;
 }
 
@@ -76,13 +139,31 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [miniHeight, setMiniHeight] = useState(480);
   const [miniPos, setMiniPos] = useState(() => ({ x: window.innerWidth - 340, y: window.innerHeight - 570 }));
   const [miniResizing, setMiniResizing] = useState(false);
-  const miniResizeStart = useRef<{ x: number; y: number; width: number; height: number; posX: number; posY: number; dir: string }>({ x: 0, y: 0, width: 320, height: 480, posX: 0, posY: 0, dir: "nw" });
+  const miniResizeStart = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    posX: number;
+    posY: number;
+    dir: string
+  }>({ x: 0, y: 0, width: 320, height: 480, posX: 0, posY: 0, dir: "nw" });
   const [miniDragging, setMiniDragging] = useState(false);
   const miniDragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const roomsRef = useRef<ChatRoom[]>([]);
-  useEffect(() => { roomsRef.current = rooms; }, [rooms]);
-  const [messageToasts, setMessageToasts] = useState<Array<{ id: string; roomId: string; title: string; preview: string; avatarUrl?: string | null; senderFirstName?: string; senderLastName?: string }>>([]);
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+  const [messageToasts, setMessageToasts] = useState<Array<{
+    id: string;
+    roomId: string;
+    title: string;
+    preview: string;
+    avatarUrl?: string | null;
+    senderFirstName?: string;
+    senderLastName?: string
+  }>>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
@@ -91,7 +172,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [startingCall, setStartingCall] = useState<"audio" | "video" | null>(null);
-  const [directCall, setDirectCall] = useState<{ meetingId: string; roomId: string; peerId: string; kind: "audio" | "video"; phase: "incoming" | "outgoing" | "active" } | null>(null);
+  const [directCall, setDirectCall] = useState<{
+    meetingId: string;
+    roomId: string;
+    peerId: string;
+    kind: "audio" | "video";
+    phase: "incoming" | "outgoing" | "active"
+  } | null>(null);
   const [catalog, setCatalog] = useState<"all" | "direct" | "group" | "channel" | "bot">("all");
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -140,8 +227,28 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
   const [detailMemberTotal, setDetailMemberTotal] = useState(0);
-  const [detailMembers, setDetailMembers] = useState<Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>>([]);
-  const [sharedItems, setSharedItems] = useState<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>([]);
+  const [detailMembers, setDetailMembers] = useState<Array<{
+    id: string;
+    publicId: string;
+    firstName: string;
+    lastName: string;
+    username?: string | null;
+    avatarUrl?: string | null;
+    lastSeen?: string | null;
+    role: string
+  }>>([]);
+  const [sharedItems, setSharedItems] = useState<Array<{
+    id?: string;
+    messageId: string;
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+    storageUrl?: string;
+    content?: string;
+    url?: string[] | string;
+    username?: string;
+    createdAt: string
+  }>>([]);
   const [mediaPreview, setMediaPreview] = useState<{ url: string; name: string } | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
   const [forwarding, setForwarding] = useState(false);
@@ -175,7 +282,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
 
   function formatTime(value: string) {
-    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(new Date(value));
   }
 
   function formatDay(value: string) {
@@ -185,16 +295,24 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { day: "numeric", month: "long" }).format(date);
   }
 
+  function formatCallDuration(seconds: number) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
   const memberMap = useMemo(() => {
     const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl" | "publicId">>();
     members.forEach((member) => result.set(member.userId, memberUser(member, t)));
     rooms.flatMap((room) => room.memberProfiles || []).forEach((profile) => result.set(profile.id, profile));
     globalUsers.forEach((profile) => result.set(profile.id, profile));
     return result;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [members, rooms, globalUsers]);
   const memberMapRef = useRef(memberMap);
-  useEffect(() => { memberMapRef.current = memberMap; }, [memberMap]);
+  useEffect(() => {
+    memberMapRef.current = memberMap;
+  }, [memberMap]);
   const detailPeer = selectedRoom?.type === "direct"
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
@@ -206,31 +324,59 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     const socket = getSocket();
-    const incoming = (data: { meetingId: string; roomId: string; fromUserId: string; kind: "audio" | "video" }) => setDirectCall({ meetingId: data.meetingId, roomId: data.roomId, peerId: data.fromUserId, kind: data.kind, phase: "incoming" });
-    const accepted = (data: { meetingId: string }) => setDirectCall((current) => current?.meetingId === data.meetingId ? { ...current, phase: "active" } : current);
-    const closed = (data: { meetingId: string }) => setDirectCall((current) => current?.meetingId === data.meetingId ? null : current);
-    socket.on("call:incoming", incoming); socket.on("call:accepted", accepted); socket.on("call:declined", closed); socket.on("call:ended", closed);
-    return () => { socket.off("call:incoming", incoming); socket.off("call:accepted", accepted); socket.off("call:declined", closed); socket.off("call:ended", closed); };
+    const incoming = (data: {
+      meetingId: string;
+      roomId: string;
+      fromUserId: string;
+      kind: "audio" | "video"
+    }) => setDirectCall({
+      meetingId: data.meetingId,
+      roomId: data.roomId,
+      peerId: data.fromUserId,
+      kind: data.kind,
+      phase: "incoming"
+    });
+    const accepted = (data: {
+      meetingId: string
+    }) => setDirectCall((current) => current?.meetingId === data.meetingId ? { ...current, phase: "active" } : current);
+    const closed = (data: {
+      meetingId: string
+    }) => setDirectCall((current) => current?.meetingId === data.meetingId ? null : current);
+    socket.on("call:incoming", incoming);
+    socket.on("call:accepted", accepted);
+    socket.on("call:declined", closed);
+    socket.on("call:ended", closed);
+    return () => {
+      socket.off("call:incoming", incoming);
+      socket.off("call:accepted", accepted);
+      socket.off("call:declined", closed);
+      socket.off("call:ended", closed);
+    };
   }, []);
 
   useEffect(() => {
     if (location !== "/chat" || (!selectedRoom && !aiOpen)) return;
     const anyModalOpen = detailsOpen || roomSettingsOpen || createOpen || workspaceInviteOpen || roomInfoOpen || Boolean(forwardingMessage) || Boolean(mediaPreview);
     if (anyModalOpen) return;
+
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
       // Escape backs out of the open conversation (personal or group) to
       // the room list, like Telegram - it never leaves the /chat route or
       // minimizes the widget on its own.
-      if (aiOpen) { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }
-      else setSelectedId(null);
+      if (aiOpen) {
+        setAiOpen(false);
+        window.history.replaceState({}, "", "/chat");
+      } else setSelectedId(null);
     }
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, createOpen, workspaceInviteOpen, roomInfoOpen, forwardingMessage, mediaPreview]);
 
   useEffect(() => {
     if (!miniResizing) return;
+
     function onMove(event: globalThis.PointerEvent) {
       const s = miniResizeStart.current;
       const dx = event.clientX - s.x;
@@ -252,7 +398,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         setMiniHeight(Math.min(maxHeight, Math.max(260, s.height + dy)));
       }
     }
-    function onUp() { setMiniResizing(false); }
+
+    function onUp() {
+      setMiniResizing(false);
+    }
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
@@ -263,13 +413,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     if (!miniDragging) return;
+
     function onMove(event: globalThis.PointerEvent) {
       const s = miniDragStart.current;
       const x = Math.min(window.innerWidth - 80, Math.max(-miniWidth + 80, s.posX + (event.clientX - s.x)));
       const y = Math.min(window.innerHeight - 60, Math.max(0, s.posY + (event.clientY - s.y)));
       setMiniPos({ x, y });
     }
-    function onUp() { setMiniDragging(false); }
+
+    function onUp() {
+      setMiniDragging(false);
+    }
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
@@ -288,7 +443,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     return (event: MouseEvent<HTMLSpanElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      miniResizeStart.current = { x: event.clientX, y: event.clientY, width: miniWidth, height: miniHeight, posX: miniPos.x, posY: miniPos.y, dir };
+      miniResizeStart.current = {
+        x: event.clientX,
+        y: event.clientY,
+        width: miniWidth,
+        height: miniHeight,
+        posX: miniPos.x,
+        posY: miniPos.y,
+        dir
+      };
       setMiniResizing(true);
     };
   }
@@ -338,7 +501,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   async function sendAiMessage() {
     const prompt = aiDraft.trim();
     if (!prompt || aiThinking) return;
-    const userMessage: AiConversationMessage = { id: crypto.randomUUID(), role: "user", text: prompt, createdAt: new Date().toISOString() };
+    const userMessage: AiConversationMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text: prompt,
+      createdAt: new Date().toISOString()
+    };
     const next = [...aiMessages, userMessage].slice(-40);
     aiShouldScroll.current = true;
     setAiMessages(next);
@@ -349,7 +517,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       const result = await api.chat.ai(prompt, history);
       const list = aiMessageList.current;
       aiShouldScroll.current = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 120;
-      const completed = [...next, { id: crypto.randomUUID(), role: "model" as const, text: result.reply, createdAt: new Date().toISOString(), sources: result.sources }].slice(-40);
+      const completed = [...next, {
+        id: crypto.randomUUID(),
+        role: "model" as const,
+        text: result.reply,
+        createdAt: new Date().toISOString(),
+        sources: result.sources
+      }].slice(-40);
       setAiMessages(completed);
       if (user?.id) localStorage.setItem(`optima-ai-conversation:${user.id}`, JSON.stringify(completed));
     } catch (error) {
@@ -361,7 +535,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   function showRoomContext(event: MouseEvent, room: ChatRoom) {
     event.preventDefault();
-    setRoomContext({ roomId: room.id, x: Math.min(event.clientX, window.innerWidth - 250), y: Math.min(event.clientY, window.innerHeight - 230) });
+    setRoomContext({
+      roomId: room.id,
+      x: Math.min(event.clientX, window.innerWidth - 250),
+      y: Math.min(event.clientY, window.innerHeight - 230)
+    });
   }
 
   async function deleteSelectedRoom() {
@@ -373,7 +551,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setRooms(remaining);
       setHeaderMenuOpen(false);
       if (remaining[0]) chooseRoom(remaining[0].id);
-      else { setSelectedId(null); navigate("/chat"); }
+      else {
+        setSelectedId(null);
+        navigate("/chat");
+      }
       show(t("chat.groupDeleted"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.groupDeleteFailed"), "error");
@@ -400,14 +581,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
       ...room!, memberIds: room!.memberIds || [], memberProfiles: room!.memberProfiles || [],
       unreadCount: room!.unreadCount || 0, memberCount: room!.memberCount || 0,
-      isReadOnly: room!.isReadOnly || false, memberStatus: "active" as const,
+      isReadOnly: room!.isReadOnly || false, memberStatus: "active" as const
     }));
     const mergedRooms = [...systemRooms, ...nextRooms.filter((room) => !systemRooms.some((system) => system.id === room.id))];
     setRooms(mergedRooms);
     setMembers(nextMembers);
     const target = preferredId || selectedId;
     if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
-    // A pending routeTarget (deep link, e.g. /g/backend-team) resolves and picks its own
+      // A pending routeTarget (deep link, e.g. /g/backend-team) resolves and picks its own
     // room shortly after - don't let the "open the first room" fallback race ahead of it.
     else if (!routeTarget && mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
     else setSelectedId(null);
@@ -420,7 +601,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setLoadingRooms(false);
       show(error instanceof Error ? error.message : t("chat.loadRoomsFailed"), "error");
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace?.id]);
 
   // Resolves a deep-link route (/u/:id, /g/:slug-or-publicId, /ch/:slug-or-publicId) to
@@ -429,9 +610,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!routeTarget || !workspace) return;
     const matchesCurrent = selectedRoom && (routeTarget.type === "direct"
       ? selectedRoom.type === "direct" && (() => {
-          const other = selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
-          return other?.username === routeTarget.identifier || (other?.publicId != null && String(other.publicId) === routeTarget.identifier);
-        })()
+      const other = selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
+      return other?.username === routeTarget.identifier || (other?.publicId != null && String(other.publicId) === routeTarget.identifier);
+    })()
       : selectedRoom.slug === routeTarget.identifier || (selectedRoom.publicId != null && String(selectedRoom.publicId) === routeTarget.identifier));
     if (matchesCurrent) return;
 
@@ -452,8 +633,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         navigate("/chat", { replace: true });
       }
     })();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
 
   useEffect(() => {
@@ -485,7 +668,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   async function loadOlderMessages() {
     if (!selectedId || loadingMessages || loadingOlderMessages || !hasOlderMessages) return;
     const oldestSequence = messages.find((message) => typeof message.sequence === "number")?.sequence;
-    if (!oldestSequence) { setHasOlderMessages(false); return; }
+    if (!oldestSequence) {
+      setHasOlderMessages(false);
+      return;
+    }
     const list = messageList.current;
     const previousHeight = list?.scrollHeight || 0;
     setLoadingOlderMessages(true);
@@ -519,7 +705,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const onDisconnect = () => setConnected(false);
     const onMessage = (message: ChatMessage) => {
       if (message.roomId !== selectedId) {
-        setRooms((current) => current.map((room) => room.id === message.roomId ? { ...room, unreadCount: message.senderId === user?.id ? room.unreadCount : room.unreadCount + 1, lastMessage: { id: message.id, content: message.content, senderId: message.senderId, createdAt: message.createdAt } } : room));
+        setRooms((current) => current.map((room) => room.id === message.roomId ? {
+          ...room,
+          unreadCount: message.senderId === user?.id ? room.unreadCount : room.unreadCount + 1,
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            createdAt: message.createdAt
+          }
+        } : room));
         if (message.senderId !== user?.id) {
           const room = roomsRef.current.find((entry) => entry.id === message.roomId);
           if (room && !room.isMuted) {
@@ -527,7 +722,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.userFallback");
             const title = room.type === "direct" ? senderName : `${senderName} · ${room.name || t("chat.unnamedGroup")}`;
             const preview = message.content || (message.attachments?.length ? t("chat.mediaMessageFallback") : "");
-            setMessageToasts((current) => [...current.filter((item) => item.id !== message.id), { id: message.id, roomId: message.roomId, title, preview, avatarUrl: sender?.avatarUrl, senderFirstName: sender?.firstName, senderLastName: sender?.lastName }].slice(-4));
+            setMessageToasts((current) => [...current.filter((item) => item.id !== message.id), {
+              id: message.id,
+              roomId: message.roomId,
+              title,
+              preview,
+              avatarUrl: sender?.avatarUrl,
+              senderFirstName: sender?.firstName,
+              senderLastName: sender?.lastName
+            }].slice(-4));
             window.setTimeout(() => setMessageToasts((current) => current.filter((item) => item.id !== message.id)), 6000);
           }
         }
@@ -538,7 +741,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           return current.map((item) => item.clientMessageId === message.clientMessageId ? {
             ...message,
             content: message.content || item.content,
-            attachments: message.attachments?.length ? message.attachments : item.attachments,
+            attachments: message.attachments?.length ? message.attachments : item.attachments
           } : item);
         }
         return current.some((item) => item.id === message.id) ? current : [...current, message];
@@ -548,7 +751,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       if (data.roomId !== selectedId || data.userId === user?.id) return;
       setTypingUsers((current) => data.typing ? [...new Set([...current, data.userId])] : current.filter((id) => id !== data.userId));
     };
-    const onReaction = (data: { roomId: string; messageId: string; emoji: string; userId: string; action: "added" | "removed" }) => {
+    const onReaction = (data: {
+      roomId: string;
+      messageId: string;
+      emoji: string;
+      userId: string;
+      action: "added" | "removed"
+    }) => {
       if (data.roomId !== selectedId) return;
       setMessages((current) => current.map((item) => {
         if (item.id !== data.messageId) return item;
@@ -626,8 +835,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!detailsOpen || !selectedId) return;
     setDetailsLoading(true);
     const request = detailsTab === "members"
-      ? api.chat.roomMembers(selectedId, detailMemberSearch.trim()).then((result) => { setDetailMembers(result.items); setDetailMemberTotal(result.total); setSharedItems([]); })
-      : api.chat.shared(selectedId, detailsTab).then((items) => { setSharedItems(items); setDetailMembers([]); });
+      ? api.chat.roomMembers(selectedId, detailMemberSearch.trim()).then((result) => {
+        setDetailMembers(result.items);
+        setDetailMemberTotal(result.total);
+        setSharedItems([]);
+      })
+      : api.chat.shared(selectedId, detailsTab).then((items) => {
+        setSharedItems(items);
+        setDetailMembers([]);
+      });
     void request.catch((error) => show(error instanceof Error ? error.message : t("chat.loadDetailsFailed"), "error")).finally(() => setDetailsLoading(false));
   }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
 
@@ -710,7 +926,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       clientMessageId,
       createdAt: new Date().toISOString(),
       reactions: [],
-      sender: user,
+      sender: user
     };
     setMessages((current) => [...current, optimistic]);
     const socket = getSocket();
@@ -718,7 +934,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     try {
       if (socket.connected) {
         await new Promise<void>((resolve, reject) => {
-          socket.timeout(9000).emit("send_message", { roomId: selectedRoom.id, text: content, clientMessageId, replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve());
+          socket.timeout(9000).emit("send_message", {
+            roomId: selectedRoom.id,
+            text: content,
+            clientMessageId,
+            replyToId: replyingTo?.id
+          }, (error: Error | null) => error ? reject(error) : resolve());
         });
       } else {
         const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
@@ -850,7 +1071,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       const clientMessageId = crypto.randomUUID();
       if (socket.connected) {
         try {
-          await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: draft.trim(), clientMessageId, attachments: [attachment], replyToId: replyingTo?.id }, (error: Error | null) => error ? reject(error) : resolve()));
+          await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", {
+            roomId: selectedRoom.id,
+            text: draft.trim(),
+            clientMessageId,
+            attachments: [attachment],
+            replyToId: replyingTo?.id
+          }, (error: Error | null) => error ? reject(error) : resolve()));
         } catch {
           await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
         }
@@ -877,12 +1104,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         title: roomTitle(selectedRoom),
         description: `${roomTitle(selectedRoom)} suhbati`,
         startTime: new Date().toISOString(),
-        maxParticipants: Math.max(2, selectedRoom.memberCount + 2),
+        maxParticipants: Math.max(2, selectedRoom.memberCount + 2)
       });
       sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
-      const call = { meetingId: meeting.id, roomId: selectedRoom.id, peerId: detailPeer.id, kind, phase: "outgoing" as const };
+      const call = {
+        meetingId: meeting.id,
+        roomId: selectedRoom.id,
+        peerId: detailPeer.id,
+        kind,
+        phase: "outgoing" as const
+      };
       setDirectCall(call);
-      getSocket().emit("call:invite", { meetingId: call.meetingId, roomId: call.roomId, targetUserId: call.peerId, kind: call.kind });
+      getSocket().emit("call:invite", {
+        meetingId: call.meetingId,
+        roomId: call.roomId,
+        targetUserId: call.peerId,
+        kind: call.kind
+      });
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.callStartFailed"), "error");
       setStartingCall(null);
@@ -892,13 +1130,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   function acceptDirectCall() {
     if (!directCall) return;
     sessionStorage.setItem(`optima:meeting-camera:${directCall.meetingId}`, directCall.kind === "video" ? "on" : "off");
-    getSocket().emit("call:accept", { meetingId: directCall.meetingId, roomId: directCall.roomId, targetUserId: directCall.peerId, kind: directCall.kind });
+    getSocket().emit("call:accept", {
+      meetingId: directCall.meetingId,
+      roomId: directCall.roomId,
+      targetUserId: directCall.peerId,
+      kind: directCall.kind
+    });
     setDirectCall({ ...directCall, phase: "active" });
   }
 
   function closeDirectCall() {
     if (!directCall) return;
-    getSocket().emit(directCall.phase === "incoming" ? "call:decline" : "call:end", { meetingId: directCall.meetingId, roomId: directCall.roomId, targetUserId: directCall.peerId, kind: directCall.kind });
+    getSocket().emit(directCall.phase === "incoming" ? "call:decline" : "call:end", {
+      meetingId: directCall.meetingId,
+      roomId: directCall.roomId,
+      targetUserId: directCall.peerId,
+      kind: directCall.kind
+    });
     setDirectCall(null);
     setStartingCall(null);
   }
@@ -913,7 +1161,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       if (socket.connected) {
         try {
           await new Promise<void>((resolve, reject) => {
-            socket.timeout(12000).emit("send_message", { roomId: selectedRoom.id, text: "", clientMessageId, attachments: [attachment] }, (error: Error | null) => error ? reject(error) : resolve());
+            socket.timeout(12000).emit("send_message", {
+              roomId: selectedRoom.id,
+              text: "",
+              clientMessageId,
+              attachments: [attachment]
+            }, (error: Error | null) => error ? reject(error) : resolve());
           });
         } catch {
           await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
@@ -936,7 +1189,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       cancelRecording.current = false;
       recordingStream.current = stream;
       recorder.current = nextRecorder;
-      nextRecorder.ondataavailable = (event) => { if (event.data.size) recordingChunks.current.push(event.data); };
+      nextRecorder.ondataavailable = (event) => {
+        if (event.data.size) recordingChunks.current.push(event.data);
+      };
       nextRecorder.onstop = () => {
         const blob = new Blob(recordingChunks.current, { type: nextRecorder.mimeType });
         stream.getTracks().forEach((track) => track.stop());
@@ -948,7 +1203,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setRecording(true);
       setRecordingSeconds(0);
       recordingTimer.current = window.setInterval(() => setRecordingSeconds((value) => {
-        if (value >= 299) { nextRecorder.stop(); setRecording(false); return 300; }
+        if (value >= 299) {
+          nextRecorder.stop();
+          setRecording(false);
+          return 300;
+        }
         return value + 1;
       }), 1000);
     } catch {
@@ -987,7 +1246,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     try {
       const room = createMode === "direct"
         ? await api.chat.createRoom(workspace.id, { type: "direct", targetUserId: selectedMembers[0] })
-        : await api.chat.createRoom(workspace.id, { type: "group", visibility: "members_only", name: String(data.get("name") || "").trim(), memberIds: selectedMembers });
+        : await api.chat.createRoom(workspace.id, {
+          type: "group",
+          visibility: "members_only",
+          name: String(data.get("name") || "").trim(),
+          memberIds: selectedMembers
+        });
       await loadRooms(room.id);
       setCreateOpen(false);
       setSelectedMembers([]);
@@ -1051,7 +1315,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     try {
       const created = await api.chat.createInvite(selectedRoom.id, {
         ...(maxUses > 0 ? { maxUses } : {}),
-        ...(expiresInHours > 0 ? { expiresInHours } : {}),
+        ...(expiresInHours > 0 ? { expiresInHours } : {})
       });
       setRoomInvites((current) => [created, ...current]);
       show(t("chat.inviteLinkCreated"));
@@ -1076,7 +1340,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!selectedRoom) return;
     try {
       await api.chat.revokeInvite(selectedRoom.id, inviteId);
-      setRoomInvites((current) => current.map((entry) => entry.id === inviteId ? { ...entry, isActive: false, revokedAt: new Date().toISOString() } : entry));
+      setRoomInvites((current) => current.map((entry) => entry.id === inviteId ? {
+        ...entry,
+        isActive: false,
+        revokedAt: new Date().toISOString()
+      } : entry));
       show(t("chat.inviteLinkRevoked"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.linkRevokeFailed"), "error");
@@ -1088,20 +1356,28 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (room.type === "group" || room.type === "private") return "group";
     return "channel";
   };
+
   async function openDiscussion(messageId: string) {
     try {
       const discussion = await api.chat.discussion(messageId);
       chooseRoom(discussion.roomId);
-      window.setTimeout(() => document.getElementById(`message-${discussion.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 400);
+      window.setTimeout(() => document.getElementById(`message-${discussion.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      }), 400);
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.discussionOpenFailed"), "error");
     }
   }
+
   async function toggleChannelMute() {
     if (!selectedRoom) return;
     try {
       const result = await api.chat.mute(selectedRoom.id, !selectedRoom.isMuted);
-      setRooms((current) => current.map((room) => room.id === selectedRoom.id ? { ...room, isMuted: result.isMuted } : room));
+      setRooms((current) => current.map((room) => room.id === selectedRoom.id ? {
+        ...room,
+        isMuted: result.isMuted
+      } : room));
       show(result.isMuted ? t("chat.channelMuted") : t("chat.channelUnmuted"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.settingSaveFailed"), "error");
@@ -1145,7 +1421,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setUploadingRoomBackground(true);
     try {
       const uploaded = await api.chat.uploadFile(selectedRoom.id, file);
-      const updated = await api.chat.updateRoomBackground(selectedRoom.id, { backgroundUrl: uploaded.storageUrl, backgroundType: "IMAGE" });
+      const updated = await api.chat.updateRoomBackground(selectedRoom.id, {
+        backgroundUrl: uploaded.storageUrl,
+        backgroundType: "IMAGE"
+      });
       setRoomSettingsBackground(updated.backgroundUrl || uploaded.storageUrl);
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
       show(t("chat.chatBackgroundUpdated"));
@@ -1161,7 +1440,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!selectedRoom) return;
     setUploadingRoomBackground(true);
     try {
-      const updated = await api.chat.updateRoomBackground(selectedRoom.id, { backgroundUrl: null, backgroundType: "DEFAULT" });
+      const updated = await api.chat.updateRoomBackground(selectedRoom.id, {
+        backgroundUrl: null,
+        backgroundType: "DEFAULT"
+      });
       setRoomSettingsBackground(null);
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
       show(t("chat.chatBackgroundRemoved"));
@@ -1182,7 +1464,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         name: roomSettingsName.trim(),
         description: roomSettingsDescription.trim(),
         avatarUrl: roomSettingsAvatar,
-        ...(trimmedSlug !== (selectedRoom.slug || "") ? { slug: trimmedSlug || null } : {}),
+        ...(trimmedSlug !== (selectedRoom.slug || "") ? { slug: trimmedSlug || null } : {})
       });
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
       setRoomSettingsOpen(false);
@@ -1196,6 +1478,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setSavingRoomSettings(false);
     }
   }
+
   async function forwardMessage(targetRoomId: string) {
     if (!forwardingMessage || forwarding) return;
     setForwarding(true);
@@ -1205,7 +1488,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         storageUrl: attachment.url,
         fileName: attachment.fileName,
         fileSize: attachment.fileSize,
-        mimeType: attachment.mimeType,
+        mimeType: attachment.mimeType
       }));
       await api.chat.send(targetRoomId, forwardingMessage.content, crypto.randomUUID(), undefined, attachments);
       setForwardingMessage(null);
@@ -1216,12 +1499,33 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setForwarding(false);
     }
   }
+
   const catalogItems = [
-    { id: "all" as const, label: t("chat.catalogAll"), icon: MessagesSquare, count: rooms.reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "direct" as const, label: t("chat.catalogDirect"), icon: UserIcon, count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "group" as const, label: t("chat.catalogGroups"), icon: Users, count: rooms.filter((room) => roomCatalog(room) === "group").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "channel" as const, label: t("chat.catalogChannels"), icon: RadioTower, count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0) },
-    { id: "bot" as const, label: t("chat.catalogBots"), icon: Bot, count: 0 },
+    {
+      id: "all" as const,
+      label: t("chat.catalogAll"),
+      icon: MessagesSquare,
+      count: rooms.reduce((sum, room) => sum + room.unreadCount, 0)
+    },
+    {
+      id: "direct" as const,
+      label: t("chat.catalogDirect"),
+      icon: UserIcon,
+      count: rooms.filter((room) => roomCatalog(room) === "direct").reduce((sum, room) => sum + room.unreadCount, 0)
+    },
+    {
+      id: "group" as const,
+      label: t("chat.catalogGroups"),
+      icon: Users,
+      count: rooms.filter((room) => roomCatalog(room) === "group").reduce((sum, room) => sum + room.unreadCount, 0)
+    },
+    {
+      id: "channel" as const,
+      label: t("chat.catalogChannels"),
+      icon: RadioTower,
+      count: rooms.filter((room) => roomCatalog(room) === "channel").reduce((sum, room) => sum + room.unreadCount, 0)
+    },
+    { id: "bot" as const, label: t("chat.catalogBots"), icon: Bot, count: 0 }
   ];
   useEffect(() => {
     function measure() {
@@ -1231,6 +1535,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       const button = nav.querySelectorAll("button")[index] as HTMLElement | undefined;
       if (button) setCatalogIndicator({ left: button.offsetLeft, width: button.offsetWidth });
     }
+
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -1250,13 +1555,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setMinimized(false);
     chooseRoom(toast.roomId);
   }
+
   const messageToastStack = messageToasts.length > 0 ? (
     <div className="message-toast-stack" aria-live="polite">
       {messageToasts.map((toast) => (
         <button key={toast.id} className="message-toast" onClick={() => openMessageToast(toast)}>
           <Avatar firstName={toast.senderFirstName} lastName={toast.senderLastName} url={toast.avatarUrl} size="sm" />
           <span><strong>{toast.title}</strong><small>{toast.preview}</small></span>
-          <span className="icon-button icon-button-sm" onClick={(event) => { event.stopPropagation(); setMessageToasts((current) => current.filter((item) => item.id !== toast.id)); }} aria-label={t("chat.dismissAria")}><X size={14} /></span>
+          <span className="icon-button icon-button-sm" onClick={(event) => {
+            event.stopPropagation();
+            setMessageToasts((current) => current.filter((item) => item.id !== toast.id));
+          }} aria-label={t("chat.dismissAria")}><X size={14} /></span>
         </button>
       ))}
     </div>
@@ -1289,59 +1598,84 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       const other = selectedRoom.type === "direct" ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
       return (
         <>
-        {messageToastStack}
-        <div className="chat-mini-widget chat-mini-conversation" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
-          {resizeHandles}
-          <header onMouseDown={startMiniDrag}>
-            <button className="icon-button" onClick={() => setSelectedId(null)} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={16} /></button>
-            {selectedRoom.type === "direct" && other ? <Avatar firstName={other.firstName} lastName={other.lastName} url={other.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || "G").trim().charAt(0).toUpperCase()}</span>}
-            <strong>{roomTitle(selectedRoom)}</strong>
-            <button className="icon-button" onClick={() => expand(selectedRoom.id)} aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} /></button>
-            <button className="icon-button" onClick={() => setMinimized(false)} aria-label={t("chat.closeMiniChatAria")} title={t("chat.closeMiniChatAria")}><X size={16} /></button>
-          </header>
-          <div className="chat-mini-messages">
-            {messages.map((message) => (
-              <div key={message.id} className={`chat-mini-message ${message.senderId === user?.id ? "mine" : ""}`}>
-                <p>{message.content || (message.attachments?.length ? `📎 ${message.attachments[0].fileName}` : "")}</p>
-              </div>
-            ))}
+          {messageToastStack}
+          <div className="chat-mini-widget chat-mini-conversation"
+               style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
+            {resizeHandles}
+            <header onMouseDown={startMiniDrag}>
+              <button className="icon-button" onClick={() => setSelectedId(null)} aria-label={t("chat.backToChatsAria")}
+                      title={t("chat.chatsTitle")}><ArrowLeft size={16} /></button>
+              {selectedRoom.type === "direct" && other ?
+                <Avatar firstName={other.firstName} lastName={other.lastName} url={other.avatarUrl}
+                        size="sm" /> : selectedRoom.avatarUrl ?
+                  <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl}
+                                                                                      alt="" /></span> : <span
+                    className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || "G").trim().charAt(0).toUpperCase()}</span>}
+              <strong>{roomTitle(selectedRoom)}</strong>
+              <button className="icon-button" onClick={() => expand(selectedRoom.id)}
+                      aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} />
+              </button>
+              <button className="icon-button" onClick={() => setMinimized(false)}
+                      aria-label={t("chat.closeMiniChatAria")} title={t("chat.closeMiniChatAria")}><X size={16} />
+              </button>
+            </header>
+            <div className="chat-mini-messages">
+              {messages.map((message) => (
+                <div key={message.id} className={`chat-mini-message ${message.senderId === user?.id ? "mine" : ""}`}>
+                  <p>{message.content || (message.attachments?.length ? `📎 ${message.attachments[0].fileName}` : "")}</p>
+                </div>
+              ))}
+            </div>
+            <form className="chat-mini-composer" onSubmit={(event) => {
+              event.preventDefault();
+              void sendMessage();
+            }}>
+              <input value={draft} onChange={(event) => announceTyping(event.target.value)}
+                     placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} />
+              <button type="submit" disabled={!draft.trim()} aria-label={t("chat.sendMessageAria")}><Send size={16} />
+              </button>
+            </form>
           </div>
-          <form className="chat-mini-composer" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-            <input value={draft} onChange={(event) => announceTyping(event.target.value)} placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} />
-            <button type="submit" disabled={!draft.trim()} aria-label={t("chat.sendMessageAria")}><Send size={16} /></button>
-          </form>
-        </div>
         </>
       );
     }
     const miniRooms = miniUnreadOnly ? rooms.filter((room) => room.unreadCount > 0) : rooms;
     return (
       <>
-      {messageToastStack}
-      <div className="chat-mini-widget" style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
-        {resizeHandles}
-        <header onMouseDown={startMiniDrag}>
-          <strong>{t("chat.messagesTitle")}</strong>
-          <button className="icon-button" onClick={() => expand()} aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} /></button>
-          <button className="icon-button" onClick={() => setMinimized(false)} aria-label={t("chat.closeMiniChatAria")} title={t("chat.closeMiniChatAria")}><X size={16} /></button>
-        </header>
-        <label className="chat-mini-filter"><input type="checkbox" checked={miniUnreadOnly} onChange={(event) => setMiniUnreadOnly(event.target.checked)} />{t("chat.unreadOnlyFilter")}</label>
-        <div className="chat-mini-list">
-          {miniRooms.length === 0 && <p className="chat-mini-empty">{t("chat.conversationNotFound")}</p>}
-          {miniRooms.map((room) => {
-            const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
-            return (
-              <button key={room.id} className="chat-mini-row" onClick={() => chooseRoom(room.id, { silent: true })}>
-                {room.type === "direct" ? <DirectRoomAvatar peer={other} size="sm" /> : room.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-                <span className="chat-mini-copy">
+        {messageToastStack}
+        <div className="chat-mini-widget"
+             style={{ left: miniPos.x, top: miniPos.y, width: miniWidth, height: miniHeight }}>
+          {resizeHandles}
+          <header onMouseDown={startMiniDrag}>
+            <strong>{t("chat.messagesTitle")}</strong>
+            <button className="icon-button" onClick={() => expand()} aria-label={t("chat.expandChatAria")}
+                    title={t("chat.expandChatAria")}><Maximize2 size={15} /></button>
+            <button className="icon-button" onClick={() => setMinimized(false)} aria-label={t("chat.closeMiniChatAria")}
+                    title={t("chat.closeMiniChatAria")}><X size={16} /></button>
+          </header>
+          <label className="chat-mini-filter"><input type="checkbox" checked={miniUnreadOnly}
+                                                     onChange={(event) => setMiniUnreadOnly(event.target.checked)} />{t("chat.unreadOnlyFilter")}
+          </label>
+          <div className="chat-mini-list">
+            {miniRooms.length === 0 && <p className="chat-mini-empty">{t("chat.conversationNotFound")}</p>}
+            {miniRooms.map((room) => {
+              const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
+              return (
+                <button key={room.id} className="chat-mini-row" onClick={() => chooseRoom(room.id, { silent: true })}>
+                  {room.type === "direct" ? <DirectRoomAvatar peer={other} size="sm" /> : room.avatarUrl ?
+                    <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl}
+                                                                                        alt="" /></span> : <span
+                      className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                  <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span>
+                  <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                    <b>{room.unreadCount}</b>}</span>
                 </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
       </>
     );
   }
@@ -1350,35 +1684,92 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
       {messageToastStack}
       <StarfieldBackground />
-      {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name} onClick={() => setMediaPreview(null)}><header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download onClick={(event) => event.stopPropagation()} aria-label={t("chat.downloadImageAria")}><Download size={19} /></a><button onClick={() => setMediaPreview(null)} aria-label={t("chat.closeAria")}><X size={22} /></button></header><img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
-      {roomContext && contextRoom && <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu" onMouseLeave={() => setRoomContext(null)}>
-        <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); }}><MessageCircle size={17} />{t("chat.openConversation")}</button>
-        <button onClick={() => { setCatalog(roomCatalog(contextRoom)); chooseRoom(contextRoom.id); setRoomContext(null); }}><Hash size={17} />{t("chat.showInCategory")}</button>
-        {contextRoom.type !== "direct" && !contextRoom.isSystem && <button onClick={() => { chooseRoom(contextRoom.id); setRoomContext(null); window.setTimeout(() => void openRoomInvites(), 0); }}><UserPlus size={17} />{t("chat.inviteToGroup")}</button>}
-        {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2 size={17} />{t("chat.deleteGroup")}</button>}
-      </div>}
+      {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name}
+                            onClick={() => setMediaPreview(null)}>
+        <header><strong>{mediaPreview.name}</strong><a href={mediaPreview.url} download
+                                                       onClick={(event) => event.stopPropagation()}
+                                                       aria-label={t("chat.downloadImageAria")}><Download
+          size={19} /></a>
+          <button onClick={() => setMediaPreview(null)} aria-label={t("chat.closeAria")}><X size={22} /></button>
+        </header>
+        <img src={mediaPreview.url} alt={mediaPreview.name} onClick={(event) => event.stopPropagation()} /></div>}
+      {roomContext && contextRoom &&
+        <div className="room-context-menu" style={{ left: roomContext.x, top: roomContext.y }} role="menu"
+             onMouseLeave={() => setRoomContext(null)}>
+          <button onClick={() => {
+            chooseRoom(contextRoom.id);
+            setRoomContext(null);
+          }}><MessageCircle size={17} />{t("chat.openConversation")}</button>
+          <button onClick={() => {
+            setCatalog(roomCatalog(contextRoom));
+            chooseRoom(contextRoom.id);
+            setRoomContext(null);
+          }}><Hash size={17} />{t("chat.showInCategory")}</button>
+          {contextRoom.type !== "direct" && !contextRoom.isSystem && <button onClick={() => {
+            chooseRoom(contextRoom.id);
+            setRoomContext(null);
+            window.setTimeout(() => void openRoomInvites(), 0);
+          }}><UserPlus size={17} />{t("chat.inviteToGroup")}</button>}
+          {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id &&
+            <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2
+              size={17} />{t("chat.deleteGroup")}</button>}
+        </div>}
       <aside className="chat-sidebar">
-        <header className="chat-sidebar-header"><button className="icon-button chat-home-back" onClick={() => navigate("/")} aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button><div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div><button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)} aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} /></button></header>
-        <label className="search-field"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("chat.searchChatPlaceholder")} aria-label={t("chat.searchChatPlaceholder")} />{search && <button onClick={() => setSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
+        <header className="chat-sidebar-header">
+          <button className="icon-button chat-home-back" onClick={() => navigate("/")}
+                  aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
+          <div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div>
+          <button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)}
+                  aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} />
+          </button>
+        </header>
+        <label className="search-field"><Search size={17} /><input value={search}
+                                                                   onChange={(event) => setSearch(event.target.value)}
+                                                                   placeholder={t("chat.searchChatPlaceholder")}
+                                                                   aria-label={t("chat.searchChatPlaceholder")} />{search &&
+          <button onClick={() => setSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
         <nav className="chat-catalog" ref={catalogNav} aria-label={t("chat.catalogAria")}>
-          <span className="catalog-indicator" aria-hidden="true" style={{ transform: `translateX(${catalogIndicator.left}px)`, width: `${catalogIndicator.width}px` }} />
-          {catalogItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={catalog === item.id ? "active" : ""} onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined} aria-label={item.label} title={item.label}><Icon size={18} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>; })}
+          <span className="catalog-indicator" aria-hidden="true"
+                style={{ transform: `translateX(${catalogIndicator.left}px)`, width: `${catalogIndicator.width}px` }} />
+          {catalogItems.map((item) => {
+            const Icon = item.icon;
+            return <button key={item.id} className={catalog === item.id ? "active" : ""}
+                           onClick={() => setCatalog(item.id)} aria-current={catalog === item.id ? "page" : undefined}
+                           aria-label={item.label} title={item.label}><Icon
+              size={18} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>;
+          })}
         </nav>
         <div className="room-list room-list-transition" key={catalog}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-          {!loadingRooms && catalog === "bot" && <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span className="room-avatar"><Bot size={18} /></span><span className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>{t("chat.aiRoomSubtitle")}</small></span></span></button>}
-          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> : <MessageCircle size={22} />}<p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p><button onClick={() => setCreateOpen(true)}>{t("chat.newChatButton")}</button></div>}
+          {!loadingRooms && catalog === "bot" &&
+            <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span
+              className="room-avatar"><Bot size={18} /></span><span
+              className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>{t("chat.aiRoomSubtitle")}</small></span></span>
+            </button>}
+          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" &&
+            <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> :
+              <MessageCircle size={22} />}
+              <p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p>
+              <button onClick={() => setCreateOpen(true)}>{t("chat.newChatButton")}</button>
+            </div>}
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
             return (
-              <button key={room.id} className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`} onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
-                {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : room.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 && <b>{room.unreadCount}</b>}</span></span>
+              <button key={room.id}
+                      className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
+                      onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
+                {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : room.avatarUrl ?
+                  <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span
+                    className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
           })}
         </div>
-        <footer className="chat-connection"><span className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small></footer>
+        <footer className="chat-connection"><span
+          className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small>
+        </footer>
       </aside>
 
       <section
@@ -1392,42 +1783,153 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           return selectedRoom && bg ? ({ "--conversation-bg": `url("${bg}")` } as CSSProperties) : undefined;
         })()}
       >
-        {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty"><button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button></header>}
-        {!selectedRoom && !aiOpen && !loadingRooms && <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")} description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("chat.newConversationButton")}</Button>} />}
+        {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty">
+          <button className="icon-button" onClick={() => {
+            setMinimized(true);
+            navigate("/");
+          }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
+        </header>}
+        {!selectedRoom && !aiOpen && !loadingRooms &&
+          <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")}
+                      description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)}
+                                                                                     icon={<Plus
+                                                                                       size={17} />}>{t("chat.newConversationButton")}</Button>} />}
         {aiOpen && <div className="ai-conversation">
-          <header className="conversation-header"><button className="icon-button chat-back" onClick={() => { setAiOpen(false); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button><span className="room-avatar room-avatar-sm"><Bot size={17} /></span><div className="conversation-title"><h2>OPTIMA AI</h2><p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div><span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span><button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button></header>
+          <header className="conversation-header">
+            <button className="icon-button chat-back" onClick={() => {
+              setAiOpen(false);
+              window.history.replaceState({}, "", "/chat");
+            }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button>
+            <span className="room-avatar room-avatar-sm"><Bot size={17} /></span>
+            <div className="conversation-title"><h2>OPTIMA AI</h2>
+              <p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div>
+            <span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span>
+            <button className="icon-button" onClick={() => {
+              setMinimized(true);
+              navigate("/");
+            }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
+          </header>
           <div ref={aiMessageList} className="message-list ai-message-list" aria-live="polite">
-            {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3><p>{t("chat.aiEmptyDesc")}</p></div>}
-            {aiMessages.map((message) => <div key={message.id} className={`message ${message.role === "user" ? "message-mine" : ""}`}><div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}<p>{message.text}</p>{message.sources && message.sources.length > 0 && <div className="ai-sources"><small>{t("chat.sourcesLabel")}</small>{message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2 size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span></div></div>)}
+            {aiMessages.length === 0 && <div className="message-empty"><span><Bot size={25} /></span><h3>OPTIMA AI</h3>
+              <p>{t("chat.aiEmptyDesc")}</p></div>}
+            {aiMessages.map((message) => <div key={message.id}
+                                              className={`message ${message.role === "user" ? "message-mine" : ""}`}>
+              <div className="message-bubble">{message.role === "model" && <strong>OPTIMA AI</strong>}
+                <p>{message.text}</p>{message.sources && message.sources.length > 0 &&
+                  <div className="ai-sources"><small>{t("chat.sourcesLabel")}</small>{message.sources.map((source) => <a
+                    key={source.url} href={source.url} target="_blank" rel="noreferrer"><Link2
+                    size={13} />{source.title}</a>)}</div>}<span><time>{formatTime(message.createdAt)}</time></span>
+              </div>
+            </div>)}
             {aiThinking && <div className="typing-bubble ai-typing"><Bot size={16} /><i /><i /><i /></div>}
           </div>
-          <div className="composer ai-composer"><textarea value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendAiMessage(); } }} placeholder={t("chat.aiComposerPlaceholder")} rows={1} maxLength={6000} aria-label={t("chat.aiQuestionAria")} /><button className="send-button" onClick={() => void sendAiMessage()} disabled={!aiDraft.trim() || aiThinking} aria-label={t("chat.sendQuestionAria")}>{aiThinking ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button></div>
+          <div className="composer ai-composer"><textarea value={aiDraft}
+                                                          onChange={(event) => setAiDraft(event.target.value)}
+                                                          onKeyDown={(event) => {
+                                                            if (event.key === "Enter" && !event.shiftKey) {
+                                                              event.preventDefault();
+                                                              void sendAiMessage();
+                                                            }
+                                                          }} placeholder={t("chat.aiComposerPlaceholder")} rows={1}
+                                                          maxLength={6000} aria-label={t("chat.aiQuestionAria")} />
+            <button className="send-button" onClick={() => void sendAiMessage()}
+                    disabled={!aiDraft.trim() || aiThinking} aria-label={t("chat.sendQuestionAria")}>{aiThinking ?
+              <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button>
+          </div>
         </div>}
         {selectedRoom && (
           <>
             <header className="conversation-header">
-              <button className="icon-button chat-back" onClick={() => { setSelectedId(null); window.history.replaceState({}, "", "/chat"); }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
-              {selectedRoom.type === "direct" && detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="sm" /> : selectedRoom.avatarUrl ? <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-              <button className="conversation-title" onClick={() => { setDetailsTab(selectedRoom.type === "direct" ? "media" : "members"); setDetailMemberSearch(""); setDetailsOpen(true); }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2><p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? formatPresenceLabel(peerPresence, t) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p></button>
+              <button className="icon-button chat-back" onClick={() => {
+                setSelectedId(null);
+                window.history.replaceState({}, "", "/chat");
+              }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
+              {selectedRoom.type === "direct" && detailPeer ?
+                <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
+                        size="sm" /> : selectedRoom.avatarUrl ?
+                  <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl}
+                                                                                      alt="" /></span> : <span
+                    className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+              <button className="conversation-title" onClick={() => {
+                setDetailsTab(selectedRoom.type === "direct" ? "media" : "members");
+                setDetailMemberSearch("");
+                setDetailsOpen(true);
+              }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2>
+                <p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? formatPresenceLabel(peerPresence, t) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p>
+              </button>
               <div className="conversation-tools">
-                <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => { setMessageSearchOpen((value) => !value); if (messageSearchOpen) setMessageSearch(""); }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
-                <button className="icon-button" onClick={() => { setMinimized(true); navigate("/"); }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
+                <button className={`icon-button ${messageSearchOpen ? "active" : ""}`} onClick={() => {
+                  setMessageSearchOpen((value) => !value);
+                  if (messageSearchOpen) setMessageSearch("");
+                }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
+                <button className="icon-button" onClick={() => {
+                  setMinimized(true);
+                  navigate("/");
+                }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} />
+                </button>
                 {selectedRoom.type === "direct" && <>
-                  <button className="icon-button" onClick={() => void startCall("audio")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")} title={t("chat.audioCallAria")}>{startingCall === "audio" ? <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
-                  <button className="icon-button" onClick={() => void startCall("video")} disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.videoCallAria")} title={t("chat.videoCallAria")}>{startingCall === "video" ? <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
+                  <button className="icon-button" onClick={() => void startCall("audio")}
+                          disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")}
+                          title={t("chat.audioCallAria")}>{startingCall === "audio" ?
+                    <LoaderCircle className="spin" size={18} /> : <Phone size={18} />}</button>
+                  <button className="icon-button" onClick={() => void startCall("video")}
+                          disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.videoCallAria")}
+                          title={t("chat.videoCallAria")}>{startingCall === "video" ?
+                    <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") && <div className="header-more"><button className={`icon-button ${headerMenuOpen ? "active" : ""}`} onClick={() => setHeaderMenuOpen((value) => !value)} aria-label={t("chat.conversationMenuAria")} aria-expanded={headerMenuOpen}><MoreVertical size={19} /></button>{headerMenuOpen && <div className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") && <button onClick={() => { setHeaderMenuOpen(false); openRoomSettings(); }}><Settings size={17} /><span><strong>{selectedRoom.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}</strong><small>{t("chat.photoNameDescHint")}</small></span></button>}{!selectedRoom.isSystem && <button onClick={() => { setHeaderMenuOpen(false); void openRoomInvites(); }}><UserPlus size={17} /><span><strong>{t("chat.inviteToGroup")}</strong><small>{t("chat.createManageLinkHint")}</small></span></button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id && <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2 size={17} /><span><strong>{t("chat.deleteGroup")}</strong><small>{t("chat.deletesAllMessagesHint")}</small></span></button>}</div>}</div>}
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") &&
+                  <div className="header-more">
+                    <button className={`icon-button ${headerMenuOpen ? "active" : ""}`}
+                            onClick={() => setHeaderMenuOpen((value) => !value)}
+                            aria-label={t("chat.conversationMenuAria")} aria-expanded={headerMenuOpen}><MoreVertical
+                      size={19} /></button>
+                    {headerMenuOpen && <div
+                      className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") &&
+                      <button onClick={() => {
+                        setHeaderMenuOpen(false);
+                        openRoomSettings();
+                      }}><Settings
+                        size={17} /><span><strong>{selectedRoom.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}</strong><small>{t("chat.photoNameDescHint")}</small></span>
+                      </button>}{!selectedRoom.isSystem && <button onClick={() => {
+                      setHeaderMenuOpen(false);
+                      void openRoomInvites();
+                    }}><UserPlus
+                      size={17} /><span><strong>{t("chat.inviteToGroup")}</strong><small>{t("chat.createManageLinkHint")}</small></span>
+                    </button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id &&
+                      <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2
+                        size={17} /><span><strong>{t("chat.deleteGroup")}</strong><small>{t("chat.deletesAllMessagesHint")}</small></span>
+                      </button>}</div>}</div>}
               </div>
             </header>
-            {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder={t("chat.searchMessagePlaceholder")} autoFocus /><span>{messageSearch ? t("chat.resultsCount", { count: visibleMessages.length }) : ""}</span><button onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }} aria-label={t("chat.closeSearchAria")}><X size={17} /></button></div>}
+            {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch}
+                                                                                                  onChange={(event) => setMessageSearch(event.target.value)}
+                                                                                                  placeholder={t("chat.searchMessagePlaceholder")}
+                                                                                                  autoFocus /><span>{messageSearch ? t("chat.resultsCount", { count: visibleMessages.length }) : ""}</span>
+              <button onClick={() => {
+                setMessageSearch("");
+                setMessageSearchOpen(false);
+              }} aria-label={t("chat.closeSearchAria")}><X size={17} /></button>
+            </div>}
             {selectedRoom.memberStatus === "pending" ? (
-              <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3><p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check size={17} />}>{t("chat.acceptButton")}</Button></div>
+              <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3>
+                <p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check
+                  size={17} />}>{t("chat.acceptButton")}</Button></div>
             ) : (
               <>
-                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => { const node = event.currentTarget; setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96); if (node.scrollTop < 90) void loadOlderMessages(); }}>
-                  {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin" size={18} /> {t("chat.loadingOlderMessages")}</div>}
+                <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => {
+                  const node = event.currentTarget;
+                  setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96);
+                  if (node.scrollTop < 90) void loadOlderMessages();
+                }}>
+                  {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin"
+                                                                                                size={18} /> {t("chat.loadingOlderMessages")}
+                  </div>}
                   {loadingMessages && <div className="center-loader"><LoaderCircle className="spin" size={24} /></div>}
-                  {!loadingMessages && visibleMessages.length === 0 && <div className="message-empty"><span>{messageSearch ? <Search size={24} /> : <MessageCircle size={24} />}</span><h3>{messageSearch ? t("chat.messageNotFound") : t("chat.startConversationTitle")}</h3><p>{messageSearch ? t("chat.tryOtherSearch") : t("chat.sendFirstMessage")}</p></div>}
+                  {!loadingMessages && visibleMessages.length === 0 &&
+                    <div className="message-empty"><span>{messageSearch ? <Search size={24} /> :
+                      <MessageCircle size={24} />}</span>
+                      <h3>{messageSearch ? t("chat.messageNotFound") : t("chat.startConversationTitle")}</h3>
+                      <p>{messageSearch ? t("chat.tryOtherSearch") : t("chat.sendFirstMessage")}</p></div>}
                   {visibleMessages.map((message, index) => {
                     const mine = message.senderId === user?.id;
                     const sender = message.sender || memberMap.get(message.senderId);
@@ -1437,6 +1939,25 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     const previous = visibleMessages[index - 1];
                     const showDay = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
                     const grouped = previous?.senderId === message.senderId && !showDay;
+                    if (message.isSystem && message.systemMetadata) {
+                      const meta = message.systemMetadata;
+                      const missed = meta.kind !== "call_ended";
+                      const CallIcon = meta.callType === "video" ? Video : Phone;
+                      const label = meta.kind === "missed_call" ? t("chat.callMissed")
+                        : meta.kind === "declined_call" ? t("chat.callDeclined")
+                          : t("chat.callEnded", { duration: formatCallDuration(meta.durationSeconds || 0) });
+                      return (
+                        <div key={message.id}>
+                          {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
+                          <div className="system-call-row">
+                            <span className={`system-call-icon ${missed ? "missed" : ""}`}>{missed ?
+                              <PhoneOff size={14} /> : <CallIcon size={14} />}</span>
+                            <span className="system-call-label">{label}</span>
+                            <time>{formatTime(message.createdAt)}</time>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
@@ -1452,25 +1973,96 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           onPointerMove={(event) => movePointerReply(event, message)}
                           onPointerUp={(event) => finishPointerReply(event, message)}
                           onPointerCancel={(event) => finishPointerReply(event, message)}
-                          onContextMenu={(event) => { event.preventDefault(); setActiveMenu(message.id); }}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            setActiveMenu(message.id);
+                          }}
                         >
-                          <span className={`swipe-reply-indicator ${swipingMessage?.id === message.id && swipingMessage.armed ? "armed" : ""}`} aria-hidden="true"><Reply size={18} /></span>
-                          {!mine && !grouped && <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />}
+                          <span
+                            className={`swipe-reply-indicator ${swipingMessage?.id === message.id && swipingMessage.armed ? "armed" : ""}`}
+                            aria-hidden="true"><Reply size={18} /></span>
+                          {!mine && !grouped &&
+                            <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl}
+                                    size="sm" />}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
-                            {message.replyToId && <button className="message-reply-quote" onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}><Reply size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span></button>}
-                            {!mine && !grouped && <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
+                            {message.replyToId && <button className="message-reply-quote"
+                                                          onClick={() => document.getElementById(`message-${message.replyToId}`)?.scrollIntoView({
+                                                            behavior: "smooth",
+                                                            block: "center"
+                                                          })}><Reply
+                              size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span>
+                            </button>}
+                            {!mine && !grouped &&
+                              <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && <p>{message.content}</p>}
-                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ? <AudioMessage key={attachment.id || attachment.url} src={attachment.url} fileName={attachment.fileName} voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ? <button className="message-image" key={attachment.id || attachment.url} onClick={() => setMediaPreview({ url: attachment.url, name: attachment.fileName })}><img src={attachment.url} alt={attachment.fileName} /></button> : attachment.mimeType.startsWith("video/") ? <video className="message-video" key={attachment.id || attachment.url} controls preload="metadata" src={attachment.url} /> : <a className="file-attachment" key={attachment.id || attachment.url} href={attachment.url} download><span><FileText size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download size={17} /></a>)}
-                            {message.reactions && message.reactions.length > 0 && <div className="message-reactions">{message.reactions.map((reaction) => <button key={reaction.emoji} onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji} <span>{reaction.userIds.length}</span></button>)}</div>}
-                            <span><time>{formatTime(message.createdAt)}</time>{message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && (
-                              selectedRoom.type === "direct"
-                                ? (readByCount > 0 ? <CheckCheck size={14} className="message-read" aria-label={t("chat.readStatusRead")} /> : <Check size={14} className="message-sent-check" aria-label={t("chat.readStatusSent")} />)
-                                : (readByCount > 0 ? <span className="message-seen-count" aria-label={t("chat.readStatusSeenBy", { count: readByCount })}><Eye size={13} />{readByCount}</span> : <Check size={14} className="message-sent-check" aria-label={t("chat.readStatusSent")} />)
-                            )}</span>
-                            {selectedRoom.slug === "otima-community" && <button className="discuss-button" onClick={() => void openDiscussion(message.id)}><MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
-                            <button className="message-menu-trigger" onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)} aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}><MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu" onMouseLeave={() => setActiveMenu(null)}><div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div><button onClick={() => { setReplyingTo(message); setEditing(null); setActiveMenu(null); }}><Reply size={16} />{t("chat.replyAction")}</button><button onClick={() => { setForwardingMessage(message); setActiveMenu(null); }}><Send size={16} />{t("chat.forwardAction")}</button><button onClick={() => { void navigator.clipboard.writeText(message.content); setActiveMenu(null); }}><Copy size={16} />{t("chat.copyAction")}</button>{mine && <button onClick={() => { setEditing(message); setReplyingTo(null); setDraft(message.content); setActiveMenu(null); }}><Pencil size={16} />{t("chat.editAction")}</button>}<button disabled><Pin size={16} />{t("chat.pinAction")} <small>{t("chat.comingSoon")}</small></button>{mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2 size={16} />{t("chat.deleteAction")}</button>}</div>}
+                            {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ?
+                              <AudioMessage key={attachment.id || attachment.url} src={attachment.url}
+                                            fileName={attachment.fileName}
+                                            voice={attachment.fileName.startsWith("voice-")} /> : attachment.mimeType.startsWith("image/") ?
+                                <button className="message-image" key={attachment.id || attachment.url}
+                                        onClick={() => setMediaPreview({
+                                          url: attachment.url,
+                                          name: attachment.fileName
+                                        })}><img src={attachment.url} alt={attachment.fileName} />
+                                </button> : attachment.mimeType.startsWith("video/") ?
+                                  <video className="message-video" key={attachment.id || attachment.url} controls
+                                         preload="metadata" src={attachment.url} /> :
+                                  <a className="file-attachment" key={attachment.id || attachment.url}
+                                     href={attachment.url} download><span><FileText
+                                    size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download
+                                    size={17} /></a>)}
+                            {message.reactions && message.reactions.length > 0 &&
+                              <div className="message-reactions">{message.reactions.map((reaction) => <button
+                                key={reaction.emoji}
+                                onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji}
+                                <span>{reaction.userIds.length}</span></button>)}</div>}
+                            <span><time>{formatTime(message.createdAt)}</time>
+                              {message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && (
+                                selectedRoom.type === "direct"
+                                  ? (readByCount > 0 ? <CheckCheck size={14} className="message-read"
+                                                                   aria-label={t("chat.readStatusRead")} /> :
+                                    <Check size={14} className="message-sent-check"
+                                           aria-label={t("chat.readStatusSent")} />)
+                                  : (readByCount > 0 ? <span className="message-seen-count"
+                                                             aria-label={t("chat.readStatusSeenBy", { count: readByCount })}><Eye
+                                    size={13} />{readByCount}</span> : <Check size={14} className="message-sent-check"
+                                                                              aria-label={t("chat.readStatusSent")} />)
+                              )}</span>
+                            {selectedRoom.slug === "otima-community" &&
+                              <button className="discuss-button" onClick={() => void openDiscussion(message.id)}>
+                                <MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
+                            <button className="message-menu-trigger"
+                                    onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)}
+                                    aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}>
+                              <MoreVertical size={16} /></button>
+                            {activeMenu === message.id && <div className="message-context-menu" role="menu"
+                                                               onMouseLeave={() => setActiveMenu(null)}>
+                              <div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button
+                                key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div>
+                              <button onClick={() => {
+                                setReplyingTo(message);
+                                setEditing(null);
+                                setActiveMenu(null);
+                              }}><Reply size={16} />{t("chat.replyAction")}</button>
+                              <button onClick={() => {
+                                setForwardingMessage(message);
+                                setActiveMenu(null);
+                              }}><Send size={16} />{t("chat.forwardAction")}</button>
+                              <button onClick={() => {
+                                void navigator.clipboard.writeText(message.content);
+                                setActiveMenu(null);
+                              }}><Copy size={16} />{t("chat.copyAction")}</button>
+                              {mine && <button onClick={() => {
+                                setEditing(message);
+                                setReplyingTo(null);
+                                setDraft(message.content);
+                                setActiveMenu(null);
+                              }}><Pencil size={16} />{t("chat.editAction")}</button>}
+                              <button disabled><Pin size={16} />{t("chat.pinAction")}
+                                <small>{t("chat.comingSoon")}</small></button>
+                              {mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2
+                                size={16} />{t("chat.deleteAction")}</button>}</div>}
                           </div>
                         </div>
                       </div>
@@ -1478,114 +2070,402 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
-                  {showScrollButton && <button className="scroll-bottom" onClick={() => { setShowScrollButton(false); messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
+                  {showScrollButton && <button className="scroll-bottom" onClick={() => {
+                    setShowScrollButton(false);
+                    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
+                  }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
                 </div>
-                {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ? <div className="channel-subscribe-bar"><button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> : <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button></div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
-                  {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => { event.preventDefault(); void runComposerAi(); }}><header><span><Sparkles size={17} /></span><div><strong>{t("chat.aiAssistTitle")}</strong><small>{t("chat.aiAssistHint")}</small></div><button type="button" onClick={() => { setDraft(""); setAiAssistPrompt(""); }} aria-label={t("chat.closeAiAssistAria")}><X size={17} /></button></header><div className="ai-assist-suggestions"><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestWriteTextPrompt"))}>{t("chat.suggestWriteText")}</button><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestFixTextPrompt"))}>{t("chat.suggestFixText")}</button><button type="button" onClick={() => setAiAssistPrompt(t("chat.suggestFillInfoPrompt"))}>{t("chat.suggestFillInfo")}</button></div><div className="ai-assist-input"><textarea value={aiAssistPrompt} onChange={(event) => setAiAssistPrompt(event.target.value)} placeholder={t("chat.aiAssistPlaceholder")} rows={3} autoFocus /><button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking} aria-label={t("chat.runAiAssistAria")}>{aiThinking ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button></div></form>}
-                  {(replyingTo || editing) && <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span><div><strong>{editing ? t("chat.editingMessageLabel") : t("chat.replyingLabel")}</strong><small>{(editing || replyingTo)?.content || t("chat.mediaMessageFallback")}</small></div><button onClick={() => { setEditing(null); setReplyingTo(null); setDraft(""); }} aria-label={t("chat.cancelAria")}><X size={17} /></button></div>}
-                  <span className="emoji-menu-wrap"><button className="icon-button" onClick={() => setEmojiOpen((value) => !value)} aria-label={t("chat.chooseEmojiAria")} aria-expanded={emojiOpen}><Smile size={20} /></button>{emojiOpen && <span className="emoji-menu" role="menu" aria-label={t("chat.quickEmojisAria")}>{quickEmojis.map((emoji) => <button key={emoji} type="button" role="menuitem" onClick={() => { setDraft((current) => `${current}${emoji}`); setEmojiOpen(false); }} aria-label={t("chat.addEmojiAria", { emoji })}>{emoji}</button>)}</span>}</span>
-                  <input ref={fileInput} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); }} />
-                  {!recording && <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label={t("chat.attachFileAria")}>{uploading ? <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
-                  {recording ? <div className="recording-status"><i /><strong>{t("chat.recordingInProgress")}</strong><time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time><button onClick={() => stopRecording(true)} aria-label={t("chat.cancelRecordingAria")}><Trash2 size={18} /></button></div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)} onKeyDown={keyDown} placeholder={t("chat.messagePlaceholder")} rows={1} maxLength={1500} aria-label={t("chat.messageTextAria")} />}
-                  {draft.trim() && !recording ? <button className="send-button" onClick={() => void sendMessage()} disabled={sending} aria-label={t("chat.sendMessageAria")}>{sending ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> : <button className={`send-button voice-button ${recording ? "recording" : ""}`} onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending} aria-label={recording ? t("chat.sendVoiceAria") : t("chat.recordVoiceAria")}>{sending ? <LoaderCircle className="spin" size={19} /> : recording ? <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
-                </div>}
+                {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ?
+                  <div className="channel-subscribe-bar">
+                    <button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> :
+                      <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button>
+                  </div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                    {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => {
+                      event.preventDefault();
+                      void runComposerAi();
+                    }}>
+                      <header><span><Sparkles size={17} /></span>
+                        <div><strong>{t("chat.aiAssistTitle")}</strong><small>{t("chat.aiAssistHint")}</small></div>
+                        <button type="button" onClick={() => {
+                          setDraft("");
+                          setAiAssistPrompt("");
+                        }} aria-label={t("chat.closeAiAssistAria")}><X size={17} /></button>
+                      </header>
+                      <div className="ai-assist-suggestions">
+                        <button type="button"
+                                onClick={() => setAiAssistPrompt(t("chat.suggestWriteTextPrompt"))}>{t("chat.suggestWriteText")}</button>
+                        <button type="button"
+                                onClick={() => setAiAssistPrompt(t("chat.suggestFixTextPrompt"))}>{t("chat.suggestFixText")}</button>
+                        <button type="button"
+                                onClick={() => setAiAssistPrompt(t("chat.suggestFillInfoPrompt"))}>{t("chat.suggestFillInfo")}</button>
+                      </div>
+                      <div className="ai-assist-input"><textarea value={aiAssistPrompt}
+                                                                 onChange={(event) => setAiAssistPrompt(event.target.value)}
+                                                                 placeholder={t("chat.aiAssistPlaceholder")} rows={3}
+                                                                 autoFocus />
+                        <button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking}
+                                aria-label={t("chat.runAiAssistAria")}>{aiThinking ?
+                          <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button>
+                      </div>
+                    </form>}
+                    {(replyingTo || editing) &&
+                      <div className="composer-mode"><span>{editing ? <Pencil size={16} /> : <Reply size={16} />}</span>
+                        <div>
+                          <strong>{editing ? t("chat.editingMessageLabel") : t("chat.replyingLabel")}</strong><small>{(editing || replyingTo)?.content || t("chat.mediaMessageFallback")}</small>
+                        </div>
+                        <button onClick={() => {
+                          setEditing(null);
+                          setReplyingTo(null);
+                          setDraft("");
+                        }} aria-label={t("chat.cancelAria")}><X size={17} /></button>
+                      </div>}
+                    <span className="emoji-menu-wrap"><button className="icon-button"
+                                                              onClick={() => setEmojiOpen((value) => !value)}
+                                                              aria-label={t("chat.chooseEmojiAria")}
+                                                              aria-expanded={emojiOpen}><Smile size={20} /></button>
+                      {emojiOpen && <span className="emoji-menu" role="menu"
+                                          aria-label={t("chat.quickEmojisAria")}>{quickEmojis.map((emoji) => <button
+                        key={emoji} type="button" role="menuitem" onClick={() => {
+                        setDraft((current) => `${current}${emoji}`);
+                        setEmojiOpen(false);
+                      }} aria-label={t("chat.addEmojiAria", { emoji })}>{emoji}</button>)}</span>}</span>
+                    <input ref={fileInput} type="file" hidden onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void uploadAttachment(file);
+                    }} />
+                    {!recording &&
+                      <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading}
+                              aria-label={t("chat.attachFileAria")}>{uploading ?
+                        <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
+                    {recording ? <div className="recording-status"><i /><strong>{t("chat.recordingInProgress")}</strong>
+                      <time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time>
+                      <button onClick={() => stopRecording(true)} aria-label={t("chat.cancelRecordingAria")}><Trash2
+                        size={18} /></button>
+                    </div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)}
+                                       onKeyDown={keyDown} placeholder={t("chat.messagePlaceholder")} rows={1}
+                                       maxLength={1500} aria-label={t("chat.messageTextAria")} />}
+                    {draft.trim() && !recording ?
+                      <button className="send-button" onClick={() => void sendMessage()} disabled={sending}
+                              aria-label={t("chat.sendMessageAria")}>{sending ?
+                        <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> :
+                      <button className={`send-button voice-button ${recording ? "recording" : ""}`}
+                              onClick={() => recording ? stopRecording() : void startRecording()} disabled={sending}
+                              aria-label={recording ? t("chat.sendVoiceAria") : t("chat.recordVoiceAria")}>{sending ?
+                        <LoaderCircle className="spin" size={19} /> : recording ?
+                          <Square size={17} fill="currentColor" /> : <Mic size={20} />}</button>}
+                  </div>}
               </>
             )}
           </>
         )}
       </section>
 
-      {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true" aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ? <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> : <section className="direct-call-ringing"><div className="direct-call-glow" /><Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")} lastName={memberMap.get(directCall.peerId)?.lastName} url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> : <Phone size={17} />}{directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}</span><h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : t("chat.userFallback")}</h2><p>{directCall.phase === "incoming" ? t("chat.incomingCallText") : t("chat.connectingText")}</p><div className="direct-call-ringing-actions"><button className="decline" onClick={closeDirectCall}><PhoneOff size={23} /><span>{directCall.phase === "incoming" ? t("chat.declineLabel") : t("chat.cancelCallLabel")}</span></button>{directCall.phase === "incoming" && <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> : <Phone size={23} />}<span>{t("chat.acceptButton")}</span></button>}</div><small><ShieldCheck size={15} /> {t("chat.callSecurityHint")}</small></section>}</div>}
+      {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true"
+                          aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ?
+        <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> :
+        <section className="direct-call-ringing">
+          <div className="direct-call-glow" />
+          <Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")}
+                  lastName={memberMap.get(directCall.peerId)?.lastName}
+                  url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span
+          className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> :
+          <Phone size={17} />}{directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}</span>
+          <h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : t("chat.userFallback")}</h2>
+          <p>{directCall.phase === "incoming" ? t("chat.incomingCallText") : t("chat.connectingText")}</p>
+          <div className="direct-call-ringing-actions">
+            <button className="decline" onClick={closeDirectCall}><PhoneOff
+              size={23} /><span>{directCall.phase === "incoming" ? t("chat.declineLabel") : t("chat.cancelCallLabel")}</span>
+            </button>
+            {directCall.phase === "incoming" &&
+              <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> :
+                <Phone size={23} />}<span>{t("chat.acceptButton")}</span></button>}</div>
+          <small><ShieldCheck size={15} /> {t("chat.callSecurityHint")}</small></section>}</div>}
 
-      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")} description={selectedRoom?.type === "direct" ? t("chat.userInfoDesc") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom?.memberCount || 0 }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })} width="lg">
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)}
+             title={selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")}
+             description={selectedRoom?.type === "direct" ? t("chat.userInfoDesc") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom?.memberCount || 0 }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}
+             width="lg">
         <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
           <section className="chat-details-hero">
-            {detailPeer ? <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="lg" /> : selectedRoom?.avatarUrl ? <span className="room-avatar room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> : <span className="room-avatar room-avatar-letter">{(selectedRoom?.name || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
-            <div className="details-identity"><strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? t("chat.usernameNotSet") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}</small>{selectedRoom?.description && <p>{selectedRoom.description}</p>}</div>
-            <span className="details-kind">{selectedRoom?.type === "direct" ? t("chat.dmLabel") : selectedRoom?.type === "channel" ? t("chat.channelLabel") : t("chat.groupLabel")}</span>
+            {detailPeer ?
+              <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
+                      size="lg" /> : selectedRoom?.avatarUrl ?
+                <span className="room-avatar room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> :
+                <span
+                  className="room-avatar room-avatar-letter">{(selectedRoom?.name || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+            <div className="details-identity">
+              <strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? t("chat.usernameNotSet") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}</small>{selectedRoom?.description &&
+              <p>{selectedRoom.description}</p>}</div>
+            <span
+              className="details-kind">{selectedRoom?.type === "direct" ? t("chat.dmLabel") : selectedRoom?.type === "channel" ? t("chat.channelLabel") : t("chat.groupLabel")}</span>
           </section>
           <div className="chat-details-actions">
-            {selectedRoom?.type === "direct" && <><button onClick={() => setDetailsOpen(false)}><MessageCircle size={19} /><span>{t("chat.messageActionLabel")}</span></button><button onClick={() => void startCall("audio")}><Phone size={19} /><span>{t("chat.audioActionLabel")}</span></button><button onClick={() => void startCall("video")}><Video size={19} /><span>{t("chat.videoActionLabel")}</span></button></>}
-            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={19} /><span>{t("chat.inviteActionLabel")}</span></button>}
-            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") && <button onClick={openRoomSettings}><Settings size={19} /><span>{t("chat.configureActionLabel")}</span></button>}
-            <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={19} /><span>{t("chat.searchActionLabel")}</span></button>
-            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> : <BellOff size={19} />}<span>{selectedRoom?.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
+            {selectedRoom?.type === "direct" && <>
+              <button onClick={() => setDetailsOpen(false)}><MessageCircle
+                size={19} /><span>{t("chat.messageActionLabel")}</span></button>
+              <button onClick={() => void startCall("audio")}><Phone
+                size={19} /><span>{t("chat.audioActionLabel")}</span></button>
+              <button onClick={() => void startCall("video")}><Video
+                size={19} /><span>{t("chat.videoActionLabel")}</span></button>
+            </>}
+            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => {
+              setDetailsOpen(false);
+              void openRoomInvites();
+            }}><UserPlus size={19} /><span>{t("chat.inviteActionLabel")}</span></button>}
+            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") &&
+              <button onClick={openRoomSettings}><Settings size={19} /><span>{t("chat.configureActionLabel")}</span>
+              </button>}
+            <button onClick={() => {
+              setDetailsOpen(false);
+              setMessageSearchOpen(true);
+            }}><Search size={19} /><span>{t("chat.searchActionLabel")}</span></button>
+            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> :
+              <BellOff size={19} />}<span>{selectedRoom?.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
           </div>
-          {selectedRoom?.type === "direct" && <section className="direct-profile-info"><button onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}><UserRound size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button><div><RadioTower size={19} /><span><strong>{formatPresenceLabel(peerPresence, t)}</strong><small>{t("chat.activityStatusLabel")}</small></span></div></section>}
-          <nav className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) => <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({ members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"), media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab") })[tab]}</button>)}</nav>
+          {selectedRoom?.type === "direct" && <section className="direct-profile-info">
+            <button
+              onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}>
+              <UserRound
+                size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy
+              size={16} /></button>
+            <div><RadioTower
+              size={19} /><span><strong>{formatPresenceLabel(peerPresence, t)}</strong><small>{t("chat.activityStatusLabel")}</small></span>
+            </div>
+          </section>}
+          <nav
+            className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) =>
+            <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({
+              members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"),
+              media: t("chat.mediaTab"),
+              files: t("chat.filesTab"),
+              links: t("chat.linksTab"),
+              music: t("chat.musicTab"),
+              voice: t("chat.voiceTab")
+            })[tab]}</button>)}</nav>
           <div className="chat-details-content">
-            {detailsTab === "members" && <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
+            {detailsTab === "members" &&
+              <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch}
+                                                                                  onChange={(event) => setDetailMemberSearch(event.target.value)}
+                                                                                  placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
             {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member" key={member.publicId}><button className="detail-member-profile" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot userId={member.id} /></button></div>)}
-            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => { const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url); const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href; return <button className="shared-item" key={item.id || item.messageId} onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ? <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href && <Download size={17} />}</button>; })}
-            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) && <div className="compact-empty"><Search size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span></div>}
+            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member"
+                                                                                               key={member.publicId}>
+              <button className="detail-member-profile"
+                      onClick={() => navigate(`/profile/${member.username || member.publicId}`)}
+                      aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar
+                firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
+                size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot
+                userId={member.id} /></button>
+            </div>)}
+            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => {
+              const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url);
+              const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href;
+              return <button className="shared-item" key={item.id || item.messageId}
+                             onClick={() => image ? setMediaPreview({
+                               url: href,
+                               name: item.fileName || "Media"
+                             }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ?
+                <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ?
+                  <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText
+                    size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href &&
+                <Download size={17} />}</button>;
+            })}
+            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) &&
+              <div className="compact-empty"><Search
+                size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span>
+              </div>}
           </div>
         </div>
       </Modal>
 
-      <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)} title={selectedRoom?.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")} description={t("chat.roomSettingsDesc")} width="md">
+      <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)}
+             title={selectedRoom?.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}
+             description={t("chat.roomSettingsDesc")} width="md">
         <form className="room-settings-form" onSubmit={saveRoomSettings}>
           <section className="room-avatar-editor">
-            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
-              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt={t("chat.chatPhotoAlt")} /> : <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
+            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()}
+                    disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
+              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt={t("chat.chatPhotoAlt")} /> :
+                <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
               <span>{uploadingRoomAvatar ? <LoaderCircle className="spin" size={20} /> : <Camera size={20} />}</span>
             </button>
-            <div><strong>{selectedRoom?.type === "channel" ? t("chat.channelPhotoLabel") : t("chat.groupPhotoLabel")}</strong><small>{t("chat.photoFormatHint")}</small><div><button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}><ImagePlus size={16} />{roomSettingsAvatar ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>{roomSettingsAvatar && <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div></div>
-            <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
+            <div>
+              <strong>{selectedRoom?.type === "channel" ? t("chat.channelPhotoLabel") : t("chat.groupPhotoLabel")}</strong><small>{t("chat.photoFormatHint")}</small>
+              <div>
+                <button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}>
+                  <ImagePlus size={16} />{roomSettingsAvatar ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>
+                {roomSettingsAvatar &&
+                  <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2
+                    size={15} />{t("chat.removePhoto")}</button>}</div>
+            </div>
+            <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
+                   onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
           </section>
           <section className="room-background-editor">
-            <div className="room-background-preview" style={roomSettingsBackground ? { backgroundImage: `url(${roomSettingsBackground})` } : undefined}>
+            <div className="room-background-preview"
+                 style={roomSettingsBackground ? { backgroundImage: `url(${roomSettingsBackground})` } : undefined}>
               {!roomSettingsBackground && <ImagePlus size={20} />}
             </div>
-            <div><strong>{t("chat.chatBackgroundLabel")}</strong><small>{t("chat.backgroundFormatHint")}</small><div><button type="button" onClick={() => roomBackgroundInput.current?.click()} disabled={uploadingRoomBackground}>{uploadingRoomBackground ? <LoaderCircle className="spin" size={16} /> : <ImagePlus size={16} />}{roomSettingsBackground ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>{roomSettingsBackground && <button type="button" className="danger" onClick={() => void removeRoomBackground()} disabled={uploadingRoomBackground}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div></div>
-            <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
+            <div><strong>{t("chat.chatBackgroundLabel")}</strong><small>{t("chat.backgroundFormatHint")}</small>
+              <div>
+                <button type="button" onClick={() => roomBackgroundInput.current?.click()}
+                        disabled={uploadingRoomBackground}>{uploadingRoomBackground ?
+                  <LoaderCircle className="spin" size={16} /> : <ImagePlus
+                    size={16} />}{roomSettingsBackground ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>
+                {roomSettingsBackground &&
+                  <button type="button" className="danger" onClick={() => void removeRoomBackground()}
+                          disabled={uploadingRoomBackground}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div>
+            </div>
+            <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
+                   onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
           </section>
-          <label>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder={t("chat.namePlaceholder")} /></label>
-          <label>{t("chat.descriptionLabel")}<textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={4} placeholder={selectedRoom?.type === "channel" ? t("chat.channelAboutPlaceholder") : t("chat.groupAboutPlaceholder")} /><small>{roomSettingsDescription.length}/1000</small></label>
-          <label>{t("chat.slugLabel")} <small>{t("chat.slugHint")}</small><input value={roomSettingsSlug} onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} maxLength={60} placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
-          <div className="room-settings-note"><ShieldCheck size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span></div>
-          <div className="modal-actions"><Button type="button" variant="ghost" onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</Button><Button type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} disabled={savingRoomSettings || !roomSettingsName.trim()}>{t("common.save")}</Button></div>
+          <label>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input
+            value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200}
+            required placeholder={t("chat.namePlaceholder")} /></label>
+          <label>{t("chat.descriptionLabel")}<textarea value={roomSettingsDescription}
+                                                       onChange={(event) => setRoomSettingsDescription(event.target.value)}
+                                                       maxLength={1000} rows={4}
+                                                       placeholder={selectedRoom?.type === "channel" ? t("chat.channelAboutPlaceholder") : t("chat.groupAboutPlaceholder")} /><small>{roomSettingsDescription.length}/1000</small></label>
+          <label>{t("chat.slugLabel")} <small>{t("chat.slugHint")}</small><input value={roomSettingsSlug}
+                                                                                 onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                                                                                 maxLength={60}
+                                                                                 placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
+          <div className="room-settings-note"><ShieldCheck
+            size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span>
+          </div>
+          <div className="modal-actions"><Button type="button" variant="ghost"
+                                                 onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</Button><Button
+            type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}
+            disabled={savingRoomSettings || !roomSettingsName.trim()}>{t("common.save")}</Button></div>
         </form>
       </Modal>
 
-      <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)} title={t("chat.forwardMessageTitle")} description={t("chat.forwardMessageDesc")} width="md">
-        <div className="forward-preview"><Reply size={16} /><span><strong>{forwardingMessage?.content || forwardingMessage?.attachments?.[0]?.fileName || t("chat.mediaMessageFallback")}</strong><small>{forwardingMessage?.attachments?.length ? t("chat.attachmentsCount", { count: forwardingMessage.attachments.length }) : t("chat.textMessageFallback")}</small></span></div>
-        <div className="forward-room-list">{rooms.filter((room) => room.memberStatus !== "pending").map((room) => <button key={room.id} disabled={forwarding} onClick={() => void forwardMessage(room.id)}><span className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : room.type === "direct" ? <UserRound size={17} /> : <Hash size={17} />}</span><span><strong>{roomTitle(room)}</strong><small>{room.type === "direct" ? t("chat.personalChatLabel") : t("chat.membersCountDesc", { count: room.memberCount })}</small></span>{forwarding ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
+      <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)}
+             title={t("chat.forwardMessageTitle")} description={t("chat.forwardMessageDesc")} width="md">
+        <div className="forward-preview"><Reply
+          size={16} /><span><strong>{forwardingMessage?.content || forwardingMessage?.attachments?.[0]?.fileName || t("chat.mediaMessageFallback")}</strong><small>{forwardingMessage?.attachments?.length ? t("chat.attachmentsCount", { count: forwardingMessage.attachments.length }) : t("chat.textMessageFallback")}</small></span>
+        </div>
+        <div className="forward-room-list">{rooms.filter((room) => room.memberStatus !== "pending").map((room) =>
+          <button key={room.id} disabled={forwarding} onClick={() => void forwardMessage(room.id)}><span
+            className="room-avatar">{room.type === "channel" ? <Megaphone size={17} /> : room.type === "direct" ?
+            <UserRound size={17} /> : <Hash
+              size={17} />}</span><span><strong>{roomTitle(room)}</strong><small>{room.type === "direct" ? t("chat.personalChatLabel") : t("chat.membersCountDesc", { count: room.memberCount })}</small></span>{forwarding ?
+            <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
       </Modal>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")} description={t("chat.newConversationModalDesc")}>
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")}
+             description={t("chat.newConversationModalDesc")}>
         <form className="modal-form" onSubmit={createConversation}>
-          <div className="segmented-control"><span className="segmented-indicator" aria-hidden="true" style={{ transform: `translateX(${createMode === "direct" ? "100%" : "0"})` }} /><button type="button" className={createMode === "group" ? "active" : ""} onClick={() => { setCreateMode("group"); setSelectedMembers([]); }}><UsersRound size={17} /> {t("chat.groupWord")}</button><button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => { setCreateMode("direct"); setSelectedMembers([]); }}><UserRound size={17} /> {t("chat.personalWord")}</button></div>
-          {createMode === "group" && <label>{t("chat.groupNameLabel")}<input name="name" placeholder={t("chat.groupNamePlaceholder")} required maxLength={200} /></label>}
-          <label className="search-field member-search"><Search size={17} /><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")} aria-label={t("chat.searchUserAria")} autoComplete="off" name="chat-member-search" />{searchingUsers ? <LoaderCircle className="spin" size={16} /> : memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
-          <fieldset className="member-picker"><legend>{createMode === "group" ? t("chat.selectMembersLegend") : t("chat.whoToChatLegend")}</legend>{pickerCandidates.length === 0 && <p className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}{pickerCandidates.map((member) => { const checked = selectedMembers.includes(member.id); return <label key={member.id} className={checked ? "checked" : ""}><input type={createMode === "direct" ? "radio" : "checkbox"} name="members" value={member.id} checked={checked} onChange={() => setSelectedMembers((current) => createMode === "direct" ? [member.id] : current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} /><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check size={16} /></label>; })}</fieldset>
-          <button type="button" className="invite-email-prompt" onClick={() => { setCreateOpen(false); setWorkspaceInviteOpen(true); }}><MailPlus size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span></button>
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button type="submit" loading={creating} disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : t("chat.openChatButton")}</Button></div>
+          <div className="segmented-control"><span className="segmented-indicator" aria-hidden="true"
+                                                   style={{ transform: `translateX(${createMode === "direct" ? "100%" : "0"})` }} />
+            <button type="button" className={createMode === "group" ? "active" : ""} onClick={() => {
+              setCreateMode("group");
+              setSelectedMembers([]);
+            }}><UsersRound size={17} /> {t("chat.groupWord")}</button>
+            <button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => {
+              setCreateMode("direct");
+              setSelectedMembers([]);
+            }}><UserRound size={17} /> {t("chat.personalWord")}</button>
+          </div>
+          {createMode === "group" &&
+            <label>{t("chat.groupNameLabel")}<input name="name" placeholder={t("chat.groupNamePlaceholder")} required
+                                                    maxLength={200} /></label>}
+          <label className="search-field member-search"><Search size={17} /><input value={memberSearch}
+                                                                                   onChange={(event) => setMemberSearch(event.target.value)}
+                                                                                   placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")}
+                                                                                   aria-label={t("chat.searchUserAria")}
+                                                                                   autoComplete="off"
+                                                                                   name="chat-member-search" />{searchingUsers ?
+            <LoaderCircle className="spin" size={16} /> : memberSearch &&
+            <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X
+              size={15} /></button>}</label>
+          <fieldset className="member-picker">
+            <legend>{createMode === "group" ? t("chat.selectMembersLegend") : t("chat.whoToChatLegend")}</legend>
+            {pickerCandidates.length === 0 && <p
+              className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}{pickerCandidates.map((member) => {
+            const checked = selectedMembers.includes(member.id);
+            return <label key={member.id} className={checked ? "checked" : ""}><input
+              type={createMode === "direct" ? "radio" : "checkbox"} name="members" value={member.id} checked={checked}
+              onChange={() => setSelectedMembers((current) => createMode === "direct" ? [member.id] : current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} /><Avatar
+              firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
+              size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check
+              size={16} /></label>;
+          })}</fieldset>
+          <button type="button" className="invite-email-prompt" onClick={() => {
+            setCreateOpen(false);
+            setWorkspaceInviteOpen(true);
+          }}><MailPlus
+            size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span>
+          </button>
+          <div className="modal-actions"><Button type="button" variant="secondary"
+                                                 onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button
+            type="submit" loading={creating}
+            disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : t("chat.openChatButton")}</Button>
+          </div>
         </form>
       </Modal>
 
-      <Modal open={workspaceInviteOpen} onClose={() => setWorkspaceInviteOpen(false)} title={t("chat.workspaceInviteTitle")} description={t("chat.workspaceInviteDesc")}>
+      <Modal open={workspaceInviteOpen} onClose={() => setWorkspaceInviteOpen(false)}
+             title={t("chat.workspaceInviteTitle")} description={t("chat.workspaceInviteDesc")}>
         <form className="modal-form" onSubmit={inviteToWorkspace}>
-          <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email" placeholder="name@company.com" required /></label>
-          <label>{t("chat.roleLabel")}<select name="role" defaultValue="junior"><option value="lead">Lead</option><option value="senior">Senior</option><option value="middle">Middle</option><option value="junior">Junior</option><option value="guest">Guest</option></select></label>
+          <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email"
+                                              placeholder="name@company.com" required /></label>
+          <label>{t("chat.roleLabel")}<select name="role" defaultValue="junior">
+            <option value="lead">Lead</option>
+            <option value="senior">Senior</option>
+            <option value="middle">Middle</option>
+            <option value="junior">Junior</option>
+            <option value="guest">Guest</option>
+          </select></label>
           <p className="field-hint">{t("chat.workspaceInviteHint")}</p>
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => { setWorkspaceInviteOpen(false); setCreateOpen(true); }}>{t("chat.backButton")}</Button><Button type="submit" loading={invitingWorkspace} icon={<MailPlus size={17} />}>{t("chat.sendInviteButton")}</Button></div>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => {
+            setWorkspaceInviteOpen(false);
+            setCreateOpen(true);
+          }}>{t("chat.backButton")}</Button><Button type="submit" loading={invitingWorkspace}
+                                                    icon={<MailPlus size={17} />}>{t("chat.sendInviteButton")}</Button>
+          </div>
         </form>
       </Modal>
 
-      <Modal open={roomInfoOpen} onClose={() => setRoomInfoOpen(false)} title={t("chat.inviteToGroup")} description={t("chat.inviteLinkModalDesc")} width="md">
+      <Modal open={roomInfoOpen} onClose={() => setRoomInfoOpen(false)} title={t("chat.inviteToGroup")}
+             description={t("chat.inviteLinkModalDesc")} width="md">
         <form className="modal-form invite-link-form" onSubmit={createRoomInvite}>
-          <div className="form-grid-2"><label>{t("chat.maxUsesLabel")}<input name="maxUses" type="number" min="1" max="100000" defaultValue="25" /></label><label>{t("chat.expiresLabel")}<select name="expiresInHours" defaultValue="168"><option value="24">{t("chat.day1")}</option><option value="168">{t("chat.day7")}</option><option value="720">{t("chat.day30")}</option><option value="">{t("chat.unlimited")}</option></select></label></div>
-          <Button type="submit" loading={creatingInvite} icon={<Link2 size={17} />}>{t("chat.createNewLinkButton")}</Button>
+          <div className="form-grid-2"><label>{t("chat.maxUsesLabel")}<input name="maxUses" type="number" min="1"
+                                                                             max="100000"
+                                                                             defaultValue="25" /></label><label>{t("chat.expiresLabel")}<select
+            name="expiresInHours" defaultValue="168">
+            <option value="24">{t("chat.day1")}</option>
+            <option value="168">{t("chat.day7")}</option>
+            <option value="720">{t("chat.day30")}</option>
+            <option value="">{t("chat.unlimited")}</option>
+          </select></label></div>
+          <Button type="submit" loading={creatingInvite}
+                  icon={<Link2 size={17} />}>{t("chat.createNewLinkButton")}</Button>
         </form>
         <div className="invite-link-list" aria-live="polite">
           {loadingInvites && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
           {!loadingInvites && inviteError && <div className="inline-notice" role="alert">{inviteError}</div>}
-          {!loadingInvites && !inviteError && roomInvites.length === 0 && <div className="invite-link-empty"><Link2 size={21} /><p>{t("chat.noInviteLinksYet")}</p></div>}
+          {!loadingInvites && !inviteError && roomInvites.length === 0 &&
+            <div className="invite-link-empty"><Link2 size={21} /><p>{t("chat.noInviteLinksYet")}</p></div>}
           {roomInvites.map((invite) => {
             const url = new URL(`/join/chat/${invite.code}`, window.location.origin).toString();
-            const expiryDate = invite.expiresAt ? new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { day: "numeric", month: "short", year: "numeric" }).format(new Date(invite.expiresAt)) : "";
-            return <div className={`invite-link-row ${invite.isActive ? "" : "inactive"}`} key={invite.id}><span className="invite-link-icon"><Link2 size={17} /></span><span className="invite-link-copy"><strong>{invite.isActive ? url : t("chat.revokedLinkLabel")}</strong><small>{invite.maxUses ? t("chat.usesWithMax", { used: invite.usesCount, max: invite.maxUses }) : t("chat.usesOnly", { used: invite.usesCount })} · {invite.expiresAt ? t("chat.untilDate", { date: expiryDate }) : t("chat.noExpiry")}</small></span>{invite.isActive && <><button type="button" className="icon-button" onClick={() => void copyInvite(invite.code)} aria-label={t("chat.copyLinkAria")} title={t("chat.copyTitle")}><Copy size={17} /></button><button type="button" className="icon-button icon-button-danger" onClick={() => void revokeRoomInvite(invite.id)} aria-label={t("chat.revokeLinkAria")} title={t("chat.revokeTitle")}><Trash2 size={17} /></button></>}</div>;
+            const expiryDate = invite.expiresAt ? new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", {
+              day: "numeric",
+              month: "short",
+              year: "numeric"
+            }).format(new Date(invite.expiresAt)) : "";
+            return <div className={`invite-link-row ${invite.isActive ? "" : "inactive"}`} key={invite.id}><span
+              className="invite-link-icon"><Link2 size={17} /></span><span
+              className="invite-link-copy"><strong>{invite.isActive ? url : t("chat.revokedLinkLabel")}</strong><small>{invite.maxUses ? t("chat.usesWithMax", {
+              used: invite.usesCount,
+              max: invite.maxUses
+            }) : t("chat.usesOnly", { used: invite.usesCount })} · {invite.expiresAt ? t("chat.untilDate", { date: expiryDate }) : t("chat.noExpiry")}</small></span>{invite.isActive && <>
+              <button type="button" className="icon-button" onClick={() => void copyInvite(invite.code)}
+                      aria-label={t("chat.copyLinkAria")} title={t("chat.copyTitle")}><Copy size={17} /></button>
+              <button type="button" className="icon-button icon-button-danger"
+                      onClick={() => void revokeRoomInvite(invite.id)} aria-label={t("chat.revokeLinkAria")}
+                      title={t("chat.revokeTitle")}><Trash2 size={17} /></button>
+            </>}</div>;
           })}
         </div>
       </Modal>

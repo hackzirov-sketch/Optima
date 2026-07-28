@@ -157,6 +157,9 @@ export interface ChatMessage {
   isThreadReply?: boolean;
   threadReplyCount?: number;
   threadLastReplyAt?: string | null;
+  /** Non-user-authored entries — currently just call outcomes (missed/declined/ended). */
+  isSystem?: boolean;
+  systemMetadata?: { kind: "missed_call" | "declined_call" | "call_ended"; callType: "audio" | "video"; durationSeconds?: number } | null;
 }
 
 export interface MeetingParticipant {
@@ -170,6 +173,33 @@ export interface MeetingParticipant {
   screenSharing: boolean;
 }
 
+export type MeetingVisibility = "workspace_only" | "private" | "public" | "invite_only";
+export type MeetingJoinPolicyValue = "auto" | "request_approval";
+export type MeetingJoinRequestStatusValue = "pending" | "approved" | "rejected" | "cancelled";
+
+/** Server-computed access decision for the current user, attached to GET/join responses. */
+export interface MeetingAccess {
+  isHost: boolean;
+  isParticipant: boolean;
+  /** True if calling join() right now succeeds immediately. */
+  canJoin: boolean;
+  /** True if requesting to join makes sense right now (not already pending). */
+  canRequest: boolean;
+  requestStatus: MeetingJoinRequestStatusValue | null;
+  deniedReason?: "workspace_only" | "invite_only" | "locked";
+}
+
+export interface MeetingJoinRequest {
+  id: string;
+  meetingId: string;
+  userId: string;
+  status: MeetingJoinRequestStatusValue;
+  requestedAt: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string | null;
+}
+
 export interface Meeting {
   id: string;
   workspaceId?: string | null;
@@ -179,6 +209,9 @@ export interface Meeting {
   description?: string | null;
   code: string;
   status: "scheduled" | "live" | "ended" | "cancelled";
+  scope: MeetingVisibility;
+  joinPolicy: MeetingJoinPolicyValue;
+  locked: boolean;
   startTime: string;
   endTime?: string | null;
   maxParticipants: number;
@@ -186,6 +219,9 @@ export interface Meeting {
   participants: MeetingParticipant[];
   agenda?: string | null;
   createdAt: string;
+  access?: MeetingAccess;
+  /** Fast Redis-backed count, only present when the caller can manage the waiting room (host/co-host). */
+  waitingCount?: number | null;
 }
 
 export interface MeetingRecording {

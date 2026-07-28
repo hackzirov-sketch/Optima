@@ -5,6 +5,7 @@ import type {
   GlobalSearchResult,
   Meeting,
   MeetingFile,
+  MeetingJoinRequest,
   MeetingRecording,
   NotificationItem,
   RoomInvite,
@@ -43,14 +44,19 @@ let refreshPromise: Promise<RefreshResult> | null = null;
 function errorMessage(body: unknown, fallback: string): { message: string; code?: string } {
   if (!body || typeof body !== "object") return { message: fallback };
   const value = body as Record<string, unknown>;
-  const nested = typeof value.message === "object" ? (value.message as Record<string, unknown>) : null;
+  // AllExceptionsFilter wraps every error as {success:false, error:{code, message}} —
+  // that's the shape every backend response actually has. Fall back to reading
+  // the top level directly in case something ever forwards a bare exception body.
+  const container =
+    value.error && typeof value.error === "object" ? (value.error as Record<string, unknown>) : value;
+  const nested = typeof container.message === "object" ? (container.message as Record<string, unknown>) : null;
   const message =
-    (typeof value.message === "string" && value.message) ||
+    (typeof container.message === "string" && container.message) ||
     (typeof nested?.message === "string" && nested.message) ||
-    (Array.isArray(value.message) && value.message.join(". ")) ||
+    (Array.isArray(container.message) && container.message.join(". ")) ||
     fallback;
   const code =
-    (typeof value.code === "string" && value.code) ||
+    (typeof container.code === "string" && container.code) ||
     (typeof nested?.code === "string" && nested.code) ||
     undefined;
   return { message, code };
@@ -361,12 +367,41 @@ export const api = {
         body: JSON.stringify(data),
       }),
     one: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}`),
+    update: (meetingId: string, data: Record<string, unknown>) =>
+      apiFetch<Meeting>(`/meetings/${meetingId}`, { method: "PATCH", body: JSON.stringify(data) }),
+    lock: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/lock`, { method: "POST" }),
+    unlock: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/unlock`, { method: "POST" }),
+    invite: (meetingId: string, data: { userIds?: string[]; emails?: string[] }) =>
+      apiFetch<{ success: boolean; invitedCount: number; notFoundEmails: string[] }>(`/meetings/${meetingId}/invite`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     join: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/join`, { method: "POST" }),
     joinByCode: (code: string) =>
       apiFetch<Meeting>("/meetings/join-by-code", { method: "POST", body: JSON.stringify({ code }) }),
+    resolveByCode: (code: string) =>
+      apiFetch<Meeting>("/meetings/resolve-by-code", { method: "POST", body: JSON.stringify({ code }) }),
     leave: (meetingId: string) => apiFetch<{ left: boolean }>(`/meetings/${meetingId}/leave`, { method: "POST" }),
     end: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/end`, { method: "POST" }),
     remove: (meetingId: string) => apiFetch<void>(`/meetings/${meetingId}`, { method: "DELETE" }),
+    requestToJoin: (meetingId: string) =>
+      apiFetch<{ status: "joined" | "pending" | "already_joined"; meeting?: Meeting; requestId?: string }>(
+        `/meetings/${meetingId}/join-requests`,
+        { method: "POST" },
+      ),
+    cancelJoinRequest: (meetingId: string) =>
+      apiFetch<MeetingJoinRequest>(`/meetings/${meetingId}/join-requests/me`, { method: "DELETE" }),
+    joinRequests: {
+      list: (meetingId: string) => apiFetch<MeetingJoinRequest[]>(`/meetings/${meetingId}/join-requests`),
+      approve: (meetingId: string, requestId: string) =>
+        apiFetch<MeetingJoinRequest>(`/meetings/${meetingId}/join-requests/${requestId}/approve`, { method: "POST" }),
+      reject: (meetingId: string, requestId: string) =>
+        apiFetch<MeetingJoinRequest>(`/meetings/${meetingId}/join-requests/${requestId}/reject`, { method: "POST" }),
+      approveAll: (meetingId: string) =>
+        apiFetch<MeetingJoinRequest[]>(`/meetings/${meetingId}/join-requests/approve-all`, { method: "POST" }),
+      rejectAll: (meetingId: string) =>
+        apiFetch<MeetingJoinRequest[]>(`/meetings/${meetingId}/join-requests/reject-all`, { method: "POST" }),
+    },
     recordings: {
       list: (meetingId: string) => apiFetch<MeetingRecording[]>(`/meetings/${meetingId}/recordings`),
       start: (meetingId: string) => apiFetch<MeetingRecording>(`/meetings/${meetingId}/recordings/start`, { method: "POST" }),
