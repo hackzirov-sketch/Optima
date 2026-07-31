@@ -74,9 +74,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         throttlers: [
+          // Burst guard — catches request floods within a single second.
           { name: 'short', ttl: 1000, limit: 20 },
-          { name: 'medium', ttl: 10000, limit: 100 },
-          { name: 'long', ttl: 60000, limit: 300 },
+          // Standard window — the project-wide 90s rate-limit baseline.
+          { name: 'standard', ttl: 90000, limit: 450 },
         ],
         storage: new RedisThrottlerStorage(config.get('REDIS_URL') as string),
       }),

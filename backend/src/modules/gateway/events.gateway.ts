@@ -414,6 +414,20 @@ export class EventsGateway
     });
   }
 
+  /** Per-user (not per-IP/global) message send limit — see RedisService.checkChatMessageRateLimit. */
+  private async assertMessageRateLimit(userId: string, client: Socket): Promise<boolean> {
+    const { exceeded, retryAfterSeconds } = await this.redisService.checkChatMessageRateLimit(userId);
+    if (exceeded) {
+      client.emit('error', {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many messages. Try again in ${retryAfterSeconds}s.`,
+        retryAfterSeconds,
+      });
+      return false;
+    }
+    return true;
+  }
+
   private async assertActiveUser(userId: string, client: Socket): Promise<boolean> {
     try {
       await this.violationService.assertNotBlocked(userId);
@@ -440,6 +454,7 @@ export class EventsGateway
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
 
     if (!await this.assertActiveUser(userId, client)) return;
+    if (!await this.assertMessageRateLimit(userId, client)) return;
 
     // Persist to DB — ChatMessageService checks room membership internally
     let saved: any;
@@ -510,6 +525,7 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
     if (!await this.assertActiveUser(userId, client)) return;
+    if (!await this.assertMessageRateLimit(userId, client)) return;
 
     let saved: any;
     try {

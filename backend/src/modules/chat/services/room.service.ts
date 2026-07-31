@@ -733,7 +733,9 @@ export class ChatRoomService {
         message: 'Room not found',
       });
 
-    if (room.type !== ChatRoomType.DIRECT && room.createdById !== userId) {
+    if (room.type === ChatRoomType.DIRECT) {
+      await this.chatMemberService.assertRoomMember(roomId, userId);
+    } else if (room.createdById !== userId) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
         message: 'Only creator can delete this room',

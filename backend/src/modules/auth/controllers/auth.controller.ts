@@ -74,7 +74,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @AuthRateLimit({ action: 'register', maxAttempts: 3, windowSeconds: 3600, blockSeconds: 86400 })
+  @AuthRateLimit({ action: 'register', maxAttempts: 3, windowSeconds: 90, blockSeconds: 86400 })
   @ApiOperation({ summary: 'Register a new user and send verification email' })
   async register(@Body() dto: RegisterDto) {
     // No clearRateLimit here: register always "succeeds" for valid input (a
@@ -85,7 +85,7 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
-  @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 60, blockSeconds: 1800 })
+  @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 90, blockSeconds: 1800 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address with verifyToken + 6-digit code' })
   async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto, @Res({ passthrough: true }) res: Response) {
@@ -96,7 +96,7 @@ export class AuthController {
 
   @Public()
   @Post('resend-verification')
-  @AuthRateLimit({ action: 'resend-verification', maxAttempts: 5, windowSeconds: 3600, blockSeconds: 3600 })
+  @AuthRateLimit({ action: 'resend-verification', maxAttempts: 5, windowSeconds: 90, blockSeconds: 3600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend the email verification code' })
   async resendVerification(@Body() dto: ResendVerificationDto) {
@@ -108,7 +108,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  @AuthRateLimit({ action: 'login', maxAttempts: 5, windowSeconds: 60, blockSeconds: 900 })
+  @AuthRateLimit({ action: 'login', maxAttempts: 5, windowSeconds: 90, blockSeconds: 900 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user, set httpOnly auth cookies' })
   async login(
@@ -137,7 +137,7 @@ export class AuthController {
 
   @Public()
   @Post('forgot-password')
-  @AuthRateLimit({ action: 'forgot-password', maxAttempts: 5, windowSeconds: 600, blockSeconds: 600 })
+  @AuthRateLimit({ action: 'forgot-password', maxAttempts: 5, windowSeconds: 90, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send password reset email' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -147,7 +147,7 @@ export class AuthController {
 
   @Public()
   @Post('verify-reset-otp')
-  @AuthRateLimit({ action: 'verify-reset-otp', maxAttempts: 10, windowSeconds: 600, blockSeconds: 900 })
+  @AuthRateLimit({ action: 'verify-reset-otp', maxAttempts: 10, windowSeconds: 90, blockSeconds: 900 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify the OTP code sent to email for password reset' })
   async verifyResetOtp(@Req() req, @Body() dto: VerifyResetOtpDto) {
@@ -158,7 +158,7 @@ export class AuthController {
 
   @Public()
   @Post('reset-password')
-  @AuthRateLimit({ action: 'reset-password', maxAttempts: 5, windowSeconds: 3600, blockSeconds: 3600 })
+  @AuthRateLimit({ action: 'reset-password', maxAttempts: 5, windowSeconds: 90, blockSeconds: 3600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using one-time token from email' })
   async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
@@ -213,7 +213,7 @@ export class AuthController {
 
   @Public()
   @Post('exchange-code')
-  @AuthRateLimit({ action: 'exchange-code', maxAttempts: 10, windowSeconds: 60, blockSeconds: 600 })
+  @AuthRateLimit({ action: 'exchange-code', maxAttempts: 10, windowSeconds: 90, blockSeconds: 600 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens, set httpOnly auth cookies' })
   async exchangeOAuthCode(@Req() req, @Body() body: { code: string }, @Res({ passthrough: true }) res: Response) {
@@ -226,7 +226,7 @@ export class AuthController {
   @Public()
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
-  @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 60, blockSeconds: 300 })
+  @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 90, blockSeconds: 300 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using the httpOnly refresh cookie' })
   async refresh(

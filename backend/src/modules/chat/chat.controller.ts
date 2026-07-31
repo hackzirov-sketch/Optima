@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus, UseGuards, UploadedFile, UseInterceptors, BadRequestException, HttpException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
@@ -23,6 +23,7 @@ import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { AiRequestDto } from './dto/ai-request.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { RoomScope, ChatRoomType } from '../../common/enums';
+import { RedisService } from '../../redis/redis.service';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -39,7 +40,19 @@ export class ChatController {
     private readonly communityService: CommunityService,
     private readonly usersService: UsersService,
     private readonly presenceService: ChatPresenceService,
+    private readonly redisService: RedisService,
   ) {}
+
+  /** Per-user (not per-IP) message send limit — mirrors the socket path's check in EventsGateway. */
+  private async assertMessageRateLimit(userId: string): Promise<void> {
+    const { exceeded, retryAfterSeconds } = await this.redisService.checkChatMessageRateLimit(userId);
+    if (exceeded) {
+      throw new HttpException(
+        { code: 'RATE_LIMIT_EXCEEDED', message: `Too many messages. Try again in ${retryAfterSeconds}s.`, retryAfterSeconds },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
 
   // ── OTIMA community (ported from main) ────────────────────────────────────
   @Get('chat/community')
@@ -207,7 +220,8 @@ export class ChatController {
   @Post('chat/rooms/:roomId/messages')
   @SkipThrottle()
   @ApiOperation({ summary: 'Send message (REST fallback)' })
-  sendMessage(@Param('roomId') roomId: string, @CurrentUser('id') userId: string, @Body() dto: SendMessageDto) {
+  async sendMessage(@Param('roomId') roomId: string, @CurrentUser('id') userId: string, @Body() dto: SendMessageDto) {
+    await this.assertMessageRateLimit(userId);
     return this.messageService.sendMessage(roomId, userId, dto);
   }
 
@@ -233,11 +247,12 @@ export class ChatController {
   @Post('chat/messages/:messageId/thread')
   @SkipThrottle()
   @ApiOperation({ summary: 'Post a reply into a message’s thread (REST fallback — prefer the socket event)' })
-  sendThreadReply(
+  async sendThreadReply(
     @Param('messageId') messageId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: SendMessageDto,
   ) {
+    await this.assertMessageRateLimit(userId);
     return this.messageService.sendThreadReply(messageId, userId, dto);
   }
 
@@ -419,7 +434,7 @@ export class ChatController {
   }
 
   @Post('chat/ai')
-  @Throttle({ short: { limit: 2, ttl: 1000 }, medium: { limit: 12, ttl: 60000 } })
+  @Throttle({ short: { limit: 2, ttl: 1000 }, standard: { limit: 18, ttl: 90000 } })
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(
     @Body() dto: AiRequestDto,

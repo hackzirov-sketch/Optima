@@ -5,14 +5,26 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
 import { GatewayModule } from '../gateway/gateway.module';
-import { MeetingsService, MEETING_RECORDING_QUEUE, MEETING_LIFECYCLE_QUEUE } from './meetings.service';
+import {
+  MEETING_RECORDING_QUEUE,
+  MEETING_LIFECYCLE_QUEUE,
+} from './meetings.constants';
+import { MeetingsService } from './meetings.service';
 import { MeetingsController } from './meetings.controller';
+import { MeetingsRepository } from './repositories/meetings.repository';
+import { MeetingAccessService } from './services/meeting-access.service';
+import { MeetingRecordingService } from './services/meeting-recording.service';
+import { MeetingJoinRequestService } from './services/meeting-join-request.service';
+import { MeetingFilesService } from './services/meeting-files.service';
 import { MeetingRecordingProcessor } from './processors/meeting-recording.processor';
 import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.processor';
 
 @Module({
   imports: [
-    BullModule.registerQueue({ name: MEETING_RECORDING_QUEUE }, { name: MEETING_LIFECYCLE_QUEUE }),
+    BullModule.registerQueue(
+      { name: MEETING_RECORDING_QUEUE },
+      { name: MEETING_LIFECYCLE_QUEUE },
+    ),
     forwardRef(() => WorkspacesModule),
     ModerationModule,
     StorageModule,
@@ -25,7 +37,16 @@ import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.proces
     forwardRef(() => GatewayModule),
   ],
   controllers: [MeetingsController],
-  providers: [MeetingsService, MeetingRecordingProcessor, MeetingLifecycleProcessor],
+  providers: [
+    MeetingsService,
+    MeetingsRepository,
+    MeetingAccessService,
+    MeetingRecordingService,
+    MeetingJoinRequestService,
+    MeetingFilesService,
+    MeetingRecordingProcessor,
+    MeetingLifecycleProcessor,
+  ],
   exports: [MeetingsService],
 })
 export class MeetingsModule {}

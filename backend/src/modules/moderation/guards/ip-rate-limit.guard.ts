@@ -27,9 +27,6 @@ export class IpRateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // TEMPORARY: Bypass all IP rate limits for team testing in production
-    return true;
-    /*
     const request = context.switchToHttp().getRequest<Request>();
     const ip = this.extractIp(request);
     // Use the matched ROUTE PATTERN (e.g. "/chat/join/:code"), not the raw
@@ -44,14 +41,12 @@ export class IpRateLimitGuard implements CanActivate {
 
     const now = new Date();
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    let committed = false;
-
-    try {
-      const rows: IpRateLimitRow[] = await queryRunner.query(
+    // Compute + persist the new counter state inside a transaction (row
+    // locked FOR UPDATE to avoid a race between concurrent requests from the
+    // same IP), then throw *after* the transaction has committed — the
+    // counter update must survive even when the request is ultimately denied.
+    const blockedRetryAfter = await this.dataSource.withTransaction(async (query) => {
+      const rows: IpRateLimitRow[] = await query(
         `SELECT id, ip, action_type AS "actionType", count, window_start AS "windowStart",
                 blocked_until AS "blockedUntil"
          FROM ip_rate_limits WHERE ip = $1 AND action_type = $2 FOR UPDATE`,
@@ -62,18 +57,7 @@ export class IpRateLimitGuard implements CanActivate {
       if (record) {
         // Currently blocked
         if (record.blockedUntil && record.blockedUntil > now) {
-          const retryAfter = Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
-          // Commit before throwing so the finally block doesn't try to rollback
-          await queryRunner.commitTransaction();
-          committed = true;
-          throw new HttpException(
-            {
-              code: ErrorCode.RATE_LIMIT_EXCEEDED,
-              message: `Too many attempts. Try again in ${Math.ceil(retryAfter / 3600)} hour(s).`,
-              retryAfter,
-            },
-            HttpStatus.TOO_MANY_REQUESTS,
-          );
+          return Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
         }
 
         let newCount: number;
@@ -92,52 +76,38 @@ export class IpRateLimitGuard implements CanActivate {
 
           if (newCount >= maxAttempts) {
             newBlockedUntil = new Date(now.getTime() + windowMs);
-            await queryRunner.query(
-              `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
-               WHERE id = $1`,
-              [record.id, newCount, newWindowStart, newBlockedUntil],
-            );
-            await queryRunner.commitTransaction();
-            committed = true;
-
-            throw new HttpException(
-              {
-                code: ErrorCode.RATE_LIMIT_EXCEEDED,
-                message: `Too many attempts. Try again in ${windowHours} hour(s).`,
-                retryAfter: windowHours * 3600,
-              },
-              HttpStatus.TOO_MANY_REQUESTS,
-            );
           }
         }
 
-        await queryRunner.query(
+        await query(
           `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
            WHERE id = $1`,
           [record.id, newCount, newWindowStart, newBlockedUntil],
         );
-      } else {
-        await queryRunner.query(
-          `INSERT INTO ip_rate_limits (ip, action_type, count, window_start)
-           VALUES ($1, $2, 1, $3)`,
-          [ip, actionType, now],
-        );
+
+        return newBlockedUntil ? windowHours * 3600 : null;
       }
 
-      if (!committed) {
-        await queryRunner.commitTransaction();
-        committed = true;
-      }
-      return true;
-    } catch (error) {
-      if (!committed) {
-        await queryRunner.rollbackTransaction();
-      }
-      throw error;
-    } finally {
-      await queryRunner.release();
+      await query(
+        `INSERT INTO ip_rate_limits (ip, action_type, count, window_start)
+         VALUES ($1, $2, 1, $3)`,
+        [ip, actionType, now],
+      );
+      return null;
+    });
+
+    if (blockedRetryAfter !== null) {
+      throw new HttpException(
+        {
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
+          message: `Too many attempts. Try again in ${Math.ceil(blockedRetryAfter / 3600)} hour(s).`,
+          retryAfter: blockedRetryAfter,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
-    */
+
+    return true;
   }
 
   private extractIp(request: Request): string {

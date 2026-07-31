@@ -51,6 +51,11 @@ export class GroupsService {
       throw new NotFoundException({ code: ErrorCode.GROUP_NOT_FOUND, message: 'Group not found' });
     }
 
+    const wsMember = await this.groupsRepository.findWorkspaceMember(group.workspaceId, userId);
+    if (!wsMember) {
+      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
+    }
+
     const memberRows = await this.groupsRepository.findMembersWithUser(id);
 
     const members = memberRows.map((m) => {

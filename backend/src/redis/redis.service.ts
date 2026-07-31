@@ -411,6 +411,85 @@ export class RedisService implements OnModuleDestroy {
     return [null, count];
   }
 
+  /**
+   * Per-user chat message send limit (not IP-based — one user's burst never
+   * touches another user's quota, unlike a naive shared/global counter).
+   * Three tiers checked atomically in one round trip via Lua, same
+   * INCR-then-PEXPIRE-only-on-first-hit pattern as RedisThrottlerStorage.
+   */
+  private static readonly CHAT_MSG_TIERS: ReadonlyArray<{ name: string; windowMs: number; limit: number }> = [
+    { name: 'burst', windowMs: 1_000, limit: 3 },
+    { name: 'medium', windowMs: 10_000, limit: 20 },
+    { name: 'long', windowMs: 60_000, limit: 100 },
+  ];
+
+  private static readonly CHAT_MSG_RATE_SCRIPT = `
+    local results = {}
+    for i = 1, #KEYS do
+      local key = KEYS[i]
+      local ttl = tonumber(ARGV[i * 2 - 1])
+      local limit = tonumber(ARGV[i * 2])
+      local hits = redis.call('INCR', key)
+      if hits == 1 then
+        redis.call('PEXPIRE', key, ttl)
+      end
+      results[#results + 1] = hits
+      results[#results + 1] = redis.call('PTTL', key)
+      results[#results + 1] = limit
+    end
+    return results
+  `;
+
+  async checkChatMessageRateLimit(userId: string): Promise<{ exceeded: boolean; retryAfterSeconds: number }> {
+    const tiers = RedisService.CHAT_MSG_TIERS;
+    try {
+      const client = this.getClient();
+      if (client) {
+        const keys = tiers.map((t) => RedisKeys.chatMsgRate(t.name, userId));
+        const args = tiers.flatMap((t) => [t.windowMs, t.limit]);
+        const raw = (await client.eval(
+          RedisService.CHAT_MSG_RATE_SCRIPT,
+          keys.length,
+          ...keys,
+          ...args,
+        )) as number[];
+        for (let i = 0; i < tiers.length; i++) {
+          const hits = raw[i * 3];
+          const pttl = raw[i * 3 + 1];
+          const limit = raw[i * 3 + 2];
+          if (hits > limit) {
+            return { exceeded: true, retryAfterSeconds: Math.max(1, Math.ceil(pttl / 1000)) };
+          }
+        }
+        return { exceeded: false, retryAfterSeconds: 0 };
+      }
+    } catch (e) {
+      this.logger.warn(`Redis chat rate limit check failed: ${e instanceof Error ? e.message : e}`);
+    }
+    return this.memCheckChatMessageRateLimit(userId, tiers);
+  }
+
+  private memCheckChatMessageRateLimit(
+    userId: string,
+    tiers: ReadonlyArray<{ name: string; windowMs: number; limit: number }>,
+  ): { exceeded: boolean; retryAfterSeconds: number } {
+    const now = Date.now();
+    for (const tier of tiers) {
+      const key = RedisKeys.chatMsgRate(tier.name, userId);
+      const entry = this.memStore.get(key);
+      if (!entry || entry.expiresAt <= now) {
+        this.memStore.set(key, { value: '1', expiresAt: now + tier.windowMs });
+        continue;
+      }
+      const hits = parseInt(entry.value, 10) + 1;
+      entry.value = hits.toString();
+      if (hits > tier.limit) {
+        return { exceeded: true, retryAfterSeconds: Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)) };
+      }
+    }
+    return { exceeded: false, retryAfterSeconds: 0 };
+  }
+
   async clearRateLimit(action: string, ip: string): Promise<void> {
     const failuresKey = RedisKeys.rateLimitFailures(action, ip);
     const blockKey = RedisKeys.rateLimitBlocked(action, ip);

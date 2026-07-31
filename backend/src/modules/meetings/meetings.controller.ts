@@ -26,7 +26,10 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JoinByCodeDto } from './dto/join-by-code.dto';
 import { PresignRecordingDto } from './dto/presign-recording.dto';
 import { StopRecordingDto } from './dto/stop-recording.dto';
-import { PresignMeetingFileDto, ShareMeetingFileDto } from './dto/share-meeting-file.dto';
+import {
+  PresignMeetingFileDto,
+  ShareMeetingFileDto,
+} from './dto/share-meeting-file.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { EventsGateway } from '../gateway/events.gateway';
 import { Inject, forwardRef } from '@nestjs/common';
@@ -74,10 +77,7 @@ export class MeetingsController {
 
   @Post('meetings')
   @ApiOperation({ summary: 'Create a standalone meeting' })
-  create(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateMeetingDto,
-  ) {
+  create(@CurrentUser('id') userId: string, @Body() dto: CreateMeetingDto) {
     return this.meetingsService.create(null, userId, dto);
   }
 
@@ -92,20 +92,17 @@ export class MeetingsController {
   @Post('meetings/join-by-code')
   @UseGuards(IpRateLimitGuard)
   @ApiOperation({ summary: 'Join a meeting using its 8-char code' })
-  joinByCode(
-    @CurrentUser('id') userId: string,
-    @Body() dto: JoinByCodeDto,
-  ) {
+  joinByCode(@CurrentUser('id') userId: string, @Body() dto: JoinByCodeDto) {
     return this.meetingsService.joinByCode(dto.code, userId);
   }
 
   @Post('meetings/resolve-by-code')
   @UseGuards(IpRateLimitGuard)
-  @ApiOperation({ summary: 'Look up a meeting by its code without joining — lets the client route through the normal access/waiting-room flow' })
-  resolveByCode(
-    @CurrentUser('id') userId: string,
-    @Body() dto: JoinByCodeDto,
-  ) {
+  @ApiOperation({
+    summary:
+      'Look up a meeting by its code without joining — lets the client route through the normal access/waiting-room flow',
+  })
+  resolveByCode(@CurrentUser('id') userId: string, @Body() dto: JoinByCodeDto) {
     return this.meetingsService.resolveByCode(dto.code, userId);
   }
 
@@ -180,14 +177,18 @@ export class MeetingsController {
   }
 
   @Post('meetings/:meetingId/lock')
-  @ApiOperation({ summary: 'Lock the meeting — blocks any new joins (host only)' })
+  @ApiOperation({
+    summary: 'Lock the meeting — blocks any new joins (host only)',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async lock(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
     const meeting = await this.meetingsService.lockMeeting(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:locked', { meetingId });
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:locked', {
+      meetingId,
+    });
     return meeting;
   }
 
@@ -199,14 +200,18 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
   ) {
     const meeting = await this.meetingsService.unlockMeeting(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:unlocked', { meetingId });
+    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:unlocked', {
+      meetingId,
+    });
     return meeting;
   }
 
   // ─── Join Policy: waiting room (request / approve / reject) ──────────────
 
   @Post('meetings/:meetingId/join-requests')
-  @ApiOperation({ summary: 'Request to join a meeting that requires host approval' })
+  @ApiOperation({
+    summary: 'Request to join a meeting that requires host approval',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async requestToJoin(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
@@ -214,12 +219,17 @@ export class MeetingsController {
   ) {
     const result = await this.meetingsService.requestToJoin(meetingId, userId);
     if (result.status === 'pending') {
-      const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
-      this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:created', {
+      const waitingCount =
+        await this.meetingsService.getWaitingCount(meetingId);
+      this.gateway.notifyMeetingHosts(
         meetingId,
-        requestId: result.requestId,
-        waitingCount,
-      });
+        'meeting:join_request:created',
+        {
+          meetingId,
+          requestId: result.requestId,
+          waitingCount,
+        },
+      );
     }
     return result;
   }
@@ -235,7 +245,10 @@ export class MeetingsController {
   }
 
   @Get('meetings/:meetingId/join-requests')
-  @ApiOperation({ summary: 'List pending join requests (host/co-host only) — the Waiting Room' })
+  @ApiOperation({
+    summary:
+      'List pending join requests (host/co-host only) — the Waiting Room',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   listJoinRequests(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
@@ -253,10 +266,22 @@ export class MeetingsController {
     @Param('requestId', ParseUUIDPipe) requestId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const request = await this.meetingsService.reviewJoinRequest(meetingId, requestId, userId, 'approved');
-    this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', { meetingId, requestId });
+    const request = await this.meetingsService.reviewJoinRequest(
+      meetingId,
+      requestId,
+      userId,
+      'approved',
+    );
+    this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', {
+      meetingId,
+      requestId,
+    });
     const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
-    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, requestId, waitingCount });
+    this.gateway.notifyMeetingHosts(
+      meetingId,
+      'meeting:join_request:reviewed',
+      { meetingId, requestId, waitingCount },
+    );
     return request;
   }
 
@@ -269,45 +294,86 @@ export class MeetingsController {
     @Param('requestId', ParseUUIDPipe) requestId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const request = await this.meetingsService.reviewJoinRequest(meetingId, requestId, userId, 'rejected');
-    this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', { meetingId, requestId });
+    const request = await this.meetingsService.reviewJoinRequest(
+      meetingId,
+      requestId,
+      userId,
+      'rejected',
+    );
+    this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', {
+      meetingId,
+      requestId,
+    });
     const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
-    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, requestId, waitingCount });
+    this.gateway.notifyMeetingHosts(
+      meetingId,
+      'meeting:join_request:reviewed',
+      { meetingId, requestId, waitingCount },
+    );
     return request;
   }
 
   @Post('meetings/:meetingId/join-requests/approve-all')
-  @ApiOperation({ summary: 'Approve all pending join requests (host/co-host only)' })
+  @ApiOperation({
+    summary: 'Approve all pending join requests (host/co-host only)',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async approveAllJoinRequests(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const requests = await this.meetingsService.batchReviewJoinRequests(meetingId, userId, 'approved');
+    const requests = await this.meetingsService.batchReviewJoinRequests(
+      meetingId,
+      userId,
+      'approved',
+    );
     for (const request of requests) {
-      this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', { meetingId, requestId: request.id });
+      this.gateway.sendToUser(request.userId, 'meeting:join_request:approved', {
+        meetingId,
+        requestId: request.id,
+      });
     }
-    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, waitingCount: 0 });
+    this.gateway.notifyMeetingHosts(
+      meetingId,
+      'meeting:join_request:reviewed',
+      { meetingId, waitingCount: 0 },
+    );
     return requests;
   }
 
   @Post('meetings/:meetingId/join-requests/reject-all')
-  @ApiOperation({ summary: 'Reject all pending join requests (host/co-host only)' })
+  @ApiOperation({
+    summary: 'Reject all pending join requests (host/co-host only)',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async rejectAllJoinRequests(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const requests = await this.meetingsService.batchReviewJoinRequests(meetingId, userId, 'rejected');
+    const requests = await this.meetingsService.batchReviewJoinRequests(
+      meetingId,
+      userId,
+      'rejected',
+    );
     for (const request of requests) {
-      this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', { meetingId, requestId: request.id });
+      this.gateway.sendToUser(request.userId, 'meeting:join_request:rejected', {
+        meetingId,
+        requestId: request.id,
+      });
     }
-    this.gateway.notifyMeetingHosts(meetingId, 'meeting:join_request:reviewed', { meetingId, waitingCount: 0 });
+    this.gateway.notifyMeetingHosts(
+      meetingId,
+      'meeting:join_request:reviewed',
+      { meetingId, waitingCount: 0 },
+    );
     return requests;
   }
 
   @Post('meetings/:meetingId/invite')
-  @ApiOperation({ summary: 'Invite members to a meeting, by workspace member id and/or email address' })
+  @ApiOperation({
+    summary:
+      'Invite members to a meeting, by workspace member id and/or email address',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   invite(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
@@ -315,42 +381,78 @@ export class MeetingsController {
     @Body('userIds') userIds: string[],
     @Body('emails') emails: string[],
   ) {
-    return this.meetingsService.inviteMembers(meetingId, userId, userIds || [], emails || []);
+    return this.meetingsService.inviteMembers(
+      meetingId,
+      userId,
+      userIds || [],
+      emails || [],
+    );
   }
 
   // ─── Shared files (ported from main) ───────────────────────────────────────
 
   @Get('meetings/:meetingId/files')
   @ApiOperation({ summary: 'List files shared in a meeting' })
-  listFiles(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string) {
+  listFiles(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.meetingsService.listSharedFiles(meetingId, userId);
   }
 
   @Post('meetings/:meetingId/files/presign')
   @ApiOperation({ summary: 'Get a direct upload URL for a meeting file' })
-  presignFile(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string, @Body() dto: PresignMeetingFileDto) {
-    return this.meetingsService.presignSharedFile(meetingId, userId, dto.fileName, dto.mimeType, dto.fileSize);
+  presignFile(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: PresignMeetingFileDto,
+  ) {
+    return this.meetingsService.presignSharedFile(
+      meetingId,
+      userId,
+      dto.fileName,
+      dto.mimeType,
+      dto.fileSize,
+    );
   }
 
   @Post('meetings/:meetingId/files')
   @ApiOperation({ summary: 'Publish an uploaded file to meeting participants' })
-  async shareFile(@Param('meetingId', ParseUUIDPipe) meetingId: string, @CurrentUser('id') userId: string, @Body() dto: ShareMeetingFileDto) {
+  async shareFile(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: ShareMeetingFileDto,
+  ) {
     const file = await this.meetingsService.shareFile(meetingId, userId, dto);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:file-shared', { file });
+    this.gateway.broadcastToRoom(
+      `meeting:${meetingId}`,
+      'meeting:file-shared',
+      { file },
+    );
     return file;
   }
 
   // ─── Recording (host/co-host only, hard 1-hour server-side cap) ───────────
 
   @Post('meetings/:meetingId/recordings/start')
-  @ApiOperation({ summary: 'Start recording the meeting (max 1 hour, auto-stopped server-side)' })
+  @ApiOperation({
+    summary:
+      'Start recording the meeting (max 1 hour, auto-stopped server-side)',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   async startRecording(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
   ) {
-    const recording = await this.meetingsService.startRecording(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:recording:started', { recording });
+    const recording = await this.meetingsService.startRecording(
+      meetingId,
+      userId,
+    );
+    this.gateway.broadcastToRoom(
+      `meeting:${meetingId}`,
+      'meeting:recording:started',
+      { recording },
+    );
     return recording;
   }
 
@@ -362,8 +464,16 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
     @Body() dto: StopRecordingDto,
   ) {
-    const recording = await this.meetingsService.stopRecording(meetingId, userId, dto);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:recording:stopped', { recording });
+    const recording = await this.meetingsService.stopRecording(
+      meetingId,
+      userId,
+      dto,
+    );
+    this.gateway.broadcastToRoom(
+      `meeting:${meetingId}`,
+      'meeting:recording:stopped',
+      { recording },
+    );
     return recording;
   }
 
@@ -378,7 +488,9 @@ export class MeetingsController {
   }
 
   @Post('meetings/:meetingId/recordings/:recordingId/presign')
-  @ApiOperation({ summary: 'Get a presigned URL to upload the recorded blob after stopping' })
+  @ApiOperation({
+    summary: 'Get a presigned URL to upload the recorded blob after stopping',
+  })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   @ApiParam({ name: 'recordingId', format: 'uuid' })
   presignRecording(
@@ -387,6 +499,12 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
     @Body() dto: PresignRecordingDto,
   ) {
-    return this.meetingsService.presignRecordingUpload(meetingId, recordingId, userId, dto.mimeType, dto.fileSize);
+    return this.meetingsService.presignRecordingUpload(
+      meetingId,
+      recordingId,
+      userId,
+      dto.mimeType,
+      dto.fileSize,
+    );
   }
 }

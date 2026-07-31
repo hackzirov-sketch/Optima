@@ -15,341 +15,67 @@ import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import {
   MeetingStatus,
   MeetingParticipantRole,
-  MeetingJoinPolicy,
-  MeetingJoinRequestStatus,
 } from '../../common/enums/meeting.enum';
-import { NotificationType, RoomScope } from '../../common/enums';
+import { RoomScope } from '../../common/enums';
 import { MembersService } from '../workspaces/services/members.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
-import { StorageService } from '../storage/storage.service';
-import { RedisService } from '../../redis/redis.service';
-import { RedisKeys } from '../../redis/redis.keys';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import {
   buildUpdateSet,
   normalizeReturning,
 } from '../../common/utils/sql.util';
-import * as crypto from 'crypto';
+import {
+  MEETING_COLUMNS_SQL,
+  PARTICIPANT_COLUMNS_SQL,
+  generateMeetingCode,
+  defaultJoinPolicy,
+} from './meetings.sql';
+import {
+  MEETING_LIFECYCLE_QUEUE,
+  MEETING_AUTO_END_GRACE_SECONDS,
+} from './meetings.constants';
+import { MeetingsRepository } from './repositories/meetings.repository';
+import { MeetingAccessService } from './services/meeting-access.service';
+import { MeetingRecordingService } from './services/meeting-recording.service';
+import { MeetingJoinRequestService } from './services/meeting-join-request.service';
+import { MeetingFilesService } from './services/meeting-files.service';
 
-export const MEETING_RECORDING_QUEUE = 'meeting-recording';
-export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enforced server-side regardless of client behavior
-
-export const MEETING_LIFECYCLE_QUEUE = 'meeting-lifecycle';
-// Google Meet-style grace window: a brief network drop/reload for the last
-// remaining participant shouldn't tear the meeting down. Re-checked at fire
-// time by MeetingLifecycleProcessor, not just at schedule time.
-export const MEETING_AUTO_END_GRACE_SECONDS = 20;
-
-const MEETING_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
-  meeting_code AS "meetingCode", status, scope, join_policy AS "joinPolicy", locked,
-  start_time AS "startTime", end_time AS "endTime",
-  max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,
-  created_at AS "createdAt", updated_at AS "updatedAt"
-`;
-
-const JOIN_REQUEST_COLUMNS_SQL = `
-  id, meeting_id AS "meetingId", user_id AS "userId", status,
-  requested_at AS "requestedAt", reviewed_by AS "reviewedBy", reviewed_at AS "reviewedAt"
-`;
+export {
+  MEETING_RECORDING_QUEUE,
+  MAX_RECORDING_DURATION_SECONDS,
+  MEETING_LIFECYCLE_QUEUE,
+  MEETING_AUTO_END_GRACE_SECONDS,
+} from './meetings.constants';
+export type { MeetingAccess } from './services/meeting-access.service';
 
 /**
- * Default join policy when the client doesn't specify one explicitly:
- * PRIVATE meetings default to a waiting room (matches "Request to Join" UX),
- * everything else defaults to instant join.
+ * Thin facade over the meetings domain. Core CRUD/lifecycle lives here;
+ * access-control decisions, the waiting-room/join-request flow, shared
+ * files, and recording are each split into their own focused service
+ * (see modules/meetings/services/) — this class just wires them together
+ * so meetings.controller.ts / events.gateway.ts / the BullMQ processors
+ * keep a single, stable entry point.
  */
-function defaultJoinPolicy(scope: RoomScope): MeetingJoinPolicy {
-  return scope === RoomScope.PRIVATE
-    ? MeetingJoinPolicy.REQUEST_APPROVAL
-    : MeetingJoinPolicy.AUTO;
-}
-
-const PARTICIPANT_COLUMNS_SQL = `
-  id, meeting_id AS "meetingId", user_id AS "userId", role, joined_at AS "joinedAt",
-  left_at AS "leftAt", is_muted AS "isMuted", camera_enabled AS "cameraEnabled",
-  screen_sharing AS "screenSharing", created_at AS "createdAt"
-`;
-
-const RECORDING_COLUMNS_SQL = `
-  id, meeting_id AS "meetingId", started_by AS "startedBy", status,
-  started_at AS "startedAt", stopped_at AS "stoppedAt", duration_seconds AS "durationSeconds",
-  auto_stopped AS "autoStopped", storage_key AS "storageKey", storage_url AS "storageUrl",
-  file_size AS "fileSize", created_at AS "createdAt", updated_at AS "updatedAt"
-`;
-
-function generateMeetingCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const segment = (n: number) =>
-    Array.from({ length: n }, () => chars[crypto.randomInt(chars.length)]).join(
-      '',
-    );
-  return `OPTIMA-${segment(3)}-${segment(4)}`;
-}
-
-export interface MeetingAccess {
-  isHost: boolean;
-  isParticipant: boolean;
-  /** True if calling join() right now will succeed immediately. */
-  canJoin: boolean;
-  /** True if calling requestToJoin() right now makes sense (not already pending). */
-  canRequest: boolean;
-  requestStatus: MeetingJoinRequestStatus | null;
-  deniedReason?: 'workspace_only' | 'invite_only' | 'locked';
-}
-
-type AccessDecision =
-  | { kind: 'host' }
-  | { kind: 'participant' }
-  | { kind: 'auto' }
-  | { kind: 'approval'; joinRequest: { id: string; status: MeetingJoinRequestStatus } | null }
-  | { kind: 'denied'; reason: 'workspace_only' | 'invite_only' | 'locked' };
-
 @Injectable()
 export class MeetingsService {
   constructor(
     private readonly dataSource: DatabaseService,
+    private readonly meetingsRepository: MeetingsRepository,
+    private readonly accessService: MeetingAccessService,
+    private readonly recordingService: MeetingRecordingService,
+    // MeetingsService.getOne() -> MeetingJoinRequestService.getWaitingCount()
+    // while MeetingJoinRequestService.requestToJoin() -> this.join()/getOne()
+    // closes a cycle; forwardRef required here to avoid undefined at runtime.
+    @Inject(forwardRef(() => MeetingJoinRequestService))
+    private readonly joinRequestService: MeetingJoinRequestService,
+    private readonly filesService: MeetingFilesService,
     @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
-    // MeetingsService -> NotificationsService -> EventsGateway -> MeetingsService
-    // closes a cycle; forwardRef required here to avoid undefined at runtime.
-    @Inject(forwardRef(() => NotificationsService))
-    private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => ReminderSchedulerService))
     private readonly reminderScheduler: ReminderSchedulerService,
-    @InjectQueue(MEETING_RECORDING_QUEUE)
-    private readonly recordingQueue: Queue,
     @InjectQueue(MEETING_LIFECYCLE_QUEUE)
     private readonly lifecycleQueue: Queue,
-    private readonly storageService: StorageService,
-    private readonly redisService: RedisService,
   ) {}
-
-  // ── Waiting Room Redis fast path ──────────────────────────────────────────
-  // meeting_join_requests (Postgres) stays the source of truth; this sorted
-  // set exists purely so "how many/who is waiting right now" is an O(log n)
-  // Redis read instead of a Postgres round trip on every socket event /
-  // badge render. Best-effort: a Redis outage falls back to Postgres-only
-  // (see listJoinRequests), it never blocks the actual approve/reject flow.
-
-  private async markWaiting(meetingId: string, userId: string) {
-    try {
-      await this.redisService
-        .getClient()
-        ?.zadd(RedisKeys.meetingWaiting(meetingId), Date.now(), userId);
-    } catch {
-      // fail open — Postgres is still authoritative
-    }
-  }
-
-  private async unmarkWaiting(meetingId: string, userIds: string[]) {
-    if (!userIds.length) return;
-    try {
-      await this.redisService
-        .getClient()
-        ?.zrem(RedisKeys.meetingWaiting(meetingId), ...userIds);
-    } catch {
-      // fail open
-    }
-  }
-
-  /** Fast count for badges; falls back to null (caller should treat as "unknown") if Redis is down. */
-  async getWaitingCount(meetingId: string): Promise<number | null> {
-    try {
-      const count = await this.redisService.getClient()?.zcard(RedisKeys.meetingWaiting(meetingId));
-      return count ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  private async findMeeting(meetingId: string) {
-    const rows = await this.dataSource.query(
-      `SELECT ${MEETING_COLUMNS_SQL} FROM meetings WHERE id = $1`,
-      [meetingId],
-    );
-    return rows[0] ?? null;
-  }
-
-  private async findMeetingWithHost(meetingId: string) {
-    const rows: any[] = await this.dataSource.query(
-      `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
-       FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings WHERE id = $1) m
-       LEFT JOIN users u ON u.id = m."hostId"`,
-      [meetingId],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    const { h_id, h_firstName, h_lastName, h_avatarUrl, ...meeting } = row;
-    return {
-      ...meeting,
-      host: h_id
-        ? {
-            id: h_id,
-            firstName: h_firstName,
-            lastName: h_lastName,
-            avatarUrl: h_avatarUrl,
-          }
-        : null,
-    };
-  }
-
-  /**
-   * Central Meeting Join Policy decision point — used by both getOne() (view
-   * access) and join()/requestToJoin() (join access) so the two can never
-   * drift out of sync. Visibility (meeting.scope) decides who is even
-   * eligible; joinPolicy decides whether an eligible user joins instantly
-   * or lands in the waiting room. A meeting_join_requests row with
-   * status='approved' (host pre-invite, or a prior approval) always
-   * short-circuits straight to instant join.
-   */
-  private async resolveAccess(meeting: any, userId: string): Promise<AccessDecision> {
-    if (meeting.hostId === userId) return { kind: 'host' };
-
-    const participantRows = await this.dataSource.query(
-      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
-      [meeting.id, userId],
-    );
-    if (participantRows[0]) return { kind: 'participant' };
-
-    // Lock Meeting blocks any NEW join outright, regardless of visibility/join
-    // policy/pre-approval — existing participants (caught above) can still
-    // reconnect, matching the "host locked the door, but people already
-    // inside stay inside" mental model.
-    if (meeting.locked) return { kind: 'denied', reason: 'locked' };
-
-    let isWorkspaceMember = false;
-    if (meeting.workspaceId) {
-      const memberRows = await this.dataSource.query(
-        `SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-        [meeting.workspaceId, userId],
-      );
-      isWorkspaceMember = !!memberRows[0];
-    }
-
-    const joinReqRows = await this.dataSource.query(
-      `SELECT ${JOIN_REQUEST_COLUMNS_SQL} FROM meeting_join_requests WHERE meeting_id = $1 AND user_id = $2`,
-      [meeting.id, userId],
-    );
-    const joinRequest = joinReqRows[0] ?? null;
-    const preApproved = joinRequest?.status === MeetingJoinRequestStatus.APPROVED;
-
-    switch (meeting.scope) {
-      case RoomScope.WORKSPACE_ONLY:
-        if (!isWorkspaceMember) return { kind: 'denied', reason: 'workspace_only' };
-        if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO) return { kind: 'auto' };
-        return { kind: 'approval', joinRequest };
-
-      case RoomScope.PUBLIC:
-        if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO) return { kind: 'auto' };
-        return { kind: 'approval', joinRequest };
-
-      case RoomScope.PRIVATE:
-        // PRIVATE always behaves as REQUEST_APPROVAL for non-invited users,
-        // regardless of joinPolicy — "Request to Join" is the whole point.
-        if (preApproved) return { kind: 'auto' };
-        return { kind: 'approval', joinRequest };
-
-      case RoomScope.INVITE_ONLY:
-        // No request fallback — either you were pre-approved (invited) or you're out.
-        if (preApproved) return { kind: 'auto' };
-        return { kind: 'denied', reason: 'invite_only' };
-
-      default:
-        return { kind: 'denied', reason: 'workspace_only' };
-    }
-  }
-
-  private describeAccess(decision: AccessDecision): MeetingAccess {
-    switch (decision.kind) {
-      case 'host':
-        return { isHost: true, isParticipant: true, canJoin: true, canRequest: false, requestStatus: null };
-      case 'participant':
-        return { isHost: false, isParticipant: true, canJoin: true, canRequest: false, requestStatus: null };
-      case 'auto':
-        return { isHost: false, isParticipant: false, canJoin: true, canRequest: false, requestStatus: null };
-      case 'approval':
-        return {
-          isHost: false,
-          isParticipant: false,
-          canJoin: false,
-          canRequest: decision.joinRequest?.status !== MeetingJoinRequestStatus.PENDING,
-          requestStatus: decision.joinRequest?.status ?? null,
-        };
-      case 'denied':
-        return {
-          isHost: false,
-          isParticipant: false,
-          canJoin: false,
-          canRequest: false,
-          requestStatus: null,
-          deniedReason: decision.reason,
-        };
-    }
-  }
-
-  private accessDeniedMessage(reason: 'workspace_only' | 'invite_only' | 'locked'): string {
-    if (reason === 'workspace_only') return 'This meeting is available only for workspace members.';
-    if (reason === 'locked') return 'The host has locked this meeting — no new participants can join right now.';
-    return "You don't have access to this meeting.";
-  }
-
-  private async findParticipants(meetingId: string) {
-    return this.dataSource.query(
-      `SELECT ${PARTICIPANT_COLUMNS_SQL} FROM meeting_participants WHERE meeting_id = $1`,
-      [meetingId],
-    );
-  }
-
-  private async assertHost(meetingId: string, userId: string) {
-    const m = await this.findMeeting(meetingId);
-    if (!m)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-    if (m.hostId !== userId)
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_HOST_ONLY,
-        message: 'Only the host can perform this action',
-      });
-    return m;
-  }
-
-  private enrichMeeting(meeting: any, participants: any[], access?: MeetingAccess) {
-    return {
-      id: meeting.id,
-      workspaceId: meeting.workspaceId,
-      hostId: meeting.hostId,
-      host: meeting.host ?? null,
-      title: meeting.title,
-      description: meeting.description ?? null,
-      code: meeting.meetingCode,
-      status: meeting.status,
-      scope: meeting.scope,
-      joinPolicy: meeting.joinPolicy,
-      locked: meeting.locked ?? false,
-      startTime: meeting.startTime,
-      endTime: meeting.endTime ?? null,
-      maxParticipants: meeting.maxParticipants,
-      isRecurring: meeting.isRecurring,
-      agenda: meeting.agenda ?? null,
-      participantCount: participants.filter((p) => !p.leftAt).length,
-      participants: participants.map((p) => ({
-        id: p.id,
-        userId: p.userId,
-        role: p.role,
-        joinedAt: p.joinedAt,
-        leftAt: p.leftAt ?? null,
-        isMuted: p.isMuted,
-        cameraEnabled: p.cameraEnabled,
-        screenSharing: p.screenSharing,
-      })),
-      createdAt: meeting.createdAt,
-      updatedAt: meeting.updatedAt,
-      ...(access ? { access } : {}),
-    };
-  }
 
   async listForWorkspace(workspaceId: string, userId: string) {
     await this.membersService.assertMember(workspaceId, userId);
@@ -390,7 +116,7 @@ export class MeetingsService {
             avatarUrl: h_avatarUrl,
           }
         : null;
-      return this.enrichMeeting(
+      return this.meetingsRepository.enrichMeeting(
         { ...meeting, host },
         byMeeting.get(m.id) ?? [],
       );
@@ -446,7 +172,7 @@ export class MeetingsService {
             avatarUrl: h_avatarUrl,
           }
         : null;
-      return this.enrichMeeting(
+      return this.meetingsRepository.enrichMeeting(
         {
           ...meetingRest,
           workspaceId: workspace_id,
@@ -538,8 +264,10 @@ export class MeetingsService {
       [saved.id, userId, MeetingParticipantRole.HOST],
     );
 
-    const full = await this.findMeetingWithHost(saved.id);
-    const participants = await this.findParticipants(saved.id);
+    const full = await this.meetingsRepository.findMeetingWithHost(saved.id);
+    const participants = await this.meetingsRepository.findParticipants(
+      saved.id,
+    );
 
     // Schedule reminders if meeting has a scheduledAt/startTime
     if (saved.startTime) {
@@ -548,35 +276,62 @@ export class MeetingsService {
         .catch(() => {});
     }
 
-    return this.enrichMeeting(full, participants);
+    return this.meetingsRepository.enrichMeeting(full, participants);
   }
 
   async getOne(meetingId: string, userId: string) {
-    const meeting = await this.findMeetingWithHost(meetingId);
+    const meeting =
+      await this.meetingsRepository.findMeetingWithHost(meetingId);
     if (!meeting)
       throw new NotFoundException({
         code: ErrorCode.MEETING_NOT_FOUND,
         message: 'Meeting not found',
       });
 
-    const decision = await this.resolveAccess(meeting, userId);
+    const decision = await this.accessService.resolveAccess(meeting, userId);
     if (decision.kind === 'denied') {
       throw new ForbiddenException({
         code: ErrorCode.MEETING_ACCESS_DENIED,
-        message: this.accessDeniedMessage(decision.reason),
+        message: this.accessService.accessDeniedMessage(decision.reason),
       });
     }
 
-    const participants = await this.findParticipants(meetingId);
-    const enriched = this.enrichMeeting(meeting, participants, this.describeAccess(decision));
+    const participants =
+      await this.meetingsRepository.findParticipants(meetingId);
+    const enriched = this.meetingsRepository.enrichMeeting(
+      meeting,
+      participants,
+      this.accessService.describeAccess(decision),
+    );
 
     const canManage =
       decision.kind === 'host' ||
-      participants.some((p) => p.userId === userId && p.role === MeetingParticipantRole.CO_HOST && !p.leftAt);
+      participants.some(
+        (p) =>
+          p.userId === userId &&
+          p.role === MeetingParticipantRole.CO_HOST &&
+          !p.leftAt,
+      );
     if (canManage) {
-      (enriched as any).waitingCount = await this.getWaitingCount(meetingId);
+      (enriched as any).waitingCount =
+        await this.joinRequestService.getWaitingCount(meetingId);
     }
     return enriched;
+  }
+
+  private async assertHost(meetingId: string, userId: string) {
+    const m = await this.meetingsRepository.findMeeting(meetingId);
+    if (!m)
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_FOUND,
+        message: 'Meeting not found',
+      });
+    if (m.hostId !== userId)
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_HOST_ONLY,
+        message: 'Only the host can perform this action',
+      });
+    return m;
   }
 
   async update(meetingId: string, userId: string, dto: UpdateMeetingDto) {
@@ -618,9 +373,11 @@ export class MeetingsService {
         .catch(() => {});
     }
 
-    const full = await this.findMeetingWithHost(saved.id);
-    const participants = await this.findParticipants(saved.id);
-    return this.enrichMeeting(full, participants);
+    const full = await this.meetingsRepository.findMeetingWithHost(saved.id);
+    const participants = await this.meetingsRepository.findParticipants(
+      saved.id,
+    );
+    return this.meetingsRepository.enrichMeeting(full, participants);
   }
 
   async remove(meetingId: string, userId: string) {
@@ -656,7 +413,7 @@ export class MeetingsService {
   }
 
   async join(meetingId: string, userId: string) {
-    const meeting = await this.findMeeting(meetingId);
+    const meeting = await this.meetingsRepository.findMeeting(meetingId);
     if (!meeting)
       throw new NotFoundException({
         code: ErrorCode.MEETING_NOT_FOUND,
@@ -672,7 +429,7 @@ export class MeetingsService {
       });
     }
     const existingRows = await this.dataSource.query(
-      `SELECT ${PARTICIPANT_COLUMNS_SQL} FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
       [meetingId, userId],
     );
     const existing = existingRows[0];
@@ -685,17 +442,18 @@ export class MeetingsService {
       return this.getOne(meetingId, userId);
     }
 
-    const decision = await this.resolveAccess(meeting, userId);
+    const decision = await this.accessService.resolveAccess(meeting, userId);
     if (decision.kind === 'denied') {
       throw new ForbiddenException({
         code: ErrorCode.MEETING_ACCESS_DENIED,
-        message: this.accessDeniedMessage(decision.reason),
+        message: this.accessService.accessDeniedMessage(decision.reason),
       });
     }
     if (decision.kind === 'approval') {
       throw new ForbiddenException({
         code: ErrorCode.MEETING_APPROVAL_REQUIRED,
-        message: 'This meeting requires host approval. Send a request to join instead.',
+        message:
+          'This meeting requires host approval. Send a request to join instead.',
         requestStatus: decision.joinRequest?.status ?? null,
       });
     }
@@ -791,7 +549,7 @@ export class MeetingsService {
    * after every leave: it's a cheap no-op whenever someone is still present.
    */
   private async scheduleAutoEndCheck(meetingId: string) {
-    const meeting = await this.findMeeting(meetingId);
+    const meeting = await this.meetingsRepository.findMeeting(meetingId);
     if (!meeting || meeting.status !== MeetingStatus.LIVE) return;
 
     const activeCountRows = await this.dataSource.query(
@@ -816,7 +574,7 @@ export class MeetingsService {
    * this is a no-op, exactly like Google Meet's empty-room behavior.
    */
   async checkAutoEnd(meetingId: string) {
-    const meeting = await this.findMeeting(meetingId);
+    const meeting = await this.meetingsRepository.findMeeting(meetingId);
     if (!meeting || meeting.status !== MeetingStatus.LIVE) return null;
 
     const activeCountRows = await this.dataSource.query(
@@ -865,25 +623,14 @@ export class MeetingsService {
       [meetingId],
     );
 
-    await this.stopRecording(meetingId, null, { autoStopped: true }).catch(() => undefined);
+    await this.recordingService
+      .stopRecording(meetingId, null, { autoStopped: true })
+      .catch(() => undefined);
 
     const job = await this.lifecycleQueue.getJob(`auto-end_${meetingId}`);
     await job?.remove().catch(() => undefined);
 
     return meeting;
-  }
-
-  private async findMeetingIdByCode(code: string): Promise<string> {
-    const rows = await this.dataSource.query(
-      `SELECT id FROM meetings WHERE meeting_code = $1`,
-      [code.toUpperCase()],
-    );
-    if (!rows[0])
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_CODE_INVALID,
-        message: 'Invalid meeting code',
-      });
-    return rows[0].id;
   }
 
   /**
@@ -894,439 +641,116 @@ export class MeetingsService {
    * an access message rather than a raw 403 from a forced join attempt.
    */
   async joinByCode(code: string, userId: string) {
-    const meetingId = await this.findMeetingIdByCode(code);
+    const meetingId = await this.meetingsRepository.findMeetingIdByCode(code);
     return this.join(meetingId, userId);
   }
 
   /** Resolve a meeting code to full meeting + access info, without forcing a join. */
   async resolveByCode(code: string, userId: string) {
-    const meetingId = await this.findMeetingIdByCode(code);
+    const meetingId = await this.meetingsRepository.findMeetingIdByCode(code);
     return this.getOne(meetingId, userId);
   }
 
   // ─────────────────────────────────────────────
-  //  Meeting Join Policy — waiting room (request/approve/reject)
+  //  Delegated to focused sub-services — kept here so the controller,
+  //  gateway, and processors have a single stable entry point.
   // ─────────────────────────────────────────────
 
-  private async assertCanManageJoinRequests(meetingId: string, userId: string) {
-    const meeting = await this.findMeeting(meetingId);
-    if (!meeting)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-    if (meeting.hostId === userId) return meeting;
-
-    const participantRows = await this.dataSource.query(
-      `SELECT role FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
-      [meetingId, userId],
-    );
-    if (participantRows[0]?.role !== MeetingParticipantRole.CO_HOST) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_HOST_ONLY,
-        message: 'Only the host or a co-host can manage join requests',
-      });
-    }
-    return meeting;
+  getWaitingCount(meetingId: string) {
+    return this.joinRequestService.getWaitingCount(meetingId);
   }
 
-  /**
-   * Called by a guest who is not eligible for instant join. If they're
-   * actually eligible (visibility allows it, or they were pre-approved via
-   * an earlier invite), this just joins them directly instead of making
-   * them wait on a request that would be auto-approved anyway.
-   */
-  async requestToJoin(meetingId: string, userId: string) {
-    const meeting = await this.findMeeting(meetingId);
-    if (!meeting)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-    if (
-      meeting.status === MeetingStatus.ENDED ||
-      meeting.status === MeetingStatus.CANCELLED
-    ) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_ENDED,
-        message: 'Meeting is no longer active',
-      });
-    }
-
-    const existingRows = await this.dataSource.query(
-      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
-      [meetingId, userId],
-    );
-    if (existingRows[0]) {
-      return { status: 'already_joined' as const, meeting: await this.getOne(meetingId, userId) };
-    }
-
-    const decision = await this.resolveAccess(meeting, userId);
-    if (decision.kind === 'denied') {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_ACCESS_DENIED,
-        message: this.accessDeniedMessage(decision.reason),
-      });
-    }
-    if (decision.kind === 'host' || decision.kind === 'participant' || decision.kind === 'auto') {
-      return { status: 'joined' as const, meeting: await this.join(meetingId, userId) };
-    }
-
-    // decision.kind === 'approval'
-    if (decision.joinRequest?.status === MeetingJoinRequestStatus.PENDING) {
-      return { status: 'pending' as const, requestId: decision.joinRequest.id };
-    }
-
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at)
-         VALUES ($1, $2, 'pending', now())
-         ON CONFLICT (meeting_id, user_id)
-         DO UPDATE SET status = 'pending', requested_at = now(), reviewed_by = NULL, reviewed_at = NULL
-         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, userId],
-      ),
-    );
-    await this.markWaiting(meetingId, userId);
-    return { status: 'pending' as const, requestId: rows[0].id };
+  requestToJoin(meetingId: string, userId: string) {
+    return this.joinRequestService.requestToJoin(meetingId, userId);
   }
 
-  /** Requester cancels their own pending request (e.g. gave up waiting). */
-  async cancelMyJoinRequest(meetingId: string, userId: string) {
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
-         SET status = 'cancelled', reviewed_at = now()
-         WHERE meeting_id = $1 AND user_id = $2 AND status = 'pending'
-         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, userId],
-      ),
-    );
-    if (!rows[0]) {
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_JOIN_REQUEST_NOT_FOUND,
-        message: 'No pending join request to cancel',
-      });
-    }
-    await this.unmarkWaiting(meetingId, [userId]);
-    return rows[0];
+  cancelMyJoinRequest(meetingId: string, userId: string) {
+    return this.joinRequestService.cancelMyJoinRequest(meetingId, userId);
   }
 
-  /** Host/co-host: pending requests for the waiting-room sidebar. */
-  async listJoinRequests(meetingId: string, userId: string) {
-    await this.assertCanManageJoinRequests(meetingId, userId);
-    return this.dataSource.query(
-      `SELECT r.id, r.meeting_id AS "meetingId", r.user_id AS "userId", r.status,
-              r.requested_at AS "requestedAt",
-              u.first_name AS "firstName", u.last_name AS "lastName", u.avatar_url AS "avatarUrl"
-       FROM meeting_join_requests r
-       JOIN users u ON u.id = r.user_id
-       WHERE r.meeting_id = $1 AND r.status = 'pending'
-       ORDER BY r.requested_at ASC`,
-      [meetingId],
-    );
+  listJoinRequests(meetingId: string, userId: string) {
+    return this.joinRequestService.listJoinRequests(meetingId, userId);
   }
 
-  /** Host/co-host: accept or reject a single waiting-room request (✓ / ✕). */
-  async reviewJoinRequest(
+  reviewJoinRequest(
     meetingId: string,
     requestId: string,
     reviewerId: string,
     decision: 'approved' | 'rejected',
   ) {
-    await this.assertCanManageJoinRequests(meetingId, reviewerId);
-
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
-         SET status = $3::meeting_join_request_status_enum, reviewed_by = $4, reviewed_at = now()
-         WHERE id = $1 AND meeting_id = $2 AND status = 'pending'
-         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [requestId, meetingId, decision, reviewerId],
-      ),
+    return this.joinRequestService.reviewJoinRequest(
+      meetingId,
+      requestId,
+      reviewerId,
+      decision,
     );
-    const updated = rows[0];
-    if (!updated) {
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_JOIN_REQUEST_NOT_FOUND,
-        message: 'Join request not found or already reviewed',
-      });
-    }
-    await this.unmarkWaiting(meetingId, [updated.userId]);
-    return updated;
   }
 
-  /** Host/co-host: "Accept All" / "Reject All" batch action. */
-  async batchReviewJoinRequests(
+  batchReviewJoinRequests(
     meetingId: string,
     reviewerId: string,
     decision: 'approved' | 'rejected',
   ) {
-    await this.assertCanManageJoinRequests(meetingId, reviewerId);
-    const updated = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
-         SET status = $2::meeting_join_request_status_enum, reviewed_by = $3, reviewed_at = now()
-         WHERE meeting_id = $1 AND status = 'pending'
-         RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, decision, reviewerId],
-      ),
+    return this.joinRequestService.batchReviewJoinRequests(
+      meetingId,
+      reviewerId,
+      decision,
     );
-    await this.unmarkWaiting(meetingId, updated.map((row: any) => row.userId));
-    return updated;
   }
 
-  /**
-   * Invites people to a meeting by workspace member id and/or email address.
-   * An email invite resolves to an existing registered account — this does
-   * not send an email to non-users; it just gives a second lookup path for
-   * "I know their email, not their workspace member id", which matters most
-   * for PRIVATE/INVITE_ONLY meetings where the target may not be a member
-   * of any shared workspace yet.
-   */
-  async inviteMembers(
+  inviteMembers(
     meetingId: string,
     inviterId: string,
     targetUserIds: string[],
     targetEmails: string[] = [],
   ) {
-    const meeting = await this.findMeeting(meetingId);
-    if (!meeting)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-
-    // Workspace meetings: any workspace member can invite. Standalone
-    // (workspace-less) meetings have no membership list to check against —
-    // only the host may invite there.
-    if (meeting.workspaceId) {
-      await this.membersService.assertMember(meeting.workspaceId, inviterId);
-    } else if (meeting.hostId !== inviterId) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_HOST_ONLY,
-        message: 'Only the host can invite people to this meeting',
-      });
-    }
-
-    const normalizedEmails = Array.from(
-      new Set(targetEmails.map((email) => email.trim().toLowerCase()).filter(Boolean)),
-    );
-    const emailRows: Array<{ id: string; email: string }> = normalizedEmails.length
-      ? await this.dataSource.query(
-          `SELECT id, email FROM users WHERE lower(email) = ANY($1::text[])`,
-          [normalizedEmails],
-        )
-      : [];
-    const foundEmails = new Set(emailRows.map((row) => row.email.toLowerCase()));
-    const notFoundEmails = normalizedEmails.filter((email) => !foundEmails.has(email));
-
-    // Server-side guard: never let the inviter invite themself, and
-    // de-duplicate. The frontend also filters the host out of the invite
-    // list, but that filter must not be the only line of defense — a
-    // stale UI, another client, or a direct API call could still send
-    // the inviter's own id.
-    const targetIds = Array.from(new Set([...targetUserIds, ...emailRows.map((row) => row.id)])).filter(
-      (uid) => uid !== inviterId,
-    );
-
-    let validUserIds: string[];
-    if (meeting.workspaceId && meeting.scope === RoomScope.WORKSPACE_ONLY) {
-      // WORKSPACE_ONLY is the one scope where membership IS the access
-      // control — inviting a non-member here would be a promise the meeting
-      // can't keep (they'd hit the workspace-membership wall in resolveAccess
-      // anyway), so filter to actual members.
-      const validMembers = await Promise.all(
-        targetIds.map(async (uid) => {
-          try {
-            await this.membersService.assertMember(meeting.workspaceId, uid);
-            return uid;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      validUserIds = validMembers.filter(Boolean) as string[];
-    } else {
-      // PRIVATE/INVITE_ONLY/PUBLIC: the invite itself IS the access grant —
-      // workspace membership is irrelevant here by design (that's the whole
-      // point of these scopes), so any resolved user id (explicit id or a
-      // matched email, workspace member or not) is invitable.
-      validUserIds = targetIds;
-    }
-
-    // Explicit host invite = pre-approved: PRIVATE/INVITE_ONLY meetings only
-    // let invited users join directly, no waiting room. Approving here (rather
-    // than inserting a participant row) keeps join() as the single place that
-    // actually admits someone (capacity checks, auto-start, etc.).
-    await Promise.all(
-      validUserIds.map((uid) =>
-        this.dataSource.query(
-          `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
-           VALUES ($1, $2, 'approved', now(), $3, now())
-           ON CONFLICT (meeting_id, user_id) DO UPDATE
-             SET status = 'approved', reviewed_by = $3, reviewed_at = now()
-             WHERE meeting_join_requests.status <> 'approved'`,
-          [meetingId, uid, inviterId],
-        ),
-      ),
-    );
-    await this.unmarkWaiting(meetingId, validUserIds);
-
-    const notifications = validUserIds.map((uid) =>
-      this.notificationsService.create({
-        userId: uid,
-        actorId: inviterId,
-        type: NotificationType.MEETING_INVITE,
-        title: 'Meeting Invitation',
-        message: `Sizni "${meeting.title || 'Uchrashuv'}" nomli meetingga taklif qilishdi.`,
-        entityType: 'meeting',
-        entityId: meeting.id,
-        actionUrl: `/app/meetings`,
-        metadata: { joinCode: meeting.meetingCode },
-      }),
-    );
-
-    await Promise.all(notifications);
-    return { success: true, invitedCount: validUserIds.length, notFoundEmails };
-  }
-
-  // ─────────────────────────────────────────────
-  //  Shared files (ported from main — meeting_shared_files table added to
-  //  init.sql, see MERGE_NOTES.md)
-  // ─────────────────────────────────────────────
-
-  private async assertMeetingParticipant(meetingId: string, userId: string) {
-    const rows = await this.dataSource.query(
-      `SELECT m.id
-       FROM meetings m
-       LEFT JOIN meeting_participants p
-         ON p.meeting_id = m.id AND p.user_id = $2 AND p.left_at IS NULL
-       WHERE m.id = $1 AND (m.host_id = $2 OR p.id IS NOT NULL)`,
-      [meetingId, userId],
-    );
-    if (!rows[0]) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_NOT_PARTICIPANT,
-        message: 'Join the meeting before sharing files',
-      });
-    }
-  }
-
-  async presignSharedFile(meetingId: string, userId: string, fileName: string, mimeType: string, fileSize: number) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    return this.storageService.getPresignedUploadUrl('meeting-files', userId, fileName, mimeType, fileSize);
-  }
-
-  async shareFile(meetingId: string, userId: string, file: { fileName: string; mimeType: string; fileSize: number; storageKey: string; storageUrl: string }) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    if (!file.storageKey.startsWith(`meeting-files/${userId}/`)) {
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file key' });
-    }
-    if (!file.storageUrl.endsWith(`/${file.storageKey}`)) {
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Invalid meeting file URL' });
-    }
-    const rows = normalizeReturning(await this.dataSource.query(
-      `INSERT INTO meeting_shared_files
-         (meeting_id, shared_by, file_name, mime_type, file_size, storage_key, storage_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, meeting_id AS "meetingId", shared_by AS "sharedBy", file_name AS "fileName",
-                 mime_type AS "mimeType", file_size::text AS "fileSize", storage_url AS "storageUrl", created_at AS "createdAt"`,
-      [meetingId, userId, file.fileName, file.mimeType, file.fileSize, file.storageKey, file.storageUrl],
-    ));
-    return rows[0];
-  }
-
-  async listSharedFiles(meetingId: string, userId: string) {
-    await this.assertMeetingParticipant(meetingId, userId);
-    return this.dataSource.query(
-      `SELECT f.id, f.meeting_id AS "meetingId", f.shared_by AS "sharedBy", f.file_name AS "fileName",
-              f.mime_type AS "mimeType", f.file_size::text AS "fileSize", f.storage_url AS "storageUrl",
-              f.created_at AS "createdAt", u.first_name AS "firstName", u.last_name AS "lastName"
-       FROM meeting_shared_files f
-       JOIN users u ON u.id = f.shared_by
-       WHERE f.meeting_id = $1
-       ORDER BY f.created_at DESC
-       LIMIT 100`,
-      [meetingId],
+    return this.joinRequestService.inviteMembers(
+      meetingId,
+      inviterId,
+      targetUserIds,
+      targetEmails,
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  Recording (hard 1-hour cap, enforced server-side)
-  // ─────────────────────────────────────────────
-
-  /**
-   * Only the host or a co-host can start a recording. Enforced here (not
-   * just in the UI) because the WebSocket handler is a thin wrapper around
-   * this method — this is the actual authorization boundary.
-   */
-  private async assertCanRecord(meetingId: string, userId: string) {
-    const meeting = await this.findMeeting(meetingId);
-    if (!meeting)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-
-    if (meeting.hostId === userId) return meeting;
-
-    const participantRows = await this.dataSource.query(
-      `SELECT role FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
-      [meetingId, userId],
+  presignSharedFile(
+    meetingId: string,
+    userId: string,
+    fileName: string,
+    mimeType: string,
+    fileSize: number,
+  ) {
+    return this.filesService.presignSharedFile(
+      meetingId,
+      userId,
+      fileName,
+      mimeType,
+      fileSize,
     );
-    const role = participantRows[0]?.role;
-    if (role !== MeetingParticipantRole.CO_HOST) {
-      throw new ForbiddenException({
-        code: ErrorCode.MEETING_HOST_ONLY,
-        message: 'Only the host or a co-host can control recording',
-      });
-    }
-    return meeting;
   }
 
-  async startRecording(meetingId: string, userId: string) {
-    await this.assertCanRecord(meetingId, userId);
-
-    const activeRows = await this.dataSource.query(
-      `SELECT id FROM meeting_recordings WHERE meeting_id = $1 AND status = 'recording'`,
-      [meetingId],
-    );
-    if (activeRows[0]) {
-      throw new ConflictException({
-        code: ErrorCode.MEETING_RECORDING_ALREADY_ACTIVE,
-        message: 'A recording is already in progress for this meeting',
-      });
-    }
-
-    const rows = await this.dataSource.query(
-      `INSERT INTO meeting_recordings (meeting_id, started_by, status, started_at)
-       VALUES ($1, $2, 'recording', now())
-       RETURNING ${RECORDING_COLUMNS_SQL}`,
-      [meetingId, userId],
-    );
-    const recording = rows[0];
-
-    // Hard server-side cutoff: fires even if the client crashes, loses
-    // connection, or simply never sends a stop — this is the real cap,
-    // not just a UI countdown.
-    await this.recordingQueue.add(
-      'auto-stop',
-      { recordingId: recording.id, meetingId },
-      {
-        delay: MAX_RECORDING_DURATION_SECONDS * 1000,
-        jobId: `auto-stop_${recording.id}`,
-      },
-    );
-
-    return recording;
+  shareFile(
+    meetingId: string,
+    userId: string,
+    file: {
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      storageKey: string;
+      storageUrl: string;
+    },
+  ) {
+    return this.filesService.shareFile(meetingId, userId, file);
   }
 
-  /**
-   * Called either by the host (manual stop) or by the auto-stop BullMQ job
-   * (`autoStopped: true`) once MAX_RECORDING_DURATION_SECONDS elapses.
-   */
-  async stopRecording(
+  listSharedFiles(meetingId: string, userId: string) {
+    return this.filesService.listSharedFiles(meetingId, userId);
+  }
+
+  startRecording(meetingId: string, userId: string) {
+    return this.recordingService.startRecording(meetingId, userId);
+  }
+
+  stopRecording(
     meetingId: string,
     userId: string | null,
     opts: {
@@ -1336,99 +760,26 @@ export class MeetingsService {
       fileSize?: number;
     } = {},
   ) {
-    if (userId) await this.assertCanRecord(meetingId, userId);
-
-    const rows = await this.dataSource.query(
-      `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 AND status = 'recording'`,
-      [meetingId],
-    );
-    const recording = rows[0];
-    if (!recording) {
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_RECORDING_NOT_ACTIVE,
-        message: 'No active recording for this meeting',
-      });
-    }
-
-    const durationSeconds = Math.min(
-      MAX_RECORDING_DURATION_SECONDS,
-      Math.floor((Date.now() - new Date(recording.startedAt).getTime()) / 1000),
-    );
-
-    const updatedRows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_recordings
-         SET status = 'completed', stopped_at = now(), duration_seconds = $2,
-             auto_stopped = $3, storage_key = COALESCE($4, storage_key),
-             storage_url = COALESCE($5, storage_url), file_size = COALESCE($6, file_size)
-         WHERE id = $1
-         RETURNING ${RECORDING_COLUMNS_SQL}`,
-        [
-          recording.id,
-          durationSeconds,
-          opts.autoStopped ?? false,
-          opts.storageKey ?? null,
-          opts.storageUrl ?? null,
-          opts.fileSize ?? null,
-        ],
-      ),
-    );
-
-    // If this was a manual stop, cancel the pending auto-stop job so it
-    // doesn't fire a redundant stop later.
-    if (!opts.autoStopped) {
-      const job = await this.recordingQueue.getJob(`auto-stop_${recording.id}`);
-      await job?.remove().catch(() => undefined);
-    }
-
-    return updatedRows[0];
+    return this.recordingService.stopRecording(meetingId, userId, opts);
   }
 
-  async listRecordings(meetingId: string, userId: string) {
-    const meeting = await this.findMeeting(meetingId);
-    if (!meeting)
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_NOT_FOUND,
-        message: 'Meeting not found',
-      });
-    await this.membersService.assertMember(meeting.workspaceId, userId);
-
-    return this.dataSource.query(
-      `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 ORDER BY started_at DESC`,
-      [meetingId],
-    );
+  listRecordings(meetingId: string, userId: string) {
+    return this.recordingService.listRecordings(meetingId, userId);
   }
 
-  /** Presigned PUT URL for the client to upload the recorded blob directly to R2 once stopped. */
-  async presignRecordingUpload(
+  presignRecordingUpload(
     meetingId: string,
     recordingId: string,
     userId: string,
     mimeType: string,
     fileSize: number,
   ) {
-    await this.assertCanRecord(meetingId, userId);
-
-    const rows = await this.dataSource.query(
-      `SELECT id FROM meeting_recordings WHERE id = $1 AND meeting_id = $2`,
-      [recordingId, meetingId],
+    return this.recordingService.presignRecordingUpload(
+      meetingId,
+      recordingId,
+      userId,
+      mimeType,
+      fileSize,
     );
-    if (!rows[0]) {
-      throw new NotFoundException({
-        code: ErrorCode.MEETING_RECORDING_NOT_FOUND,
-        message: 'Recording not found',
-      });
-    }
-
-    const ext = mimeType === 'video/mp4' ? 'mp4' : 'webm';
-    const { uploadUrl, storageKey, storageUrl } =
-      await this.storageService.getPresignedUploadUrl(
-        'meeting-recordings',
-        meetingId,
-        `${recordingId}.${ext}`,
-        mimeType,
-        fileSize,
-      );
-    return { uploadUrl, storageKey, storageUrl };
   }
 }

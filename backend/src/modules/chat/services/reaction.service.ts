@@ -79,6 +79,7 @@ export class ChatReactionService {
   async removeReaction(messageId: string, userId: string, emoji: string) {
     const msg = await this.findMessage(messageId);
     if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    await this.assertMember(msg.roomId, userId);
     await this.dataSource.query(
       `DELETE FROM chat_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
       [messageId, userId, emoji],

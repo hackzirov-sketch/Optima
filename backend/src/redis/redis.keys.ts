@@ -19,6 +19,8 @@ export const RedisKeys = {
   pwdResetConfirmed: (confirmedToken: string) => `upz:pwd_reset_confirmed:${confirmedToken}`,
   rateLimitFailures: (action: string, ip: string) => `upz:rl:fails:${action}:${ip}`,
   rateLimitBlocked: (action: string, ip: string) => `upz:rl:block:${action}:${ip}`,
+  /** Per-user chat message send rate limit — one key per tier (burst/medium/long), keyed by userId not IP. */
+  chatMsgRate: (tier: string, userId: string) => `upz:chat_rl:${tier}:${userId}`,
   accountLockout: (userId: string) => `upz:account_lock:${userId}`,
   accountLockoutFailures: (userId: string) => `upz:account_lock:fails:${userId}`,
   cachedUser: (userId: string) => `upz:user_cache:${userId}`,

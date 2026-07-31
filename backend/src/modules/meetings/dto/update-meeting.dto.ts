@@ -10,7 +10,10 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { MeetingStatus, MeetingJoinPolicy } from '../../../common/enums/meeting.enum';
+import {
+  MeetingStatus,
+  MeetingJoinPolicy,
+} from '../../../common/enums/meeting.enum';
 import { RoomScope } from '../../../common/enums';
 
 export class UpdateMeetingDto {

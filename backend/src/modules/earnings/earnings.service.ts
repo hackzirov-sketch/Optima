@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { MembersService } from '../workspaces/services/members.service';
+import { PermissionService } from '../../common/services/permission.service';
 import { CreateEarningDto } from './dto/create-earning.dto';
 
 const EARNING_COLUMNS_SQL = `
@@ -14,6 +15,7 @@ export class EarningsService {
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly membersService: MembersService,
+    private readonly permission: PermissionService,
   ) {}
 
   async getSummary(workspaceId: string, userId: string) {
@@ -77,7 +79,23 @@ export class EarningsService {
   }
 
   async remove(workspaceId: string, userId: string, earningId: string) {
-    await this.membersService.assertMember(workspaceId, userId);
+    const member = await this.membersService.assertMember(workspaceId, userId);
+
+    const rows = await this.dataSource.query(
+      `SELECT user_id AS "userId" FROM earnings WHERE id = $1 AND workspace_id = $2`,
+      [earningId, workspaceId],
+    );
+    if (!rows[0]) {
+      throw new NotFoundException('Earning record not found');
+    }
+    if (rows[0].userId !== userId) {
+      try {
+        this.permission.assertCanManageWorkspace(member);
+      } catch {
+        throw new ForbiddenException('You can only delete your own earning records');
+      }
+    }
+
     await this.dataSource.query(`DELETE FROM earnings WHERE id = $1 AND workspace_id = $2`, [earningId, workspaceId]);
   }
 }

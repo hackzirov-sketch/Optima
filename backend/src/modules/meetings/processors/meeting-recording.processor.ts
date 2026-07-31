@@ -36,13 +36,25 @@ export class MeetingRecordingProcessor extends WorkerHost {
     const { meetingId, recordingId } = job.data;
 
     try {
-      const recording = await this.meetingsService.stopRecording(meetingId, null, { autoStopped: true });
-      this.logger.log(`Auto-stopped recording ${recordingId} for meeting ${meetingId} (1h cap reached)`);
-      this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:recording:auto-stopped', { recording });
+      const recording = await this.meetingsService.stopRecording(
+        meetingId,
+        null,
+        { autoStopped: true },
+      );
+      this.logger.log(
+        `Auto-stopped recording ${recordingId} for meeting ${meetingId} (1h cap reached)`,
+      );
+      this.gateway.broadcastToRoom(
+        `meeting:${meetingId}`,
+        'meeting:recording:auto-stopped',
+        { recording },
+      );
     } catch (err) {
       // Recording was likely already stopped manually in the tiny race window
       // before this job's removal took effect — not an error worth retrying.
-      this.logger.debug(`Auto-stop skipped for ${recordingId}: ${err instanceof Error ? err.message : err}`);
+      this.logger.debug(
+        `Auto-stop skipped for ${recordingId}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
