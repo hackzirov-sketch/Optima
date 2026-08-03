@@ -29,6 +29,78 @@ import {
 } from '../chat.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
 
+/**
+ * A `chat_messages` row as this service selects it — camelCase aliases, plus
+ * the optional joined sender. Not the entity: the queries here pick a subset
+ * and add derived columns, so claiming `ChatMessage` would overstate what's
+ * actually present.
+ */
+export interface ChatMessageRow {
+  id: string;
+  roomId: string;
+  senderId: string | null;
+  sequence: number;
+  clientMessageId?: string | null;
+  content?: string | null;
+  contentJson?: unknown;
+  contentType?: string | null;
+  metadata?: unknown;
+  replyToId?: string | null;
+  isThreadReply?: boolean | null;
+  isEdited?: boolean | null;
+  editedAt?: Date | string | null;
+  isSystem?: boolean | null;
+  systemMetadata?: unknown;
+  createdAt: Date | string;
+  updatedAt?: Date | string;
+  threadReplyCount?: number | null;
+  threadRootId?: string | null;
+  sender?: MessageSender | null;
+  deletedAt?: Date | string | null;
+}
+
+export interface MessageSender {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  avatarUrl?: string | null;
+}
+
+/** What every send/list path hands back to controllers and the gateway. */
+export interface ChatMessageResponse {
+  id: string;
+  roomId: string;
+  senderId: string | null;
+  sequence: number;
+  clientMessageId?: string | null;
+  metadata?: unknown;
+  content: string | null;
+  contentType: string;
+  attachments: MappedAttachment[];
+  replyToId: string | null;
+  isThreadReply: boolean;
+  isEdited: boolean;
+  editedAt: Date | string | null;
+  createdAt: Date | string;
+  isSystem: boolean;
+  systemMetadata: unknown;
+  reactions: unknown[];
+  sender: MessageSender | null;
+  /** Set only on thread-reply responses. */
+  threadReplyCount?: number | null;
+  threadRootId?: string | null;
+}
+
+export interface MappedAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+}
+
 @Injectable()
 export class ChatMessageService {
   constructor(
@@ -73,14 +145,14 @@ export class ChatMessageService {
     if (redisClient) {
       sequence = await redisClient.incr(`room:${roomId}:seq`);
     } else {
-      const maxRes: Array<{ max: number | null }> = await this.dataSource.query(
+      const maxRes = await this.dataSource.query<{ max: number | null }>(
         `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
         [roomId],
       );
       sequence = (maxRes[0]?.max || 0) + 1;
     }
 
-    const savedRows: ChatMessage[] = await this.dataSource.query(
+    const savedRows = await this.dataSource.query<ChatMessage>(
       `INSERT INTO chat_messages
          (room_id, sender_id, sequence, content, content_type, is_system, system_metadata, metadata)
        VALUES ($1, $2, $3, $4, $5, true, $6, $7)
@@ -132,7 +204,7 @@ export class ChatMessageService {
       offsetClause = `OFFSET $${params.length}`;
     }
 
-    const messages: any[] = await this.dataSource.query(
+    const messages = await this.dataSource.query<any>(
       `SELECT
          m.id AS "id", m.room_id AS "roomId", m.sender_id AS "senderId",
          m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
@@ -153,7 +225,7 @@ export class ChatMessageService {
 
     let total: number | undefined;
     if (!cursor) {
-      const countRows: Array<{ count: string }> = await this.dataSource.query(
+      const countRows = await this.dataSource.query<{ count: string }>(
         `SELECT COUNT(*) FROM chat_messages m WHERE m.room_id = $1 AND m.deleted_at IS NULL AND m.is_thread_reply = false`,
         [roomId],
       );
@@ -166,7 +238,7 @@ export class ChatMessageService {
 
     const msgIds = messages.map((m) => m.id);
 
-    const reactions: ChatReaction[] = await this.dataSource.query(
+    const reactions = await this.dataSource.query<ChatReaction>(
       `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions WHERE message_id = ANY($1::uuid[])`,
       [msgIds],
     );
@@ -176,7 +248,7 @@ export class ChatMessageService {
       reactionsByMsg.get(r.messageId)!.push(r);
     }
 
-    const attachments: MessageAttachment[] = await this.dataSource.query(
+    const attachments = await this.dataSource.query<MessageAttachment>(
       `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = ANY($1::uuid[])`,
       [msgIds],
     );
@@ -250,11 +322,11 @@ export class ChatMessageService {
    *    catches that pattern even though each individual second passes.
    */
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
-    const roomRows: Array<{
+    const roomRows = await this.dataSource.query<{
       id: string;
       isReadOnly: boolean;
       postingMode: string | null;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, is_read_only AS "isReadOnly", posting_mode AS "postingMode" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
@@ -301,11 +373,11 @@ export class ChatMessageService {
             'replyToId (thread root message id) is required for a thread reply',
         });
       }
-      const rootRows: Array<{
+      const rootRows = await this.dataSource.query<{
         id: string;
         roomId: string;
         isThreadReply: boolean;
-      }> = await this.dataSource.query(
+      }>(
         `SELECT id, room_id AS "roomId", is_thread_reply AS "isThreadReply"
            FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
         [dto.replyToId],
@@ -338,15 +410,15 @@ export class ChatMessageService {
 
     // 1. Idempotency Check
     if (dto.clientMessageId) {
-      const existingRows: any[] = await this.dataSource.query(
+      const existingRows = await this.dataSource.query<any>(
         `SELECT ${CHAT_MESSAGE_COLUMNS_SQL} FROM chat_messages
          WHERE room_id = $1 AND sender_id = $2 AND client_message_id = $3`,
         [roomId, userId, dto.clientMessageId],
       );
       if (existingRows[0]) {
         const existing = existingRows[0];
-        const existingAttachments: MessageAttachment[] =
-          await this.dataSource.query(
+        const existingAttachments =
+          await this.dataSource.query<MessageAttachment>(
             `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = $1`,
             [existing.id],
           );
@@ -365,7 +437,7 @@ export class ChatMessageService {
       sequence = await redisClient.incr(`room:${roomId}:seq`);
     } else {
       // Fallback if Redis is down
-      const maxRes: Array<{ max: number | null }> = await this.dataSource.query(
+      const maxRes = await this.dataSource.query<{ max: number | null }>(
         `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
         [roomId],
       );
@@ -397,7 +469,7 @@ export class ChatMessageService {
       if (contentJson) contentToSave = '';
     }
 
-    const savedRows: ChatMessage[] = await this.dataSource.query(
+    const savedRows = await this.dataSource.query<ChatMessage>(
       `INSERT INTO chat_messages
          (room_id, sender_id, sequence, client_message_id, content, content_json,
           content_type, reply_to_id, metadata, is_thread_reply)
@@ -427,15 +499,14 @@ export class ChatMessageService {
     );
 
     if (dto.isThreadReply && dto.replyToId) {
-      const threadRows: Array<{ replyCount: number }> =
-        await this.dataSource.query(
-          `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
+      const threadRows = await this.dataSource.query<{ replyCount: number }>(
+        `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
          VALUES ($1, $2, 1, now())
          ON CONFLICT (root_message_id) DO UPDATE SET
            reply_count = message_threads.reply_count + 1, last_reply_at = now()
          RETURNING reply_count AS "replyCount"`,
-          [roomId, dto.replyToId],
-        );
+        [roomId, dto.replyToId],
+      );
       saved.threadReplyCount = threadRows[0].replyCount;
       saved.threadRootId = dto.replyToId;
     }
@@ -517,7 +588,7 @@ export class ChatMessageService {
   }
 
   async deleteMessage(messageId: string, userId: string) {
-    const rows: ChatMessage[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatMessage>(
       `SELECT ${CHAT_MESSAGE_COLUMNS_SQL} FROM chat_messages WHERE id = $1`,
       [messageId],
     );
@@ -532,11 +603,13 @@ export class ChatMessageService {
     if (msg.senderId !== userId) {
       // Non-senders may only delete a message if this is a group/channel room
       // (not a 1-on-1 direct room) and they are the room owner/creator.
-      const roomRows: Array<{ type: string; createdById: string }> =
-        await this.dataSource.query(
-          `SELECT type, created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
-          [msg.roomId],
-        );
+      const roomRows = await this.dataSource.query<{
+        type: string;
+        createdById: string;
+      }>(
+        `SELECT type, created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
+        [msg.roomId],
+      );
       const room = roomRows[0];
       const isDirectRoom = room?.type === 'direct';
       const isRoomOwner = room?.createdById === userId;
@@ -558,7 +631,7 @@ export class ChatMessageService {
     userId: string,
     dto: UpdateMessageDto,
   ) {
-    const rows: ChatMessage[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatMessage>(
       `SELECT ${CHAT_MESSAGE_COLUMNS_SQL} FROM chat_messages WHERE id = $1`,
       [messageId],
     );
@@ -609,10 +682,10 @@ export class ChatMessageService {
   }
 
   private mapToResponse(
-    msg: any,
+    msg: ChatMessageRow,
     decryptedContent: string,
     attachments: MessageAttachment[] = [],
-  ) {
+  ): ChatMessageResponse {
     return this.mapToResponseWithSender(
       msg,
       decryptedContent,
@@ -634,11 +707,11 @@ export class ChatMessageService {
   }
 
   private mapToResponseWithSender(
-    msg: any,
+    msg: ChatMessageRow,
     decryptedContent: string,
-    sender: any,
+    sender: MessageSender | null,
     attachments: MessageAttachment[] = [],
-  ) {
+  ): ChatMessageResponse {
     return {
       id: msg.id,
       roomId: msg.roomId,
@@ -646,7 +719,10 @@ export class ChatMessageService {
       sequence: msg.sequence,
       clientMessageId: msg.clientMessageId,
       metadata: msg.metadata,
-      content: msg.contentType === 'document' ? msg.content : decryptedContent,
+      content:
+        msg.contentType === 'document'
+          ? (msg.content ?? null)
+          : decryptedContent,
       contentType: msg.contentType ?? 'text',
       attachments: attachments.map((a) => this.mapAttachment(a)),
       replyToId: msg.replyToId ?? null,
@@ -679,7 +755,7 @@ export class ChatMessageService {
 
   /** Slack-style thread: the root message plus its replies (is_thread_reply = true), oldest first. */
   async getThread(rootMessageId: string, userId: string) {
-    const rootRows: any[] = await this.dataSource.query(
+    const rootRows = await this.dataSource.query<any>(
       `SELECT ${ChatMessageService.THREAD_MESSAGE_SELECT_SQL}
        FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
        WHERE m.id = $1 AND m.deleted_at IS NULL`,
@@ -693,7 +769,7 @@ export class ChatMessageService {
       });
     await this.chatMemberService.assertRoomMember(root.roomId, userId);
 
-    const replies: any[] = await this.dataSource.query(
+    const replies = await this.dataSource.query<any>(
       `SELECT ${ChatMessageService.THREAD_MESSAGE_SELECT_SQL}
        FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
        WHERE m.reply_to_id = $1 AND m.is_thread_reply = true AND m.deleted_at IS NULL
@@ -702,7 +778,7 @@ export class ChatMessageService {
     );
 
     const allIds = [root.id, ...replies.map((r) => r.id)];
-    const attachments: MessageAttachment[] = await this.dataSource.query(
+    const attachments = await this.dataSource.query<MessageAttachment>(
       `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = ANY($1::uuid[])`,
       [allIds],
     );
@@ -750,7 +826,7 @@ export class ChatMessageService {
     userId: string,
     dto: SendMessageDto,
   ) {
-    const rootRows: Array<{ roomId: string }> = await this.dataSource.query(
+    const rootRows = await this.dataSource.query<{ roomId: string }>(
       `SELECT room_id AS "roomId" FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
       [rootMessageId],
     );
@@ -769,7 +845,7 @@ export class ChatMessageService {
 
   /** Telegram-style unsent-message text for a room, restored when the user comes back. */
   async getDraft(roomId: string, userId: string): Promise<{ content: string }> {
-    const rows: MessageDraft[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<MessageDraft>(
       `SELECT content FROM message_drafts WHERE user_id = $1 AND room_id = $2`,
       [userId, roomId],
     );
@@ -789,7 +865,7 @@ export class ChatMessageService {
       );
       return { content: '' };
     }
-    const rows: MessageDraft[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<MessageDraft>(
       `INSERT INTO message_drafts (user_id, room_id, content)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, room_id) DO UPDATE SET content = $3, updated_at = now()

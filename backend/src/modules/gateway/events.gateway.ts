@@ -9,7 +9,7 @@ import {
   OnGatewayInit,
   WsException,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Server, Socket, DefaultEventsMap } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { JwtService } from '@nestjs/jwt';
@@ -29,6 +29,54 @@ import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
 import { UsersService } from '../users/services/users.service';
 import { RedisService } from '../../redis/redis.service';
+import { extractErrorDetails } from '../../common/utils/error.util';
+
+/**
+ * Everything this gateway hangs off a connection.
+ *
+ * Socket.IO types `socket.data` as `any` by default, which makes every
+ * `client.data.userId` an untyped read — the compiler can't catch a typo or a
+ * field that's only set on some paths. Threading this through `Socket<...>`
+ * (see the `AppSocket` alias) makes the connection state a checked contract.
+ */
+export interface WsSocketData {
+  /** Set once the handshake token verifies; absent means unauthenticated. */
+  userId?: string;
+  auth?: WsUser;
+  /** Periodic re-validation timer, cleared on disconnect. */
+  authTimer?: NodeJS.Timeout;
+  /** Workspaces this socket joined rooms for, kept for disconnect cleanup. */
+  workspaceIds?: string[];
+  /** The meeting this socket is currently in, if any. */
+  meetingId?: string;
+}
+
+/** A Socket with this gateway's `data` shape applied. */
+export type AppSocket = Socket<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  WsSocketData
+>;
+
+/** The Server, likewise — otherwise fetchSockets() returns RemoteSockets
+ * whose `data` falls back to `any` and the typing stops at the socket. */
+export type AppServer = Server<
+  DefaultEventsMap,
+  DefaultEventsMap,
+  DefaultEventsMap,
+  WsSocketData
+>;
+
+/** Claims this gateway reads off an access token. */
+interface AccessTokenPayload {
+  sub: string;
+  email: string;
+  jti?: string;
+  iat?: number;
+  exp?: number;
+  workspaceIds?: string[];
+}
 
 export interface WsUser {
   id: string;
@@ -134,7 +182,7 @@ export class EventsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
-  server!: Server;
+  server!: AppServer;
 
   private readonly logger = new Logger(EventsGateway.name);
 
@@ -175,10 +223,13 @@ export class EventsGateway
     // when `namespace` is explicitly set in @WebSocketGateway options.
     // Namespace instances don't have .adapter() — only the root Server does,
     // accessible via Namespace#server.
+    const candidate = serverOrNamespace as Partial<Server> & {
+      server?: Server;
+    };
     const rootServer: Server =
-      typeof (serverOrNamespace as any).adapter === 'function'
+      typeof candidate.adapter === 'function'
         ? serverOrNamespace
-        : (serverOrNamespace as any).server;
+        : (candidate.server as Server);
 
     if (!rootServer || typeof rootServer.adapter !== 'function') {
       throw new Error('Could not resolve root Socket.IO server instance');
@@ -211,7 +262,7 @@ export class EventsGateway
   }
 
   // ─── Auth middleware ─────────────────────────────────
-  private extractUser(client: Socket): WsUser | null {
+  private extractUser(client: AppSocket): WsUser | null {
     // Auth now lives in an httpOnly cookie (see auth-cookies.util.ts) — the
     // browser attaches it automatically on the handshake request as long as
     // the client connects with withCredentials:true, so there's nothing for
@@ -223,14 +274,16 @@ export class EventsGateway
 
     try {
       const secret = this.configService.get<string>('jwt.accessSecret');
-      const payload = this.jwtService.verify(token, { secret });
+      const payload = this.jwtService.verify<AccessTokenPayload>(token, {
+        secret,
+      });
       return {
         id: payload.sub,
         email: payload.email,
         jti: payload.jti,
         iat: payload.iat,
         expiresAt: payload.exp ? payload.exp * 1000 : 0,
-        workspaceIds: payload.workspaceIds || [],
+        workspaceIds: payload.workspaceIds ?? [],
       };
     } catch {
       return null;
@@ -248,8 +301,8 @@ export class EventsGateway
    * socket is dropped too — an attacker with a stolen cookie doesn't get to
    * hold a silent listener open indefinitely just by never sending anything.
    */
-  private async revalidateSocket(client: Socket): Promise<boolean> {
-    const auth = client.data?.auth as WsUser | undefined;
+  private async revalidateSocket(client: AppSocket): Promise<boolean> {
+    const auth = client.data?.auth;
     if (!auth) return false;
 
     if (auth.expiresAt && Date.now() >= auth.expiresAt) {
@@ -294,7 +347,7 @@ export class EventsGateway
   }
 
   private disconnectUnauthorized(
-    client: Socket,
+    client: AppSocket,
     code: string,
     message: string,
   ) {
@@ -302,7 +355,7 @@ export class EventsGateway
     client.disconnect(true);
   }
 
-  async handleConnection(client: Socket) {
+  async handleConnection(client: AppSocket) {
     const user = this.extractUser(client);
 
     if (!user) {
@@ -327,11 +380,10 @@ export class EventsGateway
     await client.join(`user:${user.id}`);
 
     // Load workspace memberships → join scoped rooms
-    const memberships: Array<{ workspaceId: string }> =
-      await this.dataSource.query(
-        `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
-        [user.id],
-      );
+    const memberships = await this.dataSource.query<{ workspaceId: string }>(
+      `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
+      [user.id],
+    );
     const wsIds = memberships.map((m) => m.workspaceId);
 
     // Store workspace memberships in socket data for cleanup on disconnect
@@ -377,7 +429,7 @@ export class EventsGateway
   }
 
   @SubscribeMessage('heartbeat')
-  async handleHeartbeat(@ConnectedSocket() client: Socket) {
+  async handleHeartbeat(@ConnectedSocket() client: AppSocket) {
     const userId = client.data?.userId;
     if (!userId) return;
     await this.presenceService.refresh(userId, client.id);
@@ -389,7 +441,7 @@ export class EventsGateway
   @SubscribeMessage('presence.set_status')
   async handleSetStatus(
     @MessageBody() data: { status: string },
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -406,8 +458,8 @@ export class EventsGateway
     );
   }
 
-  async handleDisconnect(client: Socket) {
-    const authTimer = client.data?.authTimer as NodeJS.Timeout | undefined;
+  async handleDisconnect(client: AppSocket) {
+    const authTimer = client.data?.authTimer;
     if (authTimer) {
       clearInterval(authTimer);
       delete client.data.authTimer;
@@ -487,7 +539,7 @@ export class EventsGateway
   @SubscribeMessage('join_workspace')
   async handleJoinWorkspace(
     @MessageBody() data: { workspaceId: string },
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -514,7 +566,7 @@ export class EventsGateway
   @SubscribeMessage('leave_workspace')
   async handleLeaveWorkspace(
     @MessageBody() data: { workspaceId: string },
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -531,7 +583,7 @@ export class EventsGateway
   @SubscribeMessage('join_room')
   async handleJoinRoom(
     @MessageBody() data: JoinRoomDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -562,7 +614,7 @@ export class EventsGateway
   @SubscribeMessage('leave_room')
   async handleLeaveRoom(
     @MessageBody() data: JoinRoomDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -583,7 +635,7 @@ export class EventsGateway
   @SubscribeMessage('typing')
   handleTyping(
     @MessageBody() data: TypingDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -599,7 +651,7 @@ export class EventsGateway
   /** Per-user (not per-IP/global) message send limit — see RedisService.checkChatMessageRateLimit. */
   private async assertMessageRateLimit(
     userId: string,
-    client: Socket,
+    client: AppSocket,
   ): Promise<boolean> {
     const { exceeded, retryAfterSeconds } =
       await this.redisService.checkChatMessageRateLimit(userId);
@@ -616,20 +668,16 @@ export class EventsGateway
 
   private async assertActiveUser(
     userId: string,
-    client: Socket,
+    client: AppSocket,
   ): Promise<boolean> {
     try {
       await this.violationService.assertNotBlocked(userId);
       return true;
-    } catch (err: unknown) {
-      const res =
-        err instanceof Error && 'getResponse' in err
-          ? (err as any).getResponse()
-          : {};
-      client.emit('error', {
-        code: res?.code ?? 'ACCOUNT_SUSPENDED',
-        message: res?.message ?? 'Account suspended',
-      });
+    } catch (err) {
+      client.emit(
+        'error',
+        extractErrorDetails(err, 'ACCOUNT_SUSPENDED', 'Account suspended'),
+      );
       return false;
     }
   }
@@ -638,7 +686,7 @@ export class EventsGateway
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @MessageBody() data: SendMessageWsDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -659,12 +707,16 @@ export class EventsGateway
         clientMessageId: data.clientMessageId, // idempotency: WS reconnect'da duplicate yo'q
         attachments: data.attachments,
       });
-    } catch (err: any) {
+    } catch (err) {
       // ForbiddenException → emit error back to sender only
-      client.emit('error', {
-        code: err?.response?.code || 'SEND_MESSAGE_FAILED',
-        message: err?.message || 'Failed to send message',
-      });
+      client.emit(
+        'error',
+        extractErrorDetails(
+          err,
+          'SEND_MESSAGE_FAILED',
+          'Failed to send message',
+        ),
+      );
       return;
     }
 
@@ -708,7 +760,7 @@ export class EventsGateway
     event: string,
     payload: unknown,
   ) {
-    const members: Array<{ userId: string }> = await this.dataSource.query(
+    const members = await this.dataSource.query<{ userId: string }>(
       `SELECT user_id AS "userId" FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
       [roomId],
     );
@@ -722,7 +774,7 @@ export class EventsGateway
   @SubscribeMessage('send_thread_reply')
   async handleSendThreadReply(
     @MessageBody() data: SendMessageWsDto & { threadRootId: string },
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -744,11 +796,15 @@ export class EventsGateway
           attachments: data.attachments,
         },
       );
-    } catch (err: any) {
-      client.emit('error', {
-        code: err?.response?.code || 'SEND_THREAD_REPLY_FAILED',
-        message: err?.message || 'Failed to send thread reply',
-      });
+    } catch (err) {
+      client.emit(
+        'error',
+        extractErrorDetails(
+          err,
+          'SEND_THREAD_REPLY_FAILED',
+          'Failed to send thread reply',
+        ),
+      );
       return;
     }
 
@@ -781,7 +837,7 @@ export class EventsGateway
   @SubscribeMessage('add_reaction')
   async handleAddReaction(
     @MessageBody() data: AddReactionWsDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId)
@@ -809,11 +865,11 @@ export class EventsGateway
         userId,
         action,
       });
-    } catch (err: unknown) {
-      client.emit('error', {
-        code: 'REACTION_FAILED',
-        message: err instanceof Error ? err.message : 'Failed to save reaction',
-      });
+    } catch (err) {
+      client.emit(
+        'error',
+        extractErrorDetails(err, 'REACTION_FAILED', 'Failed to save reaction'),
+      );
     }
   }
 
@@ -821,7 +877,7 @@ export class EventsGateway
   @SubscribeMessage('message_read')
   async handleMessageRead(
     @MessageBody() data: { roomId: string; messageId: string },
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -860,7 +916,7 @@ export class EventsGateway
   @SubscribeMessage('meeting:join')
   async handleMeetingJoin(
     @MessageBody() data: MeetingJoinDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) {
@@ -890,13 +946,15 @@ export class EventsGateway
     // stayed empty because only the WS room existed).
     try {
       await this.meetingsService.join(meetingId, userId);
-    } catch (err: any) {
-      const response =
-        typeof err?.getResponse === 'function' ? err.getResponse() : null;
-      client.emit('meeting:error', {
-        code: response?.code ?? 'MEETING_JOIN_FAILED',
-        message: response?.message ?? 'Could not join meeting',
-      });
+    } catch (err) {
+      client.emit(
+        'meeting:error',
+        extractErrorDetails(
+          err,
+          'MEETING_JOIN_FAILED',
+          'Could not join meeting',
+        ),
+      );
       return;
     }
 
@@ -947,7 +1005,7 @@ export class EventsGateway
   @SubscribeMessage('meeting:leave')
   async handleMeetingLeave(
     @MessageBody() data: MeetingLeaveDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -958,7 +1016,7 @@ export class EventsGateway
   @SubscribeMessage('meeting:offer')
   handleMeetingOffer(
     @MessageBody() data: MeetingOfferDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (
@@ -981,7 +1039,7 @@ export class EventsGateway
   @SubscribeMessage('meeting:answer')
   handleMeetingAnswer(
     @MessageBody() data: MeetingAnswerDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (
@@ -1020,7 +1078,7 @@ export class EventsGateway
   ): Promise<boolean> {
     if (!roomId || !callerId || !calleeId || callerId === calleeId)
       return false;
-    const rows: Array<{ userId: string }> = await this.dataSource.query(
+    const rows = await this.dataSource.query<{ userId: string }>(
       `SELECT user_id AS "userId" FROM chat_members
        WHERE room_id = $1 AND user_id = ANY($2::uuid[]) AND left_at IS NULL`,
       [roomId, [callerId, calleeId]],
@@ -1044,7 +1102,7 @@ export class EventsGateway
   @SubscribeMessage('call:invite')
   async handleDirectCallInvite(
     @MessageBody() data: DirectCallDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId || !data.meetingId || !data.roomId || !data.targetUserId)
@@ -1099,7 +1157,7 @@ export class EventsGateway
   @SubscribeMessage('call:accept')
   async handleDirectCallAccept(
     @MessageBody() data: DirectCallDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -1121,7 +1179,7 @@ export class EventsGateway
   @SubscribeMessage('call:decline')
   async handleDirectCallDecline(
     @MessageBody() data: DirectCallDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -1141,7 +1199,7 @@ export class EventsGateway
   @SubscribeMessage('call:end')
   async handleDirectCallEnd(
     @MessageBody() data: DirectCallDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
@@ -1222,7 +1280,7 @@ export class EventsGateway
   @SubscribeMessage('meeting:ice-candidate')
   handleMeetingIce(
     @MessageBody() data: MeetingIceDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (
@@ -1243,9 +1301,9 @@ export class EventsGateway
 
   // ─── Meeting: toggle audio / video / screen ───────────
   @SubscribeMessage('meeting:toggle')
-  handleMeetingToggle(
+  async handleMeetingToggle(
     @MessageBody() data: MeetingToggleDto,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
     if (
@@ -1254,6 +1312,29 @@ export class EventsGateway
       !client.rooms.has(`meeting:${data.meetingId}`)
     )
       return;
+    if (!['audio', 'video', 'screen'].includes(data.kind)) return;
+
+    // Persist before announcing. A broadcast-only toggle left the DB saying
+    // nobody was sharing while everyone's UI said otherwise, and gave screen
+    // sharing no gate at all — see MeetingsService.setParticipantMedia.
+    try {
+      await this.meetingsService.setParticipantMedia(
+        data.meetingId,
+        userId,
+        data.kind,
+        data.enabled,
+      );
+    } catch (err) {
+      client.emit(
+        'meeting:error',
+        extractErrorDetails(
+          err,
+          'MEETING_TOGGLE_FAILED',
+          'Could not update media state',
+        ),
+      );
+      return;
+    }
 
     client.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
       meetingId: data.meetingId,
@@ -1263,9 +1344,41 @@ export class EventsGateway
     });
   }
 
+  /** Host/co-host cutting another participant's screen share. */
+  @SubscribeMessage('meeting:force-stop-share')
+  async handleForceStopShare(
+    @MessageBody() data: { meetingId: string; targetUserId: string },
+    @ConnectedSocket() client: AppSocket,
+  ) {
+    const userId = client.data?.userId;
+    if (!userId || !data?.meetingId || !data?.targetUserId) return;
+
+    try {
+      await this.meetingsService.forceStopScreenShare(
+        data.meetingId,
+        userId,
+        data.targetUserId,
+      );
+    } catch (err) {
+      client.emit(
+        'meeting:error',
+        extractErrorDetails(err, 'MEETING_HOST_ONLY', 'Not allowed'),
+      );
+      return;
+    }
+
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
+      meetingId: data.meetingId,
+      userId: data.targetUserId,
+      kind: 'screen',
+      enabled: false,
+      stoppedBy: userId,
+    });
+  }
+
   // ─── Internal: clean up meeting state ────────────────
   private async leaveMeeting(
-    client: Socket,
+    client: AppSocket,
     userId: string,
     meetingId: string,
   ) {
@@ -1333,7 +1446,7 @@ export class EventsGateway
    */
   async notifyMeetingHosts(meetingId: string, event: string, payload: unknown) {
     try {
-      const rows: Array<{ userId: string }> = await this.dataSource.query(
+      const rows = await this.dataSource.query<{ userId: string }>(
         `SELECT host_id AS "userId" FROM meetings WHERE id = $1
          UNION
          SELECT user_id AS "userId" FROM meeting_participants

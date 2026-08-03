@@ -74,7 +74,7 @@ export class ChatRoomInviteService {
   }
 
   private async findRoomById(roomId: string): Promise<ChatRoom | null> {
-    const rows: ChatRoom[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatRoom>(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
@@ -91,7 +91,7 @@ export class ChatRoomInviteService {
   ): Promise<void> {
     if (room.createdById === userId) return;
 
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [room.workspaceId, userId],
     );
@@ -151,7 +151,7 @@ export class ChatRoomInviteService {
       expiresAt.setHours(expiresAt.getHours() + dto.expiresInHours);
     }
 
-    const rows: ChatRoomInviteRow[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatRoomInviteRow>(
       `INSERT INTO chat_room_invites (room_id, created_by, code, max_uses, expires_at)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING ${CHAT_ROOM_INVITE_COLUMNS_SQL}`,
@@ -170,7 +170,7 @@ export class ChatRoomInviteService {
 
     await this.assertCanManageInvites(room, userId);
 
-    const invites: ChatRoomInviteRow[] = await this.dataSource.query(
+    const invites = await this.dataSource.query<ChatRoomInviteRow>(
       `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites
        WHERE room_id = $1 ORDER BY created_at DESC`,
       [roomId],
@@ -192,7 +192,7 @@ export class ChatRoomInviteService {
 
     await this.assertCanManageInvites(room, userId);
 
-    const rows: ChatRoomInviteRow[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatRoomInviteRow>(
       `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites WHERE id = $1 AND room_id = $2`,
       [inviteId, roomId],
     );

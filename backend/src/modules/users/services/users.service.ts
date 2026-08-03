@@ -38,7 +38,7 @@ export class UsersService {
   ) {}
 
   async findById(id: string): Promise<User> {
-    const rows: User[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<User>(
       `SELECT ${USER_COLUMNS_SQL} FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
     );
@@ -53,7 +53,7 @@ export class UsersService {
   }
 
   async findPublicById(id: string): Promise<PublicUserDto> {
-    const rows: PublicUserDto[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<PublicUserDto>(
       `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username,
               avatar_url AS "avatarUrl", last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
@@ -73,7 +73,7 @@ export class UsersService {
   async findPublic(identifier: string): Promise<PublicUserDto> {
     const normalized = identifier.replace(/^@/, '');
     const isNumeric = /^\d+$/.test(normalized);
-    const rows: PublicUserDto[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<PublicUserDto>(
       isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
                   username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
@@ -129,11 +129,13 @@ export class UsersService {
     userIds: string[],
   ): Promise<Record<string, string | null>> {
     if (userIds.length === 0) return {};
-    const rows: Array<{ id: string; lastSeen: string | null }> =
-      await this.dataSource.query(
-        `SELECT id, last_seen AS "lastSeen" FROM users WHERE id = ANY($1::uuid[])`,
-        [userIds],
-      );
+    const rows = await this.dataSource.query<{
+      id: string;
+      lastSeen: string | null;
+    }>(
+      `SELECT id, last_seen AS "lastSeen" FROM users WHERE id = ANY($1::uuid[])`,
+      [userIds],
+    );
     return Object.fromEntries(rows.map((row) => [row.id, row.lastSeen]));
   }
 
@@ -189,7 +191,7 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     // Select only auth-critical fields — avoids fetching unused columns (avatarUrl, settings, etc.)
-    const rows: User[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<User>(
       `SELECT ${USER_AUTH_COLUMNS_SQL} FROM users WHERE email = $1`,
       [email],
     );
@@ -197,7 +199,7 @@ export class UsersService {
   }
 
   async findByUsername(username: string): Promise<User | null> {
-    const rows: User[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<User>(
       `SELECT ${USER_COLUMNS_SQL} FROM users WHERE username = $1`,
       [username],
     );
@@ -205,7 +207,7 @@ export class UsersService {
   }
 
   async create(data: Partial<User>): Promise<User> {
-    const rows: User[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<User>(
       `INSERT INTO users
          (first_name, last_name, username, email, phone_number, password_hash,
           avatar_url, language, timezone, theme, occupation, is_active, is_verified,
@@ -305,7 +307,7 @@ export class UsersService {
         [userId, ...values],
       );
     }
-    const rows: UserSettings[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<UserSettings>(
       `SELECT id, user_id AS "userId", notifications_enabled AS "notificationsEnabled",
               email_notifications AS "emailNotifications", push_notifications AS "pushNotifications",
               notify_task_assigned AS "notifyTaskAssigned", notify_push_reviewed AS "notifyPushReviewed",

@@ -31,7 +31,7 @@ export class TagsService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
     );
@@ -74,7 +74,7 @@ export class TagsService {
         message: 'Tag with this name already exists in workspace',
       });
 
-    const rows: Tag[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Tag>(
       `INSERT INTO tags (workspace_id, name, color, created_by)
        VALUES ($1, $2, $3, $4)
        RETURNING ${TAG_COLUMNS_SQL}`,
@@ -91,7 +91,7 @@ export class TagsService {
   ): Promise<Tag> {
     await this.assertAdminOrOwner(workspaceId, userId);
 
-    const rows: Tag[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Tag>(
       `SELECT ${TAG_COLUMNS_SQL} FROM tags WHERE id = $1 AND workspace_id = $2`,
       [tagId, workspaceId],
     );

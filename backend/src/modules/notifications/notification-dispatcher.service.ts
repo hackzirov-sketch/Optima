@@ -206,11 +206,12 @@ export class NotificationDispatcherService {
     userId: string,
     message: string,
   ): Promise<{ success: boolean; externalId?: string; error?: string }> {
-    const userRows: Array<{ id: string; phoneNumber: string | null }> =
-      await this.dataSource.query(
-        `SELECT id, phone_number AS "phoneNumber" FROM users WHERE id = $1`,
-        [userId],
-      );
+    const userRows = await this.dataSource.query<{
+      id: string;
+      phoneNumber: string | null;
+    }>(`SELECT id, phone_number AS "phoneNumber" FROM users WHERE id = $1`, [
+      userId,
+    ]);
     const user = userRows[0];
 
     if (!user?.phoneNumber) {
@@ -235,14 +236,13 @@ export class NotificationDispatcherService {
     title: string,
     message: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const userRows: Array<{
+    const userRows = await this.dataSource.query<{
       id: string;
       email: string | null;
       firstName: string;
-    }> = await this.dataSource.query(
-      `SELECT id, email, first_name AS "firstName" FROM users WHERE id = $1`,
-      [userId],
-    );
+    }>(`SELECT id, email, first_name AS "firstName" FROM users WHERE id = $1`, [
+      userId,
+    ]);
     const user = userRows[0];
     if (!user?.email) return { success: false, error: 'No email' };
 
@@ -336,7 +336,7 @@ export class NotificationDispatcherService {
       );
     }
 
-    const rows: UserNotificationPrefs[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<UserNotificationPrefs>(
       `SELECT ${NOTIFICATION_PREFS_COLUMNS_SQL} FROM user_notification_prefs WHERE user_id = $1`,
       [userId],
     );

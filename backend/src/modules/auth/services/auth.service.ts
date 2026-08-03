@@ -295,27 +295,41 @@ export class AuthService {
     // Step 1: Find user by email
     const user = await this.usersService.findByEmail(dto.email);
 
-    if (!user) {
+    // No password on file — either the address isn't registered at all, or it
+    // belongs to a Google/GitHub account that never set one. Both answer
+    // identically.
+    //
+    // Splitting them (INVALID_CREDENTIALS vs PASSWORD_SETUP_REQUIRED) told an
+    // unauthenticated caller exactly which addresses have accounts here, one
+    // request each — the whole point of the constant-time bcrypt below. It was
+    // also an email-bomb primitive: the social-account branch sent a
+    // verification mail on every attempt, with no rate limit and no
+    // credentials required.
+    if (!user || !user.passwordHash) {
       // Constant-time response to prevent email enumeration
       await this.securityService.comparePassword(
         dto.password,
         '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
       );
-      throw new UnauthorizedException({
-        code: ErrorCode.INVALID_CREDENTIALS,
-        message: 'Invalid credentials',
-      });
-    }
 
-    if (!user.passwordHash) {
-      const verifyToken = await this.issueEmailVerification(
-        user.id,
-        user.email,
-      );
+      // A real social account still gets its code (that's the recovery path);
+      // a nonexistent one gets a decoy token so the response is identical.
+      // Rate limited per account, like every other mail-sending path.
+      let verifyToken = decoyToken();
+      if (user) {
+        const limitCheck = await this.redisService.checkEmailVerifyResendLimit(
+          user.id,
+        );
+        if (!limitCheck?.blocked) {
+          verifyToken = await this.issueEmailVerification(user.id, user.email);
+          await this.redisService.markEmailVerifyResendSent(user.id);
+        }
+      }
+
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
         message:
-          'This account was created using Google/GitHub. Verification code sent.',
+          'If this account exists and was created with Google or GitHub, a verification code has been sent.',
         requiresPasswordSetup: true,
         verifyToken,
         redirect: '/verify',

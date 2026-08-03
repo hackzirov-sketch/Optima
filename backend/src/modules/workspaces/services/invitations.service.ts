@@ -36,11 +36,10 @@ export class InvitationsService {
     inviterId: string,
     dto: InviteMemberDto,
   ): Promise<WorkspaceInvitation> {
-    const workspaceRows: Array<{ id: string; name: string }> =
-      await this.dataSource.query(
-        `SELECT id, name FROM workspaces WHERE id = $1`,
-        [workspaceId],
-      );
+    const workspaceRows = await this.dataSource.query<{
+      id: string;
+      name: string;
+    }>(`SELECT id, name FROM workspaces WHERE id = $1`, [workspaceId]);
     const workspace = workspaceRows[0];
     if (!workspace)
       throw new NotFoundException({
@@ -60,7 +59,7 @@ export class InvitationsService {
       });
     this.permission.assertCanManageWorkspace(inviter);
 
-    const existingUserRows: Array<{ id: string }> = await this.dataSource.query(
+    const existingUserRows = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM users WHERE email = $1`,
       [dto.email],
     );
@@ -78,12 +77,11 @@ export class InvitationsService {
       }
     }
 
-    const existingInviteRows: WorkspaceInvitation[] =
-      await this.dataSource.query(
-        `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
+    const existingInviteRows = await this.dataSource.query<WorkspaceInvitation>(
+      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
        WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND declined_at IS NULL`,
-        [workspaceId, dto.email],
-      );
+      [workspaceId, dto.email],
+    );
     const existingInvite = existingInviteRows[0];
 
     if (existingInvite && existingInvite.expiresAt > new Date()) {
@@ -95,7 +93,7 @@ export class InvitationsService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 5); // 5 days
 
-    const savedRows: WorkspaceInvitation[] = await this.dataSource.query(
+    const savedRows = await this.dataSource.query<WorkspaceInvitation>(
       `INSERT INTO workspace_invitations (workspace_id, invited_by, email, role, token, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${WORKSPACE_INVITATION_COLUMNS_SQL}`,
@@ -149,9 +147,9 @@ export class InvitationsService {
   }
 
   async accept(token: string, userId: string): Promise<any> {
-    const invitationRows: Array<
+    const invitationRows = await this.dataSource.query<
       WorkspaceInvitation & { workspaceName: string }
-    > = await this.dataSource.query(
+    >(
       `SELECT i.id, i.workspace_id AS "workspaceId", i.email, i.role,
               i.invited_by AS "invitedById", i.token, i.expires_at AS "expiresAt",
               i.accepted_at AS "acceptedAt", i.declined_at AS "declinedAt",
@@ -184,12 +182,12 @@ export class InvitationsService {
       });
     }
 
-    const userRows: Array<{
+    const userRows = await this.dataSource.query<{
       id: string;
       email: string;
       firstName: string;
       lastName: string;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
       [userId],
     );
@@ -276,7 +274,7 @@ export class InvitationsService {
   }
 
   async decline(token: string, userId: string): Promise<void> {
-    const invitationRows: WorkspaceInvitation[] = await this.dataSource.query(
+    const invitationRows = await this.dataSource.query<WorkspaceInvitation>(
       `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations WHERE token = $1`,
       [token],
     );
@@ -288,7 +286,7 @@ export class InvitationsService {
       });
     }
 
-    const userRows: Array<{ email: string }> = await this.dataSource.query(
+    const userRows = await this.dataSource.query<{ email: string }>(
       `SELECT email FROM users WHERE id = $1`,
       [userId],
     );

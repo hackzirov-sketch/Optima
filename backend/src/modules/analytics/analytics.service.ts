@@ -14,11 +14,11 @@ export class AnalyticsService {
   private async getActiveProject(
     projectId: string,
   ): Promise<{ id: string; workspaceId: string }> {
-    const rows: Array<{
+    const rows = await this.dataSource.query<{
       id: string;
       workspaceId: string;
       deletedAt: Date | null;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, workspace_id AS "workspaceId", deleted_at AS "deletedAt" FROM projects WHERE id = $1`,
       [projectId],
     );
@@ -99,7 +99,7 @@ export class AnalyticsService {
     const project = await this.getActiveProject(projectId);
     await this.membersService.assertMember(project.workspaceId, userId);
 
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          s.id, s.user_id AS "userId", s.project_id AS "projectId",
          s.commits_count AS "commitsCount", s.pushes_count AS "pushesCount",

@@ -19,7 +19,7 @@ export class GroupsRepository {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember | null> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
        FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
@@ -75,7 +75,7 @@ export class GroupsRepository {
   }
 
   async findById(id: string): Promise<Group | null> {
-    const rows: Group[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Group>(
       `SELECT ${GROUP_COLUMNS_SQL} FROM groups WHERE id = $1`,
       [id],
     );
@@ -136,7 +136,7 @@ export class GroupsRepository {
     userId: string,
     role: WorkspaceRole,
   ): Promise<GroupMember> {
-    const rows: GroupMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<GroupMember>(
       `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, $3::group_members_role_enum)
        RETURNING ${GROUP_MEMBER_COLUMNS_SQL}`,
       [groupId, userId, role],

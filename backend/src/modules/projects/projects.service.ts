@@ -38,7 +38,7 @@ export class ProjectsService {
   ) {}
 
   private async findProjectRow(id: string): Promise<Project | null> {
-    const rows: Project[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Project>(
       `SELECT ${PROJECT_COLUMNS_SQL} FROM projects WHERE id = $1`,
       [id],
     );
@@ -49,7 +49,7 @@ export class ProjectsService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember | null> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role,
               joined_at AS "joinedAt", created_at AS "createdAt", updated_at AS "updatedAt"
        FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
@@ -278,7 +278,7 @@ export class ProjectsService {
         message: 'Project not found',
       });
 
-    const columns: ProjectColumn[] = await this.dataSource.query(
+    const columns = await this.dataSource.query<ProjectColumn>(
       `SELECT ${PROJECT_COLUMN_COLUMNS_SQL} FROM project_columns WHERE project_id = $1 ORDER BY position ASC`,
       [id],
     );
@@ -346,7 +346,7 @@ export class ProjectsService {
   ): Promise<ProjectColumn> {
     await this.checkProjectAccess(projectId, userId, true);
 
-    const existingColumns: ProjectColumn[] = await this.dataSource.query(
+    const existingColumns = await this.dataSource.query<ProjectColumn>(
       `SELECT position FROM project_columns WHERE project_id = $1`,
       [projectId],
     );
@@ -355,7 +355,7 @@ export class ProjectsService {
       -1,
     );
 
-    const rows: ProjectColumn[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ProjectColumn>(
       `INSERT INTO project_columns (project_id, name, color, maps_to_status, position)
        VALUES ($1, $2, $3, $4::project_columns_maps_to_status_enum, $5)
        RETURNING ${PROJECT_COLUMN_COLUMNS_SQL}`,
@@ -378,7 +378,7 @@ export class ProjectsService {
   ): Promise<ProjectColumn> {
     await this.checkProjectAccess(projectId, userId, true);
 
-    const columnRows: ProjectColumn[] = await this.dataSource.query(
+    const columnRows = await this.dataSource.query<ProjectColumn>(
       `SELECT ${PROJECT_COLUMN_COLUMNS_SQL} FROM project_columns WHERE id = $1 AND project_id = $2`,
       [columnId, projectId],
     );

@@ -63,7 +63,7 @@ export class ChatRoomService {
   ) {}
 
   private async findRoomById(roomId: string): Promise<ChatRoom | null> {
-    const rows: ChatRoom[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatRoom>(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
@@ -71,7 +71,7 @@ export class ChatRoomService {
   }
 
   private async fetchLastMessage(lastMessageId: string) {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT m.id, m.content, m.content_json AS "contentJson", m.sender_id AS "senderId",
               m.created_at AS "createdAt",
               u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
@@ -97,12 +97,14 @@ export class ChatRoomService {
   }
 
   async enrichRoom(room: ChatRoom, userId: string): Promise<ChatRoomDto> {
-    const members: Array<{ userId: string; lastReadSeq: number }> =
-      await this.dataSource.query(
-        `SELECT user_id AS "userId", last_read_seq AS "lastReadSeq"
+    const members = await this.dataSource.query<{
+      userId: string;
+      lastReadSeq: number;
+    }>(
+      `SELECT user_id AS "userId", last_read_seq AS "lastReadSeq"
        FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
-        [room.id],
-      );
+      [room.id],
+    );
 
     const myMembership = members.find((m) => m.userId === userId);
     let unreadCount = 0;
@@ -145,9 +147,9 @@ export class ChatRoomService {
   async listRooms(workspaceId: string, userId: string) {
     await this.wsMembersService.assertMember(workspaceId, userId);
 
-    const myRooms: Array<
+    const myRooms = await this.dataSource.query<
       ChatRoom & { myLastReadSeq: number; myStatus: string }
-    > = await this.dataSource.query(
+    >(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
@@ -159,12 +161,14 @@ export class ChatRoomService {
 
     const roomIds = myRooms.map((r) => r.id);
 
-    const allMembers: Array<{ roomId: string; userId: string }> =
-      await this.dataSource.query(
-        `SELECT room_id AS "roomId", user_id AS "userId" FROM chat_members
+    const allMembers = await this.dataSource.query<{
+      roomId: string;
+      userId: string;
+    }>(
+      `SELECT room_id AS "roomId", user_id AS "userId" FROM chat_members
        WHERE room_id = ANY($1::uuid[]) AND left_at IS NULL`,
-        [roomIds],
-      );
+      [roomIds],
+    );
 
     const membersByRoom = new Map<string, string[]>();
     for (const m of allMembers) {
@@ -248,7 +252,7 @@ export class ChatRoomService {
       )
     ).map((m: any) => m.roomId);
 
-    const publicRooms: ChatRoom[] = await this.dataSource.query(
+    const publicRooms = await this.dataSource.query<ChatRoom>(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms
        WHERE workspace_id = $1 AND scope = 'public' AND is_archived = false`,
       [workspaceId],
@@ -445,7 +449,7 @@ export class ChatRoomService {
     | { redirectSlug: string }
   > {
     const isNumeric = /^\d+$/.test(identifier);
-    const rows: ChatRoom[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatRoom>(
       isNumeric
         ? `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE public_id = $1`
         : `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE lower(slug) = lower($1)`,
@@ -498,7 +502,7 @@ export class ChatRoomService {
     roomId: string,
     userId: string,
   ): Promise<UserChatSettings | null> {
-    const rows: UserChatSettings[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<UserChatSettings>(
       `SELECT id, user_id AS "userId", room_id AS "roomId",
               background_url AS "backgroundUrl", background_type AS "backgroundType", theme,
               font_size AS "fontSize", compact_mode AS "compactMode",
@@ -548,7 +552,7 @@ export class ChatRoomService {
           ? dto.animationEnabled
           : (existing?.animationEnabled ?? true),
     };
-    const rows: UserChatSettings[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<UserChatSettings>(
       `INSERT INTO user_chat_settings
          (user_id, room_id, background_url, background_type, theme, font_size, compact_mode, animation_enabled)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -618,7 +622,7 @@ export class ChatRoomService {
         });
       // Removed assertMember to allow cross-workspace DMs
 
-      const existingRows: ChatRoom[] = await this.dataSource.query(
+      const existingRows = await this.dataSource.query<ChatRoom>(
         `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}
          FROM chat_rooms r
          JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $2 AND cm1.left_at IS NULL
@@ -664,7 +668,7 @@ export class ChatRoomService {
           ? ChatRoomType.PROJECT
           : dto.type;
 
-    const savedRows: ChatRoom[] = await this.dataSource.query(
+    const savedRows = await this.dataSource.query<ChatRoom>(
       `INSERT INTO chat_rooms (workspace_id, type, scope, name, group_id, project_id, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,

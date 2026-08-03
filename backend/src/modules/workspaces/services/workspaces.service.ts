@@ -43,7 +43,7 @@ export class WorkspacesService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
     );
@@ -128,7 +128,7 @@ export class WorkspacesService {
 
   async findAllForUser(userId: string): Promise<Workspace[]> {
     // Find all workspaces where the user is a member
-    const rows: Workspace[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Workspace>(
       `SELECT ${WORKSPACE_COLUMNS_SQL_W}
        FROM workspace_members wm
        JOIN workspaces w ON w.id = wm.workspace_id
@@ -139,7 +139,7 @@ export class WorkspacesService {
   }
 
   async findById(id: string): Promise<Workspace> {
-    const rows: Workspace[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Workspace>(
       `SELECT ${WORKSPACE_COLUMNS_SQL} FROM workspaces WHERE id = $1`,
       [id],
     );
@@ -154,7 +154,7 @@ export class WorkspacesService {
   }
 
   async findBySlug(slug: string, userId: string): Promise<Workspace> {
-    const rows: Workspace[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Workspace>(
       `SELECT ${WORKSPACE_COLUMNS_SQL} FROM workspaces WHERE slug = $1`,
       [slug],
     );

@@ -54,7 +54,7 @@ export class PushesService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
        FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
@@ -77,7 +77,7 @@ export class PushesService {
   }
 
   private async loadPush(pushId: string): Promise<TaskPush> {
-    const rows: TaskPush[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<TaskPush>(
       `SELECT ${TASK_PUSH_COLUMNS_SQL} FROM task_pushes WHERE id = $1`,
       [pushId],
     );
@@ -167,7 +167,7 @@ export class PushesService {
     const total = Number(countRows[0]?.count ?? 0);
 
     const listParams = [...params, limit, (page - 1) * limit];
-    const data: any[] = await this.dataSource.query(
+    const data = await this.dataSource.query<any>(
       `SELECT
          ${TASK_PUSH_COLUMNS_SQL_P},
          t.id AS "task_id", t.title AS "task_title", t.task_number AS "task_taskNumber"
@@ -219,7 +219,7 @@ export class PushesService {
 
     const pushType = await this.resolvePushType(task.workspaceId, member, repo);
 
-    const savedRows: TaskPush[] = await this.dataSource.query(
+    const savedRows = await this.dataSource.query<TaskPush>(
       `INSERT INTO task_pushes
          (task_id, user_id, repository_id, branch_name, commit_message, commit_sha,
           commits_count, cli_version, type, status)
@@ -493,7 +493,7 @@ export class PushesService {
 
   async listComments(pushId: string, userId: string) {
     await this.getById(pushId, userId);
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT c.*,
               a.id AS "a_id", a.first_name AS "a_firstName", a.last_name AS "a_lastName", a.avatar_url AS "a_avatarUrl",
               r.id AS "r_id", r.first_name AS "r_firstName", r.last_name AS "r_lastName"
@@ -535,7 +535,7 @@ export class PushesService {
 
   async addComment(pushId: string, userId: string, dto: AddReviewCommentDto) {
     await this.getById(pushId, userId);
-    const rows: PushReviewComment[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<PushReviewComment>(
       `INSERT INTO push_review_comments (push_id, author_id, content, file_path, line_number, line_type, parent_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${PUSH_COMMENT_COLUMNS_SQL}`,
@@ -559,7 +559,7 @@ export class PushesService {
     dto: UpdatePushCommentDto,
   ) {
     await this.getById(pushId, userId);
-    const rows: PushReviewComment[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<PushReviewComment>(
       `SELECT ${PUSH_COMMENT_COLUMNS_SQL} FROM push_review_comments WHERE id = $1 AND push_id = $2`,
       [commentId, pushId],
     );

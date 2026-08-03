@@ -148,12 +148,12 @@ export class OAuthService {
       });
     }
 
-    const accountRows: Array<{
+    const accountRows = await this.dataSource.query<{
       id: string;
       userId: string;
       accessTokenEncrypted: string;
       refreshTokenEncrypted: string | null;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT ${GITHUB_ACCOUNT_COLUMNS_SQL} FROM github_accounts WHERE github_user_id = $1`,
       [Number(githubUser.githubId)],
     );

@@ -13,14 +13,14 @@ export class ChatMemberService {
   constructor(private readonly dataSource: DatabaseService) {}
 
   async assertRoomMember(roomId: string, userId: string): Promise<ChatMember> {
-    const rows: ChatMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatMember>(
       `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, userId],
     );
     if (!rows[0]) {
       // Check if there's a pending invite
-      const pendingRows: ChatMember[] = await this.dataSource.query(
+      const pendingRows = await this.dataSource.query<ChatMember>(
         `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
         [roomId, userId],
@@ -57,7 +57,7 @@ export class ChatMemberService {
       };
     }
   > {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          cm.id AS "id", cm.room_id AS "roomId", cm.user_id AS "userId",
          cm.is_muted AS "isMuted", cm.muted_until AS "mutedUntil",
@@ -168,7 +168,7 @@ export class ChatMemberService {
     roomId: string,
     userId: string,
   ): Promise<{ message: string }> {
-    const rows: ChatMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatMember>(
       `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
       [roomId, userId],
@@ -185,7 +185,7 @@ export class ChatMemberService {
     );
 
     // Notify the room creator
-    const roomRows: any[] = await this.dataSource.query(
+    const roomRows = await this.dataSource.query<any>(
       `SELECT created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
@@ -205,7 +205,7 @@ export class ChatMemberService {
     roomId: string,
     userId: string,
   ): Promise<{ message: string }> {
-    const rows: ChatMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatMember>(
       `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
       [roomId, userId],
@@ -221,7 +221,7 @@ export class ChatMemberService {
       [roomId, userId],
     );
 
-    const roomRows: any[] = await this.dataSource.query(
+    const roomRows = await this.dataSource.query<any>(
       `SELECT created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
@@ -238,7 +238,7 @@ export class ChatMemberService {
 
   /** List all pending chat invites for a user across all rooms */
   async listPendingInvites(userId: string) {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          cm.room_id AS "roomId", r.name AS "roomName", r.type AS "roomType",
          r.scope, r.created_by AS "createdById",

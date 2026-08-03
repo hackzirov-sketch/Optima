@@ -31,16 +31,19 @@ export class ChatReactionService {
   private async findMessage(
     messageId: string,
   ): Promise<{ id: string; roomId: string; deletedAt: Date | null } | null> {
-    const rows: Array<{ id: string; roomId: string; deletedAt: Date | null }> =
-      await this.dataSource.query(
-        `SELECT id, room_id AS "roomId", deleted_at AS "deletedAt" FROM chat_messages WHERE id = $1`,
-        [messageId],
-      );
+    const rows = await this.dataSource.query<{
+      id: string;
+      roomId: string;
+      deletedAt: Date | null;
+    }>(
+      `SELECT id, room_id AS "roomId", deleted_at AS "deletedAt" FROM chat_messages WHERE id = $1`,
+      [messageId],
+    );
     return rows[0] ?? null;
   }
 
   private async assertMember(roomId: string, userId: string): Promise<void> {
-    const rows: Array<{ id: string }> = await this.dataSource.query(
+    const rows = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [roomId, userId],
     );
@@ -57,7 +60,7 @@ export class ChatReactionService {
     userId: string,
     emoji: string,
   ): Promise<ChatReaction | null> {
-    const rows: ChatReaction[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatReaction>(
       `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions
        WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
       [messageId, userId, emoji],
@@ -94,7 +97,7 @@ export class ChatReactionService {
 
     if (existing) return existing;
 
-    const rows: ChatReaction[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ChatReaction>(
       `INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)
        RETURNING ${CHAT_REACTION_COLUMNS_SQL}`,
       [messageId, userId, dto.emoji],

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { escapeHtml, safeUrl } from '../../common/utils/html.util';
 import * as nodemailer from 'nodemailer';
 import { lookup } from 'dns';
 
@@ -57,7 +58,7 @@ export class MailService {
             <h2>Welcome to UPZ!</h2>
             <p>Please use the following code to verify your email address:</p>
             <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px;">
-              ${code}
+              ${escapeHtml(code)}
             </div>
             <p>This code will expire in 15 minutes.</p>
             <p>If you didn't create an account, you can safely ignore this email.</p>
@@ -91,9 +92,9 @@ export class MailService {
         subject: `You're invited to join ${workspaceName} on UPZ`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>You've been invited to ${workspaceName}!</h2>
+            <h2>You've been invited to ${escapeHtml(workspaceName)}!</h2>
             <p>Someone invited you to collaborate on UPZ. Use the link below to accept:</p>
-            <a href="${this.configService.get('APP_URL') ?? 'http://localhost:3000'}/invite?token=${token}"
+            <a href="${this.configService.get('APP_URL') ?? 'http://localhost:3000'}/invite?token=${escapeHtml(token)}"
                style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">
               Accept Invitation
             </a>
@@ -127,7 +128,7 @@ export class MailService {
             <h2>Reset your UPZ password</h2>
             <p>Use the code below to reset your password. It expires in <strong>15 minutes</strong>.</p>
             <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 8px; margin: 24px 0; border-radius: 8px;">
-              ${otp}
+              ${escapeHtml(otp)}
             </div>
             <p>If you didn't request a password reset, you can safely ignore this email.</p>
             <p style="color: #888; font-size: 12px;">Do not share this code with anyone.</p>
@@ -160,7 +161,7 @@ export class MailService {
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Reset your UPZ password</h2>
             <p>Click the button below to reset your password. This link expires in 15 minutes.</p>
-            <a href="${resetUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">
+            <a href="${safeUrl(resetUrl)}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">
               Reset Password
             </a>
             <p>If you didn't request a password reset, you can safely ignore this email.</p>
@@ -199,9 +200,9 @@ export class MailService {
               <h1 style="color:#fff;margin:0;font-size:20px;">UPZ</h1>
             </div>
             <div style="background:#f9fafb;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e5e7eb;">
-              <p style="color:#374151;margin:0 0 8px;">Salom, ${firstName}!</p>
-              <h2 style="color:#111827;font-size:18px;margin:0 0 12px;">${title}</h2>
-              <p style="color:#6b7280;line-height:1.6;">${message}</p>
+              <p style="color:#374151;margin:0 0 8px;">Salom, ${escapeHtml(firstName)}!</p>
+              <h2 style="color:#111827;font-size:18px;margin:0 0 12px;">${escapeHtml(title)}</h2>
+              <p style="color:#6b7280;line-height:1.6;">${escapeHtml(message)}</p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
               <p style="color:#9ca3af;font-size:12px;margin:0;">
                 UPZ — Professional Development Platform<br/>

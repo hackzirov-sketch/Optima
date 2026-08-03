@@ -53,13 +53,15 @@ export class ArtifactCleanupProcessor
     // Batch to avoid loading unbounded rows into memory on the first run
     // against a backlog that's been accumulating since launch.
     for (;;) {
-      const batch: Array<{ id: string; storageKey: string | null }> =
-        await this.dataSource.query(
-          `SELECT id, storage_key AS "storageKey" FROM task_pushes
+      const batch = await this.dataSource.query<{
+        id: string;
+        storageKey: string | null;
+      }>(
+        `SELECT id, storage_key AS "storageKey" FROM task_pushes
          WHERE status = $1::task_pushes_status_enum AND expires_at < now()
          LIMIT $2`,
-          [PushStatus.UPLOADED, BATCH_SIZE],
-        );
+        [PushStatus.UPLOADED, BATCH_SIZE],
+      );
       if (batch.length === 0) break;
 
       for (const push of batch) {

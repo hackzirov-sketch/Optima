@@ -104,11 +104,11 @@ export class GithubService {
       return;
     }
 
-    const candidates: Array<{
+    const candidates = await this.dataSource.query<{
       id: string;
       commitSha: string | null;
       githubCommitSha: string | null;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, commit_sha AS "commitSha", github_commit_sha AS "githubCommitSha"
        FROM task_pushes
        WHERE repository_id = $1 AND branch_name = $2 AND deleted_at IS NULL
@@ -161,14 +161,16 @@ export class GithubService {
     const linkedRepo = await this.findLinkedRepo(githubRepoId);
     if (!linkedRepo) return;
 
-    const rows: Array<{ id: string; status: PushStatus }> =
-      await this.dataSource.query(
-        `SELECT id, status FROM task_pushes
+    const rows = await this.dataSource.query<{
+      id: string;
+      status: PushStatus;
+    }>(
+      `SELECT id, status FROM task_pushes
        WHERE repository_id = $1 AND branch_name = $2 AND deleted_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1`,
-        [linkedRepo.id, pr.head.ref],
-      );
+      [linkedRepo.id, pr.head.ref],
+    );
     const push = rows[0];
 
     if (!push) {

@@ -59,12 +59,12 @@ export class ReminderProcessor extends WorkerHost {
     type: ReminderJobType,
     meetingId: string,
   ): Promise<void> {
-    const meetingRows: Array<{
+    const meetingRows = await this.dataSource.query<{
       id: string;
       title: string | null;
       startTime: Date | null;
       hostId: string;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, title, start_time AS "startTime", host_id AS "hostId" FROM meetings WHERE id = $1`,
       [meetingId],
     );
@@ -81,7 +81,7 @@ export class ReminderProcessor extends WorkerHost {
       return;
     }
 
-    const participants: Array<{ userId: string }> = await this.dataSource.query(
+    const participants = await this.dataSource.query<{ userId: string }>(
       `SELECT user_id AS "userId" FROM meeting_participants WHERE meeting_id = $1`,
       [meetingId],
     );
@@ -120,12 +120,12 @@ export class ReminderProcessor extends WorkerHost {
     // relation — that relation doesn't exist on the entity). The previous
     // version of this method referenced `relations: ['assignees']`, which
     // would have thrown at runtime the first time this job ran.
-    const taskRows: Array<{
+    const taskRows = await this.dataSource.query<{
       id: string;
       title: string | null;
       dueDate: Date | null;
       assigneeId: string | null;
-    }> = await this.dataSource.query(
+    }>(
       `SELECT id, title, due_date AS "dueDate", assignee_id AS "assigneeId" FROM tasks WHERE id = $1 AND deleted_at IS NULL`,
       [taskId],
     );

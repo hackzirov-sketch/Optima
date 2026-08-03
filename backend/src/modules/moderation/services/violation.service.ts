@@ -94,7 +94,7 @@ export class ViolationService {
   }
 
   async getStatus(userId: string): Promise<ViolationStatus> {
-    const rows: ViolationRow[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<ViolationRow>(
       `SELECT id, user_id AS "userId", type, count, blocked_until AS "blockedUntil",
               is_permanent AS "isPermanent", reason
        FROM user_violations WHERE user_id = $1`,

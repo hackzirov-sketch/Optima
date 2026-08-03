@@ -3,6 +3,25 @@ import { RedisKeys } from './redis.keys';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { randomUUID } from 'crypto';
+import type { User } from '../database/entities/user.entity';
+
+/**
+ * The shape cacheUser() writes and validateTokenPipeline() reads back.
+ *
+ * It's a full user row round-tripped through JSON, so Date columns come back
+ * as strings — saying `User` outright would be a lie the compiler couldn't
+ * catch. Callers only need identity and the active flag, which survive
+ * serialisation intact.
+ */
+export type CachedUser = Omit<
+  User,
+  'createdAt' | 'updatedAt' | 'lastSeen' | 'deletedAt'
+> & {
+  createdAt?: string;
+  updatedAt?: string;
+  lastSeen?: string | null;
+  deletedAt?: string | null;
+};
 
 interface MemEntry {
   value: string;
@@ -625,7 +644,7 @@ export class RedisService implements OnModuleDestroy {
   async validateTokenPipeline(
     userId: string,
     jti?: string,
-  ): Promise<[boolean, number | null, any]> {
+  ): Promise<[boolean, number | null, CachedUser | null]> {
     try {
       const client = this.getClient();
       if (client) {
@@ -644,7 +663,9 @@ export class RedisService implements OnModuleDestroy {
           const sessionBlockCutoff =
             blockRaw === null ? null : Number(blockRaw);
           const cachedRaw = results[2][1] as string | null;
-          const cachedUser = cachedRaw ? JSON.parse(cachedRaw) : null;
+          const cachedUser = cachedRaw
+            ? (JSON.parse(cachedRaw) as CachedUser)
+            : null;
           return [isBlacklisted, sessionBlockCutoff, cachedUser];
         }
       }

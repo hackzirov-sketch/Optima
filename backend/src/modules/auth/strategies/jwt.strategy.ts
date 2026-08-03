@@ -4,7 +4,8 @@ import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { UsersService } from '../../users/services/users.service';
-import { RedisService } from '../../../redis/redis.service';
+import { RedisService, CachedUser } from '../../../redis/redis.service';
+import type { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ACCESS_COOKIE } from '../../../common/utils/auth-cookies.util';
 
@@ -54,13 +55,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
-    let user = cachedUser;
+    // A cache hit comes back JSON-parsed, so its date columns are strings
+    // rather than Dates (see CachedUser). Nothing downstream reads them —
+    // req.user is used for identity and permissions — so the two shapes are
+    // interchangeable here, but the union keeps that fact visible instead of
+    // pretending a round-tripped row is still a User.
+    let user: User | CachedUser | null = cachedUser;
     if (!user) {
-      user = await this.usersService.findById(payload.sub);
-      if (user) {
+      const fresh = await this.usersService.findById(payload.sub);
+      if (fresh) {
         // fire-and-forget cache write — don't block response
-        this.redisService.cacheUser(payload.sub, user, 30).catch(() => null);
+        this.redisService.cacheUser(payload.sub, fresh, 30).catch(() => null);
       }
+      user = fresh;
     }
 
     if (!user || !user.isActive) {

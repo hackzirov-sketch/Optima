@@ -14,6 +14,7 @@ import { RedisKeys } from '../../redis/redis.keys';
 import { Task } from '../../database/entities/task.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
 import { TaskTag } from '../../database/entities/task-tag.entity';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -45,6 +46,12 @@ const TASK_ENUM_CASTS = {
   status: 'tasks_status_enum',
 };
 
+/** Just enough of a user row to render "X assigned you a task". */
+interface ActorNameRow {
+  firstName: string | null;
+  lastName: string | null;
+}
+
 @Injectable()
 export class TasksService {
   constructor(
@@ -73,7 +80,13 @@ export class TasksService {
   private async syncProjectStatusWithProgress(
     projectId: string,
   ): Promise<void> {
-    const projectRows = await this.dataSource.query(
+    const projectRows = await this.dataSource.query<{
+      id: string;
+      workspaceId: string;
+      status: ProjectStatus;
+      progress: number;
+      completedAt: Date | null;
+    }>(
       `SELECT id, workspace_id AS "workspaceId", status, progress, completed_at AS "completedAt"
        FROM projects WHERE id = $1`,
       [projectId],
@@ -81,15 +94,17 @@ export class TasksService {
     const project = projectRows[0];
     if (!project) return;
 
-    const countRows: Array<{ total: string; done: string }> =
-      await this.dataSource.query(
-        `SELECT
+    const countRows = await this.dataSource.query<{
+      total: string;
+      done: string;
+    }>(
+      `SELECT
          COUNT(*) FILTER (WHERE true) AS total,
          COUNT(*) FILTER (WHERE status = $2) AS done
        FROM tasks
        WHERE project_id = $1 AND deleted_at IS NULL AND parent_task_id IS NULL`,
-        [projectId, TaskStatus.DONE],
-      );
+      [projectId, TaskStatus.DONE],
+    );
     const total = Number(countRows[0]?.total ?? 0);
     const done = Number(countRows[0]?.done ?? 0);
     const progress = total === 0 ? 0 : Math.round((done * 100) / total);
@@ -146,7 +161,7 @@ export class TasksService {
       if (cached) return JSON.parse(cached);
     }
 
-    const rows = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
        FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
@@ -168,7 +183,7 @@ export class TasksService {
   }
 
   private async getTask(taskId: string): Promise<Task> {
-    const rows: Task[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Task>(
       `SELECT ${TASK_COLUMNS_SQL} FROM tasks WHERE id = $1`,
       [taskId],
     );
@@ -202,14 +217,16 @@ export class TasksService {
     workspaceId: string,
   ): Promise<boolean> {
     // Fetch all dependencies for tasks in the same workspace in ONE query
-    const allDependencies: Array<{ taskId: string; dependsOnId: string }> =
-      await this.dataSource.query(
-        `SELECT dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId"
+    const allDependencies = await this.dataSource.query<{
+      taskId: string;
+      dependsOnId: string;
+    }>(
+      `SELECT dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.task_id
        WHERE t.workspace_id = $1`,
-        [workspaceId],
-      );
+      [workspaceId],
+    );
 
     // Build adjacency list: dependsOnId -> array of taskIds (reverse dependencies)
     const adj = new Map<string, string[]>();
@@ -258,14 +275,16 @@ export class TasksService {
       return;
     }
 
-    const deps: Array<{ dependsOnId: string; dependsOnStatus: TaskStatus }> =
-      await this.dataSource.query(
-        `SELECT dep.depends_on_id AS "dependsOnId", t.status AS "dependsOnStatus"
+    const deps = await this.dataSource.query<{
+      dependsOnId: string;
+      dependsOnStatus: TaskStatus;
+    }>(
+      `SELECT dep.depends_on_id AS "dependsOnId", t.status AS "dependsOnStatus"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.depends_on_id
        WHERE dep.task_id = $1`,
-        [taskId],
-      );
+      [taskId],
+    );
     if (deps.length === 0) return;
 
     const unmet = deps.filter((d) => d.dependsOnStatus !== TaskStatus.DONE);
@@ -292,7 +311,7 @@ export class TasksService {
 
     // Validate column belongs to the project
     if (dto.columnId) {
-      const col = await this.dataSource.query(
+      const col = await this.dataSource.query<{ id: string }>(
         `SELECT id FROM project_columns WHERE id = $1 AND project_id = $2`,
         [dto.columnId, dto.projectId],
       );
@@ -362,7 +381,7 @@ export class TasksService {
 
     // Notify assignee (if assigned and not self)
     if (dto.assigneeId && dto.assigneeId !== userId) {
-      const actorRows = await this.dataSource.query(
+      const actorRows = await this.dataSource.query<ActorNameRow>(
         `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
         [userId],
       );
@@ -496,10 +515,12 @@ export class TasksService {
     dto: FilterTasksDto,
   ): Promise<{ data: Task[]; total: number }> {
     // Always check membership — even if the project has no tasks yet
-    const projectRows = await this.dataSource.query(
-      `SELECT id, workspace_id AS "workspaceId" FROM projects WHERE id = $1`,
-      [projectId],
-    );
+    const projectRows = await this.dataSource.query<{
+      id: string;
+      workspaceId: string;
+    }>(`SELECT id, workspace_id AS "workspaceId" FROM projects WHERE id = $1`, [
+      projectId,
+    ]);
     const project = projectRows[0];
     if (!project)
       throw new NotFoundException({
@@ -514,7 +535,7 @@ export class TasksService {
     const params: unknown[] = [projectId];
     const filterClause = this.buildTaskFilters(dto, params, 2);
 
-    const countRows: Array<{ count: string }> = await this.dataSource.query(
+    const countRows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM tasks task WHERE task.project_id = $1 AND task.deleted_at IS NULL${filterClause}`,
       params,
     );
@@ -549,7 +570,7 @@ export class TasksService {
     const params: unknown[] = [workspaceId];
     const filterClause = this.buildTaskFilters(dto, params, 2);
 
-    const countRows: Array<{ count: string }> = await this.dataSource.query(
+    const countRows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM tasks task
        JOIN projects project ON project.id = task.project_id
        WHERE project.workspace_id = $1 AND task.deleted_at IS NULL${filterClause}`,
@@ -666,7 +687,7 @@ export class TasksService {
 
     // Validate column belongs to this project
     if (dto.columnId) {
-      const col = await this.dataSource.query(
+      const col = await this.dataSource.query<{ id: string }>(
         `SELECT id FROM project_columns WHERE id = $1 AND project_id = $2`,
         [dto.columnId, task.projectId],
       );
@@ -771,7 +792,7 @@ export class TasksService {
       recipientIds.add(task.assigneeId);
 
     // Project managers from project_members table
-    const projectManagers = await this.dataSource.query(
+    const projectManagers = await this.dataSource.query<{ userId: string }>(
       `SELECT user_id AS "userId" FROM project_members WHERE project_id = $1 AND role = 'manager' AND status = 'accepted'`,
       [task.projectId],
     );
@@ -780,16 +801,17 @@ export class TasksService {
     }
 
     // Also notify the project creator (stored in projects.created_by)
-    const projectRows = await this.dataSource.query(
-      `SELECT created_by AS "createdById" FROM projects WHERE id = $1`,
-      [task.projectId],
-    );
+    const projectRows = await this.dataSource.query<{
+      createdById: string | null;
+    }>(`SELECT created_by AS "createdById" FROM projects WHERE id = $1`, [
+      task.projectId,
+    ]);
     const project = projectRows[0];
     if (project?.createdById && project.createdById !== actorId) {
       recipientIds.add(project.createdById);
     }
 
-    const actorRows = await this.dataSource.query(
+    const actorRows = await this.dataSource.query<ActorNameRow>(
       `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
       [actorId],
     );
@@ -865,7 +887,10 @@ export class TasksService {
 
     if (dto.columnId !== undefined) {
       if (dto.columnId) {
-        const colRows = await this.dataSource.query(
+        const colRows = await this.dataSource.query<{
+          id: string;
+          mapsToStatus: TaskStatus | null;
+        }>(
           `SELECT id, maps_to_status AS "mapsToStatus" FROM project_columns WHERE id = $1 AND project_id = $2`,
           [dto.columnId, task.projectId],
         );
@@ -954,7 +979,7 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const existing = await this.dataSource.query(
+    const existing = await this.dataSource.query<{ id: string }>(
       `SELECT * FROM task_watchers WHERE task_id = $1 AND user_id = $2`,
       [taskId, userId],
     );
@@ -984,7 +1009,7 @@ export class TasksService {
   async getWatchers(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT tw.user_id AS "userId", tw.created_at AS "createdAt",
               u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName", u.avatar_url AS "u_avatarUrl"
        FROM task_watchers tw JOIN users u ON u.id = tw.user_id WHERE tw.task_id = $1`,
@@ -1010,7 +1035,7 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT ta.id, ta.task_id AS "taskId", ta.user_id AS "userId", ta.type, ta.description,
               ta.metadata, ta.created_at AS "createdAt",
               u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName", u.avatar_url AS "u_avatarUrl"
@@ -1090,7 +1115,7 @@ export class TasksService {
       });
     }
 
-    const existing = await this.dataSource.query(
+    const existing = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2`,
       [taskId, dto.dependsOnId],
     );
@@ -1100,7 +1125,7 @@ export class TasksService {
         message: 'This dependency already exists',
       });
 
-    const rows: TaskDependency[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<TaskDependency>(
       `INSERT INTO task_dependencies (task_id, depends_on_id, type, created_by)
        VALUES ($1, $2, $3, $4)
        RETURNING ${TASK_DEPENDENCY_COLUMNS_SQL}`,
@@ -1149,7 +1174,7 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const dep = await this.dataSource.query(
+    const dep = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM task_dependencies WHERE id = $1 AND task_id = $2`,
       [dependencyId, taskId],
     );
@@ -1176,7 +1201,7 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const tag = await this.dataSource.query(
+    const tag = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`,
       [tagId, task.workspaceId],
     );
@@ -1186,7 +1211,7 @@ export class TasksService {
         message: 'Tag not found in this workspace',
       });
 
-    const existing = await this.dataSource.query(
+    const existing = await this.dataSource.query<{ task_id: string }>(
       `SELECT * FROM task_tags WHERE task_id = $1 AND tag_id = $2`,
       [taskId, tagId],
     );
@@ -1196,7 +1221,7 @@ export class TasksService {
         message: 'Tag already attached to this task',
       });
 
-    const rows: TaskTag[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<TaskTag>(
       `INSERT INTO task_tags (task_id, tag_id) VALUES ($1, $2)
        RETURNING task_id AS "taskId", tag_id AS "tagId", created_at AS "createdAt"`,
       [taskId, tagId],

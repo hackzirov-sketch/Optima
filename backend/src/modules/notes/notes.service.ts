@@ -36,7 +36,7 @@ export class NotesService {
   ) {}
 
   private async findNote(noteId: string): Promise<NoteDto | null> {
-    const rows: NoteDto[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<NoteDto>(
       `SELECT ${NOTE_COLUMNS_SQL} FROM notes WHERE id = $1 AND deleted_at IS NULL`,
       [noteId],
     );
@@ -101,7 +101,7 @@ export class NotesService {
         });
     }
 
-    const rows: NoteDto[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<NoteDto>(
       `INSERT INTO notes (workspace_id, project_id, task_id, creator_id, title, content)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${NOTE_COLUMNS_SQL}`,

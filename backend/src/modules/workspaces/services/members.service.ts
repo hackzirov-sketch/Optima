@@ -27,7 +27,7 @@ export class MembersService {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMember> {
-    const rows: WorkspaceMember[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
     );
@@ -52,7 +52,7 @@ export class MembersService {
       });
     }
 
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          wm.id AS "id", wm.workspace_id AS "workspaceId", wm.user_id AS "userId",
          wm.role, wm.joined_at AS "joinedAt", wm.created_at AS "createdAt",
@@ -97,7 +97,7 @@ export class MembersService {
   }
 
   async findOne(workspaceId: string, userId: string): Promise<any> {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          wm.id AS "id", wm.workspace_id AS "workspaceId", wm.user_id AS "userId",
          wm.role, wm.joined_at AS "joinedAt", wm.created_at AS "createdAt",
@@ -127,11 +127,12 @@ export class MembersService {
     dto: UpdateMemberRoleDto,
     requesterId: string,
   ): Promise<WorkspaceMember> {
-    const workspaceRows: Array<{ id: string; ownerId: string }> =
-      await this.dataSource.query(
-        `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
-        [workspaceId],
-      );
+    const workspaceRows = await this.dataSource.query<{
+      id: string;
+      ownerId: string;
+    }>(`SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`, [
+      workspaceId,
+    ]);
     const workspace = workspaceRows[0];
     if (!workspace)
       throw new NotFoundException({
@@ -139,7 +140,7 @@ export class MembersService {
         message: 'Workspace not found',
       });
 
-    const requesterRows: WorkspaceMember[] = await this.dataSource.query(
+    const requesterRows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, requesterId],
     );
@@ -175,7 +176,7 @@ export class MembersService {
       }
     }
 
-    const memberRows: WorkspaceMember[] = await this.dataSource.query(
+    const memberRows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, targetUserId],
     );
@@ -214,11 +215,12 @@ export class MembersService {
     targetUserId: string,
     requesterId: string,
   ): Promise<void> {
-    const workspaceRows: Array<{ id: string; ownerId: string }> =
-      await this.dataSource.query(
-        `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
-        [workspaceId],
-      );
+    const workspaceRows = await this.dataSource.query<{
+      id: string;
+      ownerId: string;
+    }>(`SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`, [
+      workspaceId,
+    ]);
     const workspace = workspaceRows[0];
     if (!workspace)
       throw new NotFoundException({
@@ -226,7 +228,7 @@ export class MembersService {
         message: 'Workspace not found',
       });
 
-    const requesterRows: WorkspaceMember[] = await this.dataSource.query(
+    const requesterRows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, requesterId],
     );
@@ -250,7 +252,7 @@ export class MembersService {
       });
     }
 
-    const memberRows: WorkspaceMember[] = await this.dataSource.query(
+    const memberRows = await this.dataSource.query<WorkspaceMember>(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, targetUserId],
     );

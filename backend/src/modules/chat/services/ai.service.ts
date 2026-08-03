@@ -39,12 +39,21 @@ export class ChatAiService {
   }
 
   private async withTimeout<T>(work: Promise<T>, ms = 18000): Promise<T> {
-    return Promise.race([
-      work,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error('AI_TIMEOUT')), ms),
-      ),
-    ]);
+    // The timer has to be cleared on the happy path. Promise.race settles as
+    // soon as `work` resolves, but the losing timeout stays armed and keeps
+    // its closure alive until it fires — one leaked timer per AI call, held
+    // for 18s each. Harmless once, measurable under load.
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        work,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('AI_TIMEOUT')), ms);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private async askGroq(message: string, history: History): Promise<AiReply> {

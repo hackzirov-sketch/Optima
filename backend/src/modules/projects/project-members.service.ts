@@ -27,7 +27,7 @@ export class ProjectMembersService {
   ) {}
 
   private async getProject(projectId: string): Promise<Project> {
-    const rows: Project[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<Project>(
       `SELECT ${PROJECT_COLUMNS_SQL} FROM projects WHERE id = $1`,
       [projectId],
     );
@@ -83,7 +83,7 @@ export class ProjectMembersService {
         message: 'Not a workspace member',
       });
 
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          pm.id AS "id", pm.user_id AS "userId", pm.role, pm.status,
          pm.invited_by AS "invitedBy", pm.invited_at AS "invitedAt", pm.joined_at AS "joinedAt",
@@ -282,7 +282,7 @@ export class ProjectMembersService {
   }
 
   async getMyInvites(userId: string) {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          pm.id AS "id", pm.project_id AS "projectId", pm.role, pm.invited_by AS "invitedBy",
          pm.invited_at AS "invitedAt", p.name AS "projectName"

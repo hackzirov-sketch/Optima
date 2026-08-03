@@ -144,7 +144,7 @@ export class NotificationsService {
   ) {}
 
   async create(input: CreateNotificationInput) {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `INSERT INTO notifications
          (user_id, actor_id, type, title, message, entity_type, entity_id, action_url, metadata)
        VALUES ($1, $2, $3::notifications_type_enum, $4, $5, $6, $7, $8, $9)
@@ -185,7 +185,7 @@ export class NotificationsService {
 
   async list(userId: string, page = 1, limit = 30) {
     const offset = (page - 1) * limit;
-    const countRows: Array<{ count: string }> = await this.dataSource.query(
+    const countRows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM notifications WHERE user_id = $1`,
       [userId],
     );
@@ -203,7 +203,7 @@ export class NotificationsService {
   }
 
   async unreadCount(userId: string) {
-    const rows: Array<{ count: string }> = await this.dataSource.query(
+    const rows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`,
       [userId],
     );

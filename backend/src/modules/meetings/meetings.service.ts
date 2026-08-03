@@ -80,7 +80,7 @@ export class MeetingsService {
   async listForWorkspace(workspaceId: string, userId: string) {
     await this.membersService.assertMember(workspaceId, userId);
 
-    const meetings: any[] = await this.dataSource.query(
+    const meetings = await this.dataSource.query<any>(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings
              WHERE workspace_id = $1
@@ -95,7 +95,7 @@ export class MeetingsService {
     if (!meetings.length) return [];
 
     const meetingIds = meetings.map((m) => m.id);
-    const participants: any[] = await this.dataSource.query(
+    const participants = await this.dataSource.query<any>(
       `SELECT ${PARTICIPANT_COLUMNS_SQL} FROM meeting_participants WHERE meeting_id = ANY($1::uuid[])`,
       [meetingIds],
     );
@@ -124,7 +124,7 @@ export class MeetingsService {
   }
 
   async listForUser(userId: string) {
-    const meetings: any[] = await this.dataSource.query(
+    const meetings = await this.dataSource.query<any>(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM meetings m
        LEFT JOIN users u ON u.id = m.host_id
@@ -137,7 +137,7 @@ export class MeetingsService {
     if (!meetings.length) return [];
 
     const meetingIds = meetings.map((m) => m.id);
-    const participants: any[] = await this.dataSource.query(
+    const participants = await this.dataSource.query<any>(
       `SELECT ${PARTICIPANT_COLUMNS_SQL} FROM meeting_participants WHERE meeting_id = ANY($1::uuid[])`,
       [meetingIds],
     );
@@ -521,6 +521,115 @@ export class MeetingsService {
    * torn down when the host explicitly calls `endMeeting`, or when the
    * last remaining participant leaves (see `scheduleAutoEndCheck`).
    */
+  /**
+   * Persists a participant's own audio/video/screen state and enforces who may
+   * change it.
+   *
+   * Previously `meeting:toggle` was broadcast-only: nothing was written, so
+   * `meeting_participants.screen_sharing` stayed false forever, the REST
+   * participant list disagreed with what clients were showing, and state was
+   * lost on every reconnect. It also meant screen sharing had no gate at all —
+   * any participant could start sharing and no one could stop them.
+   *
+   * Screen share is exclusive: one sharer at a time, claimed atomically so two
+   * simultaneous requests can't both win.
+   */
+  async setParticipantMedia(
+    meetingId: string,
+    userId: string,
+    kind: 'audio' | 'video' | 'screen',
+    enabled: boolean,
+  ): Promise<{ kind: string; enabled: boolean }> {
+    const column = {
+      audio: 'is_muted',
+      video: 'camera_enabled',
+      screen: 'screen_sharing',
+    }[kind];
+
+    // `audio` is expressed as is_muted, i.e. the inverse of "enabled".
+    const value = kind === 'audio' ? !enabled : enabled;
+
+    if (kind === 'screen' && enabled) {
+      const claimed = await this.dataSource.query<{ id: string }>(
+        `UPDATE meeting_participants SET screen_sharing = true
+         WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM meeting_participants
+             WHERE meeting_id = $1 AND screen_sharing = true
+               AND left_at IS NULL AND user_id <> $2
+           )
+         RETURNING id`,
+        [meetingId, userId],
+      );
+      if (!claimed[0]) {
+        throw new ConflictException({
+          code: ErrorCode.MEETING_SCREEN_SHARE_TAKEN,
+          message: 'Someone else is already sharing their screen',
+        });
+      }
+      return { kind, enabled: true };
+    }
+
+    const updated = await this.dataSource.query<{ id: string }>(
+      `UPDATE meeting_participants SET ${column} = $3
+       WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL
+       RETURNING id`,
+      [meetingId, userId, value],
+    );
+    if (!updated[0]) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_PARTICIPANT,
+        message: 'You are not in this meeting',
+      });
+    }
+    return { kind, enabled };
+  }
+
+  /**
+   * Host/co-host override: cut someone else's screen share.
+   *
+   * The moderation half of the requirement — a participant controls their own
+   * media, but only a host or co-host can act on somebody else's.
+   */
+  async forceStopScreenShare(
+    meetingId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<{ stopped: boolean }> {
+    await this.assertHostOrCoHost(meetingId, actorId);
+
+    await this.dataSource.query(
+      `UPDATE meeting_participants SET screen_sharing = false
+       WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [meetingId, targetUserId],
+    );
+    return { stopped: true };
+  }
+
+  /** Host, or a participant promoted to co-host. */
+  async assertHostOrCoHost(meetingId: string, userId: string): Promise<void> {
+    const meeting = await this.meetingsRepository.findMeeting(meetingId);
+    if (!meeting) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_FOUND,
+        message: 'Meeting not found',
+      });
+    }
+    if (meeting.hostId === userId) return;
+
+    const rows = await this.dataSource.query<{ role: string }>(
+      `SELECT role FROM meeting_participants
+       WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [meetingId, userId],
+    );
+    if (rows[0]?.role !== MeetingParticipantRole.CO_HOST) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_HOST_ONLY,
+        message: 'Only the host or a co-host can perform this action',
+      });
+    }
+  }
+
   async leave(meetingId: string, userId: string) {
     const participantRows = await this.dataSource.query(
       `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,

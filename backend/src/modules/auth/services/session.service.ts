@@ -44,7 +44,7 @@ export class SessionService {
   }
 
   async getSessions(userId: string) {
-    const sessions: RefreshToken[] = await this.dataSource.query(
+    const sessions = await this.dataSource.query<RefreshToken>(
       `SELECT ${REFRESH_TOKEN_COLUMNS_SQL} FROM refresh_tokens
        WHERE user_id = $1 AND revoked_at IS NULL
        ORDER BY last_used_at DESC`,
@@ -167,7 +167,7 @@ export class SessionService {
   async findByTokenHash(
     tokenHash: string,
   ): Promise<(RefreshToken & { user: User }) | null> {
-    const rows: any[] = await this.dataSource.query(
+    const rows = await this.dataSource.query<any>(
       `SELECT
          rt.id AS "id", rt.user_id AS "userId", rt.token_hash AS "tokenHash",
          rt.device_name AS "deviceName", rt.device_info AS "deviceInfo",
