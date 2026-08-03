@@ -1,30 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
-import { DatabaseService } from '../../../database/database.service'
-import { ConfigService } from '@nestjs/config'
-import { User } from '../../../database/entities/user.entity'
-import { UserSettings } from '../../../database/entities/user-settings.entity'
-import { ErrorCode } from '../../../common/enums/error-code.enum'
-import { UpdateProfileDto } from '../schemas/update-profile.schema'
-import { UpdateSettingsDto } from '../schemas/update-settings.schema'
-import { PublicUserDto } from '../schemas/public-user.schema'
-import { RedisService } from '../../../redis/redis.service'
-import { RedisKeys } from '../../../redis/redis.keys'
-import { ContentFilterService } from '../../moderation/services/content-filter.service'
-import { ImageModerationService } from '../../moderation/services/image-moderation.service'
-import { buildUpdateSet } from '../../../common/utils/sql.util'
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DatabaseService } from '../../../database/database.service';
+import { ConfigService } from '@nestjs/config';
+import { User } from '../../../database/entities/user.entity';
+import { UserSettings } from '../../../database/entities/user-settings.entity';
+import { ErrorCode } from '../../../common/enums/error-code.enum';
+import { UpdateProfileDto } from '../schemas/update-profile.schema';
+import { UpdateSettingsDto } from '../schemas/update-settings.schema';
+import { PublicUserDto } from '../schemas/public-user.schema';
+import { RedisService } from '../../../redis/redis.service';
+import { RedisKeys } from '../../../redis/redis.keys';
+import { ContentFilterService } from '../../moderation/services/content-filter.service';
+import { ImageModerationService } from '../../moderation/services/image-moderation.service';
+import { buildUpdateSet } from '../../../common/utils/sql.util';
 import {
   USER_COLUMNS_SQL,
   USER_AUTH_COLUMNS_SQL,
   mapUserRow,
   serializeProviders,
-} from '../repositories/users.sql'
+} from '../repositories/users.sql';
 
 function parseExpiry(s: string): number {
-  const n = parseInt(s, 10)
-  if (s.endsWith('d')) return n * 86400
-  if (s.endsWith('h')) return n * 3600
-  if (s.endsWith('m')) return n * 60
-  return n
+  const n = parseInt(s, 10);
+  if (s.endsWith('d')) return n * 86400;
+  if (s.endsWith('h')) return n * 3600;
+  if (s.endsWith('m')) return n * 60;
+  return n;
 }
 
 @Injectable()
@@ -35,21 +35,21 @@ export class UsersService {
     private readonly redisService: RedisService,
     private readonly contentFilter: ContentFilterService,
     private readonly imageModeration: ImageModerationService,
-  ) { }
+  ) {}
 
   async findById(id: string): Promise<User> {
     const rows: User[] = await this.dataSource.query(
       `SELECT ${USER_COLUMNS_SQL} FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
-    )
-    const user = rows[0] && mapUserRow(rows[0])
+    );
+    const user = rows[0] && mapUserRow(rows[0]);
     if (!user) {
       throw new NotFoundException({
         code: ErrorCode.USER_NOT_FOUND,
         message: 'User not found',
-      })
+      });
     }
-    return user
+    return user;
   }
 
   async findPublicById(id: string): Promise<PublicUserDto> {
@@ -58,21 +58,21 @@ export class UsersService {
               avatar_url AS "avatarUrl", last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
-    )
-    const user = rows[0]
+    );
+    const user = rows[0];
     if (!user) {
       throw new NotFoundException({
         code: ErrorCode.USER_NOT_FOUND,
         message: 'User not found',
-      })
+      });
     }
-    return user
+    return user;
   }
 
   /** Ported from main — looks up a public profile by @username or numeric public_id. */
   async findPublic(identifier: string): Promise<PublicUserDto> {
-    const normalized = identifier.replace(/^@/, '')
-    const isNumeric = /^\d+$/.test(normalized)
+    const normalized = identifier.replace(/^@/, '');
+    const isNumeric = /^\d+$/.test(normalized);
     const rows: PublicUserDto[] = await this.dataSource.query(
       isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
@@ -82,19 +82,19 @@ export class UsersService {
                   username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
            FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
       [isNumeric ? Number(normalized) : normalized],
-    )
-    const user = rows[0]
+    );
+    const user = rows[0];
     if (!user) {
       throw new NotFoundException({
         code: ErrorCode.USER_NOT_FOUND,
         message: 'User not found',
-      })
+      });
     }
-    return user
+    return user;
   }
 
   async findByIdWithRelations(id: string) {
-    const user = await this.findById(id)
+    const user = await this.findById(id);
 
     const [settings, memberships] = await Promise.all([
       this.dataSource.query(
@@ -119,19 +119,22 @@ export class UsersService {
          WHERE wm.user_id = $1 AND w.deleted_at IS NULL`,
         [id],
       ),
-    ])
+    ]);
 
-    return { ...user, settings: settings[0] ?? null, workspaces: memberships }
+    return { ...user, settings: settings[0] ?? null, workspaces: memberships };
   }
 
   /** Bulk last_seen lookup — the durable "history" half of presence (see ChatPresenceService for the live half). */
-  async getLastSeenBulk(userIds: string[]): Promise<Record<string, string | null>> {
-    if (userIds.length === 0) return {}
-    const rows: Array<{ id: string; lastSeen: string | null }> = await this.dataSource.query(
-      `SELECT id, last_seen AS "lastSeen" FROM users WHERE id = ANY($1::uuid[])`,
-      [userIds],
-    )
-    return Object.fromEntries(rows.map((row) => [row.id, row.lastSeen]))
+  async getLastSeenBulk(
+    userIds: string[],
+  ): Promise<Record<string, string | null>> {
+    if (userIds.length === 0) return {};
+    const rows: Array<{ id: string; lastSeen: string | null }> =
+      await this.dataSource.query(
+        `SELECT id, last_seen AS "lastSeen" FROM users WHERE id = ANY($1::uuid[])`,
+        [userIds],
+      );
+    return Object.fromEntries(rows.map((row) => [row.id, row.lastSeen]));
   }
 
   /**
@@ -141,39 +144,47 @@ export class UsersService {
    * match — the "findable by direct link, not by browsing" rule.
    */
   async searchPublic(q: string, limit = 20) {
-    const term = `%${q.replace(/%/g, '\%').replace(/_/g, '\_')}%`
-    const exactUsername = q.replace(/^@/, '')
-    const exactPublicId = /^\d+$/.test(q) ? Number(q) : null
+    // `\%` in a JS string literal is just `%` — there is no such escape
+    // sequence — so the previous version escaped nothing and left both LIKE
+    // wildcards live: searching `%` matched every row in the table. Escape the
+    // backslash itself, and declare it with ESCAPE so Postgres honours it.
+    const term = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    const exactUsername = q.replace(/^@/, '');
+    const exactPublicId = /^\d+$/.test(q) ? Number(q) : null;
     // If the query looks like an email, include email search (exact match or ILIKE)
-    const isEmail = q.includes('@')
+    const isEmail = q.includes('@');
     const rows: any[] = isEmail
       ? await this.dataSource.query(
-        `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
+          `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
-           WHERE deleted_at IS NULL AND (email ILIKE $1 OR first_name ILIKE $2 OR last_name ILIKE $2 OR username ILIKE $2)
+           WHERE deleted_at IS NULL AND (email ILIKE $1 OR first_name ILIKE $2 ESCAPE '\\' OR last_name ILIKE $2 ESCAPE '\\' OR username ILIKE $2 ESCAPE '\\')
              AND (account_visibility = 'public' OR lower(username) = lower($4) OR public_id = $5)
-           ORDER BY CASE WHEN email ILIKE $1 THEN 0 WHEN username ILIKE $2 THEN 1 ELSE 2 END, last_name ASC
+           ORDER BY CASE WHEN email ILIKE $1 THEN 0 WHEN username ILIKE $2 ESCAPE '\\' THEN 1 ELSE 2 END, last_name ASC
            LIMIT $3`,
-        [q, term, limit, exactUsername, exactPublicId],
-      )
+          [q, term, limit, exactUsername, exactPublicId],
+        )
       : await this.dataSource.query(
-        `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
+          `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
-           WHERE deleted_at IS NULL AND (first_name ILIKE $1 OR last_name ILIKE $1 OR username ILIKE $1)
+           WHERE deleted_at IS NULL AND (first_name ILIKE $1 ESCAPE '\\' OR last_name ILIKE $1 ESCAPE '\\' OR username ILIKE $1 ESCAPE '\\')
              AND (account_visibility = 'public' OR lower(username) = lower($3) OR public_id = $4)
-           ORDER BY CASE WHEN username ILIKE $1 THEN 0 ELSE 1 END, last_name ASC
+           ORDER BY CASE WHEN username ILIKE $1 ESCAPE '\\' THEN 0 ELSE 1 END, last_name ASC
            LIMIT $2`,
-        [term, limit, exactUsername, exactPublicId],
-      )
-    return rows
+          [term, limit, exactUsername, exactPublicId],
+        );
+    return rows;
   }
 
-  async updateAccountVisibility(userId: string, visibility: 'public' | 'private'): Promise<User> {
-    await this.dataSource.query(`UPDATE users SET account_visibility = $2 WHERE id = $1`, [
-      userId,
-      visibility,
-    ])
-    return this.findById(userId)
+  async updateAccountVisibility(
+    userId: string,
+    visibility: 'public' | 'private',
+  ): Promise<User> {
+    await this.dataSource.query(
+      `UPDATE users SET account_visibility = $2 WHERE id = $1`,
+      [userId, visibility],
+    );
+    await this.invalidateUserCache(userId);
+    return this.findById(userId);
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -181,16 +192,16 @@ export class UsersService {
     const rows: User[] = await this.dataSource.query(
       `SELECT ${USER_AUTH_COLUMNS_SQL} FROM users WHERE email = $1`,
       [email],
-    )
-    return rows[0] ? mapUserRow(rows[0]) : null
+    );
+    return rows[0] ? mapUserRow(rows[0]) : null;
   }
 
   async findByUsername(username: string): Promise<User | null> {
     const rows: User[] = await this.dataSource.query(
       `SELECT ${USER_COLUMNS_SQL} FROM users WHERE username = $1`,
       [username],
-    )
-    return rows[0] ? mapUserRow(rows[0]) : null
+    );
+    return rows[0] ? mapUserRow(rows[0]) : null;
   }
 
   async create(data: Partial<User>): Promise<User> {
@@ -223,52 +234,76 @@ export class UsersService {
         serializeProviders(data.providers) ?? 'local',
         data.needsPasswordSetup ?? null,
       ],
-    )
-    return mapUserRow(rows[0])
+    );
+    return mapUserRow(rows[0]);
   }
 
   async update(id: string, data: Partial<User>): Promise<void> {
-    const patch: Record<string, unknown> = { ...data }
+    const patch: Record<string, unknown> = { ...data };
     if (data.providers !== undefined) {
-      patch.providers = serializeProviders(data.providers)
+      patch.providers = serializeProviders(data.providers);
     }
     const { setClause, values } = buildUpdateSet(patch, 2, {
       language: 'users_language_enum',
       theme: 'users_theme_enum',
-    })
-    if (!setClause) return
-    await this.dataSource.query(
-      `UPDATE users SET ${setClause} WHERE id = $1`,
-      [id, ...values],
-    )
+    });
+    if (!setClause) return;
+    await this.dataSource.query(`UPDATE users SET ${setClause} WHERE id = $1`, [
+      id,
+      ...values,
+    ]);
+    await this.invalidateUserCache(id);
+  }
+
+  /**
+   * JwtStrategy caches the user row for 30s to keep auth off the hot path.
+   * Nothing was clearing it, so a change that has to take effect *now* —
+   * deactivating an account above all, but also a profile or provider update —
+   * silently didn't for up to half a minute. Every write path that touches the
+   * cached shape drops the entry.
+   *
+   * Failures are swallowed: the cache is an optimisation with a short TTL, and
+   * a Redis blip shouldn't turn a successful profile update into a 500.
+   */
+  private async invalidateUserCache(userId: string): Promise<void> {
+    await this.redisService.clearCachedUser(userId).catch(() => null);
   }
 
   async updateLastSeen(userId: string): Promise<void> {
-    const key = RedisKeys.lastSeen(userId)
-    const client = this.redisService.getClient()
+    const key = RedisKeys.lastSeen(userId);
+    const client = this.redisService.getClient();
     if (client) {
-      const isSet = await client.set(key, '1', 'EX', 30, 'NX')
-      if (!isSet) return // Debounce for 30 seconds
+      const isSet = await client.set(key, '1', 'EX', 30, 'NX');
+      if (!isSet) return; // Debounce for 30 seconds
     }
-    await this.dataSource.query(`UPDATE users SET last_seen = now() WHERE id = $1`, [userId])
+    await this.dataSource.query(
+      `UPDATE users SET last_seen = now() WHERE id = $1`,
+      [userId],
+    );
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
-    const texts = [dto.firstName, dto.lastName].filter(Boolean) as string[]
+    const texts = [dto.firstName, dto.lastName].filter(Boolean) as string[];
     for (const t of texts) {
-      await this.contentFilter.filterText(t, userId, 'profile')
+      await this.contentFilter.filterText(t, userId, 'profile');
     }
-    await this.update(userId, dto as Partial<User>)
-    return this.findById(userId)
+    await this.update(userId, dto);
+    return this.findById(userId);
   }
 
-  async updateSettings(userId: string, dto: UpdateSettingsDto): Promise<UserSettings> {
-    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2)
+  async updateSettings(
+    userId: string,
+    dto: UpdateSettingsDto,
+  ): Promise<UserSettings> {
+    const { setClause, values } = buildUpdateSet(
+      dto as Record<string, unknown>,
+      2,
+    );
     if (setClause) {
       await this.dataSource.query(
         `UPDATE user_settings SET ${setClause} WHERE user_id = $1`,
         [userId, ...values],
-      )
+      );
     }
     const rows: UserSettings[] = await this.dataSource.query(
       `SELECT id, user_id AS "userId", notifications_enabled AS "notificationsEnabled",
@@ -278,47 +313,57 @@ export class UsersService {
               created_at AS "createdAt", updated_at AS "updatedAt"
        FROM user_settings WHERE user_id = $1`,
       [userId],
-    )
+    );
     if (!rows[0]) {
       throw new NotFoundException({
         code: ErrorCode.INTERNAL_ERROR,
         message: 'Settings not found',
-      })
+      });
     }
-    return rows[0]
+    return rows[0];
   }
 
   async updateAvatar(userId: string, avatarUrl: string): Promise<User> {
-    await this.imageModeration.filterImageUrl(avatarUrl, userId)
-    await this.dataSource.query(`UPDATE users SET avatar_url = $2 WHERE id = $1`, [
-      userId,
-      avatarUrl,
-    ])
-    return this.findById(userId)
+    await this.imageModeration.filterImageUrl(avatarUrl, userId);
+    await this.dataSource.query(
+      `UPDATE users SET avatar_url = $2 WHERE id = $1`,
+      [userId, avatarUrl],
+    );
+    await this.invalidateUserCache(userId);
+    return this.findById(userId);
   }
 
-  async updateBackground(userId: string, backgroundUrl: string | null): Promise<User> {
+  async updateBackground(
+    userId: string,
+    backgroundUrl: string | null,
+  ): Promise<User> {
     if (backgroundUrl) {
-      await this.imageModeration.filterImageUrl(backgroundUrl, userId)
+      await this.imageModeration.filterImageUrl(backgroundUrl, userId);
     }
-    await this.dataSource.query(`UPDATE users SET background_url = $2 WHERE id = $1`, [
-      userId,
-      backgroundUrl,
-    ])
-    return this.findById(userId)
+    await this.dataSource.query(
+      `UPDATE users SET background_url = $2 WHERE id = $1`,
+      [userId, backgroundUrl],
+    );
+    await this.invalidateUserCache(userId);
+    return this.findById(userId);
   }
 
   async softDeleteAccount(userId: string): Promise<void> {
-    await this.findById(userId)
+    await this.findById(userId);
     // Block all active access tokens before revoking refresh tokens.
     // TTL covers the max access-token lifetime so no valid token can slip through.
-    const accessExpires = this.configService.get<string>('jwt.accessExpires') || '25m'
-    const ttlSeconds = parseExpiry(accessExpires)
-    await this.redisService.blockUserSessions(userId, ttlSeconds)
-    await this.dataSource.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [userId])
+    const accessExpires =
+      this.configService.get<string>('jwt.accessExpires') || '25m';
+    const ttlSeconds = parseExpiry(accessExpires);
+    await this.redisService.blockUserSessions(userId, ttlSeconds);
+    await this.dataSource.query(
+      `DELETE FROM refresh_tokens WHERE user_id = $1`,
+      [userId],
+    );
     await this.dataSource.query(
       `UPDATE users SET deleted_by = $1, deleted_at = now() WHERE id = $1`,
       [userId],
-    )
+    );
+    await this.invalidateUserCache(userId);
   }
 }

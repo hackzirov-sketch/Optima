@@ -7,7 +7,11 @@ export const updateBackgroundSchema = z.object({
     .max(2048)
     .nullable()
     .refine(
-      (value) => value === null || /^https?:\/\/(cdn\.upz\.dev|localhost(:\d+)?|r2\.upz\.dev)\//.test(value),
+      (value) =>
+        value === null ||
+        /^https?:\/\/(cdn\.upz\.dev|localhost(:\d+)?|r2\.upz\.dev)\//.test(
+          value,
+        ),
       'backgroundUrl must be from the authorized CDN domain',
     ),
 });

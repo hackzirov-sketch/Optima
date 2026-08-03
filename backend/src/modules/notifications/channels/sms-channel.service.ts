@@ -25,9 +25,9 @@ export class SmsChannelService {
   private tokenExpiresAt = 0;
 
   constructor(private readonly config: ConfigService) {
-    this.email    = this.config.get<string>('ESKIZ_EMAIL')    ?? null;
+    this.email = this.config.get<string>('ESKIZ_EMAIL') ?? null;
     this.password = this.config.get<string>('ESKIZ_PASSWORD') ?? null;
-    this.from     = this.config.get<string>('ESKIZ_FROM')     ?? 'UPZ';
+    this.from = this.config.get<string>('ESKIZ_FROM') ?? 'UPZ';
   }
 
   get isEnabled(): boolean {
@@ -46,7 +46,7 @@ export class SmsChannelService {
         body: JSON.stringify({ email: this.email, password: this.password }),
         signal: AbortSignal.timeout(10_000),
       });
-      const data = await res.json() as any;
+      const data = await res.json();
       if (data?.data?.token) {
         this.token = data.data.token;
         // Eskiz tokens expire in 30 days; cache for 29 days
@@ -54,7 +54,9 @@ export class SmsChannelService {
         return this.token;
       }
     } catch (err) {
-      this.logger.error(`Eskiz auth failed: ${err instanceof Error ? err.message : err}`);
+      this.logger.error(
+        `Eskiz auth failed: ${err instanceof Error ? err.message : err}`,
+      );
     }
     return null;
   }
@@ -67,7 +69,8 @@ export class SmsChannelService {
     }
 
     const token = await this.getToken();
-    if (!token) return { success: false, error: 'Could not obtain SMS auth token' };
+    if (!token)
+      return { success: false, error: 'Could not obtain SMS auth token' };
 
     // Normalize phone: strip + and spaces
     const phone = phoneNumber.replace(/\D/g, '');
@@ -77,7 +80,7 @@ export class SmsChannelService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           mobile_phone: phone,
@@ -88,7 +91,7 @@ export class SmsChannelService {
         signal: AbortSignal.timeout(15_000),
       });
 
-      const data = await res.json() as any;
+      const data = await res.json();
 
       if (data?.status === 'waiting' || data?.id) {
         this.logger.log(`SMS sent to ${phone}, id=${data.id}`);
@@ -110,7 +113,10 @@ export class SmsChannelService {
   // ── Message templates ────────────────────────────────────────────────────────
 
   formatMeetingReminder(title: string, minutesBefore: number): string {
-    const label = minutesBefore >= 60 ? `${minutesBefore / 60} soat` : `${minutesBefore} daqiqa`;
+    const label =
+      minutesBefore >= 60
+        ? `${minutesBefore / 60} soat`
+        : `${minutesBefore} daqiqa`;
     return `UPZ: "${title}" meeting ${label} keyin boshlanadi. Tayyorlaning!`;
   }
 

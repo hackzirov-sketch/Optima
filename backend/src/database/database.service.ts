@@ -38,11 +38,18 @@ export class DatabaseService implements OnModuleDestroy {
    * rethrows on any error, always releases the connection.
    */
   async withTransaction<T>(
-    fn: (query: <R extends QueryResultRow = any>(sql: string, params?: unknown[]) => Promise<R[]>) => Promise<T>,
+    fn: (
+      query: <R extends QueryResultRow = any>(
+        sql: string,
+        params?: unknown[],
+      ) => Promise<R[]>,
+    ) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
-    const query = async <R extends QueryResultRow = any>(sql: string, params?: unknown[]) =>
-      (await client.query<R>(sql, params)).rows;
+    const query = async <R extends QueryResultRow = any>(
+      sql: string,
+      params?: unknown[],
+    ) => (await client.query<R>(sql, params)).rows;
     try {
       await client.query('BEGIN');
       const result = await fn(query);

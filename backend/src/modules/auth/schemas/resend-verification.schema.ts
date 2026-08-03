@@ -5,4 +5,6 @@ export const resendVerificationSchema = z.object({
   email: z.string().email(),
 });
 
-export class ResendVerificationDto extends createZodDto(resendVerificationSchema) {}
+export class ResendVerificationDto extends createZodDto(
+  resendVerificationSchema,
+) {}

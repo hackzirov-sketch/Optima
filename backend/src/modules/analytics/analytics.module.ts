@@ -7,9 +7,7 @@ import { AnalyticsController } from './analytics.controller';
 import { DailyStatsService } from './daily-stats.service';
 
 @Module({
-  imports: [
-    WorkspacesModule,
-  ],
+  imports: [WorkspacesModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService, DailyStatsService],
   exports: [AnalyticsService, DailyStatsService],

@@ -1,4 +1,3 @@
-
 export interface BannedContent {
   id: string;
 

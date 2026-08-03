@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { RedisKeys } from './redis.keys';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { randomUUID } from 'crypto';
 
 interface MemEntry {
   value: string;
@@ -62,7 +63,9 @@ export class RedisService implements OnModuleDestroy {
       const v = await client.get(RedisKeys.blacklistToken(jti));
       return v !== null;
     } catch (e) {
-      this.logger.warn(`JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Failing open.`);
+      this.logger.warn(
+        `JWT blacklist check failed: ${e instanceof Error ? e.message : e}. Failing open.`,
+      );
       return false;
     }
   }
@@ -80,12 +83,30 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  /** Block all tokens for a user (e.g. on account deletion). TTL should cover the max access-token lifetime. */
+  /**
+   * Invalidates every access token issued to a user up to *now* — used on
+   * "revoke all sessions", on refresh-token reuse detection, and on account
+   * deletion. Access tokens are stateless, so revoking the refresh token alone
+   * leaves the current access token usable for the rest of its (20 min) life;
+   * this is what actually closes that window.
+   *
+   * The stored value is the cutoff, not a flag, so a user who revokes
+   * everything can immediately log in again: the new token's `iat` is past the
+   * cutoff, while every token from before it is rejected. TTL should cover the
+   * max access-token lifetime — past that, no token old enough to be affected
+   * can still be valid.
+   */
   async blockUserSessions(userId: string, ttlSeconds: number): Promise<void> {
     try {
       const client = this.getClient();
       if (!client) return;
-      await client.set(RedisKeys.userBlock(userId), '1', 'EX', ttlSeconds);
+      const cutoff = Math.floor(Date.now() / 1000);
+      await client.set(
+        RedisKeys.userBlock(userId),
+        String(cutoff),
+        'EX',
+        ttlSeconds,
+      );
     } catch (e) {
       this.logger.warn(
         `Redis user-block set failed: ${e instanceof Error ? e.message : e}`,
@@ -93,20 +114,26 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  async isUserSessionBlocked(userId: string): Promise<boolean> {
+  /** Epoch-seconds cutoff set by blockUserSessions, or null if none is active. */
+  async getSessionBlockCutoff(userId: string): Promise<number | null> {
     try {
       const client = this.getClient();
-      if (!client) return false;
+      if (!client) return null;
       const v = await client.get(RedisKeys.userBlock(userId));
-      return v !== null;
+      return v === null ? null : Number(v);
     } catch (e) {
-      this.logger.warn(`Redis user-block check failed: ${e instanceof Error ? e.message : e}. Failing open.`);
-      return false;
+      this.logger.warn(
+        `Redis user-block check failed: ${e instanceof Error ? e.message : e}. Failing open.`,
+      );
+      return null;
     }
   }
 
   private memSet(key: string, value: string, ttlSeconds: number): void {
-    this.memStore.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+    this.memStore.set(key, {
+      value,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
   }
 
   private memGetAndDelete(key: string): string | null {
@@ -133,7 +160,9 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis OAuth code set failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis OAuth code set failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, serialized, 60);
   }
@@ -148,14 +177,21 @@ export class RedisService implements OnModuleDestroy {
         const raw = await client.get(key);
         if (raw) {
           await client.del(key);
-          return JSON.parse(raw) as { accessToken: string; refreshToken: string };
+          return JSON.parse(raw) as {
+            accessToken: string;
+            refreshToken: string;
+          };
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis OAuth code get failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis OAuth code get failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     const raw = this.memGetAndDelete(key);
-    return raw ? (JSON.parse(raw) as { accessToken: string; refreshToken: string }) : null;
+    return raw
+      ? (JSON.parse(raw) as { accessToken: string; refreshToken: string })
+      : null;
   }
 
   async setPasswordResetToken(token: string, userId: string): Promise<void> {
@@ -167,7 +203,9 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis pwd-reset set failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis pwd-reset set failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, userId, 900);
   }
@@ -196,7 +234,9 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis setPasswordResetOtp failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis setPasswordResetOtp failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, payload, 900);
   }
@@ -211,7 +251,11 @@ export class RedisService implements OnModuleDestroy {
     otp: string,
   ): Promise<
     | { ok: true; confirmedToken: string }
-    | { ok: false; reason: 'invalid_token' | 'wrong_otp' | 'max_attempts'; attemptsLeft?: number }
+    | {
+        ok: false;
+        reason: 'invalid_token' | 'wrong_otp' | 'max_attempts';
+        attemptsLeft?: number;
+      }
   > {
     const key = RedisKeys.pwdResetOtp(resetToken);
     let raw: string | null = null;
@@ -219,7 +263,9 @@ export class RedisService implements OnModuleDestroy {
       const client = this.getClient();
       if (client) raw = await client.get(key);
     } catch (e) {
-      this.logger.warn(`Redis verifyPasswordResetOtp get failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis verifyPasswordResetOtp get failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     if (!raw) {
       const mem = this.memStore.get(key);
@@ -227,7 +273,11 @@ export class RedisService implements OnModuleDestroy {
     }
     if (!raw) return { ok: false, reason: 'invalid_token' };
 
-    const record = JSON.parse(raw) as { userId: string; otp: string; attempts: number };
+    const record = JSON.parse(raw) as {
+      userId: string;
+      otp: string;
+      attempts: number;
+    };
     const MAX_ATTEMPTS = 5;
 
     if (record.otp !== otp) {
@@ -237,7 +287,9 @@ export class RedisService implements OnModuleDestroy {
         try {
           const client = this.getClient();
           if (client) await client.del(key);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         this.memStore.delete(key);
         return { ok: false, reason: 'max_attempts' };
       }
@@ -250,22 +302,34 @@ export class RedisService implements OnModuleDestroy {
           await client.set(key, updated, 'EX', ttl > 0 ? ttl : 900);
         } else {
           const mem = this.memStore.get(key);
-          this.memSet(key, updated, mem ? Math.ceil((mem.expiresAt - Date.now()) / 1000) : 900);
+          this.memSet(
+            key,
+            updated,
+            mem ? Math.ceil((mem.expiresAt - Date.now()) / 1000) : 900,
+          );
         }
       } catch (e) {
-        this.logger.warn(`Redis verifyPasswordResetOtp update failed: ${e instanceof Error ? e.message : e}`);
+        this.logger.warn(
+          `Redis verifyPasswordResetOtp update failed: ${e instanceof Error ? e.message : e}`,
+        );
       }
-      return { ok: false, reason: 'wrong_otp', attemptsLeft: MAX_ATTEMPTS - record.attempts };
+      return {
+        ok: false,
+        reason: 'wrong_otp',
+        attemptsLeft: MAX_ATTEMPTS - record.attempts,
+      };
     }
 
     // OTP correct — delete OTP record and issue confirmedToken (10 min, one-time-use)
     try {
       const client = this.getClient();
       if (client) await client.del(key);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     this.memStore.delete(key);
 
-    const confirmedToken = require('crypto').randomUUID() as string;
+    const confirmedToken = randomUUID();
     const confirmKey = RedisKeys.pwdResetConfirmed(confirmedToken);
     try {
       const client = this.getClient();
@@ -275,14 +339,18 @@ export class RedisService implements OnModuleDestroy {
         this.memSet(confirmKey, record.userId, 600);
       }
     } catch (e) {
-      this.logger.warn(`Redis verifyPasswordResetOtp confirm set failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis verifyPasswordResetOtp confirm set failed: ${e instanceof Error ? e.message : e}`,
+      );
       this.memSet(confirmKey, record.userId, 600);
     }
     return { ok: true, confirmedToken };
   }
 
   /** One-time consume confirmedToken → returns userId (used by resetPassword). */
-  async getAndDeleteConfirmedResetToken(confirmedToken: string): Promise<string | null> {
+  async getAndDeleteConfirmedResetToken(
+    confirmedToken: string,
+  ): Promise<string | null> {
     const key = RedisKeys.pwdResetConfirmed(confirmedToken);
     try {
       const client = this.getClient();
@@ -294,7 +362,9 @@ export class RedisService implements OnModuleDestroy {
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis getAndDeleteConfirmedResetToken failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis getAndDeleteConfirmedResetToken failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return this.memGetAndDelete(key);
   }
@@ -311,12 +381,18 @@ export class RedisService implements OnModuleDestroy {
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis pwd-reset get failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis pwd-reset get failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return this.memGetAndDelete(key);
   }
 
-  async incrementRateLimitFailures(action: string, ip: string, windowSeconds: number): Promise<number> {
+  async incrementRateLimitFailures(
+    action: string,
+    ip: string,
+    windowSeconds: number,
+  ): Promise<number> {
     const key = RedisKeys.rateLimitFailures(action, ip);
     try {
       const client = this.getClient();
@@ -328,7 +404,9 @@ export class RedisService implements OnModuleDestroy {
         return count;
       }
     } catch (e) {
-      this.logger.warn(`Redis incrementRateLimitFailures failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis incrementRateLimitFailures failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     // Fallback to mem store logic if redis fails
     const currentStr = this.memStore.get(key)?.value || '0';
@@ -337,7 +415,11 @@ export class RedisService implements OnModuleDestroy {
     return count;
   }
 
-  async blockRateLimit(action: string, ip: string, blockSeconds: number): Promise<void> {
+  async blockRateLimit(
+    action: string,
+    ip: string,
+    blockSeconds: number,
+  ): Promise<void> {
     const blockKey = RedisKeys.rateLimitBlocked(action, ip);
     try {
       const client = this.getClient();
@@ -346,12 +428,17 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis blockRateLimit failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis blockRateLimit failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(blockKey, '1', blockSeconds);
   }
 
-  async checkRateLimitBlock(action: string, ip: string): Promise<number | null> {
+  async checkRateLimitBlock(
+    action: string,
+    ip: string,
+  ): Promise<number | null> {
     const blockKey = RedisKeys.rateLimitBlocked(action, ip);
     try {
       const client = this.getClient();
@@ -360,7 +447,9 @@ export class RedisService implements OnModuleDestroy {
         if (ttl > 0) return ttl;
       }
     } catch (e) {
-      this.logger.warn(`Redis checkRateLimitBlock failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis checkRateLimitBlock failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     const memEntry = this.memStore.get(blockKey);
     if (memEntry && memEntry.expiresAt > Date.now()) {
@@ -368,7 +457,6 @@ export class RedisService implements OnModuleDestroy {
     }
     return null;
   }
-
 
   /**
    * OPTIMIZED: Pipeline checkBlock + increment in ONE round trip (was 2 sequential calls)
@@ -398,7 +486,9 @@ export class RedisService implements OnModuleDestroy {
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis checkAndIncrement failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis checkAndIncrement failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     // Fallback: mem store
     const blockEntry = this.memStore.get(blockKey);
@@ -417,7 +507,11 @@ export class RedisService implements OnModuleDestroy {
    * Three tiers checked atomically in one round trip via Lua, same
    * INCR-then-PEXPIRE-only-on-first-hit pattern as RedisThrottlerStorage.
    */
-  private static readonly CHAT_MSG_TIERS: ReadonlyArray<{ name: string; windowMs: number; limit: number }> = [
+  private static readonly CHAT_MSG_TIERS: ReadonlyArray<{
+    name: string;
+    windowMs: number;
+    limit: number;
+  }> = [
     { name: 'burst', windowMs: 1_000, limit: 3 },
     { name: 'medium', windowMs: 10_000, limit: 20 },
     { name: 'long', windowMs: 60_000, limit: 100 },
@@ -440,7 +534,9 @@ export class RedisService implements OnModuleDestroy {
     return results
   `;
 
-  async checkChatMessageRateLimit(userId: string): Promise<{ exceeded: boolean; retryAfterSeconds: number }> {
+  async checkChatMessageRateLimit(
+    userId: string,
+  ): Promise<{ exceeded: boolean; retryAfterSeconds: number }> {
     const tiers = RedisService.CHAT_MSG_TIERS;
     try {
       const client = this.getClient();
@@ -458,13 +554,18 @@ export class RedisService implements OnModuleDestroy {
           const pttl = raw[i * 3 + 1];
           const limit = raw[i * 3 + 2];
           if (hits > limit) {
-            return { exceeded: true, retryAfterSeconds: Math.max(1, Math.ceil(pttl / 1000)) };
+            return {
+              exceeded: true,
+              retryAfterSeconds: Math.max(1, Math.ceil(pttl / 1000)),
+            };
           }
         }
         return { exceeded: false, retryAfterSeconds: 0 };
       }
     } catch (e) {
-      this.logger.warn(`Redis chat rate limit check failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis chat rate limit check failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return this.memCheckChatMessageRateLimit(userId, tiers);
   }
@@ -484,7 +585,13 @@ export class RedisService implements OnModuleDestroy {
       const hits = parseInt(entry.value, 10) + 1;
       entry.value = hits.toString();
       if (hits > tier.limit) {
-        return { exceeded: true, retryAfterSeconds: Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)) };
+        return {
+          exceeded: true,
+          retryAfterSeconds: Math.max(
+            1,
+            Math.ceil((entry.expiresAt - now) / 1000),
+          ),
+        };
       }
     }
     return { exceeded: false, retryAfterSeconds: 0 };
@@ -500,7 +607,9 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis clearRateLimit failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis clearRateLimit failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memStore.delete(failuresKey);
     this.memStore.delete(blockKey);
@@ -510,12 +619,13 @@ export class RedisService implements OnModuleDestroy {
 
   /**
    * OPTIMIZED: JWT validation — 3 Redis calls → 1 pipeline round trip
-   * Returns [isBlacklisted, isSessionBlocked, cachedUser]
+   * Returns [isBlacklisted, sessionBlockCutoff, cachedUser], where the cutoff
+   * is epoch seconds (see blockUserSessions) or null when no block is active.
    */
   async validateTokenPipeline(
     userId: string,
     jti?: string,
-  ): Promise<[boolean, boolean, any | null]> {
+  ): Promise<[boolean, number | null, any]> {
     try {
       const client = this.getClient();
       if (client) {
@@ -530,22 +640,30 @@ export class RedisService implements OnModuleDestroy {
         const results = await pipeline.exec();
         if (results) {
           const isBlacklisted = jti ? results[0][1] !== null : false;
-          const isSessionBlocked = results[1][1] !== null;
+          const blockRaw = results[1][1] as string | null;
+          const sessionBlockCutoff =
+            blockRaw === null ? null : Number(blockRaw);
           const cachedRaw = results[2][1] as string | null;
           const cachedUser = cachedRaw ? JSON.parse(cachedRaw) : null;
-          return [isBlacklisted, isSessionBlocked, cachedUser];
+          return [isBlacklisted, sessionBlockCutoff, cachedUser];
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis validateTokenPipeline failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis validateTokenPipeline failed: ${e instanceof Error ? e.message : e}`,
+      );
       // Fail open: blacklist is defense-in-depth on top of JWT signature/expiry
       // checks (only set on logout/account deletion) — a Redis outage should
       // not lock out every authenticated user in the app.
     }
-    return [false, false, null];
+    return [false, null, null];
   }
 
-  async cacheUser(userId: string, user: any, ttlSeconds: number = 10): Promise<void> {
+  async cacheUser(
+    userId: string,
+    user: any,
+    ttlSeconds: number = 10,
+  ): Promise<void> {
     const key = RedisKeys.cachedUser(userId);
     try {
       const client = this.getClient();
@@ -554,11 +672,13 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis cacheUser failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis cacheUser failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
-  async getCachedUser(userId: string): Promise<any | null> {
+  async getCachedUser(userId: string): Promise<any> {
     const key = RedisKeys.cachedUser(userId);
     try {
       const client = this.getClient();
@@ -567,7 +687,9 @@ export class RedisService implements OnModuleDestroy {
         return raw ? JSON.parse(raw) : null;
       }
     } catch (e) {
-      this.logger.warn(`Redis getCachedUser failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis getCachedUser failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return null;
   }
@@ -580,7 +702,9 @@ export class RedisService implements OnModuleDestroy {
         await client.del(key);
       }
     } catch (e) {
-      this.logger.warn(`Redis clearCachedUser failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis clearCachedUser failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
@@ -594,12 +718,18 @@ export class RedisService implements OnModuleDestroy {
         if (ttl > 0) return ttl;
       }
     } catch (e) {
-      this.logger.warn(`Redis getAccountLockout failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis getAccountLockout failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return null;
   }
 
-  async incrementAccountLockoutFailures(userId: string, maxAttempts: number, lockoutSeconds: number): Promise<void> {
+  async incrementAccountLockoutFailures(
+    userId: string,
+    maxAttempts: number,
+    lockoutSeconds: number,
+  ): Promise<void> {
     const keyFails = RedisKeys.accountLockoutFailures(userId);
     const keyLock = RedisKeys.accountLockout(userId);
     try {
@@ -614,7 +744,9 @@ export class RedisService implements OnModuleDestroy {
         }
       }
     } catch (e) {
-      this.logger.warn(`Redis incrementAccountLockoutFailures failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis incrementAccountLockoutFailures failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
@@ -627,7 +759,9 @@ export class RedisService implements OnModuleDestroy {
         await client.del(keyFails, keyLock);
       }
     } catch (e) {
-      this.logger.warn(`Redis clearAccountLockout failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis clearAccountLockout failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
@@ -661,14 +795,19 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis setEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis setEmailVerification failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, payload, this.EMAIL_VERIFY_TTL_SECONDS);
   }
 
-  async getEmailVerification(
-    token: string,
-  ): Promise<{ userId: string; email: string; code: string; attempts: number } | null> {
+  async getEmailVerification(token: string): Promise<{
+    userId: string;
+    email: string;
+    code: string;
+    attempts: number;
+  } | null> {
     const key = RedisKeys.emailVerify(token);
     try {
       const client = this.getClient();
@@ -677,7 +816,9 @@ export class RedisService implements OnModuleDestroy {
         return raw ? JSON.parse(raw) : null;
       }
     } catch (e) {
-      this.logger.warn(`Redis getEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis getEmailVerification failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     const entry = this.memStore.get(key);
     if (!entry || Date.now() > entry.expiresAt) return null;
@@ -709,11 +850,18 @@ export class RedisService implements OnModuleDestroy {
       const client = this.getClient();
       if (client) {
         const ttl = await client.ttl(key);
-        await client.set(key, updated, 'EX', ttl > 0 ? ttl : this.EMAIL_VERIFY_TTL_SECONDS);
+        await client.set(
+          key,
+          updated,
+          'EX',
+          ttl > 0 ? ttl : this.EMAIL_VERIFY_TTL_SECONDS,
+        );
         return attempts;
       }
     } catch (e) {
-      this.logger.warn(`Redis incrementEmailVerifyAttempts failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis incrementEmailVerifyAttempts failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, updated, this.EMAIL_VERIFY_TTL_SECONDS);
     return attempts;
@@ -724,11 +872,18 @@ export class RedisService implements OnModuleDestroy {
     try {
       const client = this.getClient();
       if (client) {
-        await client.set(key, '1', 'EX', this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS);
+        await client.set(
+          key,
+          '1',
+          'EX',
+          this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS,
+        );
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis setEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis setEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memSet(key, '1', this.EMAIL_VERIFY_ATTEMPT_COOLDOWN_SECONDS);
   }
@@ -743,7 +898,9 @@ export class RedisService implements OnModuleDestroy {
         return ttl > 0 ? ttl : 0;
       }
     } catch (e) {
-      this.logger.warn(`Redis getEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis getEmailVerifyAttemptCooldown failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     const entry = this.memStore.get(key);
     if (!entry || Date.now() > entry.expiresAt) return 0;
@@ -759,7 +916,9 @@ export class RedisService implements OnModuleDestroy {
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis deleteEmailVerification failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis deleteEmailVerification failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     this.memStore.delete(key);
   }
@@ -770,24 +929,39 @@ export class RedisService implements OnModuleDestroy {
    * used to spam an inbox (or run up email-provider costs) all day long.
    * Returns null if allowed, or the reason + retryAfter (seconds) if blocked.
    */
-  async checkEmailVerifyResendLimit(
-    userId: string,
-  ): Promise<{ blocked: true; reason: 'cooldown' | 'daily_cap'; retryAfter: number } | null> {
+  async checkEmailVerifyResendLimit(userId: string): Promise<{
+    blocked: true;
+    reason: 'cooldown' | 'daily_cap';
+    retryAfter: number;
+  } | null> {
     const cooldownKey = RedisKeys.emailVerifyResendCooldown(userId);
     const countKey = RedisKeys.emailVerifyResendCount(userId);
     try {
       const client = this.getClient();
       if (client) {
-        const [cooldownTtl, count] = await Promise.all([client.ttl(cooldownKey), client.get(countKey)]);
-        if (cooldownTtl > 0) return { blocked: true, reason: 'cooldown', retryAfter: cooldownTtl };
-        if (count && parseInt(count, 10) >= this.EMAIL_VERIFY_RESEND_DAILY_CAP) {
+        const [cooldownTtl, count] = await Promise.all([
+          client.ttl(cooldownKey),
+          client.get(countKey),
+        ]);
+        if (cooldownTtl > 0)
+          return { blocked: true, reason: 'cooldown', retryAfter: cooldownTtl };
+        if (
+          count &&
+          parseInt(count, 10) >= this.EMAIL_VERIFY_RESEND_DAILY_CAP
+        ) {
           const dailyTtl = await client.ttl(countKey);
-          return { blocked: true, reason: 'daily_cap', retryAfter: dailyTtl > 0 ? dailyTtl : 86400 };
+          return {
+            blocked: true,
+            reason: 'daily_cap',
+            retryAfter: dailyTtl > 0 ? dailyTtl : 86400,
+          };
         }
         return null;
       }
     } catch (e) {
-      this.logger.warn(`Redis checkEmailVerifyResendLimit failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis checkEmailVerifyResendLimit failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
     return null; // fail-open for resend limiting — worst case is an extra email, not a security issue
   }
@@ -800,14 +974,21 @@ export class RedisService implements OnModuleDestroy {
       const client = this.getClient();
       if (client) {
         const pipeline = client.pipeline();
-        pipeline.set(cooldownKey, '1', 'EX', this.EMAIL_VERIFY_RESEND_COOLDOWN_SECONDS);
+        pipeline.set(
+          cooldownKey,
+          '1',
+          'EX',
+          this.EMAIL_VERIFY_RESEND_COOLDOWN_SECONDS,
+        );
         pipeline.incr(countKey);
         pipeline.expire(countKey, 86400, 'NX');
         await pipeline.exec();
         return;
       }
     } catch (e) {
-      this.logger.warn(`Redis markEmailVerifyResendSent failed: ${e instanceof Error ? e.message : e}`);
+      this.logger.warn(
+        `Redis markEmailVerifyResendSent failed: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 

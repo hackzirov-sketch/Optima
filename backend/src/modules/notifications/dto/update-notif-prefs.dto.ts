@@ -1,9 +1,4 @@
-import {
-  IsBoolean,
-  IsOptional,
-  IsString,
-  Matches,
-} from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Matches } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -45,7 +40,10 @@ export class UpdateNotifPrefsDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() marketingTelegram?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() marketingEmail?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() marketingInApp?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() certificateTelegram?: boolean;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  certificateTelegram?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() certificateEmail?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() certificateInApp?: boolean;
 
@@ -65,6 +63,8 @@ export class UpdateNotifPrefsDto {
 
 export class LinkTelegramDto {
   @IsString()
-  @ApiPropertyOptional({ description: 'Telegram chat_id from bot /start command' })
+  @ApiPropertyOptional({
+    description: 'Telegram chat_id from bot /start command',
+  })
   chatId: string;
 }

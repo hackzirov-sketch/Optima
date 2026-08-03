@@ -1,4 +1,12 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsUrl, MinLength, NotEquals } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MinLength,
+  NotEquals,
+} from 'class-validator';
 
 export enum Environment {
   Development = 'development',
@@ -38,15 +46,27 @@ export class EnvironmentVariables {
   REDIS_PASSWORD?: string;
 
   @IsString()
-  @MinLength(32, { message: 'JWT_ACCESS_SECRET must be at least 32 characters long' })
-  @NotEquals('your-32-char-secret', { message: 'JWT_ACCESS_SECRET is still the .env.example placeholder' })
-  @NotEquals('change-this-to-strong-32-char-secret', { message: 'JWT_ACCESS_SECRET is still a placeholder value' })
+  @MinLength(32, {
+    message: 'JWT_ACCESS_SECRET must be at least 32 characters long',
+  })
+  @NotEquals('your-32-char-secret', {
+    message: 'JWT_ACCESS_SECRET is still the .env.example placeholder',
+  })
+  @NotEquals('change-this-to-strong-32-char-secret', {
+    message: 'JWT_ACCESS_SECRET is still a placeholder value',
+  })
   JWT_ACCESS_SECRET: string;
 
   @IsString()
-  @MinLength(32, { message: 'JWT_REFRESH_SECRET must be at least 32 characters long' })
-  @NotEquals('your-32-char-secret', { message: 'JWT_REFRESH_SECRET is still the .env.example placeholder' })
-  @NotEquals('change-this-to-strong-32-char-refresh-secret', { message: 'JWT_REFRESH_SECRET is still a placeholder value' })
+  @MinLength(32, {
+    message: 'JWT_REFRESH_SECRET must be at least 32 characters long',
+  })
+  @NotEquals('your-32-char-secret', {
+    message: 'JWT_REFRESH_SECRET is still the .env.example placeholder',
+  })
+  @NotEquals('change-this-to-strong-32-char-refresh-secret', {
+    message: 'JWT_REFRESH_SECRET is still a placeholder value',
+  })
   JWT_REFRESH_SECRET: string;
 
   @IsString()

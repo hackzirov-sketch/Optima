@@ -2,7 +2,10 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { User } from '../../../database/entities/user.entity';
-import { USER_COLUMNS_SQL, mapUserRow } from '../../users/repositories/users.sql';
+import {
+  USER_COLUMNS_SQL,
+  mapUserRow,
+} from '../../users/repositories/users.sql';
 
 @Injectable()
 export class AuthRepository {
@@ -14,11 +17,12 @@ export class AuthRepository {
     userId: string,
   ): Promise<{ user: User; needsPasswordSetup: boolean }> {
     return this.dataSource.withTransaction(async (query) => {
-      const userRows: Array<User & { passwordHash: string | null }> = await query(
-        `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
+      const userRows: Array<User & { passwordHash: string | null }> =
+        await query(
+          `SELECT ${USER_COLUMNS_SQL}, password_hash AS "passwordHash"
          FROM users WHERE id = $1 FOR UPDATE`,
-        [userId],
-      );
+          [userId],
+        );
       const user = userRows[0] && mapUserRow(userRows[0]);
       if (!user) {
         throw new BadRequestException({

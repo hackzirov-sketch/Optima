@@ -21,7 +21,11 @@ export class ContentFilterService {
     private readonly violationService: ViolationService,
   ) {}
 
-  async filterText(text: string, userId?: string, context = 'text'): Promise<void> {
+  async filterText(
+    text: string,
+    userId?: string,
+    context = 'text',
+  ): Promise<void> {
     const result = await this.check(text);
     if (!result.flagged) return;
 
@@ -31,7 +35,11 @@ export class ContentFilterService {
 
     if (userId) {
       await this.violationService.assertNotBlocked(userId);
-      await this.violationService.recordViolation(userId, 'text', result.reason ?? 'content violation');
+      await this.violationService.recordViolation(
+        userId,
+        'text',
+        result.reason ?? 'content violation',
+      );
     }
 
     throw new BadRequestException({
@@ -58,14 +66,22 @@ export class ContentFilterService {
         try {
           const re = new RegExp(entry.pattern, 'i');
           if (re.test(text)) {
-            return { flagged: true, reason: 'matches banned pattern', category: entry.category ?? undefined };
+            return {
+              flagged: true,
+              reason: 'matches banned pattern',
+              category: entry.category ?? undefined,
+            };
           }
         } catch {
           // Invalid regex in DB — skip
         }
       } else {
         if (lower.includes(entry.pattern.toLowerCase())) {
-          return { flagged: true, reason: 'contains banned word/phrase', category: entry.category ?? undefined };
+          return {
+            flagged: true,
+            reason: 'contains banned word/phrase',
+            category: entry.category ?? undefined,
+          };
         }
       }
     }
@@ -79,21 +95,34 @@ export class ContentFilterService {
     // Message too long (wall-of-text / paste spam). Threshold: 1500 chars.
     // Long-form content must use the document upload path instead.
     if (trimmed.length > 1500) {
-      return { flagged: true, reason: 'message too long (max 1500 characters)', category: 'spam' };
+      return {
+        flagged: true,
+        reason: 'message too long (max 1500 characters)',
+        category: 'spam',
+      };
     }
 
     // Excessive repeated characters: "aaaaaaa" or "!!!!!!"
     if (/(.)\1{9,}/.test(trimmed)) {
-      return { flagged: true, reason: 'excessive character repetition', category: 'spam' };
+      return {
+        flagged: true,
+        reason: 'excessive character repetition',
+        category: 'spam',
+      };
     }
 
     // Excessive caps (>70% uppercase, min 10 chars)
     if (trimmed.length >= 10) {
       const letters = trimmed.replace(/[^a-zA-Z]/g, '');
       if (letters.length > 5) {
-        const upperRatio = (letters.match(/[A-Z]/g) ?? []).length / letters.length;
+        const upperRatio =
+          (letters.match(/[A-Z]/g) ?? []).length / letters.length;
         if (upperRatio > 0.7) {
-          return { flagged: true, reason: 'excessive uppercase (possible spam)', category: 'spam' };
+          return {
+            flagged: true,
+            reason: 'excessive uppercase (possible spam)',
+            category: 'spam',
+          };
         }
       }
     }
@@ -101,7 +130,11 @@ export class ContentFilterService {
     // Too many URLs (>3 links in one message = spam)
     const urlCount = (trimmed.match(/https?:\/\//gi) ?? []).length;
     if (urlCount > 3) {
-      return { flagged: true, reason: 'too many URLs in message', category: 'spam' };
+      return {
+        flagged: true,
+        reason: 'too many URLs in message',
+        category: 'spam',
+      };
     }
 
     // Repeated word spam: same word 5+ times
@@ -111,7 +144,11 @@ export class ContentFilterService {
       for (const w of words) freq.set(w, (freq.get(w) ?? 0) + 1);
       for (const [word, count] of freq) {
         if (word.length > 2 && count >= 5 && count / words.length > 0.4) {
-          return { flagged: true, reason: `repeated word spam: "${word}"`, category: 'spam' };
+          return {
+            flagged: true,
+            reason: `repeated word spam: "${word}"`,
+            category: 'spam',
+          };
         }
       }
     }

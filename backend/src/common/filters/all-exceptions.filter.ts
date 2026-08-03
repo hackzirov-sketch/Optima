@@ -13,6 +13,14 @@ import { ConfigService } from '@nestjs/config';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  /** The only routes where an error should redirect the browser instead of
+   * returning JSON — the user is mid-OAuth and has no client code to read a
+   * response body. */
+  private static readonly OAUTH_CALLBACK_PATHS = [
+    '/auth/google/callback',
+    '/auth/github/callback',
+  ];
+
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   constructor(private readonly configService: ConfigService) {}
@@ -48,7 +56,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = 'Validation failed';
         code = ErrorCode.VALIDATION_ERROR;
         details = exceptionResponse.errors.map(
-          (issue: any) => `${issue.path?.join('.') || 'value'}: ${issue.message}`,
+          (issue: any) =>
+            `${issue.path?.join('.') || 'value'}: ${issue.message}`,
         );
       } else if (
         status === HttpStatus.BAD_REQUEST &&
@@ -87,9 +96,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
     }
 
-    // Handle OAuth callback redirects
+    // Handle OAuth callback redirects.
+    //
+    // Scoped to the two real callback routes rather than `url.includes(
+    // '/callback')`: that matched any GET path with "/callback" anywhere in it
+    // — including query strings — so an unrelated endpoint's error turned into
+    // a 302 to the login page instead of the JSON body its caller was parsing.
     const isOAuthCallback =
-      request.url.includes('/callback') && request.method === 'GET';
+      request.method === 'GET' &&
+      AllExceptionsFilter.OAUTH_CALLBACK_PATHS.some((path) =>
+        request.path.endsWith(path),
+      );
     const isOAuthError =
       exception?.name === 'TokenError' ||
       exception?.name === 'AuthorizationError' ||

@@ -24,8 +24,14 @@ import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
 import { DailyStatsService } from '../analytics/daily-stats.service';
-import { TASK_PUSH_COLUMNS_SQL, TASK_PUSH_COLUMNS_SQL_P } from '../tasks/tasks.sql';
-import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
+import {
+  TASK_PUSH_COLUMNS_SQL,
+  TASK_PUSH_COLUMNS_SQL_P,
+} from '../tasks/tasks.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../common/utils/sql.util';
 
 const PUSH_COMMENT_COLUMNS_SQL = `
   id, push_id AS "pushId", author_id AS "authorId", parent_id AS "parentId",
@@ -55,7 +61,10 @@ export class PushesService {
     );
     const m = rows[0];
     if (!m)
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'You are not a member of this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'You are not a member of this workspace',
+      });
     return m;
   }
 
@@ -73,7 +82,11 @@ export class PushesService {
       [pushId],
     );
     const push = rows[0] ?? null;
-    if (!isActiveEntity(push)) throw new NotFoundException({ code: ErrorCode.PUSH_NOT_FOUND, message: 'Push not found' });
+    if (!isActiveEntity(push))
+      throw new NotFoundException({
+        code: ErrorCode.PUSH_NOT_FOUND,
+        message: 'Push not found',
+      });
     return push;
   }
 
@@ -87,7 +100,11 @@ export class PushesService {
 
   private async assertPushVisible(push: TaskPush, userId: string) {
     const task = await this.getTask(push.taskId);
-    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!task)
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
     await this.assertMember(task.workspaceId, userId);
   }
 
@@ -164,7 +181,12 @@ export class PushesService {
 
     const mapped = data.map((r) => {
       const { task_id, task_title, task_taskNumber, ...push } = r;
-      return { ...push, task: task_id ? { id: task_id, title: task_title, taskNumber: task_taskNumber } : null };
+      return {
+        ...push,
+        task: task_id
+          ? { id: task_id, title: task_title, taskNumber: task_taskNumber }
+          : null,
+      };
     });
 
     return { data: mapped, total, page, limit };
@@ -172,7 +194,11 @@ export class PushesService {
 
   async submit(userId: string, dto: SubmitPushDto) {
     const task = await this.getTask(dto.taskId);
-    if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!isActiveEntity(task))
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
 
     const member = await this.assertMember(task.workspaceId, userId);
 
@@ -184,7 +210,10 @@ export class PushesService {
       );
       repo = repoRows[0] ?? null;
       if (!repo || (repo as any).workspaceId !== task.workspaceId) {
-        throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
+        throw new BadRequestException({
+          code: ErrorCode.REPO_NOT_FOUND,
+          message: 'Repository does not belong to this task workspace',
+        });
       }
     }
 
@@ -228,21 +257,35 @@ export class PushesService {
       );
       saved = updatedRows[0];
 
-      await this.dailyStats.increment(userId, task.projectId, task.workspaceId, {
-        pushesSubmitted: 1,
-      });
+      await this.dailyStats.increment(
+        userId,
+        task.projectId,
+        task.workspaceId,
+        {
+          pushesSubmitted: 1,
+        },
+      );
     } catch {
       await this.dataSource.query(
         `UPDATE task_pushes SET status = $2::task_pushes_status_enum WHERE id = $1`,
         [saved.id, PushStatus.PENDING],
       );
-      throw new BadRequestException({ code: ErrorCode.PUSH_UPLOAD_FAILED, message: 'Failed to upload diff bundle to storage' });
+      throw new BadRequestException({
+        code: ErrorCode.PUSH_UPLOAD_FAILED,
+        message: 'Failed to upload diff bundle to storage',
+      });
     }
 
     await this.dataSource.query(
       `INSERT INTO task_activities (task_id, user_id, type, description, metadata)
        VALUES ($1, $2, $3, $4, $5)`,
-      [task.id, userId, 'push_submitted', `Push submitted for review (${saved.id})`, { pushId: saved.id, branch: dto.branchName }],
+      [
+        task.id,
+        userId,
+        'push_submitted',
+        `Push submitted for review (${saved.id})`,
+        { pushId: saved.id, branch: dto.branchName },
+      ],
     );
 
     return this.getById(saved.id, userId);
@@ -271,13 +314,20 @@ export class PushesService {
   ): Promise<TaskPush> {
     const push = await this.loadPush(pushId);
     const task = await this.getTask(push.taskId);
-    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!task)
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
 
     const requester = await this.assertMember(task.workspaceId, requesterId);
     this.assertApprover(requester); // lead, admin, or owner
 
     if (push.type !== PushType.DRAFT) {
-      throw new BadRequestException({ code: ErrorCode.PUSH_NOT_DRAFT, message: 'Only draft pushes can be linked to a repository' });
+      throw new BadRequestException({
+        code: ErrorCode.PUSH_NOT_DRAFT,
+        message: 'Only draft pushes can be linked to a repository',
+      });
     }
 
     const repoRows = await this.dataSource.query(
@@ -286,7 +336,10 @@ export class PushesService {
     );
     const repo = repoRows[0];
     if (!repo || repo.workspaceId !== task.workspaceId) {
-      throw new BadRequestException({ code: ErrorCode.REPO_NOT_FOUND, message: 'Repository does not belong to this task workspace' });
+      throw new BadRequestException({
+        code: ErrorCode.REPO_NOT_FOUND,
+        message: 'Repository does not belong to this task workspace',
+      });
     }
 
     const submitterRows = await this.dataSource.query(
@@ -330,7 +383,10 @@ export class PushesService {
     const push = await this.loadPush(pushId);
     await this.assertPushVisible(push, userId);
     if (!push.storageKey)
-      throw new BadRequestException({ code: ErrorCode.PUSH_NO_ARTIFACT, message: 'No artifact for this push' });
+      throw new BadRequestException({
+        code: ErrorCode.PUSH_NO_ARTIFACT,
+        message: 'No artifact for this push',
+      });
     const expiresIn = 3600;
     const url = await this.storage.getPresignedDownloadUrl(
       push.storageKey,
@@ -342,12 +398,19 @@ export class PushesService {
   async approve(pushId: string, userId: string) {
     const push = await this.loadPush(pushId);
     const task = await this.getTask(push.taskId);
-    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!task)
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertApprover(member);
 
-    if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status as any)) {
-      throw new BadRequestException({ code: ErrorCode.PUSH_ALREADY_REVIEWED, message: 'Push cannot be approved in its current state' });
+    if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
+      throw new BadRequestException({
+        code: ErrorCode.PUSH_ALREADY_REVIEWED,
+        message: 'Push cannot be approved in its current state',
+      });
     }
 
     const savedRows: TaskPush[] = normalizeReturning(
@@ -359,16 +422,27 @@ export class PushesService {
     );
     const saved = savedRows[0];
 
-    await this.dailyStats.increment(saved.userId, task.projectId, task.workspaceId, {
-      pushesApproved: 1,
-      addedLines: saved.addedLines ?? 0,
-      removedLines: saved.removedLines ?? 0,
-    });
+    await this.dailyStats.increment(
+      saved.userId,
+      task.projectId,
+      task.workspaceId,
+      {
+        pushesApproved: 1,
+        addedLines: saved.addedLines ?? 0,
+        removedLines: saved.removedLines ?? 0,
+      },
+    );
 
     await this.dataSource.query(
       `INSERT INTO task_activities (task_id, user_id, type, description, metadata)
        VALUES ($1, $2, $3, $4, $5)`,
-      [task.id, userId, 'push_approved', `Push ${saved.id} approved`, { pushId: saved.id }],
+      [
+        task.id,
+        userId,
+        'push_approved',
+        `Push ${saved.id} approved`,
+        { pushId: saved.id },
+      ],
     );
 
     return saved;
@@ -377,12 +451,19 @@ export class PushesService {
   async reject(pushId: string, userId: string, dto: ReviewPushDto) {
     const push = await this.loadPush(pushId);
     const task = await this.getTask(push.taskId);
-    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!task)
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
-    if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status as any)) {
-      throw new BadRequestException({ code: ErrorCode.PUSH_ALREADY_REVIEWED, message: 'Push cannot be rejected in its current state' });
+    if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
+      throw new BadRequestException({
+        code: ErrorCode.PUSH_ALREADY_REVIEWED,
+        message: 'Push cannot be rejected in its current state',
+      });
     }
 
     const savedRows: TaskPush[] = normalizeReturning(
@@ -398,7 +479,13 @@ export class PushesService {
     await this.dataSource.query(
       `INSERT INTO task_activities (task_id, user_id, type, description, metadata)
        VALUES ($1, $2, $3, $4, $5)`,
-      [task.id, userId, 'push_rejected', `Push ${saved.id} rejected`, { pushId: saved.id, reason: dto.reason }],
+      [
+        task.id,
+        userId,
+        'push_rejected',
+        `Push ${saved.id} rejected`,
+        { pushId: saved.id, reason: dto.reason },
+      ],
     );
 
     return saved;
@@ -419,11 +506,29 @@ export class PushesService {
       [pushId],
     );
     return rows.map((r) => {
-      const { a_id, a_firstName, a_lastName, a_avatarUrl, r_id, r_firstName, r_lastName, ...comment } = r;
+      const {
+        a_id,
+        a_firstName,
+        a_lastName,
+        a_avatarUrl,
+        r_id,
+        r_firstName,
+        r_lastName,
+        ...comment
+      } = r;
       return {
         ...comment,
-        author: a_id ? { id: a_id, firstName: a_firstName, lastName: a_lastName, avatarUrl: a_avatarUrl } : null,
-        resolvedBy: r_id ? { id: r_id, firstName: r_firstName, lastName: r_lastName } : null,
+        author: a_id
+          ? {
+              id: a_id,
+              firstName: a_firstName,
+              lastName: a_lastName,
+              avatarUrl: a_avatarUrl,
+            }
+          : null,
+        resolvedBy: r_id
+          ? { id: r_id, firstName: r_firstName, lastName: r_lastName }
+          : null,
       };
     });
   }
@@ -434,7 +539,15 @@ export class PushesService {
       `INSERT INTO push_review_comments (push_id, author_id, content, file_path, line_number, line_type, parent_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${PUSH_COMMENT_COLUMNS_SQL}`,
-      [pushId, userId, dto.content, dto.filePath ?? null, dto.lineNumber ?? null, dto.lineType ?? null, dto.parentId ?? null],
+      [
+        pushId,
+        userId,
+        dto.content,
+        dto.filePath ?? null,
+        dto.lineNumber ?? null,
+        dto.lineType ?? null,
+        dto.parentId ?? null,
+      ],
     );
     return rows[0];
   }
@@ -451,9 +564,16 @@ export class PushesService {
       [commentId, pushId],
     );
     const c = rows[0];
-    if (!c) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
+    if (!c)
+      throw new NotFoundException({
+        code: ErrorCode.PUSH_COMMENT_NOT_FOUND,
+        message: 'Comment not found',
+      });
     if (c.authorId !== userId)
-      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only edit your own comments' });
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You can only edit your own comments',
+      });
 
     const patch: Record<string, unknown> = {};
     if (dto.content !== undefined) patch.content = dto.content;
@@ -482,16 +602,30 @@ export class PushesService {
       [commentId, pushId],
     );
     const c = rows[0];
-    if (!c) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
+    if (!c)
+      throw new NotFoundException({
+        code: ErrorCode.PUSH_COMMENT_NOT_FOUND,
+        message: 'Comment not found',
+      });
     if (c.authorId !== userId)
-      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only delete your own comments' });
-    await this.dataSource.query(`DELETE FROM push_review_comments WHERE id = $1`, [commentId]);
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You can only delete your own comments',
+      });
+    await this.dataSource.query(
+      `DELETE FROM push_review_comments WHERE id = $1`,
+      [commentId],
+    );
   }
 
   async resolveComment(pushId: string, commentId: string, userId: string) {
     const push = await this.loadPush(pushId);
     const task = await this.getTask(push.taskId);
-    if (!task) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!task)
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
@@ -503,7 +637,11 @@ export class PushesService {
         [commentId, userId, pushId],
       ),
     );
-    if (!rows[0]) throw new NotFoundException({ code: ErrorCode.PUSH_COMMENT_NOT_FOUND, message: 'Comment not found' });
+    if (!rows[0])
+      throw new NotFoundException({
+        code: ErrorCode.PUSH_COMMENT_NOT_FOUND,
+        message: 'Comment not found',
+      });
     return rows[0];
   }
 }

@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ChatMemberService } from './member.service';
 
@@ -37,7 +42,13 @@ export class CommunityService {
     return { channel: rows[0] ?? null, group: rows[1] ?? null };
   }
 
-  async listMembers(roomId: string, userId: string, query = '', page = 1, limit = 30) {
+  async listMembers(
+    roomId: string,
+    userId: string,
+    query = '',
+    page = 1,
+    limit = 30,
+  ) {
     await this.members.assertRoomMember(roomId, userId);
     const safeLimit = Math.min(Math.max(limit || 30, 1), 100);
     const safePage = Math.max(page || 1, 1);
@@ -64,10 +75,21 @@ export class CommunityService {
          AND u.deleted_at IS NULL ${searchSql}`,
       search ? [roomId, safeLimit, 0, `%${search}%`] : [roomId],
     );
-    return { items, page: safePage, limit: safeLimit, total: countRows[0]?.total ?? 0 };
+    return {
+      items,
+      page: safePage,
+      limit: safeLimit,
+      total: countRows[0]?.total ?? 0,
+    };
   }
 
-  async shared(roomId: string, userId: string, kind: SharedKind, cursor?: string, limit = 30) {
+  async shared(
+    roomId: string,
+    userId: string,
+    kind: SharedKind,
+    cursor?: string,
+    limit = 30,
+  ) {
     await this.members.assertRoomMember(roomId, userId);
     if (!['media', 'files', 'links', 'music', 'voice'].includes(kind)) {
       throw new BadRequestException('Unsupported shared content type');
@@ -95,7 +117,7 @@ export class CommunityService {
               a.created_at AS "createdAt", u.username
        FROM message_attachments a
        JOIN chat_messages m ON m.id = a.message_id JOIN users u ON u.id = a.uploader_id
-       WHERE m.room_id = $1 AND m.deleted_at IS NULL AND ${mimeFilter[kind as Exclude<SharedKind, 'links'>]}
+       WHERE m.room_id = $1 AND m.deleted_at IS NULL AND ${mimeFilter[kind]}
          AND ($2::timestamptz IS NULL OR a.created_at < $2)
        ORDER BY a.created_at DESC LIMIT $3`,
       [roomId, cursor ?? null, safeLimit],
@@ -132,7 +154,14 @@ export class CommunityService {
          ON CONFLICT (source_channel_message_id) WHERE source_channel_message_id IS NOT NULL AND deleted_at IS NULL
          DO UPDATE SET source_channel_message_id = EXCLUDED.source_channel_message_id
          RETURNING id, room_id AS "roomId", source_channel_message_id AS "sourceChannelMessageId"`,
-        [source.groupId, source.senderId, sequenceRows[0].message_seq, source.content ?? '', JSON.stringify({ kind: 'channel_discussion' }), messageId],
+        [
+          source.groupId,
+          source.senderId,
+          sequenceRows[0].message_seq,
+          source.content ?? '',
+          JSON.stringify({ kind: 'channel_discussion' }),
+          messageId,
+        ],
       );
       await query(
         `UPDATE chat_messages SET discussion_root_message_id = $2 WHERE id = $1`,
@@ -142,11 +171,21 @@ export class CommunityService {
     });
   }
 
-  async updateMemberRole(roomId: string, targetUsername: string, role: 'member' | 'admin', userId: string) {
+  async updateMemberRole(
+    roomId: string,
+    targetUsername: string,
+    role: 'member' | 'admin',
+    userId: string,
+  ) {
     const requester = await this.members.assertRoomMember(roomId, userId);
-    if (!['admin', 'owner'].includes(requester.role)) throw new ForbiddenException('Admin permission required');
-    const roomRows = await this.dataSource.query(`SELECT is_system AS "isSystem" FROM chat_rooms WHERE id = $1`, [roomId]);
-    if (!roomRows[0]?.isSystem) throw new BadRequestException('This endpoint is for system resources');
+    if (!['admin', 'owner'].includes(requester.role))
+      throw new ForbiddenException('Admin permission required');
+    const roomRows = await this.dataSource.query(
+      `SELECT is_system AS "isSystem" FROM chat_rooms WHERE id = $1`,
+      [roomId],
+    );
+    if (!roomRows[0]?.isSystem)
+      throw new BadRequestException('This endpoint is for system resources');
     const result = await this.dataSource.query(
       `UPDATE chat_members cm SET role = $3 FROM users u
        WHERE cm.room_id = $1 AND cm.user_id = u.id AND u.username = $2

@@ -1,4 +1,12 @@
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class AiHistoryItemDto {
@@ -8,6 +16,10 @@ class AiHistoryItemDto {
 
 export class AiRequestDto {
   @IsString() @MaxLength(6000) message!: string;
-  @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => AiHistoryItemDto)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => AiHistoryItemDto)
   history?: AiHistoryItemDto[];
 }

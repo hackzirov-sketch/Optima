@@ -24,9 +24,7 @@ export interface AuditLogEntry {
  */
 @Injectable()
 export class AuditService {
-  constructor(
-    private readonly dataSource: DatabaseService,
-  ) {}
+  constructor(private readonly dataSource: DatabaseService) {}
 
   async log(entry: AuditLogEntry): Promise<void> {
     try {

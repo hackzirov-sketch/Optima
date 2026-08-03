@@ -14,9 +14,7 @@ import { Logger } from '@nestjs/common';
 export class AuthProcessor extends WorkerHost {
   private readonly logger = new Logger(AuthProcessor.name);
 
-  constructor(
-    private dataSource: DatabaseService,
-  ) {
+  constructor(private dataSource: DatabaseService) {
     super();
   }
 

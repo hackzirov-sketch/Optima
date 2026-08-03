@@ -34,7 +34,7 @@ import { ModerationModule } from '../moderation/moderation.module';
     }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) =>
+      useFactory: (configService: ConfigService) =>
         ({
           secret: configService.get<string>('jwt.accessSecret'),
           signOptions: {
@@ -60,6 +60,12 @@ import { ModerationModule } from '../moderation/moderation.module';
     EncryptionService,
     AuthProcessor, // Worker to handle background tasks
   ],
-  exports: [AuthService, OAuthService, TokenService, SessionService, EncryptionService],
+  exports: [
+    AuthService,
+    OAuthService,
+    TokenService,
+    SessionService,
+    EncryptionService,
+  ],
 })
 export class AuthModule {}

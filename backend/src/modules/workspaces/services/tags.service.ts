@@ -9,8 +9,14 @@ import { Tag } from '../../../database/entities/tag.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { PermissionService } from '../../../common/services/permission.service';
-import { TAG_COLUMNS_SQL, WORKSPACE_MEMBER_COLUMNS_SQL } from '../repositories/workspaces.sql';
-import { buildUpdateSet, normalizeReturning } from '../../../common/utils/sql.util';
+import {
+  TAG_COLUMNS_SQL,
+  WORKSPACE_MEMBER_COLUMNS_SQL,
+} from '../repositories/workspaces.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../../common/utils/sql.util';
 import { CreateTagDto } from '../schemas/create-tag.schema';
 import { UpdateTagDto } from '../schemas/update-tag.schema';
 
@@ -21,12 +27,19 @@ export class TagsService {
     private readonly permission: PermissionService,
   ) {}
 
-  private async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
+  private async assertMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember> {
     const rows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
     );
-    if (!rows[0]) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    if (!rows[0])
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     return rows[0];
   }
 
@@ -44,14 +57,22 @@ export class TagsService {
     );
   }
 
-  async create(workspaceId: string, userId: string, dto: CreateTagDto): Promise<Tag> {
+  async create(
+    workspaceId: string,
+    userId: string,
+    dto: CreateTagDto,
+  ): Promise<Tag> {
     await this.assertAdminOrOwner(workspaceId, userId);
 
     const existing = await this.dataSource.query(
       `SELECT id FROM tags WHERE workspace_id = $1 AND name = $2`,
       [workspaceId, dto.name],
     );
-    if (existing[0]) throw new ConflictException({ code: ErrorCode.TAG_ALREADY_EXISTS, message: 'Tag with this name already exists in workspace' });
+    if (existing[0])
+      throw new ConflictException({
+        code: ErrorCode.TAG_ALREADY_EXISTS,
+        message: 'Tag with this name already exists in workspace',
+      });
 
     const rows: Tag[] = await this.dataSource.query(
       `INSERT INTO tags (workspace_id, name, color, created_by)
@@ -62,7 +83,12 @@ export class TagsService {
     return rows[0];
   }
 
-  async update(workspaceId: string, tagId: string, userId: string, dto: UpdateTagDto): Promise<Tag> {
+  async update(
+    workspaceId: string,
+    tagId: string,
+    userId: string,
+    dto: UpdateTagDto,
+  ): Promise<Tag> {
     await this.assertAdminOrOwner(workspaceId, userId);
 
     const rows: Tag[] = await this.dataSource.query(
@@ -70,17 +96,28 @@ export class TagsService {
       [tagId, workspaceId],
     );
     const tag = rows[0];
-    if (!tag) throw new NotFoundException({ code: ErrorCode.TAG_NOT_FOUND, message: 'Tag not found' });
+    if (!tag)
+      throw new NotFoundException({
+        code: ErrorCode.TAG_NOT_FOUND,
+        message: 'Tag not found',
+      });
 
     if (dto.name && dto.name !== tag.name) {
       const existing = await this.dataSource.query(
         `SELECT id FROM tags WHERE workspace_id = $1 AND name = $2`,
         [workspaceId, dto.name],
       );
-      if (existing[0]) throw new ConflictException({ code: ErrorCode.TAG_ALREADY_EXISTS, message: 'Tag with this name already exists in workspace' });
+      if (existing[0])
+        throw new ConflictException({
+          code: ErrorCode.TAG_ALREADY_EXISTS,
+          message: 'Tag with this name already exists in workspace',
+        });
     }
 
-    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2);
+    const { setClause, values } = buildUpdateSet(
+      dto as Record<string, unknown>,
+      2,
+    );
     if (!setClause) return tag;
     const updatedRows: Tag[] = normalizeReturning(
       await this.dataSource.query(
@@ -91,11 +128,22 @@ export class TagsService {
     return updatedRows[0];
   }
 
-  async remove(workspaceId: string, tagId: string, userId: string): Promise<void> {
+  async remove(
+    workspaceId: string,
+    tagId: string,
+    userId: string,
+  ): Promise<void> {
     await this.assertAdminOrOwner(workspaceId, userId);
 
-    const rows = await this.dataSource.query(`SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`, [tagId, workspaceId]);
-    if (!rows[0]) throw new NotFoundException({ code: ErrorCode.TAG_NOT_FOUND, message: 'Tag not found' });
+    const rows = await this.dataSource.query(
+      `SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`,
+      [tagId, workspaceId],
+    );
+    if (!rows[0])
+      throw new NotFoundException({
+        code: ErrorCode.TAG_NOT_FOUND,
+        message: 'Tag not found',
+      });
 
     await this.dataSource.query(`DELETE FROM tags WHERE id = $1`, [tagId]);
   }

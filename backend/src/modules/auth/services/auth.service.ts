@@ -34,6 +34,33 @@ function generateVerificationCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }
 
+/**
+ * A token that looks exactly like a real one but opens nothing — there is no
+ * Redis record behind it, so any later step fails as "invalid or expired".
+ *
+ * Needed because the generic "if that email is registered…" message only hides
+ * the answer if the *shape* of the response is identical too. Returning the
+ * token field for real accounts and omitting it otherwise turns the body into
+ * a perfect oracle: one request per address tells an attacker whether it has
+ * an account here.
+ */
+function decoyToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * Length-safe constant-time string compare for short secrets (verification
+ * codes). `!==` short-circuits on the first differing character, which leaks
+ * how much of a guess was correct; timingSafeEqual doesn't, but throws unless
+ * both buffers are the same length, so the length check comes first.
+ */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -65,11 +92,18 @@ export class AuthService {
    * ~90s when it's slow/unreachable) — the user would sit on a spinner for no
    * reason since the account is already created either way.
    */
-  private async issueEmailVerification(userId: string, email: string): Promise<string> {
+  private async issueEmailVerification(
+    userId: string,
+    email: string,
+  ): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
     const code = generateVerificationCode();
 
-    await this.redisService.setEmailVerification(token, { userId, email, code });
+    await this.redisService.setEmailVerification(token, {
+      userId,
+      email,
+      code,
+    });
     void this.mailService.sendVerificationEmail(email, code);
 
     return token;
@@ -79,7 +113,9 @@ export class AuthService {
     // Parallel: DB uniqueness checks + bcrypt hashing + content filter
     const [existingUser, existingUsername, passwordHash] = await Promise.all([
       this.usersService.findByEmail(dto.email),
-      dto.username ? this.usersService.findByUsername(dto.username) : Promise.resolve(null),
+      dto.username
+        ? this.usersService.findByUsername(dto.username)
+        : Promise.resolve(null),
       this.securityService.hashPassword(dto.password),
     ]);
 
@@ -97,7 +133,9 @@ export class AuthService {
     }
 
     await Promise.all([
-      ...(dto.username ? [this.contentFilter.filterText(dto.username, undefined, 'username')] : []),
+      ...(dto.username
+        ? [this.contentFilter.filterText(dto.username, undefined, 'username')]
+        : []),
       this.contentFilter.filterText(
         [dto.firstName, dto.lastName].filter(Boolean).join(' '),
         undefined,
@@ -125,14 +163,17 @@ export class AuthService {
     const verifyToken = await this.issueEmailVerification(user.id, user.email);
 
     return {
-      message: 'Registration successful. A verification code has been sent to your email.',
+      message:
+        'Registration successful. A verification code has been sent to your email.',
       userId: user.id,
       verifyToken,
     };
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
-    const cooldown = await this.redisService.getEmailVerifyAttemptCooldown(dto.verifyToken);
+    const cooldown = await this.redisService.getEmailVerifyAttemptCooldown(
+      dto.verifyToken,
+    );
     if (cooldown > 0) {
       throw new HttpException(
         {
@@ -144,28 +185,33 @@ export class AuthService {
       );
     }
 
-    const record = await this.redisService.getEmailVerification(dto.verifyToken);
+    const record = await this.redisService.getEmailVerification(
+      dto.verifyToken,
+    );
 
     if (!record) {
       throw new BadRequestException({
         code: ErrorCode.TOKEN_INVALID,
-        message: 'Invalid or expired verification token. Please request a new code.',
+        message:
+          'Invalid or expired verification token. Please request a new code.',
       });
     }
 
-    if (record.code !== dto.code) {
-      const attempts = await this.redisService.incrementEmailVerifyAttempts(dto.verifyToken);
+    if (!timingSafeEqualStr(record.code, dto.code)) {
+      const attempts = await this.redisService.incrementEmailVerifyAttempts(
+        dto.verifyToken,
+      );
       throw new BadRequestException({
         code: ErrorCode.TOKEN_INVALID,
-        message: attempts >= 5
-          ? 'Too many incorrect attempts. Please request a new code.'
-          : 'Incorrect verification code.',
+        message:
+          attempts >= 5
+            ? 'Too many incorrect attempts. Please request a new code.'
+            : 'Incorrect verification code.',
       });
     }
 
-    const { user, needsPasswordSetup } = await this.authRepository.verifyAndActivateUser(
-      record.userId,
-    );
+    const { user, needsPasswordSetup } =
+      await this.authRepository.verifyAndActivateUser(record.userId);
 
     await this.redisService.deleteEmailVerification(dto.verifyToken);
 
@@ -205,17 +251,21 @@ export class AuthService {
    */
   async resendVerification(dto: ResendVerificationDto) {
     const genericResponse = {
-      message: 'If that email is registered and not yet verified, a new code has been sent.',
+      message:
+        'If that email is registered and not yet verified, a new code has been sent.',
     };
 
     const user = await this.usersService.findByEmail(dto.email);
     // Same response whether or not the account exists / is already verified —
-    // avoids leaking which emails are registered.
+    // avoids leaking which emails are registered. The decoy keeps the response
+    // body identical in shape, not just in message.
     if (!user || user.isVerified) {
-      return genericResponse;
+      return { ...genericResponse, verifyToken: decoyToken() };
     }
 
-    const limitCheck = await this.redisService.checkEmailVerifyResendLimit(user.id);
+    const limitCheck = await this.redisService.checkEmailVerifyResendLimit(
+      user.id,
+    );
     if (limitCheck?.blocked) {
       throw new HttpException(
         {
@@ -247,7 +297,10 @@ export class AuthService {
 
     if (!user) {
       // Constant-time response to prevent email enumeration
-      await this.securityService.comparePassword(dto.password, '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+      await this.securityService.comparePassword(
+        dto.password,
+        '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+      );
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Invalid credentials',
@@ -255,10 +308,14 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      const verifyToken = await this.issueEmailVerification(user.id, user.email);
+      const verifyToken = await this.issueEmailVerification(
+        user.id,
+        user.email,
+      );
       throw new UnauthorizedException({
         code: ErrorCode.PASSWORD_SETUP_REQUIRED,
-        message: 'This account was created using Google/GitHub. Verification code sent.',
+        message:
+          'This account was created using Google/GitHub. Verification code sent.',
         requiresPasswordSetup: true,
         verifyToken,
         redirect: '/verify',
@@ -272,17 +329,22 @@ export class AuthService {
     ]);
 
     if (lockoutTtl !== null) {
-      throw new HttpException({
-        code: ErrorCode.RATE_LIMIT_EXCEEDED,
-        message: `Account is temporarily locked. Try again in ${Math.ceil(lockoutTtl / 60)} minute(s).`,
-      }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        {
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
+          message: `Account is temporarily locked. Try again in ${Math.ceil(lockoutTtl / 60)} minute(s).`,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     if (!isPasswordValid) {
       // Fire-and-forget: don't block response on redis write
       this.redisService
         .incrementAccountLockoutFailures(user.id, 5, 900)
-        .catch((e) => this.logger.warn(`lockout increment failed: ${e?.message}`));
+        .catch((e) =>
+          this.logger.warn(`lockout increment failed: ${e?.message}`),
+        );
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Invalid credentials',
@@ -292,7 +354,9 @@ export class AuthService {
     if (!user.isVerified) {
       // Rate-limited internally (checkEmailVerifyResendLimit) — a burst of
       // failed logins against an unverified account won't spam their inbox.
-      const limitCheck = await this.redisService.checkEmailVerifyResendLimit(user.id);
+      const limitCheck = await this.redisService.checkEmailVerifyResendLimit(
+        user.id,
+      );
       let verifyToken: string | undefined;
       if (!limitCheck?.blocked) {
         verifyToken = await this.issueEmailVerification(user.id, user.email);
@@ -322,26 +386,59 @@ export class AuthService {
       .catch((e) => this.logger.warn(`clearLockout failed: ${e?.message}`));
 
     if (ip) {
-      void this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'local');
+      void this.deviceService.logIpAddress(
+        user.id,
+        ip,
+        userAgent || '',
+        'local',
+      );
     }
 
     void this.usersService.updateLastSeen(user.id);
 
     // Step 4: generateTokens — now only: enforceSessionLimit(1 CTE) + parallel JWT sign
     // persistRefreshToken is async inside generateTokens
-    return this.tokenService.generateTokens(user, { ip, userAgent, deviceName, provider: 'local' });
+    return this.tokenService.generateTokens(user, {
+      ip,
+      userAgent,
+      deviceName,
+      provider: 'local',
+    });
   }
 
-  async setPassword(userId: string | undefined, dto: SetPasswordDto, authHeader?: string) {
+  /**
+   * Three ways to prove who you are, in descending order of directness:
+   * an already-authenticated request, a one-time setupToken from the
+   * verify-email step, or the access token itself.
+   *
+   * The cookie is the one that matters in practice now. Tokens moved out of
+   * the response body into httpOnly cookies, so a signed-in browser has no
+   * Authorization header to send and this route is @Public (an OAuth-only
+   * account has to reach it before it can authenticate) — without reading the
+   * cookie, a logged-in user simply cannot set a password.
+   */
+  async setPassword(
+    userId: string | undefined,
+    dto: SetPasswordDto,
+    authHeader?: string,
+    accessCookie?: string,
+  ) {
     let finalUserId: string | null | undefined = userId;
 
     if (!finalUserId && dto.setupToken) {
-      finalUserId = await this.redisService.getAndDeletePasswordResetToken(dto.setupToken);
+      finalUserId = await this.redisService.getAndDeletePasswordResetToken(
+        dto.setupToken,
+      );
     }
 
     if (!finalUserId && authHeader?.toLowerCase().startsWith('bearer ')) {
       const token = authHeader.substring(7).trim();
       const decodedId = await this.tokenService.verifyAccessToken(token);
+      if (decodedId) finalUserId = decodedId;
+    }
+
+    if (!finalUserId && accessCookie) {
+      const decodedId = await this.tokenService.verifyAccessToken(accessCookie);
       if (decodedId) finalUserId = decodedId;
     }
 
@@ -372,7 +469,10 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    const message =
+      'If an account exists, a reset code has been sent to your email.';
     const user = await this.usersService.findByEmail(dto.email);
+
     if (user && user.isActive) {
       const resetToken = crypto.randomBytes(32).toString('hex');
       const otp = generateVerificationCode(); // 6-digit code
@@ -381,22 +481,27 @@ export class AuthService {
       void this.mailService.sendPasswordResetOtpEmail(dto.email, otp);
       // Return resetToken so the frontend can pass it back on OTP verification.
       // This is NOT sensitive on its own — the OTP is required to use it.
-      return {
-        message: 'If an account exists, a reset code has been sent to your email.',
-        resetToken,
-      };
+      return { message, resetToken };
     }
-    // Generic response — don't leak whether an email is registered
-    return { message: 'If an account exists, a reset code has been sent to your email.' };
+
+    // Unknown or inactive account: same message *and* same fields, so the
+    // response body can't be used to tell registered addresses apart. The
+    // decoy resolves to nothing, so the flow dead-ends at OTP verification
+    // exactly as a wrong code would.
+    return { message, resetToken: decoyToken() };
   }
 
   async verifyResetOtp(resetToken: string, otp: string) {
-    const result = await this.redisService.verifyPasswordResetOtp(resetToken, otp);
+    const result = await this.redisService.verifyPasswordResetOtp(
+      resetToken,
+      otp,
+    );
     if (!result.ok) {
       if (result.reason === 'max_attempts') {
         throw new BadRequestException({
           code: ErrorCode.TOKEN_INVALID,
-          message: 'Too many incorrect attempts. Please request a new reset code.',
+          message:
+            'Too many incorrect attempts. Please request a new reset code.',
         });
       }
       if (result.reason === 'invalid_token') {
@@ -420,11 +525,14 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const userId = await this.redisService.getAndDeleteConfirmedResetToken(dto.confirmedToken);
+    const userId = await this.redisService.getAndDeleteConfirmedResetToken(
+      dto.confirmedToken,
+    );
     if (!userId) {
       throw new BadRequestException({
         code: ErrorCode.TOKEN_INVALID,
-        message: 'Invalid or expired session. Please start the password reset again.',
+        message:
+          'Invalid or expired session. Please start the password reset again.',
       });
     }
 

@@ -33,10 +33,13 @@ export class IpRateLimitGuard implements CanActivate {
     // request path. Using request.path would key each guessed code/token
     // into its own bucket, so a brute-forcer never hits the limit — the
     // exact attack this guard exists to stop.
-    const actionType = (request.route as { path?: string } | undefined)?.path ?? request.path;
+    const actionType =
+      (request.route as { path?: string } | undefined)?.path ?? request.path;
 
-    const maxAttempts = this.config.get<number>('moderation.ipMaxAttempts') ?? 100;
-    const windowHours = this.config.get<number>('moderation.ipWindowHours') ?? 1;
+    const maxAttempts =
+      this.config.get<number>('moderation.ipMaxAttempts') ?? 100;
+    const windowHours =
+      this.config.get<number>('moderation.ipWindowHours') ?? 1;
     const windowMs = windowHours * 60 * 60 * 1000;
 
     const now = new Date();
@@ -45,56 +48,60 @@ export class IpRateLimitGuard implements CanActivate {
     // locked FOR UPDATE to avoid a race between concurrent requests from the
     // same IP), then throw *after* the transaction has committed — the
     // counter update must survive even when the request is ultimately denied.
-    const blockedRetryAfter = await this.dataSource.withTransaction(async (query) => {
-      const rows: IpRateLimitRow[] = await query(
-        `SELECT id, ip, action_type AS "actionType", count, window_start AS "windowStart",
+    const blockedRetryAfter = await this.dataSource.withTransaction(
+      async (query) => {
+        const rows: IpRateLimitRow[] = await query(
+          `SELECT id, ip, action_type AS "actionType", count, window_start AS "windowStart",
                 blocked_until AS "blockedUntil"
          FROM ip_rate_limits WHERE ip = $1 AND action_type = $2 FOR UPDATE`,
-        [ip, actionType],
-      );
-      const record = rows[0];
+          [ip, actionType],
+        );
+        const record = rows[0];
 
-      if (record) {
-        // Currently blocked
-        if (record.blockedUntil && record.blockedUntil > now) {
-          return Math.ceil((record.blockedUntil.getTime() - now.getTime()) / 1000);
-        }
-
-        let newCount: number;
-        let newWindowStart: Date;
-        let newBlockedUntil: Date | null;
-
-        // Window expired — reset
-        if (record.windowStart.getTime() + windowMs < now.getTime()) {
-          newCount = 1;
-          newWindowStart = now;
-          newBlockedUntil = null;
-        } else {
-          newCount = record.count + 1;
-          newWindowStart = record.windowStart;
-          newBlockedUntil = null;
-
-          if (newCount >= maxAttempts) {
-            newBlockedUntil = new Date(now.getTime() + windowMs);
+        if (record) {
+          // Currently blocked
+          if (record.blockedUntil && record.blockedUntil > now) {
+            return Math.ceil(
+              (record.blockedUntil.getTime() - now.getTime()) / 1000,
+            );
           }
+
+          let newCount: number;
+          let newWindowStart: Date;
+          let newBlockedUntil: Date | null;
+
+          // Window expired — reset
+          if (record.windowStart.getTime() + windowMs < now.getTime()) {
+            newCount = 1;
+            newWindowStart = now;
+            newBlockedUntil = null;
+          } else {
+            newCount = record.count + 1;
+            newWindowStart = record.windowStart;
+            newBlockedUntil = null;
+
+            if (newCount >= maxAttempts) {
+              newBlockedUntil = new Date(now.getTime() + windowMs);
+            }
+          }
+
+          await query(
+            `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
+           WHERE id = $1`,
+            [record.id, newCount, newWindowStart, newBlockedUntil],
+          );
+
+          return newBlockedUntil ? windowHours * 3600 : null;
         }
 
         await query(
-          `UPDATE ip_rate_limits SET count = $2, window_start = $3, blocked_until = $4, updated_at = now()
-           WHERE id = $1`,
-          [record.id, newCount, newWindowStart, newBlockedUntil],
-        );
-
-        return newBlockedUntil ? windowHours * 3600 : null;
-      }
-
-      await query(
-        `INSERT INTO ip_rate_limits (ip, action_type, count, window_start)
+          `INSERT INTO ip_rate_limits (ip, action_type, count, window_start)
          VALUES ($1, $2, 1, $3)`,
-        [ip, actionType, now],
-      );
-      return null;
-    });
+          [ip, actionType, now],
+        );
+        return null;
+      },
+    );
 
     if (blockedRetryAfter !== null) {
       throw new HttpException(

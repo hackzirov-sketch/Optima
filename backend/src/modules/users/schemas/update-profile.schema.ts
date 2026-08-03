@@ -9,7 +9,11 @@ export const updateProfileSchema = z.object({
   language: z.nativeEnum(UserLanguage).optional(),
   timezone: z.string().optional(),
   theme: z.nativeEnum(UserTheme).optional(),
-  phoneNumber: z.coerce.number().min(10000000000).max(999999999999999).optional(),
+  phoneNumber: z.coerce
+    .number()
+    .min(10000000000)
+    .max(999999999999999)
+    .optional(),
   occupation: z.nativeEnum(UserOccupation).optional(),
 });
 

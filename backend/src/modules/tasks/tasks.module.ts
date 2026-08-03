@@ -8,12 +8,7 @@ import { TasksService } from './tasks.service';
 import { TasksController } from './tasks.controller';
 
 @Module({
-  imports: [
-    GatewayModule,
-    NotificationsModule,
-    RedisModule,
-    AnalyticsModule,
-  ],
+  imports: [GatewayModule, NotificationsModule, RedisModule, AnalyticsModule],
   controllers: [TasksController],
   providers: [TasksService],
   exports: [TasksService],

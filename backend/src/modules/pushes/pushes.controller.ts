@@ -45,7 +45,8 @@ export class PushesController {
 
   @Patch(':pushId/link-and-promote')
   @ApiOperation({
-    summary: 'Link a repository to a draft push and re-resolve its push_type (lead/admin only)',
+    summary:
+      'Link a repository to a draft push and re-resolve its push_type (lead/admin only)',
     description:
       "draft → github_direct'ga avtomatik aylanmaydi. Faqat lead/admin/owner ushbu action orqali qo'lda repo bog'laydi va push_type qayta hisoblanadi.",
   })

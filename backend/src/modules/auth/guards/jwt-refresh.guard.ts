@@ -10,9 +10,10 @@ export class JwtRefreshGuard extends AuthGuard('jwt-refresh') {
         err ||
         new UnauthorizedException({
           code: ErrorCode.TOKEN_INVALID,
-          message: info?.message === 'jwt expired'
-            ? 'Refresh token expired, please log in again'
-            : 'Invalid or expired refresh token',
+          message:
+            info?.message === 'jwt expired'
+              ? 'Refresh token expired, please log in again'
+              : 'Invalid or expired refresh token',
         })
       );
     }

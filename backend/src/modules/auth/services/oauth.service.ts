@@ -5,7 +5,10 @@ import { UsersService } from '../../users/services/users.service';
 import { RedisService } from '../../../redis/redis.service';
 import { EncryptionService } from '../../../common/services/encryption.service';
 import { User } from '../../../database/entities/user.entity';
-import { GoogleOAuthProfile, GitHubOAuthProfile } from '../interfaces/oauth-profiles.interface';
+import {
+  GoogleOAuthProfile,
+  GitHubOAuthProfile,
+} from '../interfaces/oauth-profiles.interface';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -44,7 +47,10 @@ export class OAuthService {
     return username;
   }
 
-  private async enqueueOnRegister(userId: string, email: string): Promise<void> {
+  private async enqueueOnRegister(
+    userId: string,
+    email: string,
+  ): Promise<void> {
     try {
       await this.authQueue.add(
         'on-register',
@@ -56,15 +62,40 @@ export class OAuthService {
         },
       );
     } catch (error) {
-      this.logger.warn(`BullMQ on-register failed: ${error instanceof Error ? error.message : error}`);
+      this.logger.warn(
+        `BullMQ on-register failed: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 
-  async googleLogin(googleUser: GoogleOAuthProfile, ip?: string, userAgent?: string) {
+  async googleLogin(
+    googleUser: GoogleOAuthProfile,
+    ip?: string,
+    userAgent?: string,
+  ) {
     if (!googleUser) {
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
         message: 'Google authentication failed',
+      });
+    }
+
+    if (!googleUser.email) {
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Google did not return an email address for this account',
+      });
+    }
+
+    // An unverified address is attacker-chosen — the provider is only saying
+    // "someone typed this in". Matching one against an existing UPZ account is
+    // straight account takeover, and creating a new account on one lets an
+    // attacker pre-claim an address its real owner hasn't signed up with yet.
+    if (!googleUser.emailVerified) {
+      throw new UnauthorizedException({
+        code: ErrorCode.OAUTH_EMAIL_UNVERIFIED,
+        message:
+          'This email is not verified with Google. Verify it there, then try again.',
       });
     }
 
@@ -88,15 +119,28 @@ export class OAuthService {
     }
 
     if (ip) {
-      await this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'google');
+      await this.deviceService.logIpAddress(
+        user.id,
+        ip,
+        userAgent || '',
+        'google',
+      );
     }
 
     void this.usersService.updateLastSeen(user.id);
 
-    return this.tokenService.generateTokens(user, { ip, userAgent, provider: 'google' });
+    return this.tokenService.generateTokens(user, {
+      ip,
+      userAgent,
+      provider: 'google',
+    });
   }
 
-  async githubLogin(githubUser: GitHubOAuthProfile, ip?: string, userAgent?: string) {
+  async githubLogin(
+    githubUser: GitHubOAuthProfile,
+    ip?: string,
+    userAgent?: string,
+  ) {
     if (!githubUser) {
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
@@ -113,13 +157,15 @@ export class OAuthService {
       `SELECT ${GITHUB_ACCOUNT_COLUMNS_SQL} FROM github_accounts WHERE github_user_id = $1`,
       [Number(githubUser.githubId)],
     );
-    let githubAccount = accountRows[0];
+    const githubAccount = accountRows[0];
 
     let user: User | null = null;
 
     if (githubAccount) {
       user = await this.usersService.findById(githubAccount.userId);
-      const accessTokenEncrypted = this.encryptionService.encrypt(githubUser.accessToken);
+      const accessTokenEncrypted = this.encryptionService.encrypt(
+        githubUser.accessToken,
+      );
       const refreshTokenEncrypted = githubUser.refreshToken
         ? this.encryptionService.encrypt(githubUser.refreshToken)
         : githubAccount.refreshTokenEncrypted;
@@ -131,13 +177,26 @@ export class OAuthService {
         [githubAccount.id, accessTokenEncrypted, refreshTokenEncrypted],
       );
     } else {
-      const email = githubUser.email || `${githubUser.githubId}@github.placeholder.com`;
-      user = await this.usersService.findByEmail(email);
+      // First time we've seen this GitHub account. Linking it to an existing
+      // UPZ user by email is only safe when GitHub says the address is
+      // verified — anyone can add victim@example.com to their own GitHub
+      // account, so an unverified match would hand over the victim's account.
+      // Unverified (or missing) addresses fall back to a placeholder so the
+      // login still works, it just creates its own isolated account.
+      const verifiedEmail = githubUser.emailVerified
+        ? githubUser.email
+        : undefined;
+      const email =
+        verifiedEmail || `${githubUser.githubId}@github.placeholder.com`;
+      user = verifiedEmail
+        ? await this.usersService.findByEmail(verifiedEmail)
+        : await this.usersService.findByEmail(email);
 
       if (!user) {
         user = await this.usersService.create({
           email,
-          firstName: githubUser.firstName || githubUser.username || 'GitHub user',
+          firstName:
+            githubUser.firstName || githubUser.username || 'GitHub user',
           lastName: githubUser.lastName || '',
           username: null,
           avatarUrl: githubUser.avatarUrl,
@@ -162,20 +221,34 @@ export class OAuthService {
           email,
           githubUser.avatarUrl ?? null,
           this.encryptionService.encrypt(githubUser.accessToken),
-          githubUser.refreshToken ? this.encryptionService.encrypt(githubUser.refreshToken) : null,
+          githubUser.refreshToken
+            ? this.encryptionService.encrypt(githubUser.refreshToken)
+            : null,
         ],
       );
     }
 
     if (user && ip) {
-      await this.deviceService.logIpAddress(user.id, ip, userAgent || '', 'github');
+      await this.deviceService.logIpAddress(
+        user.id,
+        ip,
+        userAgent || '',
+        'github',
+      );
     }
 
     if (user) {
       void this.usersService.updateLastSeen(user.id);
-      return this.tokenService.generateTokens(user, { ip, userAgent, provider: 'github' });
+      return this.tokenService.generateTokens(user, {
+        ip,
+        userAgent,
+        provider: 'github',
+      });
     } else {
-      throw new UnauthorizedException({ code: ErrorCode.OAUTH_LINK_FAILED, message: 'Failed to link or create user' });
+      throw new UnauthorizedException({
+        code: ErrorCode.OAUTH_LINK_FAILED,
+        message: 'Failed to link or create user',
+      });
     }
   }
 

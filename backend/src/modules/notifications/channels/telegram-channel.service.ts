@@ -22,7 +22,11 @@ export class TelegramChannelService {
     return !!this.botToken;
   }
 
-  async send(chatId: string, text: string, parseMode: 'HTML' | 'Markdown' = 'HTML'): Promise<TelegramSendResult> {
+  async send(
+    chatId: string,
+    text: string,
+    parseMode: 'HTML' | 'Markdown' = 'HTML',
+  ): Promise<TelegramSendResult> {
     if (!this.isEnabled) {
       return { success: false, error: 'Telegram bot not configured' };
     }
@@ -40,10 +44,12 @@ export class TelegramChannelService {
         signal: AbortSignal.timeout(10_000),
       });
 
-      const data = await res.json() as any;
+      const data = await res.json();
 
       if (!data.ok) {
-        this.logger.warn(`Telegram send failed: ${data.description} (chatId=${chatId})`);
+        this.logger.warn(
+          `Telegram send failed: ${data.description} (chatId=${chatId})`,
+        );
         return { success: false, error: data.description };
       }
 
@@ -56,18 +62,28 @@ export class TelegramChannelService {
   }
 
   /** Check if user has read the message (requires webhook updates tracking) */
-  async getMessageReadStatus(chatId: string, messageId: number): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async getMessageReadStatus(
+    _chatId: string,
+    _messageId: number,
+  ): Promise<boolean> {
     // Telegram doesn't expose read receipts via Bot API.
     // We track this via webhook: when user interacts after a message, mark it read.
     // For now return false — actual tracking is in TelegramWebhookController.
     return false;
   }
 
-  formatMeetingReminder(title: string, minutesBefore: number, meetingUrl?: string): string {
-    const emoji = minutesBefore <= 10 ? '🔴' : minutesBefore <= 60 ? '🟡' : '📅';
-    const timeLabel = minutesBefore >= 60
-      ? `${minutesBefore / 60} soat`
-      : `${minutesBefore} daqiqa`;
+  formatMeetingReminder(
+    title: string,
+    minutesBefore: number,
+    meetingUrl?: string,
+  ): string {
+    const emoji =
+      minutesBefore <= 10 ? '🔴' : minutesBefore <= 60 ? '🟡' : '📅';
+    const timeLabel =
+      minutesBefore >= 60
+        ? `${minutesBefore / 60} soat`
+        : `${minutesBefore} daqiqa`;
 
     return [
       `${emoji} <b>Meeting Eslatmasi</b>`,
@@ -75,17 +91,25 @@ export class TelegramChannelService {
       `📌 <b>${title}</b>`,
       `⏰ ${timeLabel} oldin boshlanadi`,
       meetingUrl ? `🔗 <a href="${meetingUrl}">Meetingga kirish</a>` : '',
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
-  formatTaskReminder(taskTitle: string, dueDate: Date, projectName?: string): string {
+  formatTaskReminder(
+    taskTitle: string,
+    dueDate: Date,
+    projectName?: string,
+  ): string {
     return [
       `📋 <b>Task Deadline</b>`,
       ``,
       `✅ <b>${taskTitle}</b>`,
       projectName ? `📁 Loyiha: ${projectName}` : '',
       `📅 Deadline: ${dueDate.toLocaleDateString('uz-UZ')}`,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   formatOtp(otp: string, purpose: 'login' | 'recovery' | '2fa'): string {
@@ -115,7 +139,11 @@ export class TelegramChannelService {
     ].join('\n');
   }
 
-  formatPaymentNotification(type: 'success' | 'failed', amount?: string, plan?: string): string {
+  formatPaymentNotification(
+    type: 'success' | 'failed',
+    amount?: string,
+    plan?: string,
+  ): string {
     if (type === 'success') {
       return [
         `✅ <b>To'lov muvaffaqiyatli</b>`,
@@ -123,7 +151,9 @@ export class TelegramChannelService {
         plan ? `📦 Plan: ${plan}` : '',
         amount ? `💰 Miqdor: ${amount}` : '',
         `🎉 Premium faollashtirildi!`,
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
     }
     return [
       `❌ <b>To'lov muvaffaqiyatsiz</b>`,

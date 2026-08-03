@@ -29,7 +29,9 @@ export class ChatEncryptionService {
       this.key = crypto.scryptSync(secret, DOMAIN_SALT, 32);
       this.logger.log('Chat message encryption enabled (AES-256-GCM)');
     } else {
-      this.logger.warn('CHAT_ENCRYPTION_KEY not set — messages stored as plaintext');
+      this.logger.warn(
+        'CHAT_ENCRYPTION_KEY not set — messages stored as plaintext',
+      );
     }
   }
 
@@ -89,7 +91,10 @@ export class ChatEncryptionService {
   }
 
   /** Safely decrypt contentJson; falls back to raw content string if not encrypted */
-  safeDecrypt(contentJson: EncryptedMessage | null, rawContent: string | null): string {
+  safeDecrypt(
+    contentJson: EncryptedMessage | null,
+    rawContent: string | null,
+  ): string {
     if (contentJson && this.key) {
       try {
         return this.decrypt(contentJson);
@@ -100,7 +105,9 @@ export class ChatEncryptionService {
         // occurrence. Debug-level avoids flooding logs on every fetch of
         // old message history; genuinely new decrypt failures are rare
         // enough that DEBUG is still discoverable when investigating.
-        this.logger.debug(`Decrypt failed, falling back to raw content: ${err}`);
+        this.logger.debug(
+          `Decrypt failed, falling back to raw content: ${err}`,
+        );
       }
     }
     return rawContent ?? '';

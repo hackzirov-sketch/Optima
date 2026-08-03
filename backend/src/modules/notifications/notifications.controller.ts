@@ -1,8 +1,20 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Query,
+  Body,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { UpdateNotifPrefsDto, LinkTelegramDto } from './dto/update-notif-prefs.dto';
+import {
+  UpdateNotifPrefsDto,
+  LinkTelegramDto,
+} from './dto/update-notif-prefs.dto';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('access-token')
@@ -52,7 +64,10 @@ export class NotificationsController {
 
   @Patch('preferences')
   @ApiOperation({ summary: 'Update notification preferences' })
-  updatePrefs(@CurrentUser('id') userId: string, @Body() dto: UpdateNotifPrefsDto) {
+  updatePrefs(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateNotifPrefsDto,
+  ) {
     return this.notificationsService.updatePrefs(userId, dto);
   }
 
@@ -60,7 +75,10 @@ export class NotificationsController {
 
   @Post('telegram/link')
   @ApiOperation({ summary: 'Link Telegram bot chat_id' })
-  linkTelegram(@CurrentUser('id') userId: string, @Body() dto: LinkTelegramDto) {
+  linkTelegram(
+    @CurrentUser('id') userId: string,
+    @Body() dto: LinkTelegramDto,
+  ) {
     return this.notificationsService.linkTelegram(userId, dto.chatId);
   }
 

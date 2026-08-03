@@ -13,11 +13,21 @@ import { CreateWorkspaceDto } from '../schemas/create-workspace.schema';
 import { UpdateWorkspaceDto } from '../schemas/update-workspace.schema';
 import { WorkspaceRole } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { isActiveEntity, isSoftDeleted } from '../../../common/utils/soft-delete';
+import {
+  isActiveEntity,
+  isSoftDeleted,
+} from '../../../common/utils/soft-delete';
 import { PermissionService } from '../../../common/services/permission.service';
 import { AuditService } from '../../../common/services/audit.service';
-import { WORKSPACE_COLUMNS_SQL, WORKSPACE_COLUMNS_SQL_W, WORKSPACE_MEMBER_COLUMNS_SQL } from '../repositories/workspaces.sql';
-import { buildUpdateSet, normalizeReturning } from '../../../common/utils/sql.util';
+import {
+  WORKSPACE_COLUMNS_SQL,
+  WORKSPACE_COLUMNS_SQL_W,
+  WORKSPACE_MEMBER_COLUMNS_SQL,
+} from '../repositories/workspaces.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../../common/utils/sql.util';
 
 @Injectable()
 export class WorkspacesService {
@@ -29,7 +39,10 @@ export class WorkspacesService {
     private readonly audit: AuditService,
   ) {}
 
-  private async getMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
+  private async getMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember> {
     const rows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
@@ -49,7 +62,10 @@ export class WorkspacesService {
   }
 
   async create(userId: string, dto: CreateWorkspaceDto): Promise<Workspace> {
-    const existing = await this.dataSource.query(`SELECT id FROM workspaces WHERE slug = $1`, [dto.slug]);
+    const existing = await this.dataSource.query(
+      `SELECT id FROM workspaces WHERE slug = $1`,
+      [dto.slug],
+    );
     if (existing[0]) {
       throw new ConflictException({
         code: ErrorCode.WORKSPACE_SLUG_TAKEN,
@@ -99,8 +115,14 @@ export class WorkspacesService {
         return savedWorkspace;
       });
     } catch (error) {
-      this.logger.error('Failed to create workspace', error instanceof Error ? error.stack : error);
-      throw new InternalServerErrorException({ code: ErrorCode.INTERNAL_ERROR, message: 'Failed to create workspace' });
+      this.logger.error(
+        'Failed to create workspace',
+        error instanceof Error ? error.stack : error,
+      );
+      throw new InternalServerErrorException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Failed to create workspace',
+      });
     }
   }
 
@@ -149,7 +171,10 @@ export class WorkspacesService {
       [workspace.id, userId],
     );
     if (!memberRows[0]) {
-      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'Access denied to this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
+        message: 'Access denied to this workspace',
+      });
     }
     return workspace;
   }
@@ -164,7 +189,10 @@ export class WorkspacesService {
     this.permission.assertCanManageWorkspace(member);
 
     if (dto.slug && dto.slug !== workspace.slug) {
-      const existing = await this.dataSource.query(`SELECT id FROM workspaces WHERE slug = $1`, [dto.slug]);
+      const existing = await this.dataSource.query(
+        `SELECT id FROM workspaces WHERE slug = $1`,
+        [dto.slug],
+      );
       if (existing[0]) {
         throw new ConflictException({
           code: ErrorCode.WORKSPACE_SLUG_TAKEN,
@@ -173,9 +201,13 @@ export class WorkspacesService {
       }
     }
 
-    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2, {
-      visibility: 'workspaces_visibility_enum',
-    });
+    const { setClause, values } = buildUpdateSet(
+      dto as Record<string, unknown>,
+      2,
+      {
+        visibility: 'workspaces_visibility_enum',
+      },
+    );
     if (!setClause) return workspace;
     const rows: Workspace[] = normalizeReturning(
       await this.dataSource.query(
@@ -218,7 +250,10 @@ export class WorkspacesService {
     newOwnerUserId: string,
   ): Promise<Workspace> {
     await this.findById(workspaceId);
-    const currentOwnerMember = await this.getMember(workspaceId, currentOwnerId);
+    const currentOwnerMember = await this.getMember(
+      workspaceId,
+      currentOwnerId,
+    );
 
     if (currentOwnerMember.role !== WorkspaceRole.OWNER) {
       throw new ForbiddenException({
@@ -246,22 +281,24 @@ export class WorkspacesService {
     }
 
     try {
-      const savedRows: Workspace[] = await this.dataSource.withTransaction(async (query) => {
-        await query(
-          `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
-          [workspaceId, currentOwnerId, WorkspaceRole.ADMIN],
-        );
-        await query(
-          `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
-          [workspaceId, newOwnerUserId, WorkspaceRole.OWNER],
-        );
-        return normalizeReturning(
+      const savedRows: Workspace[] = await this.dataSource.withTransaction(
+        async (query) => {
           await query(
-            `UPDATE workspaces SET owner_id = $2 WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
-            [workspaceId, newOwnerUserId],
-          ),
-        );
-      });
+            `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
+            [workspaceId, currentOwnerId, WorkspaceRole.ADMIN],
+          );
+          await query(
+            `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
+            [workspaceId, newOwnerUserId, WorkspaceRole.OWNER],
+          );
+          return normalizeReturning(
+            await query(
+              `UPDATE workspaces SET owner_id = $2 WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+              [workspaceId, newOwnerUserId],
+            ),
+          );
+        },
+      );
 
       await this.audit.log({
         workspaceId,
@@ -273,7 +310,7 @@ export class WorkspacesService {
         newValue: { ownerId: newOwnerUserId },
       });
       return savedRows[0];
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException({
         code: ErrorCode.INTERNAL_ERROR,
         message: 'Failed to transfer ownership',

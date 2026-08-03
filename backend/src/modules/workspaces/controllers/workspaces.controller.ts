@@ -56,7 +56,8 @@ export class WorkspacesController {
   ) {
     await this.workspacesService.assertMembership(wsId, userId);
     const user = await this.usersService.findById(userId);
-    const { accessToken, refreshToken, ...rest } = await this.tokenService.generateTokens(user, {}, wsId);
+    const { accessToken, refreshToken, ...rest } =
+      await this.tokenService.generateTokens(user, {}, wsId);
     setAuthCookies(res, this.config, { accessToken, refreshToken });
     return { ...rest, workspaceId: wsId };
   }
@@ -120,16 +121,17 @@ export class WorkspacesController {
     @CurrentUser('id') currentOwnerId: string,
     @Body() dto: TransferOwnershipDto,
   ) {
-    return this.workspacesService.transferOwnership(wsId, currentOwnerId, dto.newOwnerUserId);
+    return this.workspacesService.transferOwnership(
+      wsId,
+      currentOwnerId,
+      dto.newOwnerUserId,
+    );
   }
 
   // ── Members ─────────────────────────────────────
   @Get(':wsId/members')
   @ApiOperation({ summary: 'Get workspace members' })
-  getMembers(
-    @Param('wsId') wsId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  getMembers(@Param('wsId') wsId: string, @CurrentUser('id') userId: string) {
     return this.membersService.findAll(wsId, userId);
   }
 
@@ -193,10 +195,7 @@ export class WorkspacesController {
 
   @Get(':wsId/tags')
   @ApiOperation({ summary: 'List all tags in workspace' })
-  listTags(
-    @Param('wsId') wsId: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  listTags(@Param('wsId') wsId: string, @CurrentUser('id') userId: string) {
     return this.tagsService.listByWorkspace(wsId, userId);
   }
 

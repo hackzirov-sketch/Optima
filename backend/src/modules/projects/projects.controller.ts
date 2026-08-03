@@ -129,7 +129,12 @@ export class ProjectsController {
     @Body() dto: InviteProjectMemberDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.projectMembersService.inviteMember(projectId, dto.userId, dto.role ?? 'member', userId);
+    return this.projectMembersService.inviteMember(
+      projectId,
+      dto.userId,
+      dto.role ?? 'member',
+      userId,
+    );
   }
 
   @Delete(':projectId/members/:targetUserId')
@@ -139,7 +144,11 @@ export class ProjectsController {
     @Param('targetUserId') targetUserId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.projectMembersService.removeMember(projectId, targetUserId, userId);
+    return this.projectMembersService.removeMember(
+      projectId,
+      targetUserId,
+      userId,
+    );
   }
 
   @Patch('member-invites/:memberId/respond')
@@ -149,7 +158,11 @@ export class ProjectsController {
     @Body() dto: RespondInviteDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.projectMembersService.respondToInvite(memberId, userId, dto.accept);
+    return this.projectMembersService.respondToInvite(
+      memberId,
+      userId,
+      dto.accept,
+    );
   }
 
   @Get('my-invites')

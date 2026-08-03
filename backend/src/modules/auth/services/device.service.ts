@@ -4,9 +4,7 @@ import { UAParser } from 'ua-parser-js';
 
 @Injectable()
 export class DeviceService {
-  constructor(
-    private dataSource: DatabaseService,
-  ) {}
+  constructor(private dataSource: DatabaseService) {}
 
   async logIpAddress(
     userId: string,
@@ -21,8 +19,13 @@ export class DeviceService {
     );
   }
 
-  parseDeviceInfo(userAgent?: string, deviceName?: string): {
-    browser?: string; os?: string; deviceName?: string;
+  parseDeviceInfo(
+    userAgent?: string,
+    deviceName?: string,
+  ): {
+    browser?: string;
+    os?: string;
+    deviceName?: string;
   } {
     if (!userAgent) return { deviceName };
     const res = new UAParser(userAgent).getResult();
@@ -32,10 +35,11 @@ export class DeviceService {
     const os = res.os.name
       ? `${res.os.name} ${res.os.version || ''}`.trim()
       : undefined;
-    const derived = deviceName
-      ?? (res.device.vendor && res.device.model
+    const derived =
+      deviceName ??
+      (res.device.vendor && res.device.model
         ? `${res.device.vendor} ${res.device.model}`
-        : res.os.name ?? 'Unknown Device');
+        : (res.os.name ?? 'Unknown Device'));
     return { browser, os, deviceName: derived };
   }
 }

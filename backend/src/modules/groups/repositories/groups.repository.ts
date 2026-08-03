@@ -5,14 +5,20 @@ import { GroupMember } from '../../../database/entities/group-member.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { WorkspaceRole } from '../../../common/enums';
 import { CreateGroupDto } from '../schemas/create-group.schema';
-import { buildUpdateSet, normalizeReturning } from '../../../common/utils/sql.util';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../../common/utils/sql.util';
 import { GROUP_COLUMNS_SQL, GROUP_MEMBER_COLUMNS_SQL } from './groups.sql';
 
 @Injectable()
 export class GroupsRepository {
   constructor(private readonly dataSource: DatabaseService) {}
 
-  async findWorkspaceMember(workspaceId: string, userId: string): Promise<WorkspaceMember | null> {
+  async findWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember | null> {
     const rows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
        FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
@@ -21,18 +27,33 @@ export class GroupsRepository {
     return rows[0] ?? null;
   }
 
-  async create(dto: CreateGroupDto, creatorId: string, creatorRole: WorkspaceRole): Promise<Group> {
+  async create(
+    dto: CreateGroupDto,
+    creatorId: string,
+    creatorRole: WorkspaceRole,
+  ): Promise<Group> {
     return this.dataSource.withTransaction(async (query) => {
       const slug = dto.slug
         ? dto.slug
-        : dto.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') +
-          '-' + Date.now().toString(36);
+        : dto.name
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '') +
+          '-' +
+          Date.now().toString(36);
 
       const savedRows: Group[] = await query(
         `INSERT INTO groups (workspace_id, name, slug, type, description, created_by)
          VALUES ($1, $2, $3, COALESCE($4, 'general')::groups_type_enum, $5, $6)
          RETURNING ${GROUP_COLUMNS_SQL}`,
-        [dto.workspaceId, dto.name, slug, dto.type ?? null, dto.description ?? null, creatorId],
+        [
+          dto.workspaceId,
+          dto.name,
+          slug,
+          dto.type ?? null,
+          dto.description ?? null,
+          creatorId,
+        ],
       );
       const savedGroup = savedRows[0];
 
@@ -74,8 +95,13 @@ export class GroupsRepository {
     );
   }
 
-  async update(id: string, dto: Record<string, unknown>): Promise<Group | null> {
-    const { setClause, values } = buildUpdateSet(dto, 2, { type: 'groups_type_enum' });
+  async update(
+    id: string,
+    dto: Record<string, unknown>,
+  ): Promise<Group | null> {
+    const { setClause, values } = buildUpdateSet(dto, 2, {
+      type: 'groups_type_enum',
+    });
     if (!setClause) return this.findById(id);
 
     const rows: Group[] = normalizeReturning(
@@ -94,7 +120,10 @@ export class GroupsRepository {
     );
   }
 
-  async findMembership(groupId: string, userId: string): Promise<{ id: string } | null> {
+  async findMembership(
+    groupId: string,
+    userId: string,
+  ): Promise<{ id: string } | null> {
     const rows = await this.dataSource.query(
       `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [groupId, userId],
@@ -102,7 +131,11 @@ export class GroupsRepository {
     return rows[0] ?? null;
   }
 
-  async addMember(groupId: string, userId: string, role: WorkspaceRole): Promise<GroupMember> {
+  async addMember(
+    groupId: string,
+    userId: string,
+    role: WorkspaceRole,
+  ): Promise<GroupMember> {
     const rows: GroupMember[] = await this.dataSource.query(
       `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, $3::group_members_role_enum)
        RETURNING ${GROUP_MEMBER_COLUMNS_SQL}`,

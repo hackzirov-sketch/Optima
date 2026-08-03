@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -17,7 +22,11 @@ import { RedisService } from '../../../redis/redis.service';
 import { SendMessageDto } from '../dto/send-message.dto';
 import { UpdateMessageDto } from '../dto/update-message.dto';
 import { v4 as uuidv4 } from 'uuid';
-import { CHAT_MESSAGE_COLUMNS_SQL, CHAT_REACTION_COLUMNS_SQL, MESSAGE_ATTACHMENT_COLUMNS_SQL } from '../chat.sql';
+import {
+  CHAT_MESSAGE_COLUMNS_SQL,
+  CHAT_REACTION_COLUMNS_SQL,
+  MESSAGE_ATTACHMENT_COLUMNS_SQL,
+} from '../chat.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
 
 @Injectable()
@@ -45,6 +54,20 @@ export class ChatMessageService {
     contentType: string,
     systemMetadata: Record<string, unknown>,
   ) {
+    // Defence in depth: callers pass a roomId that ultimately originates from a
+    // client payload (call signaling), so re-check the attributed sender really
+    // belongs to the room rather than trusting the caller to have done it.
+    const memberRows = await this.dataSource.query(
+      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [roomId, senderId],
+    );
+    if (!memberRows[0]) {
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
+      });
+    }
+
     const redisClient = this.redisService.getClient();
     let sequence = 1;
     if (redisClient) {
@@ -68,14 +91,25 @@ export class ChatMessageService {
 
     await this.chatQueue.add(
       'update-room-metadata',
-      { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
+      {
+        roomId,
+        sequence,
+        lastMessageId: saved.id,
+        lastMessageAt: saved.createdAt,
+      },
       { jobId: roomId, removeOnComplete: true, removeOnFail: true },
     );
 
     return this.mapToResponse(saved, content, []);
   }
 
-  async listMessages(roomId: string, userId: string, page = 1, limit = 50, cursor?: number) {
+  async listMessages(
+    roomId: string,
+    userId: string,
+    page = 1,
+    limit = 50,
+    cursor?: number,
+  ) {
     await this.chatMemberService.assertRoomMember(roomId, userId);
 
     const l = Number(limit) || 50;
@@ -148,7 +182,8 @@ export class ChatMessageService {
     );
     const attachmentsByMsg = new Map<string, MessageAttachment[]>();
     for (const a of attachments) {
-      if (!attachmentsByMsg.has(a.messageId)) attachmentsByMsg.set(a.messageId, []);
+      if (!attachmentsByMsg.has(a.messageId))
+        attachmentsByMsg.set(a.messageId, []);
       attachmentsByMsg.get(a.messageId)!.push(a);
     }
 
@@ -167,9 +202,14 @@ export class ChatMessageService {
             avatarUrl: msg.s_avatarUrl,
           }
         : null,
-      content: msg.contentType === 'document' ? msg.content : this.chatEncryption.safeDecrypt(msg.contentJson, msg.content ?? ''),
+      content:
+        msg.contentType === 'document'
+          ? msg.content
+          : this.chatEncryption.safeDecrypt(msg.contentJson, msg.content ?? ''),
       contentType: msg.contentType,
-      attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) => this.mapAttachment(a)),
+      attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) =>
+        this.mapAttachment(a),
+      ),
       replyToId: msg.replyToId ?? null,
       isEdited: msg.isEdited,
       editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
@@ -177,7 +217,9 @@ export class ChatMessageService {
       systemMetadata: msg.systemMetadata,
       createdAt: msg.createdAt,
       updatedAt: msg.updatedAt,
-      reactions: this.chatReactionService.groupReactions(reactionsByMsg.get(msg.id) ?? []),
+      reactions: this.chatReactionService.groupReactions(
+        reactionsByMsg.get(msg.id) ?? [],
+      ),
       threadReplyCount: msg.threadReplyCount ? Number(msg.threadReplyCount) : 0,
       threadLastReplyAt: msg.threadLastReplyAt ?? null,
     }));
@@ -208,35 +250,66 @@ export class ChatMessageService {
    *    catches that pattern even though each individual second passes.
    */
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
-    const roomRows: Array<{ id: string; isReadOnly: boolean; postingMode: string | null }> = await this.dataSource.query(
+    const roomRows: Array<{
+      id: string;
+      isReadOnly: boolean;
+      postingMode: string | null;
+    }> = await this.dataSource.query(
       `SELECT id, is_read_only AS "isReadOnly", posting_mode AS "postingMode" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
     const room = roomRows[0];
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
     // assertRoomMemberWithUser: membership + user bir SELECT'da — keyinroq sender uchun alohida query yo'q
-    const member = await this.chatMemberService.assertRoomMemberWithUser(roomId, userId);
-    if (room.isReadOnly) throw new ForbiddenException({ code: ErrorCode.ROOM_READ_ONLY, message: 'Room is read-only' });
-    if (member.isBanned || (member.bannedUntil && new Date(member.bannedUntil) > new Date())) {
-      throw new ForbiddenException({ code: 'CHAT_MEMBER_BANNED', message: 'You cannot send messages in this room' });
+    const member = await this.chatMemberService.assertRoomMemberWithUser(
+      roomId,
+      userId,
+    );
+    if (room.isReadOnly)
+      throw new ForbiddenException({
+        code: ErrorCode.ROOM_READ_ONLY,
+        message: 'Room is read-only',
+      });
+    if (
+      member.isBanned ||
+      (member.bannedUntil && new Date(member.bannedUntil) > new Date())
+    ) {
+      throw new ForbiddenException({
+        code: 'CHAT_MEMBER_BANNED',
+        message: 'You cannot send messages in this room',
+      });
     }
-    if (room.postingMode === 'admins_only' && member.user.publicId !== '777777') {
-      throw new ForbiddenException({ code: 'CHANNEL_ADMIN_ONLY', message: 'Only channel admins can publish posts' });
+    if (
+      room.postingMode === 'admins_only' &&
+      member.user.publicId !== '777777'
+    ) {
+      throw new ForbiddenException({
+        code: 'CHANNEL_ADMIN_ONLY',
+        message: 'Only channel admins can publish posts',
+      });
     }
 
     if (dto.isThreadReply) {
       if (!dto.replyToId) {
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
-          message: 'replyToId (thread root message id) is required for a thread reply',
+          message:
+            'replyToId (thread root message id) is required for a thread reply',
         });
       }
-      const rootRows: Array<{ id: string; roomId: string; isThreadReply: boolean }> =
-        await this.dataSource.query(
-          `SELECT id, room_id AS "roomId", is_thread_reply AS "isThreadReply"
+      const rootRows: Array<{
+        id: string;
+        roomId: string;
+        isThreadReply: boolean;
+      }> = await this.dataSource.query(
+        `SELECT id, room_id AS "roomId", is_thread_reply AS "isThreadReply"
            FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
-          [dto.replyToId],
-        );
+        [dto.replyToId],
+      );
       const rootMsg = rootRows[0];
       if (!rootMsg || rootMsg.roomId !== roomId)
         throw new NotFoundException({
@@ -246,13 +319,17 @@ export class ChatMessageService {
       if (rootMsg.isThreadReply)
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
-          message: 'Cannot start a thread on a reply — thread on the root message instead',
+          message:
+            'Cannot start a thread on a reply — thread on the root message instead',
         });
     }
 
     const hasAttachments = !!dto.attachments?.length;
     if (!dto.content?.trim() && !hasAttachments) {
-      throw new BadRequestException({ code: ErrorCode.MESSAGE_EMPTY, message: 'Message content is required' });
+      throw new BadRequestException({
+        code: ErrorCode.MESSAGE_EMPTY,
+        message: 'Message content is required',
+      });
     }
 
     if (dto.content?.trim()) {
@@ -268,11 +345,16 @@ export class ChatMessageService {
       );
       if (existingRows[0]) {
         const existing = existingRows[0];
-        const existingAttachments: MessageAttachment[] = await this.dataSource.query(
-          `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = $1`,
-          [existing.id],
+        const existingAttachments: MessageAttachment[] =
+          await this.dataSource.query(
+            `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = $1`,
+            [existing.id],
+          );
+        return this.mapToResponse(
+          existing,
+          existing.content ?? '',
+          existingAttachments,
         );
-        return this.mapToResponse(existing, existing.content ?? '', existingAttachments);
       }
     }
 
@@ -300,7 +382,11 @@ export class ChatMessageService {
       contentType = 'document';
       const key = `chat-long-messages/${uuidv4()}.txt`;
       const buffer = Buffer.from(plainText, 'utf-8');
-      const { url } = await this.storageService.uploadBuffer(buffer, key, 'text/plain');
+      const { url } = await this.storageService.uploadBuffer(
+        buffer,
+        key,
+        'text/plain',
+      );
 
       contentToSave = plainText.substring(0, 150) + '...'; // Preview
       contentJson = { documentUrl: url, key }; // Store URL in JSON
@@ -341,14 +427,15 @@ export class ChatMessageService {
     );
 
     if (dto.isThreadReply && dto.replyToId) {
-      const threadRows: Array<{ replyCount: number }> = await this.dataSource.query(
-        `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
+      const threadRows: Array<{ replyCount: number }> =
+        await this.dataSource.query(
+          `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
          VALUES ($1, $2, 1, now())
          ON CONFLICT (root_message_id) DO UPDATE SET
            reply_count = message_threads.reply_count + 1, last_reply_at = now()
          RETURNING reply_count AS "replyCount"`,
-        [roomId, dto.replyToId],
-      );
+          [roomId, dto.replyToId],
+        );
       saved.threadReplyCount = threadRows[0].replyCount;
       saved.threadRootId = dto.replyToId;
     }
@@ -399,7 +486,12 @@ export class ChatMessageService {
       jobs.push(
         this.chatQueue.add(
           'update-room-metadata',
-          { roomId, sequence, lastMessageId: saved.id, lastMessageAt: saved.createdAt },
+          {
+            roomId,
+            sequence,
+            lastMessageId: saved.id,
+            lastMessageAt: saved.createdAt,
+          },
           // jobId dedupes bursts of messages in the same room into one job, but
           // BullMQ treats a jobId as permanently taken once that job exists -
           // without removeOnComplete/removeOnFail, only the very first message
@@ -416,7 +508,12 @@ export class ChatMessageService {
     // user join bilan chaqirilgan, shuning uchun alohida SELECT yo'q.
     const senderUser = member.user ?? null;
 
-    return this.mapToResponseWithSender(saved, plainText, senderUser, savedAttachments);
+    return this.mapToResponseWithSender(
+      saved,
+      plainText,
+      senderUser,
+      savedAttachments,
+    );
   }
 
   async deleteMessage(messageId: string, userId: string) {
@@ -425,40 +522,65 @@ export class ChatMessageService {
       [messageId],
     );
     const msg = rows[0];
-    if (!msg) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    if (!msg)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
     await this.chatMemberService.assertRoomMember(msg.roomId, userId);
 
     if (msg.senderId !== userId) {
       // Non-senders may only delete a message if this is a group/channel room
       // (not a 1-on-1 direct room) and they are the room owner/creator.
-      const roomRows: Array<{ type: string; createdById: string }> = await this.dataSource.query(
-        `SELECT type, created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
-        [msg.roomId],
-      );
+      const roomRows: Array<{ type: string; createdById: string }> =
+        await this.dataSource.query(
+          `SELECT type, created_by AS "createdById" FROM chat_rooms WHERE id = $1`,
+          [msg.roomId],
+        );
       const room = roomRows[0];
       const isDirectRoom = room?.type === 'direct';
       const isRoomOwner = room?.createdById === userId;
       if (isDirectRoom || !isRoomOwner) {
-        throw new ForbiddenException({ code: ErrorCode.CANNOT_DELETE_MESSAGE, message: 'You can only delete your own messages' });
+        throw new ForbiddenException({
+          code: ErrorCode.CANNOT_DELETE_MESSAGE,
+          message: 'You can only delete your own messages',
+        });
       }
     }
-    await this.dataSource.query(`UPDATE chat_messages SET deleted_at = now() WHERE id = $1`, [messageId]);
+    await this.dataSource.query(
+      `UPDATE chat_messages SET deleted_at = now() WHERE id = $1`,
+      [messageId],
+    );
   }
 
-  async updateMessage(messageId: string, userId: string, dto: UpdateMessageDto) {
+  async updateMessage(
+    messageId: string,
+    userId: string,
+    dto: UpdateMessageDto,
+  ) {
     const rows: ChatMessage[] = await this.dataSource.query(
       `SELECT ${CHAT_MESSAGE_COLUMNS_SQL} FROM chat_messages WHERE id = $1`,
       [messageId],
     );
     const msg = rows[0];
-    if (!msg || msg.deletedAt) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    if (!msg || msg.deletedAt)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
     await this.chatMemberService.assertRoomMember(msg.roomId, userId);
 
     if (msg.senderId !== userId)
-      throw new ForbiddenException({ code: ErrorCode.CANNOT_EDIT_MESSAGE, message: 'You can only edit your own messages' });
+      throw new ForbiddenException({
+        code: ErrorCode.CANNOT_EDIT_MESSAGE,
+        message: 'You can only edit your own messages',
+      });
 
     if (msg.contentType === 'document') {
-      throw new ForbiddenException({ code: ErrorCode.CANNOT_EDIT_MESSAGE, message: 'Long document messages cannot be edited' });
+      throw new ForbiddenException({
+        code: ErrorCode.CANNOT_EDIT_MESSAGE,
+        message: 'Long document messages cannot be edited',
+      });
     }
 
     const plainText = dto.content.trim();
@@ -486,8 +608,17 @@ export class ChatMessageService {
     return { ...saved, content: plainText, editedAt: saved.editedAt };
   }
 
-  private mapToResponse(msg: any, decryptedContent: string, attachments: MessageAttachment[] = []) {
-    return this.mapToResponseWithSender(msg, decryptedContent, msg.sender ?? null, attachments);
+  private mapToResponse(
+    msg: any,
+    decryptedContent: string,
+    attachments: MessageAttachment[] = [],
+  ) {
+    return this.mapToResponseWithSender(
+      msg,
+      decryptedContent,
+      msg.sender ?? null,
+      attachments,
+    );
   }
 
   private mapAttachment(a: MessageAttachment) {
@@ -502,7 +633,12 @@ export class ChatMessageService {
     };
   }
 
-  private mapToResponseWithSender(msg: any, decryptedContent: string, sender: any, attachments: MessageAttachment[] = []) {
+  private mapToResponseWithSender(
+    msg: any,
+    decryptedContent: string,
+    sender: any,
+    attachments: MessageAttachment[] = [],
+  ) {
     return {
       id: msg.id,
       roomId: msg.roomId,
@@ -550,7 +686,11 @@ export class ChatMessageService {
       [rootMessageId],
     );
     const root = rootRows[0];
-    if (!root) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Message not found' });
+    if (!root)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
     await this.chatMemberService.assertRoomMember(root.roomId, userId);
 
     const replies: any[] = await this.dataSource.query(
@@ -568,29 +708,63 @@ export class ChatMessageService {
     );
     const attachmentsByMsg = new Map<string, MessageAttachment[]>();
     for (const a of attachments) {
-      if (!attachmentsByMsg.has(a.messageId)) attachmentsByMsg.set(a.messageId, []);
+      if (!attachmentsByMsg.has(a.messageId))
+        attachmentsByMsg.set(a.messageId, []);
       attachmentsByMsg.get(a.messageId)!.push(a);
     }
     const sender = (row: any) =>
-      row.s_id ? { id: row.s_id, firstName: row.s_firstName, lastName: row.s_lastName, avatarUrl: row.s_avatarUrl } : null;
+      row.s_id
+        ? {
+            id: row.s_id,
+            firstName: row.s_firstName,
+            lastName: row.s_lastName,
+            avatarUrl: row.s_avatarUrl,
+          }
+        : null;
     const decrypt = (row: any) =>
-      row.contentType === 'document' ? row.content : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? '');
+      row.contentType === 'document'
+        ? row.content
+        : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? '');
 
     return {
-      root: this.mapToResponseWithSender(root, decrypt(root), sender(root), attachmentsByMsg.get(root.id) ?? []),
-      replies: replies.map((r) => this.mapToResponseWithSender(r, decrypt(r), sender(r), attachmentsByMsg.get(r.id) ?? [])),
+      root: this.mapToResponseWithSender(
+        root,
+        decrypt(root),
+        sender(root),
+        attachmentsByMsg.get(root.id) ?? [],
+      ),
+      replies: replies.map((r) =>
+        this.mapToResponseWithSender(
+          r,
+          decrypt(r),
+          sender(r),
+          attachmentsByMsg.get(r.id) ?? [],
+        ),
+      ),
     };
   }
 
   /** Resolves the root message's room, then posts through the normal sendMessage pipeline. */
-  async sendThreadReply(rootMessageId: string, userId: string, dto: SendMessageDto) {
+  async sendThreadReply(
+    rootMessageId: string,
+    userId: string,
+    dto: SendMessageDto,
+  ) {
     const rootRows: Array<{ roomId: string }> = await this.dataSource.query(
       `SELECT room_id AS "roomId" FROM chat_messages WHERE id = $1 AND deleted_at IS NULL`,
       [rootMessageId],
     );
     const root = rootRows[0];
-    if (!root) throw new NotFoundException({ code: ErrorCode.MESSAGE_NOT_FOUND, message: 'Thread root message not found' });
-    return this.sendMessage(root.roomId, userId, { ...dto, replyToId: rootMessageId, isThreadReply: true });
+    if (!root)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Thread root message not found',
+      });
+    return this.sendMessage(root.roomId, userId, {
+      ...dto,
+      replyToId: rootMessageId,
+      isThreadReply: true,
+    });
   }
 
   /** Telegram-style unsent-message text for a room, restored when the user comes back. */

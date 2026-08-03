@@ -39,7 +39,10 @@ class DualValidationPipe implements PipeTransform {
   }
 }
 
-export function setupValidation(app: INestApplication, config: ConfigService): void {
+export function setupValidation(
+  app: INestApplication,
+  config: ConfigService,
+): void {
   app.useGlobalPipes(new DualValidationPipe());
 
   // Serialization & response wrapping

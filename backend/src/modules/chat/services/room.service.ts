@@ -172,9 +172,7 @@ export class ChatRoomService {
       membersByRoom.get(m.roomId)!.push(m.userId);
     }
 
-    const lastMsgIds = myRooms
-      .map((r) => r.lastMessageId)
-      .filter(Boolean) as string[];
+    const lastMsgIds = myRooms.map((r) => r.lastMessageId).filter(Boolean);
 
     const lastMessages: any[] =
       lastMsgIds.length > 0
@@ -385,16 +383,28 @@ export class ChatRoomService {
         message: 'Invalid backgroundType',
       });
 
-    if (dto.name !== undefined && (dto.name.trim().length < 1 || dto.name.trim().length > 200))
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Room name must be 1-200 characters' });
+    if (
+      dto.name !== undefined &&
+      (dto.name.trim().length < 1 || dto.name.trim().length > 200)
+    )
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Room name must be 1-200 characters',
+      });
     if (dto.description !== undefined && dto.description.length > 1000)
-      throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Description must not exceed 1000 characters' });
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Description must not exceed 1000 characters',
+      });
     if (dto.avatarUrl !== undefined && dto.avatarUrl !== null) {
       try {
         const avatar = new URL(dto.avatarUrl);
         if (avatar.protocol !== 'https:') throw new Error();
       } catch {
-        throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'Avatar URL must be a valid HTTPS URL' });
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'Avatar URL must be a valid HTTPS URL',
+        });
       }
     }
     const allowedUpdates = {
@@ -406,10 +416,7 @@ export class ChatRoomService {
       backgroundType: dto.backgroundType,
       slug: dto.slug,
     };
-    const { setClause, values } = buildUpdateSet(
-      allowedUpdates as Record<string, unknown>,
-      2,
-    );
+    const { setClause, values } = buildUpdateSet(allowedUpdates, 2);
     let updated = room;
     if (setClause) {
       const rows: ChatRoom[] = normalizeReturning(
@@ -444,7 +451,7 @@ export class ChatRoomService {
         : `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE lower(slug) = lower($1)`,
       [isNumeric ? Number(identifier) : identifier],
     );
-    let room = rows[0];
+    const room = rows[0];
 
     if (!room && !isNumeric) {
       const history = await this.dataSource.query(
@@ -508,7 +515,8 @@ export class ChatRoomService {
     userId: string,
     dto: {
       backgroundUrl?: string | null;
-      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
+      backgroundType?:
+        'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN' | null;
       theme?: string | null;
       fontSize?: number | null;
       compactMode?: boolean;

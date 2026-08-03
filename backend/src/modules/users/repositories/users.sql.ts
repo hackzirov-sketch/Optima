@@ -24,7 +24,9 @@ export const USER_AUTH_COLUMNS_SQL = `
  */
 export function mapUserRow<T extends { providers: unknown }>(row: T): T {
   if (typeof row.providers === 'string') {
-    (row as any).providers = row.providers.length ? row.providers.split(',') : [];
+    (row as any).providers = row.providers.length
+      ? row.providers.split(',')
+      : [];
   }
   return row;
 }
@@ -33,7 +35,9 @@ export function mapUserRows<T extends { providers: unknown }>(rows: T[]): T[] {
   return rows.map(mapUserRow);
 }
 
-export function serializeProviders(providers: string[] | undefined): string | undefined {
+export function serializeProviders(
+  providers: string[] | undefined,
+): string | undefined {
   if (providers === undefined) return undefined;
   return providers.join(',');
 }

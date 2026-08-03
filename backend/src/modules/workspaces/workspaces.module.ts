@@ -11,14 +11,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [
-    UsersModule,
-    MailModule,
-    NotificationsModule,
-    AuthModule,
-  ],
+  imports: [UsersModule, MailModule, NotificationsModule, AuthModule],
   controllers: [WorkspacesController, InvitationsController],
-  providers: [WorkspacesService, MembersService, InvitationsService, TagsService],
+  providers: [
+    WorkspacesService,
+    MembersService,
+    InvitationsService,
+    TagsService,
+  ],
   exports: [WorkspacesService, MembersService, TagsService],
 })
 export class WorkspacesModule {}

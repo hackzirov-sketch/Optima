@@ -35,7 +35,9 @@ class SignUploadDto {
     example: 'avatars',
   })
   @IsString()
-  @IsIn(ALLOWED_FOLDERS, { message: `folder must be one of: ${ALLOWED_FOLDERS.join(', ')}` })
+  @IsIn(ALLOWED_FOLDERS, {
+    message: `folder must be one of: ${ALLOWED_FOLDERS.join(', ')}`,
+  })
   folder!: string;
 
   @ApiPropertyOptional({
@@ -45,6 +47,26 @@ class SignUploadDto {
   @IsOptional()
   @IsMimeType()
   mimeType?: string;
+}
+
+class ConfirmUploadDto {
+  @ApiProperty({
+    description: 'public_id returned by POST /storage/sign',
+    example: 'upz/avatars/user-uuid/file-uuid',
+  })
+  @IsString()
+  publicId!: string;
+
+  @ApiProperty({
+    description: 'The folder the signature was issued for',
+    enum: ALLOWED_FOLDERS,
+    example: 'avatars',
+  })
+  @IsString()
+  @IsIn(ALLOWED_FOLDERS, {
+    message: `folder must be one of: ${ALLOWED_FOLDERS.join(', ')}`,
+  })
+  folder!: string;
 }
 
 // ─── Response schemas (for Swagger only) ──────────────────────────────────
@@ -142,18 +164,66 @@ without exposing the API secret on the client.
     description: 'Signed upload params returned successfully',
     type: SignUploadResponseWrapper,
   })
-  @ApiResponse({ status: 400, description: 'Invalid folder or disallowed MIME type' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid folder or disallowed MIME type',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  sign(
-    @CurrentUser('id') userId: string,
-    @Body() dto: SignUploadDto,
-  ) {
-    const result = this.storageService.signUpload(dto.folder as UploadFolder, userId, dto.mimeType);
+  sign(@CurrentUser('id') userId: string, @Body() dto: SignUploadDto) {
+    const result = this.storageService.signUpload(
+      dto.folder as UploadFolder,
+      userId,
+      dto.mimeType,
+    );
 
     return {
       ...result,
       maxBytes: this.storageService.getMaxBytes(dto.folder as UploadFolder),
     };
+  }
+
+  /**
+   * POST /storage/confirm
+   *
+   * Step 2.5 of the upload flow. Cloudinary can enforce the *format* allowlist
+   * (it's folded into the signature) but has no signable size parameter, so
+   * until the asset is inspected the only thing describing it is whatever the
+   * uploader claims. Call this before persisting a `secure_url` anywhere: it
+   * returns the real byte count and format, and deletes the asset outright if
+   * it breaks the folder's policy.
+   */
+  @Post('confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify a direct Cloudinary upload against its folder policy',
+    description:
+      'Returns the authoritative size/format of the uploaded asset. ' +
+      'Rejects (and deletes) anything over the size limit or of a disallowed type.',
+  })
+  @ApiBody({ type: ConfirmUploadDto })
+  @ApiResponse({ status: 200, description: 'Upload is within policy' })
+  @ApiResponse({
+    status: 400,
+    description: 'Asset missing, too large, or wrong type',
+  })
+  @ApiResponse({ status: 403, description: 'Not your upload' })
+  async confirmUpload(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ConfirmUploadDto,
+  ) {
+    // publicId is minted server-side as `<base>/<folder>/<userId>/<uuid>`, so
+    // this both scopes the check to the caller's own uploads and stops it from
+    // being used to probe other people's assets.
+    if (!dto.publicId.split('/').includes(userId)) {
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You can only confirm your own uploads',
+      });
+    }
+    return this.storageService.verifyUploadedAsset(
+      dto.publicId,
+      dto.folder as UploadFolder,
+    );
   }
 
   /**
@@ -188,10 +258,17 @@ without exposing the API secret on the client.
     @Query('publicId') publicId: string,
     @CurrentUser('id') userId: string,
   ) {
-    if (!publicId) throw new BadRequestException({ code: ErrorCode.STORAGE_PUBLIC_ID_REQUIRED, message: 'publicId is required' });
+    if (!publicId)
+      throw new BadRequestException({
+        code: ErrorCode.STORAGE_PUBLIC_ID_REQUIRED,
+        message: 'publicId is required',
+      });
     const segments = publicId.split('/');
     if (!segments.includes(userId)) {
-      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'You can only delete your own files' });
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You can only delete your own files',
+      });
     }
     await this.storageService.deleteCloudinaryFile(publicId);
     return { deleted: true };

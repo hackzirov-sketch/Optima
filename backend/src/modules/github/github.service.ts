@@ -5,7 +5,6 @@ import { DatabaseService } from '../../database/database.service';
 import * as crypto from 'crypto';
 
 import { PushStatus } from '../../common/enums';
-import { TASK_PUSH_COLUMNS_SQL } from '../tasks/tasks.sql';
 import { buildUpdateSet } from '../../common/utils/sql.util';
 
 @Injectable()
@@ -29,7 +28,10 @@ export class GithubService {
     }
 
     if (!signatureHeader) {
-      throw new UnauthorizedException({ code: ErrorCode.GITHUB_SIGNATURE_MISSING, message: 'Missing X-Hub-Signature-256 header' });
+      throw new UnauthorizedException({
+        code: ErrorCode.GITHUB_SIGNATURE_MISSING,
+        message: 'Missing X-Hub-Signature-256 header',
+      });
     }
 
     const body = rawBody ?? Buffer.alloc(0);
@@ -39,7 +41,10 @@ export class GithubService {
     const a = Buffer.from(signatureHeader, 'utf8');
     const b = Buffer.from(digest, 'utf8');
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      throw new UnauthorizedException({ code: ErrorCode.GITHUB_SIGNATURE_INVALID, message: 'Invalid GitHub signature' });
+      throw new UnauthorizedException({
+        code: ErrorCode.GITHUB_SIGNATURE_INVALID,
+        message: 'Invalid GitHub signature',
+      });
     }
   }
 
@@ -64,7 +69,9 @@ export class GithubService {
     return { received: true, event };
   }
 
-  private async findLinkedRepo(githubRepoId: number): Promise<{ id: string } | null> {
+  private async findLinkedRepo(
+    githubRepoId: number,
+  ): Promise<{ id: string } | null> {
     const rows = await this.dataSource.query(
       `SELECT id FROM repositories WHERE github_repo_id = $1`,
       [githubRepoId],
@@ -154,13 +161,14 @@ export class GithubService {
     const linkedRepo = await this.findLinkedRepo(githubRepoId);
     if (!linkedRepo) return;
 
-    const rows: Array<{ id: string; status: PushStatus }> = await this.dataSource.query(
-      `SELECT id, status FROM task_pushes
+    const rows: Array<{ id: string; status: PushStatus }> =
+      await this.dataSource.query(
+        `SELECT id, status FROM task_pushes
        WHERE repository_id = $1 AND branch_name = $2 AND deleted_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1`,
-      [linkedRepo.id, pr.head.ref],
-    );
+        [linkedRepo.id, pr.head.ref],
+      );
     const push = rows[0];
 
     if (!push) {
@@ -175,13 +183,22 @@ export class GithubService {
     if (pr.number != null) patch.githubPrNumber = pr.number;
     if (pr.head.sha) patch.githubCommitSha = pr.head.sha;
 
-    if (p.action === 'closed' && pr.merged && push.status === PushStatus.APPROVED) {
+    if (
+      p.action === 'closed' &&
+      pr.merged &&
+      push.status === PushStatus.APPROVED
+    ) {
       patch.status = PushStatus.MERGED;
     }
 
-    const { setClause, values } = buildUpdateSet(patch, 2, { status: 'task_pushes_status_enum' });
+    const { setClause, values } = buildUpdateSet(patch, 2, {
+      status: 'task_pushes_status_enum',
+    });
     if (setClause) {
-      await this.dataSource.query(`UPDATE task_pushes SET ${setClause} WHERE id = $1`, [push.id, ...values]);
+      await this.dataSource.query(
+        `UPDATE task_pushes SET ${setClause} WHERE id = $1`,
+        [push.id, ...values],
+      );
     }
 
     this.logger.log(

@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ChatMember } from '../../../database/entities/chat-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -6,9 +10,7 @@ import { CHAT_MEMBER_COLUMNS_SQL } from '../chat.sql';
 
 @Injectable()
 export class ChatMemberService {
-  constructor(
-    private readonly dataSource: DatabaseService,
-  ) {}
+  constructor(private readonly dataSource: DatabaseService) {}
 
   async assertRoomMember(roomId: string, userId: string): Promise<ChatMember> {
     const rows: ChatMember[] = await this.dataSource.query(
@@ -26,7 +28,8 @@ export class ChatMemberService {
       if (pendingRows[0]) {
         throw new ForbiddenException({
           code: 'CHAT_INVITE_PENDING',
-          message: 'You have a pending invite to this room. Please accept it first.',
+          message:
+            'You have a pending invite to this room. Please accept it first.',
         });
       }
       throw new ForbiddenException({
@@ -40,7 +43,20 @@ export class ChatMemberService {
   async assertRoomMemberWithUser(
     roomId: string,
     userId: string,
-  ): Promise<ChatMember & { role: string; isBanned: boolean; bannedUntil: string | null; user: { id: string; firstName: string; lastName: string; avatarUrl: string | null; publicId: string } }> {
+  ): Promise<
+    ChatMember & {
+      role: string;
+      isBanned: boolean;
+      bannedUntil: string | null;
+      user: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        avatarUrl: string | null;
+        publicId: string;
+      };
+    }
+  > {
     const rows: any[] = await this.dataSource.query(
       `SELECT
          cm.id AS "id", cm.room_id AS "roomId", cm.user_id AS "userId",
@@ -62,10 +78,23 @@ export class ChatMemberService {
         message: 'Not a member of this chat room',
       });
     }
-    const { u_id, u_firstName, u_lastName, u_avatarUrl, u_publicId, ...member } = row;
+    const {
+      u_id,
+      u_firstName,
+      u_lastName,
+      u_avatarUrl,
+      u_publicId,
+      ...member
+    } = row;
     return {
       ...member,
-      user: { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl, publicId: u_publicId },
+      user: {
+        id: u_id,
+        firstName: u_firstName,
+        lastName: u_lastName,
+        avatarUrl: u_avatarUrl,
+        publicId: u_publicId,
+      },
     };
   }
 
@@ -114,7 +143,11 @@ export class ChatMemberService {
   }
 
   /** Mute/unmute notifications for a room, for the calling member only. */
-  async setMuted(roomId: string, userId: string, muted: boolean): Promise<{ isMuted: boolean }> {
+  async setMuted(
+    roomId: string,
+    userId: string,
+    muted: boolean,
+  ): Promise<{ isMuted: boolean }> {
     const rows = await this.dataSource.query(
       `UPDATE chat_members SET is_muted = $3
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'
@@ -131,7 +164,10 @@ export class ChatMemberService {
   }
 
   /** Accept a pending chat invite (e.g. DM request) */
-  async acceptChatInvite(roomId: string, userId: string): Promise<{ message: string }> {
+  async acceptChatInvite(
+    roomId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
     const rows: ChatMember[] = await this.dataSource.query(
       `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
@@ -165,7 +201,10 @@ export class ChatMemberService {
   }
 
   /** Decline a pending chat invite */
-  async declineChatInvite(roomId: string, userId: string): Promise<{ message: string }> {
+  async declineChatInvite(
+    roomId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
     const rows: ChatMember[] = await this.dataSource.query(
       `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,

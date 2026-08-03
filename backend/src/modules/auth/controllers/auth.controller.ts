@@ -61,20 +61,47 @@ export class AuthController {
 
   @Public()
   @Post('set-password')
+  // The route has to stay @Public — it's how an OAuth-only account sets its
+  // first password, before it can authenticate at all. That means the global
+  // JwtAuthGuard never populates req.user here, so an already-signed-in caller
+  // is identified from the access cookie instead (see AuthService.setPassword).
+  // Rate limited like every other credential-accepting endpoint: it takes a
+  // one-time setupToken, and an unlimited endpoint is an unlimited guessing
+  // budget, however wide the keyspace.
+  @AuthRateLimit({
+    action: 'set-password',
+    maxAttempts: 5,
+    windowSeconds: 90,
+    blockSeconds: 900,
+  })
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Set password for social login accounts or new users' })
+  @ApiOperation({
+    summary: 'Set password for social login accounts or new users',
+  })
   async setPassword(
     @Req() req,
     @Body() dto: SetPasswordDto,
-    @Headers('authorization') authHeader?: string
+    @Headers('authorization') authHeader?: string,
   ) {
-    return this.authService.setPassword(req.user?.id, dto, authHeader);
+    const result = await this.authService.setPassword(
+      req.user?.id,
+      dto,
+      authHeader,
+      req.cookies?.[ACCESS_COOKIE],
+    );
+    await req.clearRateLimit?.();
+    return result;
   }
 
   @Public()
   @Post('register')
-  @AuthRateLimit({ action: 'register', maxAttempts: 3, windowSeconds: 90, blockSeconds: 86400 })
+  @AuthRateLimit({
+    action: 'register',
+    maxAttempts: 3,
+    windowSeconds: 90,
+    blockSeconds: 86400,
+  })
   @ApiOperation({ summary: 'Register a new user and send verification email' })
   async register(@Body() dto: RegisterDto) {
     // No clearRateLimit here: register always "succeeds" for valid input (a
@@ -85,10 +112,21 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
-  @AuthRateLimit({ action: 'verify-email', maxAttempts: 10, windowSeconds: 90, blockSeconds: 1800 })
+  @AuthRateLimit({
+    action: 'verify-email',
+    maxAttempts: 10,
+    windowSeconds: 90,
+    blockSeconds: 1800,
+  })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify email address with verifyToken + 6-digit code' })
-  async verifyEmail(@Req() req, @Body() dto: VerifyEmailDto, @Res({ passthrough: true }) res: Response) {
+  @ApiOperation({
+    summary: 'Verify email address with verifyToken + 6-digit code',
+  })
+  async verifyEmail(
+    @Req() req,
+    @Body() dto: VerifyEmailDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.verifyEmail(dto);
     await req.clearRateLimit?.();
     return this.respondWithTokens(res, result);
@@ -96,7 +134,12 @@ export class AuthController {
 
   @Public()
   @Post('resend-verification')
-  @AuthRateLimit({ action: 'resend-verification', maxAttempts: 5, windowSeconds: 90, blockSeconds: 3600 })
+  @AuthRateLimit({
+    action: 'resend-verification',
+    maxAttempts: 5,
+    windowSeconds: 90,
+    blockSeconds: 3600,
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend the email verification code' })
   async resendVerification(@Body() dto: ResendVerificationDto) {
@@ -108,7 +151,12 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  @AuthRateLimit({ action: 'login', maxAttempts: 5, windowSeconds: 90, blockSeconds: 900 })
+  @AuthRateLimit({
+    action: 'login',
+    maxAttempts: 5,
+    windowSeconds: 90,
+    blockSeconds: 900,
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user, set httpOnly auth cookies' })
   async login(
@@ -126,10 +174,9 @@ export class AuthController {
   /** Tokens never reach the response body — they're set as httpOnly cookies
    * here and stripped out, so nothing JS-readable on the frontend ever holds
    * one (defeats token exfiltration via XSS). */
-  private respondWithTokens<T extends { accessToken: string; refreshToken: string }>(
-    res: Response,
-    result: T,
-  ) {
+  private respondWithTokens<
+    T extends { accessToken: string; refreshToken: string },
+  >(res: Response, result: T) {
     const { accessToken, refreshToken, ...rest } = result;
     setAuthCookies(res, this.configService, { accessToken, refreshToken });
     return rest;
@@ -137,7 +184,12 @@ export class AuthController {
 
   @Public()
   @Post('forgot-password')
-  @AuthRateLimit({ action: 'forgot-password', maxAttempts: 5, windowSeconds: 90, blockSeconds: 600 })
+  @AuthRateLimit({
+    action: 'forgot-password',
+    maxAttempts: 5,
+    windowSeconds: 90,
+    blockSeconds: 600,
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send password reset email' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -147,18 +199,33 @@ export class AuthController {
 
   @Public()
   @Post('verify-reset-otp')
-  @AuthRateLimit({ action: 'verify-reset-otp', maxAttempts: 10, windowSeconds: 90, blockSeconds: 900 })
+  @AuthRateLimit({
+    action: 'verify-reset-otp',
+    maxAttempts: 10,
+    windowSeconds: 90,
+    blockSeconds: 900,
+  })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify the OTP code sent to email for password reset' })
+  @ApiOperation({
+    summary: 'Verify the OTP code sent to email for password reset',
+  })
   async verifyResetOtp(@Req() req, @Body() dto: VerifyResetOtpDto) {
-    const result = await this.authService.verifyResetOtp(dto.resetToken, dto.otp);
+    const result = await this.authService.verifyResetOtp(
+      dto.resetToken,
+      dto.otp,
+    );
     await req.clearRateLimit?.();
     return result;
   }
 
   @Public()
   @Post('reset-password')
-  @AuthRateLimit({ action: 'reset-password', maxAttempts: 5, windowSeconds: 90, blockSeconds: 3600 })
+  @AuthRateLimit({
+    action: 'reset-password',
+    maxAttempts: 5,
+    windowSeconds: 90,
+    blockSeconds: 3600,
+  })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using one-time token from email' })
   async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
@@ -171,7 +238,7 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Login with Google' })
-  async googleAuth(@Req() req) {}
+  async googleAuth() {}
 
   @Public()
   @Get('google/callback')
@@ -184,8 +251,13 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
   ) {
     const data = await this.oauthService.googleLogin(req.user, ip, userAgent);
-    const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
-    const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    const frontendUrl =
+      this.configService.get<string>('app.frontendUrl') ||
+      'http://localhost:3001';
+    const code = await this.oauthService.createOAuthSessionCode(
+      data.accessToken,
+      data.refreshToken,
+    );
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
@@ -193,7 +265,7 @@ export class AuthController {
   @Get('github')
   @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'Login with GitHub' })
-  async githubAuth(@Req() req) {}
+  async githubAuth() {}
 
   @Public()
   @Get('github/callback')
@@ -206,18 +278,39 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
   ) {
     const data = await this.oauthService.githubLogin(req.user, ip, userAgent);
-    const frontendUrl = this.configService.get<string>('app.frontendUrl') || 'http://localhost:3001';
-    const code = await this.oauthService.createOAuthSessionCode(data.accessToken, data.refreshToken);
+    const frontendUrl =
+      this.configService.get<string>('app.frontendUrl') ||
+      'http://localhost:3001';
+    const code = await this.oauthService.createOAuthSessionCode(
+      data.accessToken,
+      data.refreshToken,
+    );
     return res.redirect(`${frontendUrl}/auth/callback?code=${code}`);
   }
 
   @Public()
   @Post('exchange-code')
-  @AuthRateLimit({ action: 'exchange-code', maxAttempts: 10, windowSeconds: 90, blockSeconds: 600 })
+  @AuthRateLimit({
+    action: 'exchange-code',
+    maxAttempts: 10,
+    windowSeconds: 90,
+    blockSeconds: 600,
+  })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Exchange one-time OAuth session code for tokens, set httpOnly auth cookies' })
-  async exchangeOAuthCode(@Req() req, @Body() body: { code: string }, @Res({ passthrough: true }) res: Response) {
-    if (!body?.code) throw new BadRequestException({ code: ErrorCode.VALIDATION_ERROR, message: 'code is required' });
+  @ApiOperation({
+    summary:
+      'Exchange one-time OAuth session code for tokens, set httpOnly auth cookies',
+  })
+  async exchangeOAuthCode(
+    @Req() req,
+    @Body() body: { code: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body?.code)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'code is required',
+      });
     const result = await this.oauthService.exchangeOAuthSessionCode(body.code);
     await req.clearRateLimit?.();
     return this.respondWithTokens(res, result);
@@ -226,9 +319,16 @@ export class AuthController {
   @Public()
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
-  @AuthRateLimit({ action: 'refresh', maxAttempts: 20, windowSeconds: 90, blockSeconds: 300 })
+  @AuthRateLimit({
+    action: 'refresh',
+    maxAttempts: 20,
+    windowSeconds: 90,
+    blockSeconds: 300,
+  })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using the httpOnly refresh cookie' })
+  @ApiOperation({
+    summary: 'Refresh access token using the httpOnly refresh cookie',
+  })
   async refresh(
     @Req() req,
     @CurrentUser('refreshToken') refreshToken: string,
@@ -244,7 +344,8 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Revoke refresh token, blacklist current access token, clear auth cookies',
+    summary:
+      'Revoke refresh token, blacklist current access token, clear auth cookies',
   })
   async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
     const refreshToken: string | undefined = req.cookies?.[REFRESH_COOKIE];

@@ -7,15 +7,6 @@ export interface ImageValidationResult {
   reason?: string;
 }
 
-// Allowed image magic bytes
-const MAGIC = {
-  JPEG: [0xff, 0xd8, 0xff],
-  PNG:  [0x89, 0x50, 0x4e, 0x47],
-  GIF:  [0x47, 0x49, 0x46],
-  WEBP: [0x52, 0x49, 0x46, 0x46], // RIFF....WEBP — checked separately
-  BMP:  [0x42, 0x4d],
-} as const;
-
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_DIMENSION = 8000; // px — guards against DoS via huge canvas
 
@@ -32,7 +23,9 @@ export class ImageModerationService {
   async filterImageUrl(imageUrl: string, userId?: string): Promise<void> {
     let buffer: Buffer;
     try {
-      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
+      const res = await fetch(imageUrl, {
+        signal: AbortSignal.timeout(10_000),
+      });
       if (!res.ok) {
         throw new BadRequestException({
           code: ErrorCode.VALIDATION_ERROR,
@@ -43,7 +36,9 @@ export class ImageModerationService {
       buffer = Buffer.from(ab);
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
-      this.logger.warn(`Image fetch failed url=${imageUrl}: ${(err as Error).message}`);
+      this.logger.warn(
+        `Image fetch failed url=${imageUrl}: ${(err as Error).message}`,
+      );
       return; // Network issues — allow through (fail open for URL fetch)
     }
 
@@ -64,10 +59,16 @@ export class ImageModerationService {
     const result = this.checkBuffer(buffer);
     if (result.valid) return;
 
-    this.logger.warn(`Image rejected user=${userId ?? 'anonymous'} reason=${result.reason}`);
+    this.logger.warn(
+      `Image rejected user=${userId ?? 'anonymous'} reason=${result.reason}`,
+    );
 
     if (userId) {
-      await this.violationService.recordViolation(userId, 'image', result.reason ?? 'invalid image');
+      await this.violationService.recordViolation(
+        userId,
+        'image',
+        result.reason ?? 'invalid image',
+      );
       await this.violationService.assertNotBlocked(userId);
     }
 
@@ -80,7 +81,10 @@ export class ImageModerationService {
   checkBuffer(buffer: Buffer): ImageValidationResult {
     // Size check
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return { valid: false, reason: `file too large (max ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)` };
+      return {
+        valid: false,
+        reason: `file too large (max ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)`,
+      };
     }
 
     if (buffer.length < 4) {
@@ -90,7 +94,10 @@ export class ImageModerationService {
     // Magic bytes check
     const mime = this.detectMime(buffer);
     if (!mime) {
-      return { valid: false, reason: 'unsupported or fake image format (magic bytes mismatch)' };
+      return {
+        valid: false,
+        reason: 'unsupported or fake image format (magic bytes mismatch)',
+      };
     }
 
     // Dimension check via simple parser (no dependencies)
@@ -108,20 +115,38 @@ export class ImageModerationService {
   }
 
   private detectMime(buf: Buffer): string | null {
-    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
-    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
-    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff)
+      return 'image/jpeg';
+    if (
+      buf[0] === 0x89 &&
+      buf[1] === 0x50 &&
+      buf[2] === 0x4e &&
+      buf[3] === 0x47
+    )
+      return 'image/png';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46)
+      return 'image/gif';
     if (buf[0] === 0x42 && buf[1] === 0x4d) return 'image/bmp';
     // WebP: RIFF????WEBP
     if (
-      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
-    ) return 'image/webp';
+      buf[0] === 0x52 &&
+      buf[1] === 0x49 &&
+      buf[2] === 0x46 &&
+      buf[3] === 0x46 &&
+      buf[8] === 0x57 &&
+      buf[9] === 0x45 &&
+      buf[10] === 0x42 &&
+      buf[11] === 0x50
+    )
+      return 'image/webp';
 
     return null;
   }
 
-  private readDimensions(buf: Buffer, mime: string): { width: number; height: number } | null {
+  private readDimensions(
+    buf: Buffer,
+    mime: string,
+  ): { width: number; height: number } | null {
     try {
       if (mime === 'image/png') {
         // PNG: width at bytes 16-19, height at 20-23 (big-endian)
@@ -136,8 +161,12 @@ export class ImageModerationService {
           if (buf[i] !== 0xff) break;
           const marker = buf[i + 1];
           // SOF markers: C0, C1, C2, C3, C5, C6, C7, C9, CA, CB, CD, CE, CF
-          if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
-              (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+          if (
+            (marker >= 0xc0 && marker <= 0xc3) ||
+            (marker >= 0xc5 && marker <= 0xc7) ||
+            (marker >= 0xc9 && marker <= 0xcb) ||
+            (marker >= 0xcd && marker <= 0xcf)
+          ) {
             const height = buf.readUInt16BE(i + 5);
             const width = buf.readUInt16BE(i + 7);
             return { width, height };
@@ -152,13 +181,23 @@ export class ImageModerationService {
         // VP8 chunk: width/height at specific offsets
         if (buf.length < 30) return null;
         // VP8 (lossy): "VP8 " at offset 12
-        if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x20) {
+        if (
+          buf[12] === 0x56 &&
+          buf[13] === 0x50 &&
+          buf[14] === 0x38 &&
+          buf[15] === 0x20
+        ) {
           const width = (buf.readUInt16LE(26) & 0x3fff) + 1;
           const height = (buf.readUInt16LE(28) & 0x3fff) + 1;
           return { width, height };
         }
         // VP8L (lossless): "VP8L" at offset 12
-        if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x4c) {
+        if (
+          buf[12] === 0x56 &&
+          buf[13] === 0x50 &&
+          buf[14] === 0x38 &&
+          buf[15] === 0x4c
+        ) {
           const bits = buf.readUInt32LE(21);
           const width = (bits & 0x3fff) + 1;
           const height = ((bits >> 14) & 0x3fff) + 1;

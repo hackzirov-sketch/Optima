@@ -15,7 +15,10 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { NotificationType } from '../../../common/enums';
 import { PermissionService } from '../../../common/services/permission.service';
 import * as crypto from 'crypto';
-import { WORKSPACE_INVITATION_COLUMNS_SQL, WORKSPACE_MEMBER_COLUMNS_SQL } from '../repositories/workspaces.sql';
+import {
+  WORKSPACE_INVITATION_COLUMNS_SQL,
+  WORKSPACE_MEMBER_COLUMNS_SQL,
+} from '../repositories/workspaces.sql';
 
 @Injectable()
 export class InvitationsService {
@@ -33,19 +36,28 @@ export class InvitationsService {
     inviterId: string,
     dto: InviteMemberDto,
   ): Promise<WorkspaceInvitation> {
-    const workspaceRows: Array<{ id: string; name: string }> = await this.dataSource.query(
-      `SELECT id, name FROM workspaces WHERE id = $1`,
-      [workspaceId],
-    );
+    const workspaceRows: Array<{ id: string; name: string }> =
+      await this.dataSource.query(
+        `SELECT id, name FROM workspaces WHERE id = $1`,
+        [workspaceId],
+      );
     const workspace = workspaceRows[0];
-    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
+    if (!workspace)
+      throw new NotFoundException({
+        code: ErrorCode.WORKSPACE_NOT_FOUND,
+        message: 'Workspace not found',
+      });
 
     const inviterRows = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, inviterId],
     );
     const inviter = inviterRows[0];
-    if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    if (!inviter)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     this.permission.assertCanManageWorkspace(inviter);
 
     const existingUserRows: Array<{ id: string }> = await this.dataSource.query(
@@ -66,11 +78,12 @@ export class InvitationsService {
       }
     }
 
-    const existingInviteRows: WorkspaceInvitation[] = await this.dataSource.query(
-      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
+    const existingInviteRows: WorkspaceInvitation[] =
+      await this.dataSource.query(
+        `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
        WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND declined_at IS NULL`,
-      [workspaceId, dto.email],
-    );
+        [workspaceId, dto.email],
+      );
     const existingInvite = existingInviteRows[0];
 
     if (existingInvite && existingInvite.expiresAt > new Date()) {
@@ -136,7 +149,9 @@ export class InvitationsService {
   }
 
   async accept(token: string, userId: string): Promise<any> {
-    const invitationRows: Array<WorkspaceInvitation & { workspaceName: string }> = await this.dataSource.query(
+    const invitationRows: Array<
+      WorkspaceInvitation & { workspaceName: string }
+    > = await this.dataSource.query(
       `SELECT i.id, i.workspace_id AS "workspaceId", i.email, i.role,
               i.invited_by AS "invitedById", i.token, i.expires_at AS "expiresAt",
               i.accepted_at AS "acceptedAt", i.declined_at AS "declinedAt",
@@ -169,7 +184,12 @@ export class InvitationsService {
       });
     }
 
-    const userRows: Array<{ id: string; email: string; firstName: string; lastName: string }> = await this.dataSource.query(
+    const userRows: Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+    }> = await this.dataSource.query(
       `SELECT id, email, first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
       [userId],
     );
@@ -193,40 +213,46 @@ export class InvitationsService {
     }
 
     try {
-      const savedMember = await this.dataSource.withTransaction(async (query) => {
-        await query(`UPDATE workspace_invitations SET accepted_at = now() WHERE id = $1`, [invitation.id]);
-
-        const savedMemberRows: any[] = await query(
-          `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)
-           RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
-          [invitation.workspaceId, userId, invitation.role],
-        );
-        const savedMember = savedMemberRows[0];
-
-        // Auto-join all workspace-wide public channels (e.g. #general). A room
-        // no longer has a `type`; "workspace-wide" is: belongs to this
-        // workspace, not scoped to a specific group/project, and public.
-        const wsRooms: Array<{ id: string }> = await query(
-          `SELECT id FROM chat_rooms
-           WHERE workspace_id = $1 AND group_id IS NULL AND project_id IS NULL AND is_public = true`,
-          [invitation.workspaceId],
-        );
-        for (const room of wsRooms) {
+      const savedMember = await this.dataSource.withTransaction(
+        async (query) => {
           await query(
-            `INSERT INTO chat_members (room_id, user_id)
+            `UPDATE workspace_invitations SET accepted_at = now() WHERE id = $1`,
+            [invitation.id],
+          );
+
+          const savedMemberRows: any[] = await query(
+            `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)
+           RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
+            [invitation.workspaceId, userId, invitation.role],
+          );
+          const savedMember = savedMemberRows[0];
+
+          // Auto-join all workspace-wide public channels (e.g. #general). A room
+          // no longer has a `type`; "workspace-wide" is: belongs to this
+          // workspace, not scoped to a specific group/project, and public.
+          const wsRooms: Array<{ id: string }> = await query(
+            `SELECT id FROM chat_rooms
+           WHERE workspace_id = $1 AND group_id IS NULL AND project_id IS NULL AND is_public = true`,
+            [invitation.workspaceId],
+          );
+          for (const room of wsRooms) {
+            await query(
+              `INSERT INTO chat_members (room_id, user_id)
              SELECT $1, $2 WHERE NOT EXISTS (
                SELECT 1 FROM chat_members WHERE room_id = $1 AND user_id = $2
              )`,
-            [room.id, userId],
-          );
-        }
+              [room.id, userId],
+            );
+          }
 
-        return savedMember;
-      });
+          return savedMember;
+        },
+      );
 
       // Notify the inviter that the invitation was accepted
       if (invitation.invitedById && invitation.invitedById !== userId) {
-        const userName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email;
+        const userName =
+          `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email;
         await this.notificationsService.create({
           userId: invitation.invitedById,
           actorId: userId,
@@ -242,7 +268,10 @@ export class InvitationsService {
       return savedMember;
     } catch (error) {
       this.logger.error('Failed to accept invitation', (error as Error)?.stack);
-      throw new InternalServerErrorException({ code: ErrorCode.INTERNAL_ERROR, message: 'Failed to accept invitation' });
+      throw new InternalServerErrorException({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: 'Failed to accept invitation',
+      });
     }
   }
 
@@ -271,7 +300,10 @@ export class InvitationsService {
       });
     }
 
-    await this.dataSource.query(`UPDATE workspace_invitations SET declined_at = now() WHERE id = $1`, [invitation.id]);
+    await this.dataSource.query(
+      `UPDATE workspace_invitations SET declined_at = now() WHERE id = $1`,
+      [invitation.id],
+    );
   }
 
   async remove(
@@ -284,15 +316,26 @@ export class InvitationsService {
       [workspaceId, requesterId],
     );
     const inviter = inviterRows[0];
-    if (!inviter) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    if (!inviter)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     this.permission.assertCanManageWorkspace(inviter);
 
     const invitationRows = await this.dataSource.query(
       `SELECT id FROM workspace_invitations WHERE id = $1 AND workspace_id = $2`,
       [id, workspaceId],
     );
-    if (!invitationRows[0]) throw new NotFoundException({ code: ErrorCode.INVITATION_NOT_FOUND, message: 'Invitation not found' });
+    if (!invitationRows[0])
+      throw new NotFoundException({
+        code: ErrorCode.INVITATION_NOT_FOUND,
+        message: 'Invitation not found',
+      });
 
-    await this.dataSource.query(`DELETE FROM workspace_invitations WHERE id = $1`, [id]);
+    await this.dataSource.query(
+      `DELETE FROM workspace_invitations WHERE id = $1`,
+      [id],
+    );
   }
 }

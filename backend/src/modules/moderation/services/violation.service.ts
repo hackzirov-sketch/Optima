@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -40,8 +36,9 @@ export class ViolationService {
     type: ViolationType,
     reason: string,
   ): Promise<ViolationStatus> {
-    const blockDurations: number[] =
-      this.config.get<number[]>('moderation.blockDurationsMinutes') ?? [15, 30];
+    const blockDurations: number[] = this.config.get<number[]>(
+      'moderation.blockDurationsMinutes',
+    ) ?? [15, 30];
     const permanentThreshold =
       this.config.get<number>('moderation.permanentBlockThreshold') ?? 3;
 
@@ -64,11 +61,17 @@ export class ViolationService {
       if (count >= permanentThreshold) {
         isPermanent = true;
         blockedUntil = null;
-        this.logger.warn(`User ${userId} permanently blocked after ${count} violations`);
+        this.logger.warn(
+          `User ${userId} permanently blocked after ${count} violations`,
+        );
       } else {
-        const minutes = blockDurations[count - 1] ?? blockDurations[blockDurations.length - 1];
+        const minutes =
+          blockDurations[count - 1] ??
+          blockDurations[blockDurations.length - 1];
         blockedUntil = new Date(now.getTime() + minutes * 60 * 1000);
-        this.logger.warn(`User ${userId} temp-blocked for ${minutes} min (violation #${count})`);
+        this.logger.warn(
+          `User ${userId} temp-blocked for ${minutes} min (violation #${count})`,
+        );
       }
 
       if (existing) {
@@ -98,10 +101,21 @@ export class ViolationService {
       [userId],
     );
     const record = rows[0];
-    if (!record) return { blocked: false, isPermanent: false, blockedUntil: null, count: 0 };
+    if (!record)
+      return {
+        blocked: false,
+        isPermanent: false,
+        blockedUntil: null,
+        count: 0,
+      };
 
     if (record.isPermanent) {
-      return { blocked: true, isPermanent: true, blockedUntil: null, count: record.count };
+      return {
+        blocked: true,
+        isPermanent: true,
+        blockedUntil: null,
+        count: record.count,
+      };
     }
 
     const now = new Date();
@@ -114,7 +128,12 @@ export class ViolationService {
       };
     }
 
-    return { blocked: false, isPermanent: false, blockedUntil: null, count: record.count };
+    return {
+      blocked: false,
+      isPermanent: false,
+      blockedUntil: null,
+      count: record.count,
+    };
   }
 
   /** Throws ForbiddenException if user is currently blocked. Call at start of sensitive actions. */
@@ -125,7 +144,8 @@ export class ViolationService {
     if (status.isPermanent) {
       throw new ForbiddenException({
         code: ErrorCode.ACCOUNT_SUSPENDED,
-        message: 'Your account has been permanently suspended due to repeated violations.',
+        message:
+          'Your account has been permanently suspended due to repeated violations.',
       });
     }
 

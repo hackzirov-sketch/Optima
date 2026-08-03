@@ -40,18 +40,25 @@ export class CreateChatRoomDto {
   @IsUUID()
   projectId?: string;
 
-  @ApiPropertyOptional({ description: 'Required for direct (DM) rooms — the other participant' })
+  @ApiPropertyOptional({
+    description: 'Required for direct (DM) rooms — the other participant',
+  })
   @IsOptional()
   @IsUUID()
   targetUserId?: string;
 
-  @ApiPropertyOptional({ description: 'Public user ID alternative for opening a direct room' })
+  @ApiPropertyOptional({
+    description: 'Public user ID alternative for opening a direct room',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(20)
   targetPublicId?: string;
 
-  @ApiPropertyOptional({ description: 'Initial member IDs for group/project rooms (excluding creator)' })
+  @ApiPropertyOptional({
+    description:
+      'Initial member IDs for group/project rooms (excluding creator)',
+  })
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })

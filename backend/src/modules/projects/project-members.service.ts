@@ -33,7 +33,10 @@ export class ProjectMembersService {
     );
     const project = rows[0];
     if (!project || project.deletedAt) {
-      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
+      throw new NotFoundException({
+        code: ErrorCode.PROJECT_NOT_FOUND,
+        message: 'Project not found',
+      });
     }
     return project;
   }
@@ -47,7 +50,10 @@ export class ProjectMembersService {
     return rows[0] ?? null;
   }
 
-  private async assertProjectManager(projectId: string, userId: string): Promise<Project> {
+  private async assertProjectManager(
+    projectId: string,
+    userId: string,
+  ): Promise<Project> {
     const project = await this.getProject(projectId);
 
     // Project creator is always a manager
@@ -55,7 +61,11 @@ export class ProjectMembersService {
 
     // Or workspace LEAD+ role
     const wsMember = await this.getWorkspaceMember(project.workspaceId, userId);
-    if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    if (!wsMember)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     this.permission.assertCanManageProject(wsMember);
 
     return project;
@@ -63,8 +73,15 @@ export class ProjectMembersService {
 
   async listMembers(projectId: string, requesterId: string) {
     const project = await this.getProject(projectId);
-    const wsMember = await this.getWorkspaceMember(project.workspaceId, requesterId);
-    if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    const wsMember = await this.getWorkspaceMember(
+      project.workspaceId,
+      requesterId,
+    );
+    if (!wsMember)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
 
     const rows: any[] = await this.dataSource.query(
       `SELECT
@@ -88,7 +105,13 @@ export class ProjectMembersService {
       invitedAt: m.invitedAt,
       joinedAt: m.joinedAt,
       user: m.u_id
-        ? { id: m.u_id, firstName: m.u_firstName, lastName: m.u_lastName, avatarUrl: m.u_avatarUrl, email: m.u_email }
+        ? {
+            id: m.u_id,
+            firstName: m.u_firstName,
+            lastName: m.u_lastName,
+            avatarUrl: m.u_avatarUrl,
+            email: m.u_email,
+          }
         : null,
     }));
   }
@@ -102,8 +125,15 @@ export class ProjectMembersService {
     const project = await this.assertProjectManager(projectId, inviterId);
 
     // Target must be workspace member
-    const wsTarget = await this.getWorkspaceMember(project.workspaceId, targetUserId);
-    if (!wsTarget) throw new NotFoundException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Target user is not a workspace member' });
+    const wsTarget = await this.getWorkspaceMember(
+      project.workspaceId,
+      targetUserId,
+    );
+    if (!wsTarget)
+      throw new NotFoundException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Target user is not a workspace member',
+      });
 
     // Check not already a member
     const existing = await this.dataSource.query(
@@ -111,7 +141,10 @@ export class ProjectMembersService {
       [projectId, targetUserId],
     );
     if (existing[0]) {
-      throw new ConflictException({ code: ErrorCode.ALREADY_ROOM_MEMBER, message: 'User is already a project member' });
+      throw new ConflictException({
+        code: ErrorCode.ALREADY_ROOM_MEMBER,
+        message: 'User is already a project member',
+      });
     }
 
     const savedRows = await this.dataSource.query(
@@ -127,7 +160,9 @@ export class ProjectMembersService {
       [inviterId],
     );
     const inviter = inviterRows[0];
-    const inviterName = inviter ? `${inviter.firstName ?? ''} ${inviter.lastName ?? ''}`.trim() : 'Someone';
+    const inviterName = inviter
+      ? `${inviter.firstName ?? ''} ${inviter.lastName ?? ''}`.trim()
+      : 'Someone';
 
     await this.notifications.create({
       userId: targetUserId,
@@ -138,7 +173,12 @@ export class ProjectMembersService {
       entityType: 'project_member',
       entityId: saved.id,
       actionUrl: `/app/projects/${projectId}`,
-      metadata: { projectId, projectName: project.name, role, memberId: saved.id },
+      metadata: {
+        projectId,
+        projectName: project.name,
+        role,
+        memberId: saved.id,
+      },
     });
 
     return saved;
@@ -150,9 +190,16 @@ export class ProjectMembersService {
       [memberId, userId],
     );
     const member = memberRows[0];
-    if (!member) throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Invite not found' });
+    if (!member)
+      throw new NotFoundException({
+        code: ErrorCode.MEMBER_NOT_FOUND,
+        message: 'Invite not found',
+      });
     if (member.status !== 'pending') {
-      throw new ConflictException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Invite already responded' });
+      throw new ConflictException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Invite already responded',
+      });
     }
 
     const newStatus = accept ? 'accepted' : 'declined';
@@ -172,15 +219,20 @@ export class ProjectMembersService {
       [userId],
     );
     const user = userRows[0];
-    const userName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() : 'Someone';
+    const userName = user
+      ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
+      : 'Someone';
 
-    const notifType = accept ? NotificationType.PROJECT_MEMBER_ACCEPTED : NotificationType.PROJECT_MEMBER_DECLINED;
+    const notifType = accept
+      ? NotificationType.PROJECT_MEMBER_ACCEPTED
+      : NotificationType.PROJECT_MEMBER_DECLINED;
     const notifTitle = accept
       ? `${userName} loyihaga qo'shildi`
       : `${userName} taklifni rad etdi`;
 
     const managersToNotify = new Set<string>();
-    if (project?.createdById && project.createdById !== userId) managersToNotify.add(project.createdById);
+    if (project?.createdById && project.createdById !== userId)
+      managersToNotify.add(project.createdById);
 
     const otherManagers = await this.dataSource.query(
       `SELECT user_id AS "userId" FROM project_members WHERE project_id = $1 AND role = 'manager' AND status = 'accepted'`,
@@ -208,14 +260,25 @@ export class ProjectMembersService {
     return saved;
   }
 
-  async removeMember(projectId: string, targetUserId: string, requesterId: string) {
+  async removeMember(
+    projectId: string,
+    targetUserId: string,
+    requesterId: string,
+  ) {
     await this.assertProjectManager(projectId, requesterId);
     const member = await this.dataSource.query(
       `SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2`,
       [projectId, targetUserId],
     );
-    if (!member[0]) throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Member not found' });
-    await this.dataSource.query(`DELETE FROM project_members WHERE project_id = $1 AND user_id = $2`, [projectId, targetUserId]);
+    if (!member[0])
+      throw new NotFoundException({
+        code: ErrorCode.MEMBER_NOT_FOUND,
+        message: 'Member not found',
+      });
+    await this.dataSource.query(
+      `DELETE FROM project_members WHERE project_id = $1 AND user_id = $2`,
+      [projectId, targetUserId],
+    );
   }
 
   async getMyInvites(userId: string) {

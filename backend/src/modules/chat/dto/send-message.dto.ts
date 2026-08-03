@@ -14,7 +14,9 @@ import {
 import { Type } from 'class-transformer';
 
 export class MessageAttachmentInputDto {
-  @ApiProperty({ description: 'R2 object key returned by the presign endpoint' })
+  @ApiProperty({
+    description: 'R2 object key returned by the presign endpoint',
+  })
   @IsString()
   @IsNotEmpty()
   storageKey: string;
@@ -52,7 +54,10 @@ export class MessageAttachmentInputDto {
 }
 
 export class SendMessageDto {
-  @ApiPropertyOptional({ description: 'Text content. Max 1500 chars. Optional when attachments are present (media-only message).' })
+  @ApiPropertyOptional({
+    description:
+      'Text content. Max 1500 chars. Optional when attachments are present (media-only message).',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(1500)
@@ -69,7 +74,11 @@ export class SendMessageDto {
   @MaxLength(64)
   clientMessageId?: string;
 
-  @ApiPropertyOptional({ type: [MessageAttachmentInputDto], description: 'Files already uploaded via /chat/rooms/:roomId/attachments/presign' })
+  @ApiPropertyOptional({
+    type: [MessageAttachmentInputDto],
+    description:
+      'Files already uploaded via /chat/rooms/:roomId/attachments/presign',
+  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

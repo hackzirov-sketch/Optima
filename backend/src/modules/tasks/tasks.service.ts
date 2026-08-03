@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -6,7 +12,6 @@ import { RedisService } from '../../redis/redis.service';
 import { RedisKeys } from '../../redis/redis.keys';
 
 import { Task } from '../../database/entities/task.entity';
-import { TaskActivity } from '../../database/entities/task-activity.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
 import { TaskTag } from '../../database/entities/task-tag.entity';
 
@@ -15,13 +20,24 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { FilterTasksDto } from './dto/filter-tasks.dto';
 import { AddDependencyDto } from './dto/add-dependency.dto';
-import { NotificationType, TaskStatus, ProjectStatus } from '../../common/enums';
+import {
+  NotificationType,
+  TaskStatus,
+  ProjectStatus,
+} from '../../common/enums';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
 import { DailyStatsService } from '../analytics/daily-stats.service';
-import { TASK_COLUMNS_SQL, TASK_ACTIVITY_COLUMNS_SQL, TASK_DEPENDENCY_COLUMNS_SQL, TASK_PUSH_COLUMNS_SQL } from './tasks.sql';
-import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
+import {
+  TASK_COLUMNS_SQL,
+  TASK_DEPENDENCY_COLUMNS_SQL,
+  TASK_PUSH_COLUMNS_SQL,
+} from './tasks.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../common/utils/sql.util';
 
 const TASK_ENUM_CASTS = {
   type: 'tasks_type_enum',
@@ -54,7 +70,9 @@ export class TasksService {
    * progress itself, keeps status consistent, and broadcasts the change.
    * Call this after any task create/status-change/move/soft-delete.
    */
-  private async syncProjectStatusWithProgress(projectId: string): Promise<void> {
+  private async syncProjectStatusWithProgress(
+    projectId: string,
+  ): Promise<void> {
     const projectRows = await this.dataSource.query(
       `SELECT id, workspace_id AS "workspaceId", status, progress, completed_at AS "completedAt"
        FROM projects WHERE id = $1`,
@@ -63,14 +81,15 @@ export class TasksService {
     const project = projectRows[0];
     if (!project) return;
 
-    const countRows: Array<{ total: string; done: string }> = await this.dataSource.query(
-      `SELECT
+    const countRows: Array<{ total: string; done: string }> =
+      await this.dataSource.query(
+        `SELECT
          COUNT(*) FILTER (WHERE true) AS total,
          COUNT(*) FILTER (WHERE status = $2) AS done
        FROM tasks
        WHERE project_id = $1 AND deleted_at IS NULL AND parent_task_id IS NULL`,
-      [projectId, TaskStatus.DONE],
-    );
+        [projectId, TaskStatus.DONE],
+      );
     const total = Number(countRows[0]?.total ?? 0);
     const done = Number(countRows[0]?.done ?? 0);
     const progress = total === 0 ? 0 : Math.round((done * 100) / total);
@@ -79,7 +98,10 @@ export class TasksService {
     let completedAt = project.completedAt;
 
     // Terminal/manual statuses are never auto-overridden.
-    if (status !== ProjectStatus.ARCHIVED && status !== ProjectStatus.CANCELLED) {
+    if (
+      status !== ProjectStatus.ARCHIVED &&
+      status !== ProjectStatus.CANCELLED
+    ) {
       if (progress >= 100 && status !== ProjectStatus.COMPLETED) {
         status = ProjectStatus.COMPLETED;
         if (!completedAt) completedAt = new Date();
@@ -110,7 +132,12 @@ export class TasksService {
   private async assertMember(
     workspaceId: string,
     userId: string,
-  ): Promise<{ id: string; workspaceId: string; userId: string; role: string }> {
+  ): Promise<{
+    id: string;
+    workspaceId: string;
+    userId: string;
+    role: string;
+  }> {
     const cacheKey = RedisKeys.workspaceMember(workspaceId, userId);
     const client = this.redisService.getClient();
 
@@ -127,7 +154,10 @@ export class TasksService {
     const member = rows[0];
 
     if (!member) {
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'You are not a member of this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'You are not a member of this workspace',
+      });
     }
 
     if (client) {
@@ -143,7 +173,11 @@ export class TasksService {
       [taskId],
     );
     const task = rows[0] ?? null;
-    if (!isActiveEntity(task)) throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found' });
+    if (!isActiveEntity(task))
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found',
+      });
     return task;
   }
 
@@ -168,13 +202,14 @@ export class TasksService {
     workspaceId: string,
   ): Promise<boolean> {
     // Fetch all dependencies for tasks in the same workspace in ONE query
-    const allDependencies: Array<{ taskId: string; dependsOnId: string }> = await this.dataSource.query(
-      `SELECT dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId"
+    const allDependencies: Array<{ taskId: string; dependsOnId: string }> =
+      await this.dataSource.query(
+        `SELECT dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.task_id
        WHERE t.workspace_id = $1`,
-      [workspaceId],
-    );
+        [workspaceId],
+      );
 
     // Build adjacency list: dependsOnId -> array of taskIds (reverse dependencies)
     const adj = new Map<string, string[]>();
@@ -216,17 +251,21 @@ export class TasksService {
     newStatus: TaskStatus,
   ): Promise<void> {
     // Cancelled/backlog statusga qaytishda ogohlantirish ma'nosiz
-    if (newStatus === TaskStatus.CANCELLED || newStatus === TaskStatus.BACKLOG) {
+    if (
+      newStatus === TaskStatus.CANCELLED ||
+      newStatus === TaskStatus.BACKLOG
+    ) {
       return;
     }
 
-    const deps: Array<{ dependsOnId: string; dependsOnStatus: TaskStatus }> = await this.dataSource.query(
-      `SELECT dep.depends_on_id AS "dependsOnId", t.status AS "dependsOnStatus"
+    const deps: Array<{ dependsOnId: string; dependsOnStatus: TaskStatus }> =
+      await this.dataSource.query(
+        `SELECT dep.depends_on_id AS "dependsOnId", t.status AS "dependsOnStatus"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.depends_on_id
        WHERE dep.task_id = $1`,
-      [taskId],
-    );
+        [taskId],
+      );
     if (deps.length === 0) return;
 
     const unmet = deps.filter((d) => d.dependsOnStatus !== TaskStatus.DONE);
@@ -257,7 +296,11 @@ export class TasksService {
         `SELECT id FROM project_columns WHERE id = $1 AND project_id = $2`,
         [dto.columnId, dto.projectId],
       );
-      if (!col[0]) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found in this project' });
+      if (!col[0])
+        throw new NotFoundException({
+          code: ErrorCode.COLUMN_NOT_FOUND,
+          message: 'Column not found in this project',
+        });
     }
 
     const saved = await this.dataSource.withTransaction(async (query) => {
@@ -312,7 +355,9 @@ export class TasksService {
       `Task UPZ-${saved.taskNumber} created`,
     );
     const full = await this.findById(saved.id, userId);
-    this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', { task: full });
+    this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', {
+      task: full,
+    });
     await this.syncProjectStatusWithProgress(dto.projectId);
 
     // Notify assignee (if assigned and not self)
@@ -322,7 +367,9 @@ export class TasksService {
         [userId],
       );
       const actor = actorRows[0];
-      const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
+      const actorName = actor
+        ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim()
+        : 'Someone';
       await this.notifications.create({
         userId: dto.assigneeId,
         actorId: userId,
@@ -332,14 +379,22 @@ export class TasksService {
         entityType: 'task',
         entityId: full.id,
         actionUrl: `/app/tasks/${full.id}`,
-        metadata: { taskId: full.id, taskTitle: full.title, dueDate: full.dueDate ?? null },
+        metadata: {
+          taskId: full.id,
+          taskTitle: full.title,
+          dueDate: full.dueDate ?? null,
+        },
       });
     }
 
     return full;
   }
 
-  private buildTaskFilters(dto: FilterTasksDto, params: unknown[], startIndex: number): string {
+  private buildTaskFilters(
+    dto: FilterTasksDto,
+    params: unknown[],
+    _startIndex: number,
+  ): string {
     const clauses: string[] = [];
     if (dto.status) {
       params.push(dto.status);
@@ -382,15 +437,37 @@ export class TasksService {
 
   private mapTaskRow(row: any): any {
     const {
-      a_id, a_firstName, a_lastName, a_avatarUrl,
-      c_id, c_firstName, c_lastName, c_avatarUrl,
-      col_id, col_name, col_color,
+      a_id,
+      a_firstName,
+      a_lastName,
+      a_avatarUrl,
+      c_id,
+      c_firstName,
+      c_lastName,
+      c_avatarUrl,
+      col_id,
+      col_name,
+      col_color,
       ...task
     } = row;
     return {
       ...task,
-      assignee: a_id ? { id: a_id, firstName: a_firstName, lastName: a_lastName, avatarUrl: a_avatarUrl } : null,
-      creator: c_id ? { id: c_id, firstName: c_firstName, lastName: c_lastName, avatarUrl: c_avatarUrl } : null,
+      assignee: a_id
+        ? {
+            id: a_id,
+            firstName: a_firstName,
+            lastName: a_lastName,
+            avatarUrl: a_avatarUrl,
+          }
+        : null,
+      creator: c_id
+        ? {
+            id: c_id,
+            firstName: c_firstName,
+            lastName: c_lastName,
+            avatarUrl: c_avatarUrl,
+          }
+        : null,
       column: col_id ? { id: col_id, name: col_name, color: col_color } : null,
     };
   }
@@ -419,9 +496,16 @@ export class TasksService {
     dto: FilterTasksDto,
   ): Promise<{ data: Task[]; total: number }> {
     // Always check membership — even if the project has no tasks yet
-    const projectRows = await this.dataSource.query(`SELECT id, workspace_id AS "workspaceId" FROM projects WHERE id = $1`, [projectId]);
+    const projectRows = await this.dataSource.query(
+      `SELECT id, workspace_id AS "workspaceId" FROM projects WHERE id = $1`,
+      [projectId],
+    );
     const project = projectRows[0];
-    if (!project) throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
+    if (!project)
+      throw new NotFoundException({
+        code: ErrorCode.PROJECT_NOT_FOUND,
+        message: 'Project not found',
+      });
     await this.assertMember(project.workspaceId, userId);
 
     const page = dto.page ?? 1;
@@ -494,18 +578,41 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const [assigneeRows, creatorRows, reviewerRows, columnRows, subtasks, taskTags, watchers] = await Promise.all([
+    const [
+      assigneeRows,
+      creatorRows,
+      reviewerRows,
+      columnRows,
+      subtasks,
+      taskTags,
+      watchers,
+    ] = await Promise.all([
       task.assigneeId
-        ? this.dataSource.query(`SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`, [task.assigneeId])
+        ? this.dataSource.query(
+            `SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`,
+            [task.assigneeId],
+          )
         : Promise.resolve([]),
-      this.dataSource.query(`SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`, [task.creatorId]),
+      this.dataSource.query(
+        `SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`,
+        [task.creatorId],
+      ),
       task.reviewerId
-        ? this.dataSource.query(`SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`, [task.reviewerId])
+        ? this.dataSource.query(
+            `SELECT id, first_name AS "firstName", last_name AS "lastName", avatar_url AS "avatarUrl" FROM users WHERE id = $1`,
+            [task.reviewerId],
+          )
         : Promise.resolve([]),
       task.columnId
-        ? this.dataSource.query(`SELECT id, name, color FROM project_columns WHERE id = $1`, [task.columnId])
+        ? this.dataSource.query(
+            `SELECT id, name, color FROM project_columns WHERE id = $1`,
+            [task.columnId],
+          )
         : Promise.resolve([]),
-      this.dataSource.query(`SELECT ${TASK_COLUMNS_SQL} FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL`, [taskId]),
+      this.dataSource.query(
+        `SELECT ${TASK_COLUMNS_SQL} FROM tasks WHERE parent_task_id = $1 AND deleted_at IS NULL`,
+        [taskId],
+      ),
       this.dataSource.query(
         `SELECT tt.task_id AS "taskId", tt.tag_id AS "tagId", t.id AS "t_id", t.name AS "t_name", t.color AS "t_color"
          FROM task_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.task_id = $1`,
@@ -526,8 +633,20 @@ export class TasksService {
       reviewer: reviewerRows[0] ?? null,
       column: columnRows[0] ?? null,
       subtasks,
-      taskTags: taskTags.map((tt: any) => ({ taskId: tt.taskId, tagId: tt.tagId, tag: { id: tt.t_id, name: tt.t_name, color: tt.t_color } })),
-      watchers: watchers.map((w: any) => ({ userId: w.userId, user: { id: w.u_id, firstName: w.u_firstName, lastName: w.u_lastName, avatarUrl: w.u_avatarUrl } })),
+      taskTags: taskTags.map((tt: any) => ({
+        taskId: tt.taskId,
+        tagId: tt.tagId,
+        tag: { id: tt.t_id, name: tt.t_name, color: tt.t_color },
+      })),
+      watchers: watchers.map((w: any) => ({
+        userId: w.userId,
+        user: {
+          id: w.u_id,
+          firstName: w.u_firstName,
+          lastName: w.u_lastName,
+          avatarUrl: w.u_avatarUrl,
+        },
+      })),
     };
   }
 
@@ -551,7 +670,11 @@ export class TasksService {
         `SELECT id FROM project_columns WHERE id = $1 AND project_id = $2`,
         [dto.columnId, task.projectId],
       );
-      if (!col[0]) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found in this project' });
+      if (!col[0])
+        throw new NotFoundException({
+          code: ErrorCode.COLUMN_NOT_FOUND,
+          message: 'Column not found in this project',
+        });
     }
 
     const patch: Record<string, unknown> = { ...dto };
@@ -601,17 +724,29 @@ export class TasksService {
 
     // Send notifications when status changes
     if (dto.status && dto.status !== old.status) {
-      await this.sendStatusChangeNotifications(saved, userId, old.status, dto.status);
+      await this.sendStatusChangeNotifications(
+        saved,
+        userId,
+        old.status,
+        dto.status,
+      );
       await this.syncProjectStatusWithProgress(saved.projectId);
 
       if (dto.status === TaskStatus.DONE) {
-        await this.dailyStats.increment(saved.assigneeId ?? userId, saved.projectId, saved.workspaceId, {
-          tasksCompleted: 1,
-        });
+        await this.dailyStats.increment(
+          saved.assigneeId ?? userId,
+          saved.projectId,
+          saved.workspaceId,
+          {
+            tasksCompleted: 1,
+          },
+        );
       }
     }
 
-    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', { task: saved });
+    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', {
+      task: saved,
+    });
     return saved;
   }
 
@@ -622,14 +757,18 @@ export class TasksService {
     newStatus: TaskStatus,
   ): Promise<void> {
     const isDone = newStatus === TaskStatus.DONE;
-    const type = isDone ? NotificationType.TASK_COMPLETED : NotificationType.TASK_STATUS_CHANGED;
+    const type = isDone
+      ? NotificationType.TASK_COMPLETED
+      : NotificationType.TASK_STATUS_CHANGED;
     const taskUrl = `/app/tasks/${task.id}`;
 
     // Collect unique recipients: creator + assignee + project managers
     const recipientIds = new Set<string>();
 
-    if (task.creatorId && task.creatorId !== actorId) recipientIds.add(task.creatorId);
-    if (task.assigneeId && task.assigneeId !== actorId) recipientIds.add(task.assigneeId);
+    if (task.creatorId && task.creatorId !== actorId)
+      recipientIds.add(task.creatorId);
+    if (task.assigneeId && task.assigneeId !== actorId)
+      recipientIds.add(task.assigneeId);
 
     // Project managers from project_members table
     const projectManagers = await this.dataSource.query(
@@ -641,23 +780,32 @@ export class TasksService {
     }
 
     // Also notify the project creator (stored in projects.created_by)
-    const projectRows = await this.dataSource.query(`SELECT created_by AS "createdById" FROM projects WHERE id = $1`, [task.projectId]);
+    const projectRows = await this.dataSource.query(
+      `SELECT created_by AS "createdById" FROM projects WHERE id = $1`,
+      [task.projectId],
+    );
     const project = projectRows[0];
     if (project?.createdById && project.createdById !== actorId) {
       recipientIds.add(project.createdById);
     }
 
-    const actorRows = await this.dataSource.query(`SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`, [actorId]);
+    const actorRows = await this.dataSource.query(
+      `SELECT first_name AS "firstName", last_name AS "lastName" FROM users WHERE id = $1`,
+      [actorId],
+    );
     const actor = actorRows[0];
-    const actorName = actor ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim() : 'Someone';
+    const actorName = actor
+      ? `${actor.firstName ?? ''} ${actor.lastName ?? ''}`.trim()
+      : 'Someone';
 
     const title = isDone
       ? `"${task.title}" bajarildi`
       : `Task holati o'zgardi: ${oldStatus} → ${newStatus}`;
 
-    const message = isDone && task.completionNote
-      ? `${actorName}: ${task.completionNote}`
-      : `${actorName} "${task.title}" ni ${newStatus} ga o'zgartirdi`;
+    const message =
+      isDone && task.completionNote
+        ? `${actorName}: ${task.completionNote}`
+        : `${actorName} "${task.title}" ni ${newStatus} ga o'zgartirdi`;
 
     await Promise.all(
       Array.from(recipientIds).map((userId) =>
@@ -691,8 +839,14 @@ export class TasksService {
     }
 
     const { workspaceId } = task;
-    await this.dataSource.query(`UPDATE tasks SET deleted_at = now(), deleted_by = $2 WHERE id = $1`, [taskId, userId]);
-    this.gateway.broadcastToWorkspace(workspaceId, 'task:deleted', { taskId, workspaceId });
+    await this.dataSource.query(
+      `UPDATE tasks SET deleted_at = now(), deleted_by = $2 WHERE id = $1`,
+      [taskId, userId],
+    );
+    this.gateway.broadcastToWorkspace(workspaceId, 'task:deleted', {
+      taskId,
+      workspaceId,
+    });
     await this.syncProjectStatusWithProgress(task.projectId);
   }
 
@@ -717,7 +871,10 @@ export class TasksService {
         );
         const col = colRows[0];
         if (!col)
-          throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Target column not found in this project' });
+          throw new NotFoundException({
+            code: ErrorCode.COLUMN_NOT_FOUND,
+            message: 'Target column not found in this project',
+          });
         patch.columnId = dto.columnId;
 
         // Auto-sync status from column mapping if no explicit status given
@@ -775,9 +932,14 @@ export class TasksService {
     if (saved.status !== oldStatus) {
       await this.syncProjectStatusWithProgress(saved.projectId);
       if (saved.status === TaskStatus.DONE) {
-        await this.dailyStats.increment(saved.assigneeId ?? userId, saved.projectId, saved.workspaceId, {
-          tasksCompleted: 1,
-        });
+        await this.dailyStats.increment(
+          saved.assigneeId ?? userId,
+          saved.projectId,
+          saved.workspaceId,
+          {
+            tasksCompleted: 1,
+          },
+        );
       }
     }
 
@@ -792,7 +954,10 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const existing = await this.dataSource.query(`SELECT * FROM task_watchers WHERE task_id = $1 AND user_id = $2`, [taskId, userId]);
+    const existing = await this.dataSource.query(
+      `SELECT * FROM task_watchers WHERE task_id = $1 AND user_id = $2`,
+      [taskId, userId],
+    );
     if (existing[0]) return { watching: true };
 
     await this.dataSource.query(
@@ -809,7 +974,10 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    await this.dataSource.query(`DELETE FROM task_watchers WHERE task_id = $1 AND user_id = $2`, [taskId, userId]);
+    await this.dataSource.query(
+      `DELETE FROM task_watchers WHERE task_id = $1 AND user_id = $2`,
+      [taskId, userId],
+    );
     return { watching: false };
   }
 
@@ -825,7 +993,12 @@ export class TasksService {
     return rows.map((r) => ({
       userId: r.userId,
       createdAt: r.createdAt,
-      user: { id: r.u_id, firstName: r.u_firstName, lastName: r.u_lastName, avatarUrl: r.u_avatarUrl },
+      user: {
+        id: r.u_id,
+        firstName: r.u_firstName,
+        lastName: r.u_lastName,
+        avatarUrl: r.u_avatarUrl,
+      },
     }));
   }
 
@@ -853,7 +1026,14 @@ export class TasksService {
       const { u_id, u_firstName, u_lastName, u_avatarUrl, ...activity } = r;
       return {
         ...activity,
-        user: u_id ? { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl } : null,
+        user: u_id
+          ? {
+              id: u_id,
+              firstName: u_firstName,
+              lastName: u_lastName,
+              avatarUrl: u_avatarUrl,
+            }
+          : null,
       };
     });
   }
@@ -861,7 +1041,10 @@ export class TasksService {
   async getPushesForTask(projectId: string, taskId: string, userId: string) {
     const task = await this.getTask(taskId);
     if (task.projectId !== projectId) {
-      throw new NotFoundException({ code: ErrorCode.TASK_NOT_FOUND, message: 'Task not found in this project' });
+      throw new NotFoundException({
+        code: ErrorCode.TASK_NOT_FOUND,
+        message: 'Task not found in this project',
+      });
     }
     await this.assertMember(task.workspaceId, userId);
 
@@ -884,25 +1067,38 @@ export class TasksService {
     await this.assertMember(task.workspaceId, userId);
 
     if (taskId === dto.dependsOnId) {
-      throw new BadRequestException({ code: ErrorCode.TASK_SELF_DEPENDENCY, message: 'A task cannot depend on itself' });
+      throw new BadRequestException({
+        code: ErrorCode.TASK_SELF_DEPENDENCY,
+        message: 'A task cannot depend on itself',
+      });
     }
 
     // Ensure target task exists and is in the same workspace
     const target = await this.getTask(dto.dependsOnId);
     if (target.workspaceId !== task.workspaceId) {
-      throw new BadRequestException({ code: ErrorCode.TASK_CROSS_WORKSPACE, message: 'Dependencies must be within the same workspace' });
+      throw new BadRequestException({
+        code: ErrorCode.TASK_CROSS_WORKSPACE,
+        message: 'Dependencies must be within the same workspace',
+      });
     }
 
     // Cycle detection using local BFS (single query)
     if (await this.hasCycle(taskId, dto.dependsOnId, task.workspaceId)) {
-      throw new ConflictException({ code: ErrorCode.TASK_DEPENDENCY_CYCLE, message: 'Adding this dependency would create a cycle' });
+      throw new ConflictException({
+        code: ErrorCode.TASK_DEPENDENCY_CYCLE,
+        message: 'Adding this dependency would create a cycle',
+      });
     }
 
     const existing = await this.dataSource.query(
       `SELECT id FROM task_dependencies WHERE task_id = $1 AND depends_on_id = $2`,
       [taskId, dto.dependsOnId],
     );
-    if (existing[0]) throw new ConflictException({ code: ErrorCode.DEPENDENCY_ALREADY_EXISTS, message: 'This dependency already exists' });
+    if (existing[0])
+      throw new ConflictException({
+        code: ErrorCode.DEPENDENCY_ALREADY_EXISTS,
+        message: 'This dependency already exists',
+      });
 
     const rows: TaskDependency[] = await this.dataSource.query(
       `INSERT INTO task_dependencies (task_id, depends_on_id, type, created_by)
@@ -917,25 +1113,32 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    return this.dataSource.query(
-      `SELECT dep.id, dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId", dep.type,
+    return this.dataSource
+      .query(
+        `SELECT dep.id, dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId", dep.type,
               dep.created_by AS "createdById", dep.created_at AS "createdAt",
               t.id AS "t_id", t.title AS "t_title", t.status AS "t_status", t.task_number AS "t_taskNumber"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.depends_on_id
        WHERE dep.task_id = $1`,
-      [taskId],
-    ).then((rows: any[]) =>
-      rows.map((r) => ({
-        id: r.id,
-        taskId: r.taskId,
-        dependsOnId: r.dependsOnId,
-        type: r.type,
-        createdById: r.createdById,
-        createdAt: r.createdAt,
-        dependsOn: { id: r.t_id, title: r.t_title, status: r.t_status, taskNumber: r.t_taskNumber },
-      })),
-    );
+        [taskId],
+      )
+      .then((rows: any[]) =>
+        rows.map((r) => ({
+          id: r.id,
+          taskId: r.taskId,
+          dependsOnId: r.dependsOnId,
+          type: r.type,
+          createdById: r.createdById,
+          createdAt: r.createdAt,
+          dependsOn: {
+            id: r.t_id,
+            title: r.t_title,
+            status: r.t_status,
+            taskNumber: r.t_taskNumber,
+          },
+        })),
+      );
   }
 
   async removeDependency(
@@ -946,10 +1149,19 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const dep = await this.dataSource.query(`SELECT id FROM task_dependencies WHERE id = $1 AND task_id = $2`, [dependencyId, taskId]);
-    if (!dep[0]) throw new NotFoundException({ code: ErrorCode.DEPENDENCY_NOT_FOUND, message: 'Dependency not found' });
+    const dep = await this.dataSource.query(
+      `SELECT id FROM task_dependencies WHERE id = $1 AND task_id = $2`,
+      [dependencyId, taskId],
+    );
+    if (!dep[0])
+      throw new NotFoundException({
+        code: ErrorCode.DEPENDENCY_NOT_FOUND,
+        message: 'Dependency not found',
+      });
 
-    await this.dataSource.query(`DELETE FROM task_dependencies WHERE id = $1`, [dependencyId]);
+    await this.dataSource.query(`DELETE FROM task_dependencies WHERE id = $1`, [
+      dependencyId,
+    ]);
   }
 
   // ─────────────────────────────────────────────
@@ -964,12 +1176,25 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    const tag = await this.dataSource.query(`SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`, [tagId, task.workspaceId]);
-    if (!tag[0]) throw new NotFoundException({ code: ErrorCode.TAG_NOT_FOUND, message: 'Tag not found in this workspace' });
+    const tag = await this.dataSource.query(
+      `SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`,
+      [tagId, task.workspaceId],
+    );
+    if (!tag[0])
+      throw new NotFoundException({
+        code: ErrorCode.TAG_NOT_FOUND,
+        message: 'Tag not found in this workspace',
+      });
 
-    const existing = await this.dataSource.query(`SELECT * FROM task_tags WHERE task_id = $1 AND tag_id = $2`, [taskId, tagId]);
+    const existing = await this.dataSource.query(
+      `SELECT * FROM task_tags WHERE task_id = $1 AND tag_id = $2`,
+      [taskId, tagId],
+    );
     if (existing[0])
-      throw new ConflictException({ code: ErrorCode.TAG_ALREADY_ATTACHED, message: 'Tag already attached to this task' });
+      throw new ConflictException({
+        code: ErrorCode.TAG_ALREADY_ATTACHED,
+        message: 'Tag already attached to this task',
+      });
 
     const rows: TaskTag[] = await this.dataSource.query(
       `INSERT INTO task_tags (task_id, tag_id) VALUES ($1, $2)
@@ -987,22 +1212,29 @@ export class TasksService {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
 
-    await this.dataSource.query(`DELETE FROM task_tags WHERE task_id = $1 AND tag_id = $2`, [taskId, tagId]);
+    await this.dataSource.query(
+      `DELETE FROM task_tags WHERE task_id = $1 AND tag_id = $2`,
+      [taskId, tagId],
+    );
   }
 
   async getTags(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
     await this.assertMember(task.workspaceId, userId);
-    return this.dataSource.query(
-      `SELECT tt.task_id AS "taskId", tt.tag_id AS "tagId", tt.created_at AS "createdAt",
+    return this.dataSource
+      .query(
+        `SELECT tt.task_id AS "taskId", tt.tag_id AS "tagId", tt.created_at AS "createdAt",
               t.id AS "t_id", t.name AS "t_name", t.color AS "t_color"
        FROM task_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.task_id = $1`,
-      [taskId],
-    ).then((rows: any[]) => rows.map((r) => ({
-      taskId: r.taskId,
-      tagId: r.tagId,
-      createdAt: r.createdAt,
-      tag: { id: r.t_id, name: r.t_name, color: r.t_color },
-    })));
+        [taskId],
+      )
+      .then((rows: any[]) =>
+        rows.map((r) => ({
+          taskId: r.taskId,
+          tagId: r.tagId,
+          createdAt: r.createdAt,
+          tag: { id: r.t_id, name: r.t_name, color: r.t_color },
+        })),
+      );
   }
 }

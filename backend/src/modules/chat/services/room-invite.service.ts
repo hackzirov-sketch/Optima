@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
@@ -8,7 +13,10 @@ import { PermissionService } from '../../../common/services/permission.service';
 import { ChatMemberService } from './member.service';
 import { ChatRoomService } from './room.service';
 import { CreateRoomInviteDto } from '../dto/create-room-invite.dto';
-import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_INVITE_COLUMNS_SQL } from '../chat.sql';
+import {
+  CHAT_ROOM_COLUMNS_SQL,
+  CHAT_ROOM_INVITE_COLUMNS_SQL,
+} from '../chat.sql';
 
 export interface RoomInviteDto {
   id: string;
@@ -77,7 +85,10 @@ export class ChatRoomInviteService {
    * Generatsiya ruxsati: assertCanCreateChatRoom darajasi (lead+) yoki room
    * creator. Aks holda → ROOM_INVITE_FORBIDDEN (system design v2 §4.1).
    */
-  private async assertCanManageInvites(room: ChatRoom, userId: string): Promise<void> {
+  private async assertCanManageInvites(
+    room: ChatRoom,
+    userId: string,
+  ): Promise<void> {
     if (room.createdById === userId) return;
 
     const rows: WorkspaceMember[] = await this.dataSource.query(
@@ -86,14 +97,18 @@ export class ChatRoomInviteService {
     );
     const wsMember = rows[0];
     if (!wsMember) {
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     }
     try {
       this.permission.assertCanCreateChatRoom(wsMember);
     } catch {
       throw new ForbiddenException({
         code: ErrorCode.ROOM_INVITE_FORBIDDEN,
-        message: 'Only the room creator or a lead/admin/owner can manage invite links',
+        message:
+          'Only the room creator or a lead/admin/owner can manage invite links',
       });
     }
   }
@@ -102,15 +117,29 @@ export class ChatRoomInviteService {
     const { randomBytes } = await import('crypto');
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = randomBytes(6).toString('base64url').slice(0, 8);
-      const existing = await this.dataSource.query(`SELECT id FROM chat_room_invites WHERE code = $1`, [code]);
+      const existing = await this.dataSource.query(
+        `SELECT id FROM chat_room_invites WHERE code = $1`,
+        [code],
+      );
       if (!existing[0]) return code;
     }
-    throw new BadRequestException({ code: ErrorCode.INTERNAL_ERROR, message: 'Could not generate a unique invite code, try again' });
+    throw new BadRequestException({
+      code: ErrorCode.INTERNAL_ERROR,
+      message: 'Could not generate a unique invite code, try again',
+    });
   }
 
-  async create(roomId: string, userId: string, dto: CreateRoomInviteDto): Promise<RoomInviteDto> {
+  async create(
+    roomId: string,
+    userId: string,
+    dto: CreateRoomInviteDto,
+  ): Promise<RoomInviteDto> {
     const room = await this.findRoomById(roomId);
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
 
     await this.chatMemberService.assertRoomMember(roomId, userId);
     await this.assertCanManageInvites(room, userId);
@@ -133,7 +162,11 @@ export class ChatRoomInviteService {
 
   async list(roomId: string, userId: string): Promise<RoomInviteDto[]> {
     const room = await this.findRoomById(roomId);
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
 
     await this.assertCanManageInvites(room, userId);
 
@@ -145,9 +178,17 @@ export class ChatRoomInviteService {
     return invites.map((i) => this.toDto(i));
   }
 
-  async revoke(roomId: string, inviteId: string, userId: string): Promise<void> {
+  async revoke(
+    roomId: string,
+    inviteId: string,
+    userId: string,
+  ): Promise<void> {
     const room = await this.findRoomById(roomId);
-    if (!room) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
 
     await this.assertCanManageInvites(room, userId);
 
@@ -156,10 +197,17 @@ export class ChatRoomInviteService {
       [inviteId, roomId],
     );
     const invite = rows[0];
-    if (!invite) throw new NotFoundException({ code: ErrorCode.ROOM_INVITE_NOT_FOUND, message: 'Invite not found' });
+    if (!invite)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_INVITE_NOT_FOUND,
+        message: 'Invite not found',
+      });
     if (invite.revokedAt) return;
 
-    await this.dataSource.query(`UPDATE chat_room_invites SET revoked_at = now() WHERE id = $1`, [inviteId]);
+    await this.dataSource.query(
+      `UPDATE chat_room_invites SET revoked_at = now() WHERE id = $1`,
+      [inviteId],
+    );
   }
 
   async joinByCode(code: string, userId: string) {
@@ -170,9 +218,16 @@ export class ChatRoomInviteService {
         [code],
       );
       const invite = inviteRows[0];
-      if (!invite) throw new NotFoundException({ code: ErrorCode.INVITE_CODE_INVALID, message: 'Invalid invite link' });
+      if (!invite)
+        throw new NotFoundException({
+          code: ErrorCode.INVITE_CODE_INVALID,
+          message: 'Invalid invite link',
+        });
       if (invite.expiresAt && invite.expiresAt <= new Date()) {
-        throw new BadRequestException({ code: ErrorCode.INVITE_CODE_EXPIRED, message: 'This invite link has expired' });
+        throw new BadRequestException({
+          code: ErrorCode.INVITE_CODE_EXPIRED,
+          message: 'This invite link has expired',
+        });
       }
 
       const roomRows: ChatRoom[] = await query(
@@ -180,7 +235,11 @@ export class ChatRoomInviteService {
         [invite.roomId],
       );
       const lockedRoom = roomRows[0];
-      if (!lockedRoom) throw new NotFoundException({ code: ErrorCode.ROOM_NOT_FOUND, message: 'Room not found' });
+      if (!lockedRoom)
+        throw new NotFoundException({
+          code: ErrorCode.ROOM_NOT_FOUND,
+          message: 'Room not found',
+        });
 
       const existingRows = await query(
         `SELECT id, status FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -188,21 +247,33 @@ export class ChatRoomInviteService {
       );
       if (existingRows[0]) {
         if (existingRows[0].status === 'pending') {
-          await query(`UPDATE chat_members SET status = 'active' WHERE id = $1`, [existingRows[0].id]);
+          await query(
+            `UPDATE chat_members SET status = 'active' WHERE id = $1`,
+            [existingRows[0].id],
+          );
         }
         return lockedRoom;
       }
 
       if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
-        throw new BadRequestException({ code: ErrorCode.INVITE_CODE_EXHAUSTED, message: 'This invite link has reached its usage limit' });
+        throw new BadRequestException({
+          code: ErrorCode.INVITE_CODE_EXHAUSTED,
+          message: 'This invite link has reached its usage limit',
+        });
       }
       await query(
         `INSERT INTO workspace_members (workspace_id, user_id, role)
          VALUES ($1, $2, 'junior') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
         [lockedRoom.workspaceId, userId],
       );
-      await query(`INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`, [lockedRoom.id, userId]);
-      await query(`UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`, [invite.id]);
+      await query(
+        `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`,
+        [lockedRoom.id, userId],
+      );
+      await query(
+        `UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`,
+        [invite.id],
+      );
       return lockedRoom;
     });
 

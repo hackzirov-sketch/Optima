@@ -7,7 +7,8 @@ export class SecurityService {
   private readonly bcryptRounds: number;
 
   constructor(private configService: ConfigService) {
-    this.bcryptRounds = this.configService.get<number>('app.bcryptRounds') ?? 10;
+    this.bcryptRounds =
+      this.configService.get<number>('app.bcryptRounds') ?? 10;
   }
 
   async hashPassword(plain: string): Promise<string> {

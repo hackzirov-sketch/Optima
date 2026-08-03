@@ -5,7 +5,10 @@ import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
 import { ReminderSchedulerService } from './reminder-scheduler.service';
-import { ReminderProcessor, REMINDER_QUEUE } from './processors/reminder.processor';
+import {
+  ReminderProcessor,
+  REMINDER_QUEUE,
+} from './processors/reminder.processor';
 import { TelegramChannelService } from './channels/telegram-channel.service';
 import { SmsChannelService } from './channels/sms-channel.service';
 

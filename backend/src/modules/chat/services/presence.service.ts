@@ -34,7 +34,9 @@ export class ChatPresenceService {
 
   /** Masks a stored status for anyone other than its owner. */
   maskForOthers(status: PresenceStatus): PresenceStatus {
-    return status === PresenceStatus.INVISIBLE ? PresenceStatus.OFFLINE : status;
+    return status === PresenceStatus.INVISIBLE
+      ? PresenceStatus.OFFLINE
+      : status;
   }
 
   /**
@@ -61,7 +63,10 @@ export class ChatPresenceService {
   }
 
   /** A new socket connected for this user. Records it and, only on the 0->1+ transition, marks them online. */
-  async connect(userId: string, socketId: string): Promise<{ status: PresenceStatus; isNewlyOnline: boolean }> {
+  async connect(
+    userId: string,
+    socketId: string,
+  ): Promise<{ status: PresenceStatus; isNewlyOnline: boolean }> {
     const client = this.redisService.getClient();
     if (!client) return { status: PresenceStatus.ONLINE, isNewlyOnline: true };
 
@@ -74,7 +79,8 @@ export class ChatPresenceService {
     await pipeline.exec();
 
     const status = wasOnline
-      ? ((await client.hget(key(userId), 'status')) as PresenceStatus) || PresenceStatus.ONLINE
+      ? ((await client.hget(key(userId), 'status')) as PresenceStatus) ||
+        PresenceStatus.ONLINE
       : PresenceStatus.ONLINE;
     return { status, isNewlyOnline: !wasOnline };
   }
@@ -91,7 +97,10 @@ export class ChatPresenceService {
   }
 
   /** A socket for this user disconnected. Only once every fresh socket is gone do we actually go offline. */
-  async disconnect(userId: string, socketId: string): Promise<{ isNowOffline: boolean }> {
+  async disconnect(
+    userId: string,
+    socketId: string,
+  ): Promise<{ isNowOffline: boolean }> {
     const client = this.redisService.getClient();
     if (!client) return { isNowOffline: true };
 
@@ -121,27 +130,33 @@ export class ChatPresenceService {
     const client = this.redisService.getClient();
     if (!client) return { status: PresenceStatus.OFFLINE, lastSeenAt: null };
     const fresh = await this.countFreshSockets(userId);
-    if (fresh === 0) return { status: PresenceStatus.OFFLINE, lastSeenAt: null };
+    if (fresh === 0)
+      return { status: PresenceStatus.OFFLINE, lastSeenAt: null };
     const status = (await client.hget(key(userId), 'status')) as PresenceStatus;
     return { status: status || PresenceStatus.ONLINE, lastSeenAt: null };
   }
 
   /** Batched lookup for a room's member list / a DM header — one Redis round trip for the status hashes. */
-  async getPresenceBulk(userIds: string[]): Promise<Record<string, PresenceStatus>> {
+  async getPresenceBulk(
+    userIds: string[],
+  ): Promise<Record<string, PresenceStatus>> {
     const client = this.redisService.getClient();
     const result: Record<string, PresenceStatus> = {};
     if (!client || userIds.length === 0) return result;
     // countFreshSockets self-heals (evicts stale entries) so it can't be
     // folded into the pipeline below — run it per user first.
-    const freshCounts = await Promise.all(userIds.map((id) => this.countFreshSockets(id)));
+    const freshCounts = await Promise.all(
+      userIds.map((id) => this.countFreshSockets(id)),
+    );
     const pipeline = client.pipeline();
     userIds.forEach((id) => pipeline.hget(key(id), 'status'));
     const responses = await pipeline.exec();
     userIds.forEach((id, i) => {
       const status = (responses?.[i]?.[1] as string | null) ?? null;
-      result[id] = freshCounts[i] === 0 || !status
-        ? PresenceStatus.OFFLINE
-        : this.maskForOthers(status as PresenceStatus);
+      result[id] =
+        freshCounts[i] === 0 || !status
+          ? PresenceStatus.OFFLINE
+          : this.maskForOthers(status as PresenceStatus);
     });
     return result;
   }

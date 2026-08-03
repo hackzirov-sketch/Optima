@@ -31,9 +31,7 @@ const INCREMENT_COLUMNS: Record<keyof Increments, string> = {
  */
 @Injectable()
 export class DailyStatsService {
-  constructor(
-    private readonly dataSource: DatabaseService,
-  ) {}
+  constructor(private readonly dataSource: DatabaseService) {}
 
   async increment(
     userId: string,
@@ -43,7 +41,9 @@ export class DailyStatsService {
   ): Promise<void> {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-    const entries = Object.entries(inc).filter(([, v]) => v !== undefined) as Array<[keyof Increments, number]>;
+    const entries = Object.entries(inc).filter(
+      ([, v]) => v !== undefined,
+    ) as Array<[keyof Increments, number]>;
     if (entries.length === 0) return;
 
     // Atomic upsert via ON CONFLICT — avoids the read-then-write race the
@@ -51,7 +51,9 @@ export class DailyStatsService {
     // (e.g. two tasks completed by the same dev in the same second).
     const insertCols = entries.map(([k]) => INCREMENT_COLUMNS[k]);
     const insertVals = entries.map(([, v]) => v);
-    const conflictSet = insertCols.map((col) => `${col} = developer_daily_stats.${col} + EXCLUDED.${col}`).join(', ');
+    const conflictSet = insertCols
+      .map((col) => `${col} = developer_daily_stats.${col} + EXCLUDED.${col}`)
+      .join(', ');
 
     await this.dataSource.query(
       `INSERT INTO developer_daily_stats (user_id, project_id, workspace_id, date, ${insertCols.join(', ')})

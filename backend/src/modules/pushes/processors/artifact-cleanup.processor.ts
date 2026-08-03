@@ -11,7 +11,7 @@ const REPEAT_JOB_NAME = 'sweep-expired-artifacts';
 const BATCH_SIZE = 200;
 
 /**
- * Design doc (section 10 / 18) calls for a recurring "artifact-cleanup" job
+ * Design doc (section 10 / 18) calls for a recurring "artifact-cleanup" __job
  * that expires stale push artifacts stored in R2. This was never wired up —
  * `task_pushes.expires_at` existed but nothing ever read it, so expired
  * artifacts (and their R2 storage cost) accumulated forever.
@@ -22,7 +22,10 @@ const BATCH_SIZE = 200;
  */
 @Injectable()
 @Processor(ARTIFACT_CLEANUP_QUEUE)
-export class ArtifactCleanupProcessor extends WorkerHost implements OnModuleInit {
+export class ArtifactCleanupProcessor
+  extends WorkerHost
+  implements OnModuleInit
+{
   private readonly logger = new Logger(ArtifactCleanupProcessor.name);
 
   constructor(
@@ -50,12 +53,13 @@ export class ArtifactCleanupProcessor extends WorkerHost implements OnModuleInit
     // Batch to avoid loading unbounded rows into memory on the first run
     // against a backlog that's been accumulating since launch.
     for (;;) {
-      const batch: Array<{ id: string; storageKey: string | null }> = await this.dataSource.query(
-        `SELECT id, storage_key AS "storageKey" FROM task_pushes
+      const batch: Array<{ id: string; storageKey: string | null }> =
+        await this.dataSource.query(
+          `SELECT id, storage_key AS "storageKey" FROM task_pushes
          WHERE status = $1::task_pushes_status_enum AND expires_at < now()
          LIMIT $2`,
-        [PushStatus.UPLOADED, BATCH_SIZE],
-      );
+          [PushStatus.UPLOADED, BATCH_SIZE],
+        );
       if (batch.length === 0) break;
 
       for (const push of batch) {

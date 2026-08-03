@@ -1,42 +1,126 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
-import { NotificationType, NotificationCategory, NotificationPriority } from '../../common/enums';
+import {
+  NotificationType,
+  NotificationCategory,
+  NotificationPriority,
+} from '../../common/enums';
 import { UpdateNotifPrefsDto } from './dto/update-notif-prefs.dto';
-import { NOTIFICATION_COLUMNS_SQL, NOTIFICATION_PREFS_COLUMNS_SQL } from './notifications.sql';
-import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
+import {
+  NOTIFICATION_COLUMNS_SQL,
+  NOTIFICATION_PREFS_COLUMNS_SQL,
+} from './notifications.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../common/utils/sql.util';
 
 // NotificationDispatcherService.dispatch() routes channels off `category` +
 // `priority`, but nothing populated them from the notification `type` being
 // created — so every dispatch() call silently threw (PRIORITY_CHANNELS[undefined])
 // and external channels (SMS/Telegram/Email) never actually fired. This maps
 // every NotificationType to its channel-routing category/priority.
-const NOTIFICATION_ROUTING: Record<string, { category: NotificationCategory; priority: NotificationPriority }> = {
-  [NotificationType.TASK_ASSIGNED]: { category: NotificationCategory.TASK, priority: NotificationPriority.HIGH },
-  [NotificationType.TASK_UPDATED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.TASK_COMMENTED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.TASK_COMPLETED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.TASK_STATUS_CHANGED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PUSH_SUBMITTED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PUSH_APPROVED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PUSH_REJECTED]: { category: NotificationCategory.TASK, priority: NotificationPriority.HIGH },
-  [NotificationType.PR_CREATED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PR_REVIEWED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PR_MERGED]: { category: NotificationCategory.TASK, priority: NotificationPriority.NORMAL },
-  [NotificationType.PROJECT_CREATED]: { category: NotificationCategory.TASK, priority: NotificationPriority.LOW },
-  [NotificationType.PROJECT_UPDATED]: { category: NotificationCategory.TASK, priority: NotificationPriority.LOW },
-  [NotificationType.MEMBER_JOINED]: { category: NotificationCategory.SYSTEM, priority: NotificationPriority.LOW },
-  [NotificationType.MEMBER_ROLE_CHANGED]: { category: NotificationCategory.SECURITY, priority: NotificationPriority.NORMAL },
-  [NotificationType.MENTION]: { category: NotificationCategory.TASK, priority: NotificationPriority.HIGH },
-  [NotificationType.WORKSPACE_INVITE]: { category: NotificationCategory.SYSTEM, priority: NotificationPriority.HIGH },
-  [NotificationType.PROJECT_MEMBER_INVITE]: { category: NotificationCategory.TASK, priority: NotificationPriority.HIGH },
-  [NotificationType.PROJECT_MEMBER_ACCEPTED]: { category: NotificationCategory.TASK, priority: NotificationPriority.LOW },
-  [NotificationType.PROJECT_MEMBER_DECLINED]: { category: NotificationCategory.TASK, priority: NotificationPriority.LOW },
-  [NotificationType.MEETING_INVITE]: { category: NotificationCategory.MEETING, priority: NotificationPriority.HIGH },
+const NOTIFICATION_ROUTING: Record<
+  string,
+  { category: NotificationCategory; priority: NotificationPriority }
+> = {
+  [NotificationType.TASK_ASSIGNED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.HIGH,
+  },
+  [NotificationType.TASK_UPDATED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.TASK_COMMENTED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.TASK_COMPLETED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.TASK_STATUS_CHANGED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PUSH_SUBMITTED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PUSH_APPROVED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PUSH_REJECTED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.HIGH,
+  },
+  [NotificationType.PR_CREATED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PR_REVIEWED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PR_MERGED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.PROJECT_CREATED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.LOW,
+  },
+  [NotificationType.PROJECT_UPDATED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.LOW,
+  },
+  [NotificationType.MEMBER_JOINED]: {
+    category: NotificationCategory.SYSTEM,
+    priority: NotificationPriority.LOW,
+  },
+  [NotificationType.MEMBER_ROLE_CHANGED]: {
+    category: NotificationCategory.SECURITY,
+    priority: NotificationPriority.NORMAL,
+  },
+  [NotificationType.MENTION]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.HIGH,
+  },
+  [NotificationType.WORKSPACE_INVITE]: {
+    category: NotificationCategory.SYSTEM,
+    priority: NotificationPriority.HIGH,
+  },
+  [NotificationType.PROJECT_MEMBER_INVITE]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.HIGH,
+  },
+  [NotificationType.PROJECT_MEMBER_ACCEPTED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.LOW,
+  },
+  [NotificationType.PROJECT_MEMBER_DECLINED]: {
+    category: NotificationCategory.TASK,
+    priority: NotificationPriority.LOW,
+  },
+  [NotificationType.MEETING_INVITE]: {
+    category: NotificationCategory.MEETING,
+    priority: NotificationPriority.HIGH,
+  },
 };
-const DEFAULT_ROUTING = { category: NotificationCategory.SYSTEM, priority: NotificationPriority.NORMAL };
+const DEFAULT_ROUTING = {
+  category: NotificationCategory.SYSTEM,
+  priority: NotificationPriority.NORMAL,
+};
 
 export interface CreateNotificationInput {
   userId: string;
@@ -99,11 +183,7 @@ export class NotificationsService {
     return saved;
   }
 
-  async list(
-    userId: string,
-    page = 1,
-    limit = 30,
-  ) {
+  async list(userId: string, page = 1, limit = 30) {
     const offset = (page - 1) * limit;
     const countRows: Array<{ count: string }> = await this.dataSource.query(
       `SELECT COUNT(*) FROM notifications WHERE user_id = $1`,
@@ -140,7 +220,10 @@ export class NotificationsService {
       ),
     );
     if (!rows[0]) {
-      throw new NotFoundException({ code: ErrorCode.NOTIFICATION_NOT_FOUND, message: 'Notification not found' });
+      throw new NotFoundException({
+        code: ErrorCode.NOTIFICATION_NOT_FOUND,
+        message: 'Notification not found',
+      });
     }
     return rows[0];
   }
@@ -161,7 +244,10 @@ export class NotificationsService {
       ),
     );
     if (!rows[0]) {
-      throw new NotFoundException({ code: ErrorCode.NOTIFICATION_NOT_FOUND, message: 'Notification not found' });
+      throw new NotFoundException({
+        code: ErrorCode.NOTIFICATION_NOT_FOUND,
+        message: 'Notification not found',
+      });
     }
   }
 
@@ -218,7 +304,10 @@ export class NotificationsService {
   async updatePrefs(userId: string, dto: UpdateNotifPrefsDto) {
     await this.getPrefs(userId); // ensures a row exists
 
-    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2);
+    const { setClause, values } = buildUpdateSet(
+      dto as Record<string, unknown>,
+      2,
+    );
     if (!setClause) return this.getPrefs(userId);
 
     const rows = normalizeReturning(

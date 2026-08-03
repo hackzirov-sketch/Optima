@@ -23,7 +23,10 @@ export class MembersService {
     private readonly audit: AuditService,
   ) {}
 
-  async assertMember(workspaceId: string, userId: string): Promise<WorkspaceMember> {
+  async assertMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember> {
     const rows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [workspaceId, userId],
@@ -63,11 +66,21 @@ export class MembersService {
       [workspaceId],
     );
 
-    return rows.map(this.mapWithUser);
+    return rows.map((row) => this.mapWithUser(row));
   }
 
   private mapWithUser(row: any) {
-    const { u_id, u_publicId, u_firstName, u_lastName, u_username, u_email, u_avatarUrl, u_lastSeen, ...member } = row;
+    const {
+      u_id,
+      u_publicId,
+      u_firstName,
+      u_lastName,
+      u_username,
+      u_email,
+      u_avatarUrl,
+      u_lastSeen,
+      ...member
+    } = row;
     return {
       ...member,
       user: {
@@ -114,12 +127,17 @@ export class MembersService {
     dto: UpdateMemberRoleDto,
     requesterId: string,
   ): Promise<WorkspaceMember> {
-    const workspaceRows: Array<{ id: string; ownerId: string }> = await this.dataSource.query(
-      `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
-      [workspaceId],
-    );
+    const workspaceRows: Array<{ id: string; ownerId: string }> =
+      await this.dataSource.query(
+        `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
+        [workspaceId],
+      );
     const workspace = workspaceRows[0];
-    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
+    if (!workspace)
+      throw new NotFoundException({
+        code: ErrorCode.WORKSPACE_NOT_FOUND,
+        message: 'Workspace not found',
+      });
 
     const requesterRows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
@@ -127,7 +145,10 @@ export class MembersService {
     );
     const requester = requesterRows[0];
     if (!requester) {
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Requester not found in workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Requester not found in workspace',
+      });
     }
 
     // Must be ADMIN or OWNER; ADMIN can only assign ≤ LEAD
@@ -142,9 +163,15 @@ export class MembersService {
     }
 
     // Prevent self-promotion: cannot assign yourself a role higher than your own
-    if (requesterId === targetUserId && requester.role !== WorkspaceRole.OWNER) {
+    if (
+      requesterId === targetUserId &&
+      requester.role !== WorkspaceRole.OWNER
+    ) {
       if (ROLE_LEVEL[dto.role] > ROLE_LEVEL[requester.role]) {
-        throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Cannot promote yourself' });
+        throw new ForbiddenException({
+          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+          message: 'Cannot promote yourself',
+        });
       }
     }
 
@@ -154,7 +181,10 @@ export class MembersService {
     );
     const member = memberRows[0];
     if (!member) {
-      throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Member not found in this workspace' });
+      throw new NotFoundException({
+        code: ErrorCode.MEMBER_NOT_FOUND,
+        message: 'Member not found in this workspace',
+      });
     }
     const oldRole = member.role;
 
@@ -184,12 +214,17 @@ export class MembersService {
     targetUserId: string,
     requesterId: string,
   ): Promise<void> {
-    const workspaceRows: Array<{ id: string; ownerId: string }> = await this.dataSource.query(
-      `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
-      [workspaceId],
-    );
+    const workspaceRows: Array<{ id: string; ownerId: string }> =
+      await this.dataSource.query(
+        `SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`,
+        [workspaceId],
+      );
     const workspace = workspaceRows[0];
-    if (!workspace) throw new NotFoundException({ code: ErrorCode.WORKSPACE_NOT_FOUND, message: 'Workspace not found' });
+    if (!workspace)
+      throw new NotFoundException({
+        code: ErrorCode.WORKSPACE_NOT_FOUND,
+        message: 'Workspace not found',
+      });
 
     const requesterRows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
@@ -197,7 +232,10 @@ export class MembersService {
     );
     const requester = requesterRows[0];
     if (!requester) {
-      throw new NotFoundException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Requester not found in workspace' });
+      throw new NotFoundException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Requester not found in workspace',
+      });
     }
 
     // User can remove themselves (leave); otherwise must be ADMIN or OWNER
@@ -218,10 +256,16 @@ export class MembersService {
     );
     const member = memberRows[0];
     if (!member) {
-      throw new NotFoundException({ code: ErrorCode.MEMBER_NOT_FOUND, message: 'Member not found in this workspace' });
+      throw new NotFoundException({
+        code: ErrorCode.MEMBER_NOT_FOUND,
+        message: 'Member not found in this workspace',
+      });
     }
 
-    await this.dataSource.query(`DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`, [workspaceId, targetUserId]);
+    await this.dataSource.query(
+      `DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
+      [workspaceId, targetUserId],
+    );
 
     await this.audit.log({
       workspaceId,

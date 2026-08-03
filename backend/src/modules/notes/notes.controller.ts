@@ -1,5 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 
 import { NotesService } from './notes.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -13,7 +29,10 @@ export class NotesController {
   constructor(private readonly notesService: NotesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List notes for a scope. Pass exactly the narrowest filter you have — taskId, or projectId, or workspaceId. No filter lists your own global notes.' })
+  @ApiOperation({
+    summary:
+      'List notes for a scope. Pass exactly the narrowest filter you have — taskId, or projectId, or workspaceId. No filter lists your own global notes.',
+  })
   @ApiQuery({ name: 'workspaceId', required: false })
   @ApiQuery({ name: 'projectId', required: false })
   @ApiQuery({ name: 'taskId', required: false })
@@ -27,7 +46,9 @@ export class NotesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a note (workspace/project/task-scoped, or fully global)' })
+  @ApiOperation({
+    summary: 'Create a note (workspace/project/task-scoped, or fully global)',
+  })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateNoteDto) {
     return this.notesService.create(userId, dto);
   }
@@ -40,14 +61,21 @@ export class NotesController {
 
   @Patch(':noteId')
   @ApiOperation({ summary: 'Update a note (creator only)' })
-  update(@Param('noteId') noteId: string, @CurrentUser('id') userId: string, @Body() dto: UpdateNoteDto) {
+  update(
+    @Param('noteId') noteId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateNoteDto,
+  ) {
     return this.notesService.update(noteId, userId, dto);
   }
 
   @Delete(':noteId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a note (creator only)' })
-  async remove(@Param('noteId') noteId: string, @CurrentUser('id') userId: string) {
+  async remove(
+    @Param('noteId') noteId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     await this.notesService.remove(noteId, userId);
   }
 }

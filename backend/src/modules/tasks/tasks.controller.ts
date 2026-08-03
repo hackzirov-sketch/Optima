@@ -66,7 +66,8 @@ export class TasksController {
 
   @Get('workspaces/:workspaceId/tasks')
   @ApiOperation({
-    summary: 'List all tasks in a workspace (single request, avoids N+1 per project)',
+    summary:
+      'List all tasks in a workspace (single request, avoids N+1 per project)',
   })
   @ApiParam({ name: 'workspaceId', description: 'Workspace UUID' })
   findAllByWorkspace(

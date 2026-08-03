@@ -9,7 +9,7 @@ import { NotFoundException } from '@nestjs/common';
 export class MeetingsRepository {
   constructor(private readonly dataSource: DatabaseService) {}
 
-  async findMeeting(meetingId: string): Promise<any | null> {
+  async findMeeting(meetingId: string): Promise<any> {
     const rows = await this.dataSource.query(
       `SELECT ${MEETING_COLUMNS_SQL} FROM meetings WHERE id = $1`,
       [meetingId],
@@ -17,7 +17,7 @@ export class MeetingsRepository {
     return rows[0] ?? null;
   }
 
-  async findMeetingWithHost(meetingId: string): Promise<any | null> {
+  async findMeetingWithHost(meetingId: string): Promise<any> {
     const rows: any[] = await this.dataSource.query(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings WHERE id = $1) m

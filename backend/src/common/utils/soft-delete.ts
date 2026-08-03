@@ -19,7 +19,9 @@ export function applySoftDelete<T extends SoftDeletableEntity>(
   return entity;
 }
 
-export function isSoftDeleted(entity: SoftDeletableEntity | null | undefined): boolean {
+export function isSoftDeleted(
+  entity: SoftDeletableEntity | null | undefined,
+): boolean {
   if (!entity) return true;
   return Boolean(entity.deletedAt);
 }

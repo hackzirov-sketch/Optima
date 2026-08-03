@@ -207,21 +207,21 @@ export class MeetingsService {
       await this.membersService.assertMember(workspaceId, userId);
     }
 
-    let code: string;
-    let attempts = 0;
-    do {
-      code = generateMeetingCode();
-      if (++attempts > 10)
-        throw new BadRequestException({
-          code: ErrorCode.MEETING_CODE_GENERATION_FAILED,
-          message: 'Could not generate unique meeting code',
-        });
+    let code = '';
+    for (let attempts = 0; attempts < 10 && !code; attempts++) {
+      const candidate = generateMeetingCode();
       const existing = await this.dataSource.query(
         `SELECT id FROM meetings WHERE meeting_code = $1`,
-        [code],
+        [candidate],
       );
-      if (!existing[0]) break;
-    } while (true);
+      if (!existing[0]) code = candidate;
+    }
+    if (!code) {
+      throw new BadRequestException({
+        code: ErrorCode.MEETING_CODE_GENERATION_FAILED,
+        message: 'Could not generate unique meeting code',
+      });
+    }
 
     let saved: any;
     try {
@@ -236,7 +236,7 @@ export class MeetingsService {
           userId,
           dto.title,
           dto.description ?? null,
-          code!,
+          code,
           new Date(dto.startTime),
           dto.endTime ? new Date(dto.endTime) : null,
           dto.maxParticipants ?? null,

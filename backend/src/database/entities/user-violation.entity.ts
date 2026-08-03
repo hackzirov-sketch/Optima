@@ -1,4 +1,3 @@
-
 export interface UserViolation {
   id: string;
 

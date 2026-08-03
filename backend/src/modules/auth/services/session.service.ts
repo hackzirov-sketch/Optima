@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import ms from 'ms';
 import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from '../../../redis/redis.service';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -24,12 +26,21 @@ const REFRESH_TOKEN_COLUMNS_SQL = `
 @Injectable()
 export class SessionService {
   private readonly maxSessions: number;
+  /** How long a session block must outlive the newest access token it needs
+   * to invalidate — see revokeAllSessions. */
+  private readonly accessTokenTtlSeconds: number;
 
   constructor(
     private dataSource: DatabaseService,
     private configService: ConfigService,
+    private redisService: RedisService,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
+    const accessExpires =
+      this.configService.get<string>('jwt.accessExpires') || '20m';
+    this.accessTokenTtlSeconds = Math.ceil(
+      (ms(accessExpires as any) as unknown as number) / 1000,
+    );
   }
 
   async getSessions(userId: string) {
@@ -70,12 +81,24 @@ export class SessionService {
     return { message: 'Session revoked successfully' };
   }
 
+  /**
+   * Revoking the refresh tokens alone is not enough: access tokens are
+   * stateless, so every already-issued one stays valid for the rest of its
+   * lifetime (20 min by default) — exactly the window that matters when the
+   * user hits this because they think they've been compromised, or when
+   * refresh-token reuse detection fires. blockUserSessions records a cutoff
+   * that JwtStrategy checks against each token's `iat`, which kills the
+   * outstanding ones without blocking the session the user opens next.
+   */
   async revokeAllSessions(userId: string) {
-    await this.dataSource.query(
-      `UPDATE refresh_tokens SET revoked_at = now()
-       WHERE user_id = $1 AND revoked_at IS NULL`,
-      [userId],
-    );
+    await Promise.all([
+      this.dataSource.query(
+        `UPDATE refresh_tokens SET revoked_at = now()
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      ),
+      this.redisService.blockUserSessions(userId, this.accessTokenTtlSeconds),
+    ]);
     return { message: 'All sessions revoked successfully' };
   }
 
@@ -168,8 +191,19 @@ export class SessionService {
     if (!row) return null;
 
     const {
-      id, userId, tokenHash: th, deviceName, deviceInfo, ipAddress, location,
-      userAgent, provider, lastUsedAt, expiresAt, revokedAt, createdAt,
+      id,
+      userId,
+      tokenHash: th,
+      deviceName,
+      deviceInfo,
+      ipAddress,
+      location,
+      userAgent,
+      provider,
+      lastUsedAt,
+      expiresAt,
+      revokedAt,
+      createdAt,
       ...prefixed
     } = row;
 
@@ -180,10 +214,21 @@ export class SessionService {
     );
 
     return {
-      id, userId, tokenHash: th, deviceName, deviceInfo, ipAddress, location,
-      userAgent, provider, lastUsedAt, expiresAt, revokedAt, createdAt,
+      id,
+      userId,
+      tokenHash: th,
+      deviceName,
+      deviceInfo,
+      ipAddress,
+      location,
+      userAgent,
+      provider,
+      lastUsedAt,
+      expiresAt,
+      revokedAt,
+      createdAt,
       user,
-    } as RefreshToken & { user: User };
+    };
   }
 
   /**
@@ -208,8 +253,16 @@ export class SessionService {
       const cols = ['revokedAt', 'lastUsedAt'] as const;
       const entries = cols
         .filter((c) => session[c] !== undefined)
-        .map((c) => [c === 'revokedAt' ? 'revoked_at' : 'last_used_at', session[c]] as const);
-      const setClause = entries.map(([col], i) => `${col} = $${i + 2}`).join(', ');
+        .map(
+          (c) =>
+            [
+              c === 'revokedAt' ? 'revoked_at' : 'last_used_at',
+              session[c],
+            ] as const,
+        );
+      const setClause = entries
+        .map(([col], i) => `${col} = $${i + 2}`)
+        .join(', ');
       return { setClause, values: entries.map(([, v]) => v) };
     })();
     if (!setClause) return session;

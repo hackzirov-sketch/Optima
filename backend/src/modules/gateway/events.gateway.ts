@@ -21,7 +21,10 @@ import { ACCESS_COOKIE } from '../../common/utils/auth-cookies.util';
 import { ChatMessageService } from '../chat/services/message.service';
 import { ChatReactionService } from '../chat/services/reaction.service';
 import { ChatMemberService } from '../chat/services/member.service';
-import { ChatPresenceService, PresenceStatus } from '../chat/services/presence.service';
+import {
+  ChatPresenceService,
+  PresenceStatus,
+} from '../chat/services/presence.service';
 import { ViolationService } from '../moderation/services/violation.service';
 import { MeetingsService } from '../meetings/meetings.service';
 import { UsersService } from '../users/services/users.service';
@@ -30,6 +33,12 @@ import { RedisService } from '../../redis/redis.service';
 export interface WsUser {
   id: string;
   email: string;
+  /** Access-token id, checked against the logout blacklist on revalidation. */
+  jti?: string;
+  /** Token issue time (epoch seconds), compared against a session-block cutoff. */
+  iat?: number;
+  /** Token expiry in epoch milliseconds; 0 when the token carried no `exp`. */
+  expiresAt: number;
   workspaceIds: string[];
 }
 
@@ -67,19 +76,50 @@ export interface AddReactionWsDto {
 }
 
 // ─── Meeting DTOs ──────────────────────────────────────
-export interface MeetingJoinDto    { meetingId: string; }
-export interface MeetingLeaveDto   { meetingId: string; }
-export interface MeetingOfferDto   { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
-export interface MeetingAnswerDto  { meetingId: string; targetUserId: string; sdp: RTCSessionDescriptionInit; }
-export interface MeetingIceDto     { meetingId: string; targetUserId: string; candidate: RTCIceCandidateInit; }
-export interface MeetingToggleDto  { meetingId: string; kind: 'audio' | 'video' | 'screen'; enabled: boolean; }
-export interface DirectCallDto { meetingId: string; roomId: string; targetUserId: string; kind: 'audio' | 'video'; }
+export interface MeetingJoinDto {
+  meetingId: string;
+}
+export interface MeetingLeaveDto {
+  meetingId: string;
+}
+export interface MeetingOfferDto {
+  meetingId: string;
+  targetUserId: string;
+  sdp: RTCSessionDescriptionInit;
+}
+export interface MeetingAnswerDto {
+  meetingId: string;
+  targetUserId: string;
+  sdp: RTCSessionDescriptionInit;
+}
+export interface MeetingIceDto {
+  meetingId: string;
+  targetUserId: string;
+  candidate: RTCIceCandidateInit;
+}
+export interface MeetingToggleDto {
+  meetingId: string;
+  kind: 'audio' | 'video' | 'screen';
+  enabled: boolean;
+}
+export interface DirectCallDto {
+  meetingId: string;
+  roomId: string;
+  targetUserId: string;
+  kind: 'audio' | 'video';
+}
 
 // A socket drop (network blip, tab refresh) shouldn't immediately count as
 // "left the meeting" — give it a window to reconnect and rejoin before the
 // participant is marked as having left in the DB (which can in turn trigger
 // meeting auto-end if they were the last one present).
 const MEETING_RECONNECT_GRACE_MS = 30_000;
+
+// How often a live socket's handshake token is re-checked (expiry, logout
+// blacklist, session block, account status). Short enough that a revoked
+// session dies well inside the access token's own 20-minute lifetime, long
+// enough that it costs one pipelined Redis round trip per socket per minute.
+const WS_REVALIDATE_INTERVAL_MS = 60_000;
 
 @Injectable()
 @WebSocketGateway({
@@ -144,7 +184,8 @@ export class EventsGateway
       throw new Error('Could not resolve root Socket.IO server instance');
     }
 
-    const url = this.configService.get<string>('redis.url') || 'redis://localhost:6379';
+    const url =
+      this.configService.get<string>('redis.url') || 'redis://localhost:6379';
     const password = this.configService.get<string>('redis.password');
 
     const pubClient = new Redis(url, {
@@ -186,11 +227,79 @@ export class EventsGateway
       return {
         id: payload.sub,
         email: payload.email,
+        jti: payload.jti,
+        iat: payload.iat,
+        expiresAt: payload.exp ? payload.exp * 1000 : 0,
         workspaceIds: payload.workspaceIds || [],
       };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * A socket authenticates once at handshake and then stays open for as long
+   * as the client keeps it — days, in practice. Without this, the handshake
+   * token's expiry never arrives, logout never reaches the socket, and neither
+   * does a revoked session or a deactivated account: the connection outlives
+   * every mechanism that is supposed to end it.
+   *
+   * Runs on a timer per socket (rather than per inbound event) so an idle
+   * socket is dropped too — an attacker with a stolen cookie doesn't get to
+   * hold a silent listener open indefinitely just by never sending anything.
+   */
+  private async revalidateSocket(client: Socket): Promise<boolean> {
+    const auth = client.data?.auth as WsUser | undefined;
+    if (!auth) return false;
+
+    if (auth.expiresAt && Date.now() >= auth.expiresAt) {
+      this.disconnectUnauthorized(client, 'TOKEN_EXPIRED', 'Session expired');
+      return false;
+    }
+
+    const [blacklisted, sessionBlockCutoff, cachedUser] =
+      await this.redisService.validateTokenPipeline(auth.id, auth.jti);
+
+    if (blacklisted) {
+      this.disconnectUnauthorized(
+        client,
+        'TOKEN_REVOKED',
+        'Token has been revoked',
+      );
+      return false;
+    }
+    if (
+      sessionBlockCutoff !== null &&
+      (auth.iat === undefined || auth.iat <= sessionBlockCutoff)
+    ) {
+      this.disconnectUnauthorized(
+        client,
+        'TOKEN_REVOKED',
+        'All sessions have been revoked',
+      );
+      return false;
+    }
+
+    const user = cachedUser ?? (await this.usersService.findById(auth.id));
+    if (!user || !user.isActive) {
+      this.disconnectUnauthorized(
+        client,
+        'ACCOUNT_INACTIVE',
+        'Account is inactive',
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  private disconnectUnauthorized(
+    client: Socket,
+    code: string,
+    message: string,
+  ) {
+    client.emit('error', { code, message });
+    client.disconnect(true);
   }
 
   async handleConnection(client: Socket) {
@@ -204,25 +313,39 @@ export class EventsGateway
     }
 
     client.data.userId = user.id;
+    client.data.auth = user;
 
-    // Auto-join personal room for direct notifications
-    client.join(`user:${user.id}`);
+    // Re-check the handshake token periodically for the rest of the socket's
+    // life; cleared in handleDisconnect.
+    client.data.authTimer = setInterval(() => {
+      void this.revalidateSocket(client);
+    }, WS_REVALIDATE_INTERVAL_MS);
+
+    // Auto-join personal room for direct notifications. join/leave return a
+    // promise once a (Redis) adapter is attached, and a rejected one here would
+    // otherwise be unhandled.
+    await client.join(`user:${user.id}`);
 
     // Load workspace memberships → join scoped rooms
-    const memberships: Array<{ workspaceId: string }> = await this.dataSource.query(
-      `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
-      [user.id],
-    );
+    const memberships: Array<{ workspaceId: string }> =
+      await this.dataSource.query(
+        `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
+        [user.id],
+      );
     const wsIds = memberships.map((m) => m.workspaceId);
 
     // Store workspace memberships in socket data for cleanup on disconnect
     client.data.workspaceIds = wsIds;
-    wsIds.forEach((wsId) => client.join(`workspace:${wsId}`));
+    // Socket#join accepts an array and handles the adapter round trip itself.
+    await client.join(wsIds.map((wsId) => `workspace:${wsId}`));
 
     // Redis presence: per-socket freshness tracking (self-healing against
     // orphaned entries from a dead process) - only the 0->1+ transition
     // actually flips status to online (see ChatPresenceService).
-    const { status, isNewlyOnline } = await this.presenceService.connect(user.id, client.id);
+    const { status, isNewlyOnline } = await this.presenceService.connect(
+      user.id,
+      client.id,
+    );
     if (isNewlyOnline) {
       wsIds.forEach((wsId) =>
         this.server.to(`workspace:${wsId}`).emit('presence_update', {
@@ -236,13 +359,18 @@ export class EventsGateway
     const peerIds = new Set<string>();
     await Promise.all(
       wsIds.map(async (wsId) => {
-        const sockets = await this.server.in(`workspace:${wsId}`).fetchSockets();
+        const sockets = await this.server
+          .in(`workspace:${wsId}`)
+          .fetchSockets();
         for (const s of sockets) {
-          if (s.data?.userId && s.data.userId !== user.id) peerIds.add(s.data.userId);
+          if (s.data?.userId && s.data.userId !== user.id)
+            peerIds.add(s.data.userId);
         }
       }),
     );
-    const snapshot = await this.presenceService.getPresenceBulk(Array.from(peerIds));
+    const snapshot = await this.presenceService.getPresenceBulk(
+      Array.from(peerIds),
+    );
     client.emit('presence_snapshot', { presence: snapshot });
 
     this.logger.log(`Client connected: ${client.id} → userId=${user.id}`);
@@ -265,17 +393,26 @@ export class EventsGateway
   ) {
     const userId = client.data?.userId;
     if (!userId) return;
-    if (!Object.values(PresenceStatus).includes(data.status as PresenceStatus)) return;
-    if (data.status === PresenceStatus.OFFLINE) return; // offline is derived, never set directly
-    await this.presenceService.setStatus(userId, data.status as PresenceStatus);
+    const status = data.status as PresenceStatus;
+    if (!Object.values(PresenceStatus).includes(status)) return;
+    if (status === PresenceStatus.OFFLINE) return; // offline is derived, never set directly
+    await this.presenceService.setStatus(userId, status);
     const wsIds: string[] = client.data?.workspaceIds || [];
-    const masked = this.presenceService.maskForOthers(data.status as PresenceStatus);
+    const masked = this.presenceService.maskForOthers(status);
     wsIds.forEach((wsId) =>
-      this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: masked }),
+      this.server
+        .to(`workspace:${wsId}`)
+        .emit('presence_update', { userId, status: masked }),
     );
   }
 
   async handleDisconnect(client: Socket) {
+    const authTimer = client.data?.authTimer as NodeJS.Timeout | undefined;
+    if (authTimer) {
+      clearInterval(authTimer);
+      delete client.data.authTimer;
+    }
+
     const userId = client.data?.userId;
     if (!userId) return;
 
@@ -286,16 +423,25 @@ export class EventsGateway
     // hit isNowOffline until their last connection drops, and even a
     // never-cleaned-up entry (process crash) self-heals via its TTL.
     try {
-      const { isNowOffline } = await this.presenceService.disconnect(userId, client.id);
+      const { isNowOffline } = await this.presenceService.disconnect(
+        userId,
+        client.id,
+      );
       if (isNowOffline) {
         void this.usersService.updateLastSeen(userId);
         const wsIds: string[] = client.data?.workspaceIds || [];
         for (const wsId of wsIds) {
-          this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.OFFLINE });
+          this.server.to(`workspace:${wsId}`).emit('presence_update', {
+            userId,
+            status: PresenceStatus.OFFLINE,
+          });
         }
       }
     } catch (err) {
-      this.logger.error(`Error during presence disconnect cleanup for ${userId}`, err);
+      this.logger.error(
+        `Error during presence disconnect cleanup for ${userId}`,
+        err,
+      );
     }
 
     // Clean up meeting presence if this socket was in a meeting — but only
@@ -306,23 +452,35 @@ export class EventsGateway
     // rather than this socket's own (already-gone) membership.
     const meetingId = client.data?.meetingId;
     if (meetingId) {
-      setTimeout(async () => {
-        try {
-          const stillPresent = await this.server
-            .in(`meeting:${meetingId}:user:${userId}`)
-            .fetchSockets();
-          if (stillPresent.length === 0) {
-            await this.meetingsService.leave(meetingId, userId).catch(() => {});
-            this.server.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
-            this.logger.log(`User ${userId} left meeting ${meetingId} (disconnect grace expired)`);
-          }
-        } catch (err) {
-          this.logger.error(`Error finalizing meeting leave for ${userId}`, err);
-        }
+      setTimeout(() => {
+        void this.finalizeMeetingLeaveAfterGrace(meetingId, userId);
       }, MEETING_RECONNECT_GRACE_MS);
     }
 
     this.logger.log(`Client disconnected: ${client.id} → userId=${userId}`);
+  }
+
+  /** Tail of handleDisconnect, run once the reconnect grace window expires. */
+  private async finalizeMeetingLeaveAfterGrace(
+    meetingId: string,
+    userId: string,
+  ) {
+    try {
+      const stillPresent = await this.server
+        .in(`meeting:${meetingId}:user:${userId}`)
+        .fetchSockets();
+      if (stillPresent.length === 0) {
+        await this.meetingsService.leave(meetingId, userId).catch(() => {});
+        this.server
+          .to(`meeting:${meetingId}`)
+          .emit('meeting:user-left', { meetingId, userId });
+        this.logger.log(
+          `User ${userId} left meeting ${meetingId} (disconnect grace expired)`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`Error finalizing meeting leave for ${userId}`, err);
+    }
   }
 
   // ─── Workspace join/leave ────────────────────────────
@@ -332,28 +490,40 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
     const memberRows = await this.dataSource.query(
       `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [data.workspaceId, userId],
     );
     const member = memberRows[0];
-    if (!member) throw new WsException({ code: 'WS_NOT_WORKSPACE_MEMBER', message: 'Not a workspace member' });
+    if (!member)
+      throw new WsException({
+        code: 'WS_NOT_WORKSPACE_MEMBER',
+        message: 'Not a workspace member',
+      });
 
-    client.join(`workspace:${data.workspaceId}`);
+    await client.join(`workspace:${data.workspaceId}`);
     return { event: 'workspace_joined', workspaceId: data.workspaceId };
   }
 
   @SubscribeMessage('leave_workspace')
-  handleLeaveWorkspace(
+  async handleLeaveWorkspace(
     @MessageBody() data: { workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
-    client.leave(`workspace:${data.workspaceId}`);
+    await client.leave(`workspace:${data.workspaceId}`);
     return { event: 'workspace_left', workspaceId: data.workspaceId };
   }
 
@@ -364,16 +534,24 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
     const chatMemberRows = await this.dataSource.query(
       `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [data.roomId, userId],
     );
     const member = chatMemberRows[0];
-    if (!member) throw new WsException({ code: 'WS_NOT_ROOM_MEMBER', message: 'Not a room member' });
+    if (!member)
+      throw new WsException({
+        code: 'WS_NOT_ROOM_MEMBER',
+        message: 'Not a room member',
+      });
 
-    client.join(`room:${data.roomId}`);
+    await client.join(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_joined_room', {
       userId,
       roomId: data.roomId,
@@ -382,14 +560,18 @@ export class EventsGateway
   }
 
   @SubscribeMessage('leave_room')
-  handleLeaveRoom(
+  async handleLeaveRoom(
     @MessageBody() data: JoinRoomDto,
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
-    client.leave(`room:${data.roomId}`);
+    await client.leave(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_left_room', {
       userId,
       roomId: data.roomId,
@@ -415,8 +597,12 @@ export class EventsGateway
   }
 
   /** Per-user (not per-IP/global) message send limit — see RedisService.checkChatMessageRateLimit. */
-  private async assertMessageRateLimit(userId: string, client: Socket): Promise<boolean> {
-    const { exceeded, retryAfterSeconds } = await this.redisService.checkChatMessageRateLimit(userId);
+  private async assertMessageRateLimit(
+    userId: string,
+    client: Socket,
+  ): Promise<boolean> {
+    const { exceeded, retryAfterSeconds } =
+      await this.redisService.checkChatMessageRateLimit(userId);
     if (exceeded) {
       client.emit('error', {
         code: 'RATE_LIMIT_EXCEEDED',
@@ -428,14 +614,18 @@ export class EventsGateway
     return true;
   }
 
-  private async assertActiveUser(userId: string, client: Socket): Promise<boolean> {
+  private async assertActiveUser(
+    userId: string,
+    client: Socket,
+  ): Promise<boolean> {
     try {
       await this.violationService.assertNotBlocked(userId);
       return true;
     } catch (err: unknown) {
-      const res = err instanceof Error && 'getResponse' in err
-        ? (err as any).getResponse()
-        : {};
+      const res =
+        err instanceof Error && 'getResponse' in err
+          ? (err as any).getResponse()
+          : {};
       client.emit('error', {
         code: res?.code ?? 'ACCOUNT_SUSPENDED',
         message: res?.message ?? 'Account suspended',
@@ -451,10 +641,14 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
-    if (!await this.assertActiveUser(userId, client)) return;
-    if (!await this.assertMessageRateLimit(userId, client)) return;
+    if (!(await this.assertActiveUser(userId, client))) return;
+    if (!(await this.assertMessageRateLimit(userId, client))) return;
 
     // Persist to DB — ChatMessageService checks room membership internally
     let saved: any;
@@ -499,13 +693,21 @@ export class EventsGateway
     // auto-joins its own `user:<id>` on connect (see handleConnection), so
     // fan this out there too - that's what actually reaches a member
     // regardless of which room, if any, they currently have open.
-    await this.broadcastToRoomMembers(data.roomId, 'new_message', messagePayload);
+    await this.broadcastToRoomMembers(
+      data.roomId,
+      'new_message',
+      messagePayload,
+    );
 
     return { event: 'message_sent', messageId: saved.id };
   }
 
   /** Emits an event to every active member's personal `user:<id>` channel — see handleSendMessage. */
-  private async broadcastToRoomMembers(roomId: string, event: string, payload: unknown) {
+  private async broadcastToRoomMembers(
+    roomId: string,
+    event: string,
+    payload: unknown,
+  ) {
     const members: Array<{ userId: string }> = await this.dataSource.query(
       `SELECT user_id AS "userId" FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
       [roomId],
@@ -523,17 +725,25 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
-    if (!await this.assertActiveUser(userId, client)) return;
-    if (!await this.assertMessageRateLimit(userId, client)) return;
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
+    if (!(await this.assertActiveUser(userId, client))) return;
+    if (!(await this.assertMessageRateLimit(userId, client))) return;
 
     let saved: any;
     try {
-      saved = await this.messageService.sendThreadReply(data.threadRootId, userId, {
-        content: data.text,
-        clientMessageId: data.clientMessageId,
-        attachments: data.attachments,
-      } as any);
+      saved = await this.messageService.sendThreadReply(
+        data.threadRootId,
+        userId,
+        {
+          content: data.text,
+          clientMessageId: data.clientMessageId,
+          attachments: data.attachments,
+        },
+      );
     } catch (err: any) {
       client.emit('error', {
         code: err?.response?.code || 'SEND_THREAD_REPLY_FAILED',
@@ -574,20 +784,27 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId) throw new WsException({ code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+    if (!userId)
+      throw new WsException({
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
 
-    if (!await this.assertActiveUser(userId, client)) return;
+    if (!(await this.assertActiveUser(userId, client))) return;
 
     try {
-      const action = await this.reactionService.toggleReaction(
+      // roomId comes back from the message row, not from `data` — otherwise a
+      // member of room A could react there but have the event announced in
+      // room B by naming it in the payload.
+      const { action, roomId } = await this.reactionService.toggleReaction(
         data.messageId,
         userId,
         data.emoji,
       );
 
-      this.server.to(`room:${data.roomId}`).emit('reaction_updated', {
+      this.server.to(`room:${roomId}`).emit('reaction_updated', {
         messageId: data.messageId,
-        roomId: data.roomId,
+        roomId,
         emoji: data.emoji,
         userId,
         action,
@@ -647,13 +864,19 @@ export class EventsGateway
   ) {
     const userId = client.data?.userId;
     if (!userId) {
-      client.emit('error', { code: 'WS_NOT_AUTHENTICATED', message: 'Not authenticated' });
+      client.emit('error', {
+        code: 'WS_NOT_AUTHENTICATED',
+        message: 'Not authenticated',
+      });
       return;
     }
 
     const { meetingId } = data;
     if (!meetingId) {
-      client.emit('meeting:error', { code: 'MEETING_ID_REQUIRED', message: 'meetingId is required' });
+      client.emit('meeting:error', {
+        code: 'MEETING_ID_REQUIRED',
+        message: 'meetingId is required',
+      });
       return;
     }
 
@@ -668,7 +891,8 @@ export class EventsGateway
     try {
       await this.meetingsService.join(meetingId, userId);
     } catch (err: any) {
-      const response = typeof err?.getResponse === 'function' ? err.getResponse() : null;
+      const response =
+        typeof err?.getResponse === 'function' ? err.getResponse() : null;
       client.emit('meeting:error', {
         code: response?.code ?? 'MEETING_JOIN_FAILED',
         message: response?.message ?? 'Could not join meeting',
@@ -696,17 +920,24 @@ export class EventsGateway
       }
     }
 
-    client.emit('meeting:participants', { meetingId, userIds: Array.from(participants) });
+    client.emit('meeting:participants', {
+      meetingId,
+      userIds: Array.from(participants),
+    });
 
     // Notify everyone else that this user joined
-    client.to(`meeting:${meetingId}`).emit('meeting:user-joined', { meetingId, userId });
+    client
+      .to(`meeting:${meetingId}`)
+      .emit('meeting:user-joined', { meetingId, userId });
 
     // Auto-presence: joining a call is a strong, unambiguous "in a meeting"
     // signal - no reason to make the user set this by hand.
     await this.presenceService.setStatus(userId, PresenceStatus.IN_MEETING);
     const wsIds: string[] = client.data?.workspaceIds || [];
     wsIds.forEach((wsId) =>
-      this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.IN_MEETING }),
+      this.server
+        .to(`workspace:${wsId}`)
+        .emit('presence_update', { userId, status: PresenceStatus.IN_MEETING }),
     );
 
     this.logger.log(`User ${userId} joined meeting ${meetingId}`);
@@ -730,13 +961,20 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
 
-    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:offer', {
-      meetingId: data.meetingId,
-      fromUserId: userId,
-      sdp: data.sdp,
-    });
+    this.server
+      .to(`meeting:${data.meetingId}:user:${data.targetUserId}`)
+      .emit('meeting:offer', {
+        meetingId: data.meetingId,
+        fromUserId: userId,
+        sdp: data.sdp,
+      });
   }
 
   // ─── Meeting: WebRTC answer ───────────────────────────
@@ -746,13 +984,20 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
 
-    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:answer', {
-      meetingId: data.meetingId,
-      fromUserId: userId,
-      sdp: data.sdp,
-    });
+    this.server
+      .to(`meeting:${data.meetingId}:user:${data.targetUserId}`)
+      .emit('meeting:answer', {
+        meetingId: data.meetingId,
+        fromUserId: userId,
+        sdp: data.sdp,
+      });
   }
 
   // ─── Direct (1:1) audio/video call signaling (ported from main) ───────
@@ -760,15 +1005,80 @@ export class EventsGateway
     return `call:${meetingId}`;
   }
 
+  /**
+   * Every field of a `call:*` payload is client-controlled, so nothing here may
+   * be trusted on its own. Both parties must be live members of the room the
+   * call claims to belong to — otherwise `call:invite` doubles as a
+   * "ring any user on the platform" primitive, and the `roomId` it stores in
+   * Redis flows into finalizeDirectCall -> createSystemMessage, which would let
+   * a caller post into a room they were never in.
+   */
+  private async assertCallParties(
+    roomId: string,
+    callerId: string,
+    calleeId: string,
+  ): Promise<boolean> {
+    if (!roomId || !callerId || !calleeId || callerId === calleeId)
+      return false;
+    const rows: Array<{ userId: string }> = await this.dataSource.query(
+      `SELECT user_id AS "userId" FROM chat_members
+       WHERE room_id = $1 AND user_id = ANY($2::uuid[]) AND left_at IS NULL`,
+      [roomId, [callerId, calleeId]],
+    );
+    return rows.length === 2;
+  }
+
+  /** Loads the Redis call state only if `userId` is one of its two parties. */
+  private async getOwnCallState(
+    meetingId: string,
+    userId: string,
+  ): Promise<Record<string, string> | null> {
+    const redis = this.redisService.getClient();
+    if (!redis || !meetingId) return null;
+    const state = await redis.hgetall(this.callKey(meetingId));
+    if (!state?.callerId) return null;
+    if (state.callerId !== userId && state.calleeId !== userId) return null;
+    return state;
+  }
+
   @SubscribeMessage('call:invite')
-  async handleDirectCallInvite(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallInvite(
+    @MessageBody() data: DirectCallDto,
+    @ConnectedSocket() client: Socket,
+  ) {
     const userId = client.data?.userId;
-    if (!userId || !data.meetingId || !data.roomId || !data.targetUserId) return;
+    if (!userId || !data.meetingId || !data.roomId || !data.targetUserId)
+      return;
+    if (data.kind !== 'audio' && data.kind !== 'video') return;
+
+    if (
+      !(await this.assertCallParties(data.roomId, userId, data.targetUserId))
+    ) {
+      client.emit('call:error', {
+        code: 'CALL_NOT_ROOM_MEMBER',
+        message: 'Both participants must be members of this room',
+      });
+      return;
+    }
+
     const redis = this.redisService.getClient();
     if (redis) {
+      // NX: a meetingId already backing a live call belongs to whoever claimed
+      // it first — a second inviter can't overwrite the parties on it.
+      const claimed = await redis.hsetnx(
+        this.callKey(data.meetingId),
+        'callerId',
+        userId,
+      );
+      if (!claimed) {
+        client.emit('call:error', {
+          code: 'CALL_ALREADY_ACTIVE',
+          message: 'This call is already in progress',
+        });
+        return;
+      }
       const pipeline = redis.pipeline();
       pipeline.hset(this.callKey(data.meetingId), {
-        callerId: userId,
         calleeId: data.targetUserId,
         roomId: data.roomId,
         kind: data.kind,
@@ -777,32 +1087,75 @@ export class EventsGateway
       pipeline.expire(this.callKey(data.meetingId), 3600);
       await pipeline.exec();
     }
-    this.server.to(`user:${data.targetUserId}`).emit('call:incoming', { ...data, fromUserId: userId });
+    this.server.to(`user:${data.targetUserId}`).emit('call:incoming', {
+      meetingId: data.meetingId,
+      roomId: data.roomId,
+      kind: data.kind,
+      targetUserId: data.targetUserId,
+      fromUserId: userId,
+    });
   }
 
   @SubscribeMessage('call:accept')
-  async handleDirectCallAccept(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallAccept(
+    @MessageBody() data: DirectCallDto,
+    @ConnectedSocket() client: Socket,
+  ) {
     const userId = client.data?.userId;
     if (!userId) return;
+    // Only the invited callee can accept, and only the caller gets told.
+    const state = await this.getOwnCallState(data.meetingId, userId);
+    if (!state || state.calleeId !== userId) return;
+
     const redis = this.redisService.getClient();
-    if (redis) await redis.hset(this.callKey(data.meetingId), 'answeredAt', Date.now());
-    this.server.to(`user:${data.targetUserId}`).emit('call:accepted', { ...data, fromUserId: userId });
+    if (redis)
+      await redis.hset(this.callKey(data.meetingId), 'answeredAt', Date.now());
+    this.server.to(`user:${state.callerId}`).emit('call:accepted', {
+      meetingId: data.meetingId,
+      roomId: state.roomId,
+      kind: state.kind,
+      fromUserId: userId,
+    });
   }
 
   @SubscribeMessage('call:decline')
-  async handleDirectCallDecline(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallDecline(
+    @MessageBody() data: DirectCallDto,
+    @ConnectedSocket() client: Socket,
+  ) {
     const userId = client.data?.userId;
     if (!userId) return;
-    await this.finalizeDirectCall(data.meetingId, 'declined');
-    this.server.to(`user:${data.targetUserId}`).emit('call:declined', { ...data, fromUserId: userId });
+    const state = await this.getOwnCallState(data.meetingId, userId);
+    if (!state) return;
+
+    const peerId = state.callerId === userId ? state.calleeId : state.callerId;
+    await this.finalizeDirectCall(data.meetingId, 'declined', userId);
+    this.server.to(`user:${peerId}`).emit('call:declined', {
+      meetingId: data.meetingId,
+      roomId: state.roomId,
+      kind: state.kind,
+      fromUserId: userId,
+    });
   }
 
   @SubscribeMessage('call:end')
-  async handleDirectCallEnd(@MessageBody() data: DirectCallDto, @ConnectedSocket() client: Socket) {
+  async handleDirectCallEnd(
+    @MessageBody() data: DirectCallDto,
+    @ConnectedSocket() client: Socket,
+  ) {
     const userId = client.data?.userId;
     if (!userId) return;
-    await this.finalizeDirectCall(data.meetingId, 'ended');
-    this.server.to(`user:${data.targetUserId}`).emit('call:ended', { ...data, fromUserId: userId });
+    const state = await this.getOwnCallState(data.meetingId, userId);
+    if (!state) return;
+
+    const peerId = state.callerId === userId ? state.calleeId : state.callerId;
+    await this.finalizeDirectCall(data.meetingId, 'ended', userId);
+    this.server.to(`user:${peerId}`).emit('call:ended', {
+      meetingId: data.meetingId,
+      roomId: state.roomId,
+      kind: state.kind,
+      fromUserId: userId,
+    });
   }
 
   /**
@@ -811,33 +1164,57 @@ export class EventsGateway
    * whether the callee ever accepted (answeredAt), read from the state
    * call:invite/call:accept wrote to Redis. Idempotent: the key is deleted
    * after the first finalize, so an accidental double-fire is a no-op.
+   *
+   * `actorId` must be one of the call's own parties — the roomId/callerId this
+   * writes a message as come from Redis state, never from the socket payload,
+   * so an outsider can neither end someone else's call nor have a message
+   * attributed to a user in a room they don't belong to.
    */
-  private async finalizeDirectCall(meetingId: string, reason: 'declined' | 'ended') {
+  private async finalizeDirectCall(
+    meetingId: string,
+    reason: 'declined' | 'ended',
+    actorId: string,
+  ) {
     const redis = this.redisService.getClient();
     if (!redis) return;
     const state = await redis.hgetall(this.callKey(meetingId));
     if (!state.callerId) return;
+    if (state.callerId !== actorId && state.calleeId !== actorId) return;
     await redis.del(this.callKey(meetingId));
 
     const { callerId, roomId, kind, answeredAt } = state;
     let systemMetadata: Record<string, unknown>;
     let content: string;
     if (answeredAt) {
-      const durationSeconds = Math.max(0, Math.round((Date.now() - Number(answeredAt)) / 1000));
+      const durationSeconds = Math.max(
+        0,
+        Math.round((Date.now() - Number(answeredAt)) / 1000),
+      );
       systemMetadata = { kind: 'call_ended', callType: kind, durationSeconds };
       content = `Call ended (${durationSeconds}s)`;
     } else {
-      const outcomeKind = reason === 'declined' ? 'declined_call' : 'missed_call';
+      const outcomeKind =
+        reason === 'declined' ? 'declined_call' : 'missed_call';
       systemMetadata = { kind: outcomeKind, callType: kind };
-      content = outcomeKind === 'declined_call' ? 'Declined call' : 'Missed call';
+      content =
+        outcomeKind === 'declined_call' ? 'Declined call' : 'Missed call';
     }
 
     try {
-      const message = await this.messageService.createSystemMessage(roomId, callerId, content, 'call', systemMetadata);
+      const message = await this.messageService.createSystemMessage(
+        roomId,
+        callerId,
+        content,
+        'call',
+        systemMetadata,
+      );
       this.server.to(`room:${roomId}`).emit('new_message', message);
       await this.broadcastToRoomMembers(roomId, 'new_message', message);
     } catch (err) {
-      this.logger.error(`Failed to record call outcome for meeting ${meetingId}`, err);
+      this.logger.error(
+        `Failed to record call outcome for meeting ${meetingId}`,
+        err,
+      );
     }
   }
 
@@ -848,13 +1225,20 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
 
-    this.server.to(`meeting:${data.meetingId}:user:${data.targetUserId}`).emit('meeting:ice-candidate', {
-      meetingId: data.meetingId,
-      fromUserId: userId,
-      candidate: data.candidate,
-    });
+    this.server
+      .to(`meeting:${data.meetingId}:user:${data.targetUserId}`)
+      .emit('meeting:ice-candidate', {
+        meetingId: data.meetingId,
+        fromUserId: userId,
+        candidate: data.candidate,
+      });
   }
 
   // ─── Meeting: toggle audio / video / screen ───────────
@@ -864,7 +1248,12 @@ export class EventsGateway
     @ConnectedSocket() client: Socket,
   ) {
     const userId = client.data?.userId;
-    if (!userId || client.data?.meetingId !== data.meetingId || !client.rooms.has(`meeting:${data.meetingId}`)) return;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
 
     client.to(`meeting:${data.meetingId}`).emit('meeting:toggled', {
       meetingId: data.meetingId,
@@ -875,27 +1264,37 @@ export class EventsGateway
   }
 
   // ─── Internal: clean up meeting state ────────────────
-  private async leaveMeeting(client: Socket, userId: string, meetingId: string) {
+  private async leaveMeeting(
+    client: Socket,
+    userId: string,
+    meetingId: string,
+  ) {
     delete client.data.meetingId;
     await client.leave(`meeting:${meetingId}:user:${userId}`);
     await client.leave(`meeting:${meetingId}`);
 
     // Check if the user has any other sockets still in the meeting
     // (multiple tabs/devices) before marking them as left in the DB.
-    const sockets = await this.server.in(`meeting:${meetingId}:user:${userId}`).fetchSockets();
+    const sockets = await this.server
+      .in(`meeting:${meetingId}:user:${userId}`)
+      .fetchSockets();
     if (sockets.length === 0) {
       // Persist leftAt so REST reads (participant list, capacity count,
       // host-leaves-ends-meeting logic) stay consistent with WS presence.
       // Swallow errors: the participant row may not exist if this socket
       // never completed a validated join (e.g. it disconnected mid-join).
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
-      client.to(`meeting:${meetingId}`).emit('meeting:user-left', { meetingId, userId });
+      client
+        .to(`meeting:${meetingId}`)
+        .emit('meeting:user-left', { meetingId, userId });
       this.logger.log(`User ${userId} left meeting ${meetingId}`);
 
       await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
       const wsIds: string[] = client.data?.workspaceIds || [];
       wsIds.forEach((wsId) =>
-        this.server.to(`workspace:${wsId}`).emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
+        this.server
+          .to(`workspace:${wsId}`)
+          .emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
       );
     }
   }
@@ -905,8 +1304,9 @@ export class EventsGateway
     const sockets = await this.server.in(`meeting:${meetingId}`).fetchSockets();
     for (const s of sockets) {
       delete s.data.meetingId;
-      await s.leave(`meeting:${meetingId}`);
-      if (s.data?.userId) await s.leave(`meeting:${meetingId}:user:${s.data.userId}`);
+      // RemoteSocket#leave is synchronous, unlike Socket#leave.
+      s.leave(`meeting:${meetingId}`);
+      if (s.data?.userId) s.leave(`meeting:${meetingId}:user:${s.data.userId}`);
     }
   }
 
@@ -922,17 +1322,29 @@ export class EventsGateway
     this.server?.to(`user:${userId}`)?.emit(event, payload);
   }
 
-  /** Notify the meeting host + any co-hosts (e.g. a new waiting-room join request). */
+  /**
+   * Notify the meeting host + any co-hosts (e.g. a new waiting-room join
+   * request).
+   *
+   * Callers treat this as fire-and-forget after the real work has already been
+   * committed, so it must not reject: it hits the DB, and an unhandled
+   * rejection from a background notify would take the process down (Node's
+   * default) over an event nobody was waiting on.
+   */
   async notifyMeetingHosts(meetingId: string, event: string, payload: unknown) {
-    const rows: Array<{ userId: string }> = await this.dataSource.query(
-      `SELECT host_id AS "userId" FROM meetings WHERE id = $1
-       UNION
-       SELECT user_id AS "userId" FROM meeting_participants
-       WHERE meeting_id = $1 AND role = 'co_host' AND left_at IS NULL`,
-      [meetingId],
-    );
-    for (const { userId } of rows) {
-      this.sendToUser(userId, event, payload);
+    try {
+      const rows: Array<{ userId: string }> = await this.dataSource.query(
+        `SELECT host_id AS "userId" FROM meetings WHERE id = $1
+         UNION
+         SELECT user_id AS "userId" FROM meeting_participants
+         WHERE meeting_id = $1 AND role = 'co_host' AND left_at IS NULL`,
+        [meetingId],
+      );
+      for (const { userId } of rows) {
+        this.sendToUser(userId, event, payload);
+      }
+    } catch (err) {
+      this.logger.error(`Failed to notify hosts of meeting ${meetingId}`, err);
     }
   }
 
@@ -952,12 +1364,9 @@ export class EventsGateway
     return sockets ? sockets.length > 0 : false;
   }
 
-  /** Get all currently online user IDs (Note: Can be expensive, avoid frequent use) */
-  async getOnlineUsers(): Promise<string[]> {
-    // We cannot efficiently query ALL online users across a cluster easily without storing it in Redis.
-    // Instead of iterating all rooms, we could rely on a Redis set.
-    // But since this was only an in-memory Set before, if it's unused, we can just return empty for now,
-    // or we'd need to maintain a Redis Set of online users if really needed.
-    return [];
+  /** Check how many sockets a user currently has open across the cluster. */
+  async countUserSockets(userId: string): Promise<number> {
+    const sockets = await this.server?.in(`user:${userId}`)?.fetchSockets();
+    return sockets?.length ?? 0;
   }
 }

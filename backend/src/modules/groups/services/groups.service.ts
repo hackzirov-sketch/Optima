@@ -22,9 +22,16 @@ export class GroupsService {
   ) {}
 
   async create(userId: string, dto: CreateGroupDto): Promise<Group> {
-    const wsMember = await this.groupsRepository.findWorkspaceMember(dto.workspaceId, userId);
+    const wsMember = await this.groupsRepository.findWorkspaceMember(
+      dto.workspaceId,
+      userId,
+    );
 
-    if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+    if (!wsMember)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a workspace member',
+      });
     this.permission.assertCanManageWorkspace(wsMember);
 
     return this.groupsRepository.create(dto, userId, wsMember.role);
@@ -34,42 +41,80 @@ export class GroupsService {
     workspaceId: string,
     userId: string,
   ): Promise<Group[]> {
-    const wsMember = await this.groupsRepository.findWorkspaceMember(workspaceId, userId);
+    const wsMember = await this.groupsRepository.findWorkspaceMember(
+      workspaceId,
+      userId,
+    );
 
     if (!wsMember) {
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a member of this workspace',
+      });
     }
 
     // All workspace members can see all groups for now, since UPZ groups are not private.
     return this.groupsRepository.findAllInWorkspace(workspaceId);
   }
 
-  async findById(id: string, userId: string): Promise<Group & { members: any[] }> {
+  async findById(
+    id: string,
+    userId: string,
+  ): Promise<Group & { members: any[] }> {
     const group = await this.groupsRepository.findById(id);
 
     if (!isActiveEntity(group)) {
-      throw new NotFoundException({ code: ErrorCode.GROUP_NOT_FOUND, message: 'Group not found' });
+      throw new NotFoundException({
+        code: ErrorCode.GROUP_NOT_FOUND,
+        message: 'Group not found',
+      });
     }
 
-    const wsMember = await this.groupsRepository.findWorkspaceMember(group.workspaceId, userId);
+    const wsMember = await this.groupsRepository.findWorkspaceMember(
+      group.workspaceId,
+      userId,
+    );
     if (!wsMember) {
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a member of this workspace',
+      });
     }
 
     const memberRows = await this.groupsRepository.findMembersWithUser(id);
 
     const members = memberRows.map((m) => {
       const { u_id, u_firstName, u_lastName, u_avatarUrl, ...rest } = m;
-      return { ...rest, user: u_id ? { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl } : null };
+      return {
+        ...rest,
+        user: u_id
+          ? {
+              id: u_id,
+              firstName: u_firstName,
+              lastName: u_lastName,
+              avatarUrl: u_avatarUrl,
+            }
+          : null,
+      };
     });
 
     return { ...group, members };
   }
 
-  private async assertCanManage(group: Group, requesterId: string): Promise<void> {
+  private async assertCanManage(
+    group: Group,
+    requesterId: string,
+  ): Promise<void> {
     if (group.createdById !== requesterId) {
-      const wsMember = await this.groupsRepository.findWorkspaceMember(group.workspaceId, requesterId);
-      if (!wsMember) throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a workspace member' });
+      const wsMember = await this.groupsRepository.findWorkspaceMember(
+        group.workspaceId,
+        requesterId,
+      );
+      if (!wsMember)
+        throw new ForbiddenException({
+          code: ErrorCode.NOT_WORKSPACE_MEMBER,
+          message: 'Not a workspace member',
+        });
       this.permission.assertCanManageWorkspace(wsMember);
     }
   }
@@ -82,7 +127,10 @@ export class GroupsService {
     const group = await this.findById(id, userId);
     await this.assertCanManage(group, userId);
 
-    const updated = await this.groupsRepository.update(id, dto as Record<string, unknown>);
+    const updated = await this.groupsRepository.update(
+      id,
+      dto as Record<string, unknown>,
+    );
     return updated ?? group;
   }
 
@@ -103,7 +151,10 @@ export class GroupsService {
     await this.assertCanManage(group, requesterId);
 
     // Must be a workspace member to be added
-    const targetWsMember = await this.groupsRepository.findWorkspaceMember(group.workspaceId, userIdToAdd);
+    const targetWsMember = await this.groupsRepository.findWorkspaceMember(
+      group.workspaceId,
+      userIdToAdd,
+    );
 
     if (!targetWsMember) {
       throw new NotFoundException({
@@ -112,13 +163,23 @@ export class GroupsService {
       });
     }
 
-    const existing = await this.groupsRepository.findMembership(id, userIdToAdd);
+    const existing = await this.groupsRepository.findMembership(
+      id,
+      userIdToAdd,
+    );
 
     if (existing) {
-      throw new ConflictException({ code: ErrorCode.GROUP_ALREADY_MEMBER, message: 'User is already a member of this group' });
+      throw new ConflictException({
+        code: ErrorCode.GROUP_ALREADY_MEMBER,
+        message: 'User is already a member of this group',
+      });
     }
 
-    return this.groupsRepository.addMember(id, userIdToAdd, role || WorkspaceRole.JUNIOR);
+    return this.groupsRepository.addMember(
+      id,
+      userIdToAdd,
+      role || WorkspaceRole.JUNIOR,
+    );
   }
 
   async removeMember(
@@ -134,13 +195,22 @@ export class GroupsService {
     }
 
     if (userIdToRemove === group.createdById) {
-      throw new ConflictException({ code: ErrorCode.GROUP_OWNER_REMOVE, message: 'Cannot remove the group owner' });
+      throw new ConflictException({
+        code: ErrorCode.GROUP_OWNER_REMOVE,
+        message: 'Cannot remove the group owner',
+      });
     }
 
-    const membership = await this.groupsRepository.findMembership(id, userIdToRemove);
+    const membership = await this.groupsRepository.findMembership(
+      id,
+      userIdToRemove,
+    );
 
     if (!membership) {
-      throw new NotFoundException({ code: ErrorCode.GROUP_MEMBER_NOT_FOUND, message: 'User is not a member of this group' });
+      throw new NotFoundException({
+        code: ErrorCode.GROUP_MEMBER_NOT_FOUND,
+        message: 'User is not a member of this group',
+      });
     }
 
     await this.groupsRepository.removeMember(id, userIdToRemove);

@@ -18,7 +18,7 @@ export const REMINDER_QUEUE = 'reminders';
 
 export interface ReminderJobData {
   type: ReminderJobType;
-  entityId: string;   // meetingId or taskId
+  entityId: string; // meetingId or taskId
   userIds?: string[]; // override — if not set, fetched from DB
 }
 
@@ -55,12 +55,19 @@ export class ReminderProcessor extends WorkerHost {
 
   // ── Meeting reminders ────────────────────────────────────────────────────────
 
-  private async processMeetingReminder(type: ReminderJobType, meetingId: string): Promise<void> {
-    const meetingRows: Array<{ id: string; title: string | null; startTime: Date | null; hostId: string }> =
-      await this.dataSource.query(
-        `SELECT id, title, start_time AS "startTime", host_id AS "hostId" FROM meetings WHERE id = $1`,
-        [meetingId],
-      );
+  private async processMeetingReminder(
+    type: ReminderJobType,
+    meetingId: string,
+  ): Promise<void> {
+    const meetingRows: Array<{
+      id: string;
+      title: string | null;
+      startTime: Date | null;
+      hostId: string;
+    }> = await this.dataSource.query(
+      `SELECT id, title, start_time AS "startTime", host_id AS "hostId" FROM meetings WHERE id = $1`,
+      [meetingId],
+    );
     const meeting = meetingRows[0];
 
     if (!meeting) {
@@ -78,7 +85,9 @@ export class ReminderProcessor extends WorkerHost {
       `SELECT user_id AS "userId" FROM meeting_participants WHERE meeting_id = $1`,
       [meetingId],
     );
-    const userIds = [...new Set([meeting.hostId, ...participants.map((p) => p.userId)])];
+    const userIds = [
+      ...new Set([meeting.hostId, ...participants.map((p) => p.userId)]),
+    ];
 
     const config = MEETING_REMINDER_CONFIG[type];
     if (!config) return;
@@ -87,7 +96,10 @@ export class ReminderProcessor extends WorkerHost {
       await this.sendReminder({
         userId,
         title: config.title,
-        message: config.getMessage(meeting.title ?? 'Meeting', meeting.startTime ?? undefined),
+        message: config.getMessage(
+          meeting.title ?? 'Meeting',
+          meeting.startTime ?? undefined,
+        ),
         category: NotificationCategory.MEETING,
         priority: config.priority,
         forceChannels: config.forceChannels,
@@ -100,16 +112,23 @@ export class ReminderProcessor extends WorkerHost {
 
   // ── Task reminders ───────────────────────────────────────────────────────────
 
-  private async processTaskReminder(type: ReminderJobType, taskId: string): Promise<void> {
+  private async processTaskReminder(
+    type: ReminderJobType,
+    taskId: string,
+  ): Promise<void> {
     // NOTE: Task has a single `assigneeId` (not a many-to-many `assignees`
     // relation — that relation doesn't exist on the entity). The previous
     // version of this method referenced `relations: ['assignees']`, which
     // would have thrown at runtime the first time this job ran.
-    const taskRows: Array<{ id: string; title: string | null; dueDate: Date | null; assigneeId: string | null }> =
-      await this.dataSource.query(
-        `SELECT id, title, due_date AS "dueDate", assignee_id AS "assigneeId" FROM tasks WHERE id = $1 AND deleted_at IS NULL`,
-        [taskId],
-      );
+    const taskRows: Array<{
+      id: string;
+      title: string | null;
+      dueDate: Date | null;
+      assigneeId: string | null;
+    }> = await this.dataSource.query(
+      `SELECT id, title, due_date AS "dueDate", assignee_id AS "assigneeId" FROM tasks WHERE id = $1 AND deleted_at IS NULL`,
+      [taskId],
+    );
     const task = taskRows[0];
 
     if (!task) {
@@ -158,12 +177,21 @@ export class ReminderProcessor extends WorkerHost {
       if (client) {
         const exists = await client.get(dedupKey);
         if (exists) {
-          this.logger.log(`Dedup: skipping ${params.notifType} for user=${params.userId}`);
+          this.logger.log(
+            `Dedup: skipping ${params.notifType} for user=${params.userId}`,
+          );
           return;
         }
         await client.set(dedupKey, '1', 'EX', 120);
       }
-    } catch {}
+    } catch (e) {
+      // Redis is a cache here, not the source of truth — the reminder dedup check
+      // failing must not break the caller. Logged rather than swallowed
+      // silently, so an outage is visible instead of just slow.
+      this.logger.warn(
+        `Redis unavailable while the reminder dedup check: ${e instanceof Error ? e.message : e}`,
+      );
+    }
 
     const notif = await this.notifService.create({
       userId: params.userId,
@@ -188,16 +216,22 @@ export class ReminderProcessor extends WorkerHost {
 
 // ── Config tables ─────────────────────────────────────────────────────────────
 
-const MEETING_REMINDER_CONFIG: Partial<Record<ReminderJobType, {
-  title: string;
-  priority: NotificationPriority;
-  forceChannels?: NotificationChannel[];
-  getMessage: (title: string, date?: Date) => string;
-}>> = {
+const MEETING_REMINDER_CONFIG: Partial<
+  Record<
+    ReminderJobType,
+    {
+      title: string;
+      priority: NotificationPriority;
+      forceChannels?: NotificationChannel[];
+      getMessage: (title: string, date?: Date) => string;
+    }
+  >
+> = {
   [ReminderJobType.MEETING_24H]: {
     title: '📅 Meeting eslatmasi (24 soat)',
     priority: NotificationPriority.NORMAL,
-    getMessage: (title) => `"${title}" meeting ertaga boshlanadi. Tayyorgarlik ko'ring!`,
+    getMessage: (title) =>
+      `"${title}" meeting ertaga boshlanadi. Tayyorgarlik ko'ring!`,
   },
   [ReminderJobType.MEETING_3H]: {
     title: '🟡 Meeting eslatmasi (3 soat)',
@@ -207,7 +241,8 @@ const MEETING_REMINDER_CONFIG: Partial<Record<ReminderJobType, {
   [ReminderJobType.MEETING_30M]: {
     title: '🔴 Meeting boshlanadigu! (30 daqiqa)',
     priority: NotificationPriority.CRITICAL, // triggers SMS
-    getMessage: (title) => `"${title}" 30 daqiqadan keyin! Kirish havolasini tekshiring.`,
+    getMessage: (title) =>
+      `"${title}" 30 daqiqadan keyin! Kirish havolasini tekshiring.`,
   },
   [ReminderJobType.MEETING_5M]: {
     title: '🚨 Meeting hozir boshlanadi!',
@@ -217,15 +252,21 @@ const MEETING_REMINDER_CONFIG: Partial<Record<ReminderJobType, {
   },
 };
 
-const TASK_REMINDER_CONFIG: Partial<Record<ReminderJobType, {
-  title: string;
-  priority: NotificationPriority;
-  getMessage: (title: string) => string;
-}>> = {
+const TASK_REMINDER_CONFIG: Partial<
+  Record<
+    ReminderJobType,
+    {
+      title: string;
+      priority: NotificationPriority;
+      getMessage: (title: string) => string;
+    }
+  >
+> = {
   [ReminderJobType.TASK_3D]: {
     title: '📋 Task deadline (3 kun)',
     priority: NotificationPriority.NORMAL,
-    getMessage: (title) => `"${title}" taskining deadline 3 kunda. Rejalashtiring!`,
+    getMessage: (title) =>
+      `"${title}" taskining deadline 3 kunda. Rejalashtiring!`,
   },
   [ReminderJobType.TASK_1D]: {
     title: '⚠️ Task deadline ertaga!',
@@ -235,6 +276,7 @@ const TASK_REMINDER_CONFIG: Partial<Record<ReminderJobType, {
   [ReminderJobType.TASK_2H]: {
     title: '🔴 Task deadline 2 soatda!',
     priority: NotificationPriority.HIGH,
-    getMessage: (title) => `"${title}" deadline 2 soatdan keyin. So'nggi imkoniyat!`,
+    getMessage: (title) =>
+      `"${title}" deadline 2 soatdan keyin. So'nggi imkoniyat!`,
   },
 };

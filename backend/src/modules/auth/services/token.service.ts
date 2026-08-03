@@ -32,7 +32,10 @@ export class TokenService {
     private deviceService: DeviceService,
   ) {}
 
-  async buildJwtPair(user: User, workspaceId?: string): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
+  async buildJwtPair(
+    user: User,
+    workspaceId?: string,
+  ): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     const jti = crypto.randomUUID();
     const payload = { sub: user.id, email: user.email, jti, workspaceId };
     // Parallel JWT signing (both are CPU-bound, independent)
@@ -46,10 +49,18 @@ export class TokenService {
     return { accessToken, refreshToken, jti };
   }
 
-  async generateTokens(user: User, ctx: TokenContext = {}, workspaceId?: string) {
-    const refreshExpires = this.configService.get<string>('jwt.refreshExpires') || '7d';
+  async generateTokens(
+    user: User,
+    ctx: TokenContext = {},
+    workspaceId?: string,
+  ) {
+    const refreshExpires =
+      this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));
-    const deviceInfo = this.deviceService.parseDeviceInfo(ctx.userAgent, ctx.deviceName);
+    const deviceInfo = this.deviceService.parseDeviceInfo(
+      ctx.userAgent,
+      ctx.deviceName,
+    );
 
     // Parallel: enforceSessionLimit + buildJwtPair (independent)
     const [{ accessToken, refreshToken }] = await Promise.all([
@@ -57,19 +68,28 @@ export class TokenService {
       this.sessionService.enforceSessionLimit(user.id),
     ]);
 
-    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
 
     // Must complete before we hand the refreshToken back to the client — otherwise
     // a client that refreshes again within milliseconds (e.g. two visibilitychange
     // events firing back-to-back) can race findByTokenHash() against this INSERT
     // and get a spurious "invalid token" 401, wiping the session it was just given.
-    await this.sessionService.persistRefreshToken(user.id, tokenHash, expiresAt, ctx, deviceInfo);
+    await this.sessionService.persistRefreshToken(
+      user.id,
+      tokenHash,
+      expiresAt,
+      ctx,
+      deviceInfo,
+    );
 
     // SECURITY: raw-SQL rows are plain objects, not User class instances, so the
     // @Exclude() on User.passwordHash is NOT applied by ClassSerializerInterceptor.
     // Strip it explicitly here — this is the single choke point every login/register/
     // oauth/refresh flow returns through.
-    const { passwordHash: _omit, ...safeUser } = user;
+    const { passwordHash: _passwordHash, ...safeUser } = user;
 
     return {
       requiresPasswordSetup: user.needsPasswordSetup,
@@ -82,7 +102,10 @@ export class TokenService {
   async verifyAccessToken(token: string): Promise<string | null> {
     try {
       const secret = this.configService.get<string>('jwt.accessSecret');
-      const decoded = await this.jwtService.verifyAsync<{ sub?: string }>(token, { secret });
+      const decoded = await this.jwtService.verifyAsync<{ sub?: string }>(
+        token,
+        { secret },
+      );
       return decoded?.sub || null;
     } catch {
       return null;
@@ -145,14 +168,18 @@ export class TokenService {
       });
     }
 
-    return this.generateTokens(storedToken.user, {
-      ip: storedToken.ipAddress ?? undefined,
-      userAgent: storedToken.userAgent ?? undefined,
-      deviceName: storedToken.deviceName ?? undefined,
-      provider: storedToken.provider ?? 'jwt-refresh',
-      // Carry the active workspace forward across rotation — otherwise every
-      // silent refresh would drop the user back to "no workspace selected".
-    }, workspaceId);
+    return this.generateTokens(
+      storedToken.user,
+      {
+        ip: storedToken.ipAddress ?? undefined,
+        userAgent: storedToken.userAgent ?? undefined,
+        deviceName: storedToken.deviceName ?? undefined,
+        provider: storedToken.provider ?? 'jwt-refresh',
+        // Carry the active workspace forward across rotation — otherwise every
+        // silent refresh would drop the user back to "no workspace selected".
+      },
+      workspaceId,
+    );
   }
 
   async logout(refreshToken: string, accessToken?: string) {
@@ -160,7 +187,7 @@ export class TokenService {
       .createHash('sha256')
       .update(refreshToken)
       .digest('hex');
-    
+
     await this.sessionService.revokeSessionByTokenHash(tokenHash);
 
     if (accessToken) {

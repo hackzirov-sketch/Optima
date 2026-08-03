@@ -41,11 +41,12 @@ export class AuthRateLimitGuard implements CanActivate {
     const { action, maxAttempts, windowSeconds, blockSeconds } = options;
 
     // OPTIMIZED: Pipeline checkBlock + incrementFailures in one Redis round trip
-    const [blockTtl, count] = await this.redisService.checkAndIncrementRateLimit(
-      action,
-      ip,
-      windowSeconds,
-    );
+    const [blockTtl, count] =
+      await this.redisService.checkAndIncrementRateLimit(
+        action,
+        ip,
+        windowSeconds,
+      );
 
     if (blockTtl !== null) {
       throw new HttpException(

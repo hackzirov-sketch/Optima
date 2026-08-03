@@ -18,8 +18,15 @@ import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
 import { PermissionService } from '../../common/services/permission.service';
 import { AuditService } from '../../common/services/audit.service';
-import { PROJECT_COLUMNS_SQL, PROJECT_COLUMNS_SQL_P, PROJECT_COLUMN_COLUMNS_SQL } from './projects.sql';
-import { buildUpdateSet, normalizeReturning } from '../../common/utils/sql.util';
+import {
+  PROJECT_COLUMNS_SQL,
+  PROJECT_COLUMNS_SQL_P,
+  PROJECT_COLUMN_COLUMNS_SQL,
+} from './projects.sql';
+import {
+  buildUpdateSet,
+  normalizeReturning,
+} from '../../common/utils/sql.util';
 
 @Injectable()
 export class ProjectsService {
@@ -38,7 +45,10 @@ export class ProjectsService {
     return rows[0] ?? null;
   }
 
-  private async getWorkspaceMember(workspaceId: string, userId: string): Promise<WorkspaceMember | null> {
+  private async getWorkspaceMember(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceMember | null> {
     const rows: WorkspaceMember[] = await this.dataSource.query(
       `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role,
               joined_at AS "joinedAt", created_at AS "createdAt", updated_at AS "updatedAt"
@@ -56,20 +66,29 @@ export class ProjectsService {
     const project = await this.findProjectRow(projectId);
 
     if (!isActiveEntity(project)) {
-      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
+      throw new NotFoundException({
+        code: ErrorCode.PROJECT_NOT_FOUND,
+        message: 'Project not found',
+      });
     }
 
     const wsMember = await this.getWorkspaceMember(project.workspaceId, userId);
 
     if (!wsMember) {
-      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'You do not have access to this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
+        message: 'You do not have access to this workspace',
+      });
     }
 
     if (requireAdmin && project.createdById !== userId) {
       this.permission.assertCanManageProject(wsMember);
     }
 
-    const isAdminOrOwner = this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN);
+    const isAdminOrOwner = this.permission.isAtLeast(
+      wsMember,
+      WorkspaceRole.ADMIN,
+    );
 
     if (project.groupId && !isAdminOrOwner) {
       const groupMemberRows = await this.dataSource.query(
@@ -90,13 +109,20 @@ export class ProjectsService {
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
     await this.contentFilter.filterText(dto.name, userId, 'project_name');
     if (dto.description) {
-      await this.contentFilter.filterText(dto.description, userId, 'project_description');
+      await this.contentFilter.filterText(
+        dto.description,
+        userId,
+        'project_description',
+      );
     }
 
     const wsMember = await this.getWorkspaceMember(dto.workspaceId, userId);
 
     if (!wsMember) {
-      throw new ForbiddenException({ code: ErrorCode.WORKSPACE_ACCESS_DENIED, message: 'You do not have access to this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
+        message: 'You do not have access to this workspace',
+      });
     }
 
     if (dto.groupId) {
@@ -106,15 +132,22 @@ export class ProjectsService {
           [dto.groupId, userId],
         );
         if (!groupMemberRows[0]) {
-          throw new ForbiddenException({ code: ErrorCode.GROUP_ACCESS_DENIED, message: 'You do not have access to this group' });
+          throw new ForbiddenException({
+            code: ErrorCode.GROUP_ACCESS_DENIED,
+            message: 'You do not have access to this group',
+          });
         }
       }
     }
 
     const slug = dto.slug
       ? dto.slug
-      : dto.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') +
-        '-' + Date.now().toString(36);
+      : dto.name
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '') +
+        '-' +
+        Date.now().toString(36);
 
     const existingProject = await this.dataSource.query(
       `SELECT id FROM projects WHERE workspace_id = $1 AND slug = $2`,
@@ -122,14 +155,16 @@ export class ProjectsService {
     );
 
     if (existingProject[0]) {
-      throw new ConflictException(
-        { code: ErrorCode.PROJECT_SLUG_TAKEN, message: 'Project with this slug already exists in the workspace' },
-      );
+      throw new ConflictException({
+        code: ErrorCode.PROJECT_SLUG_TAKEN,
+        message: 'Project with this slug already exists in the workspace',
+      });
     }
 
-    const savedProject = await this.dataSource.withTransaction(async (query) => {
-      const savedRows: Project[] = await query(
-        `INSERT INTO projects
+    const savedProject = await this.dataSource.withTransaction(
+      async (query) => {
+        const savedRows: Project[] = await query(
+          `INSERT INTO projects
            (workspace_id, group_id, name, slug, description,
             status, priority, start_date, deadline, created_by)
          VALUES ($1, $2, $3, $4, $5,
@@ -137,39 +172,66 @@ export class ProjectsService {
                  COALESCE($7, 'medium')::projects_priority_enum,
                  $8, $9, $10)
          RETURNING ${PROJECT_COLUMNS_SQL}`,
-        [
-          dto.workspaceId,
-          dto.groupId ?? null,
-          dto.name,
-          slug,
-          dto.description ?? null,
-          dto.status ?? null,
-          dto.priority ?? null,
-          dto.startDate ?? null,
-          dto.deadline ?? null,
-          userId,
-        ],
-      );
-      const savedProject = savedRows[0];
-
-      // Create default columns
-      const defaultColumns = [
-        { name: 'To Do', position: 0, isDefault: true, mapsToStatus: TaskStatus.TODO },
-        { name: 'In Progress', position: 1, isDefault: true, mapsToStatus: TaskStatus.IN_PROGRESS },
-        { name: 'Review', position: 2, isDefault: false, mapsToStatus: TaskStatus.REVIEW },
-        { name: 'Done', position: 3, isDefault: true, mapsToStatus: TaskStatus.DONE },
-      ];
-
-      for (const col of defaultColumns) {
-        await query(
-          `INSERT INTO project_columns (project_id, name, position, is_default, maps_to_status)
-           VALUES ($1, $2, $3, $4, $5::project_columns_maps_to_status_enum)`,
-          [savedProject.id, col.name, col.position, col.isDefault, col.mapsToStatus],
+          [
+            dto.workspaceId,
+            dto.groupId ?? null,
+            dto.name,
+            slug,
+            dto.description ?? null,
+            dto.status ?? null,
+            dto.priority ?? null,
+            dto.startDate ?? null,
+            dto.deadline ?? null,
+            userId,
+          ],
         );
-      }
+        const savedProject = savedRows[0];
 
-      return savedProject;
-    });
+        // Create default columns
+        const defaultColumns = [
+          {
+            name: 'To Do',
+            position: 0,
+            isDefault: true,
+            mapsToStatus: TaskStatus.TODO,
+          },
+          {
+            name: 'In Progress',
+            position: 1,
+            isDefault: true,
+            mapsToStatus: TaskStatus.IN_PROGRESS,
+          },
+          {
+            name: 'Review',
+            position: 2,
+            isDefault: false,
+            mapsToStatus: TaskStatus.REVIEW,
+          },
+          {
+            name: 'Done',
+            position: 3,
+            isDefault: true,
+            mapsToStatus: TaskStatus.DONE,
+          },
+        ];
+
+        for (const col of defaultColumns) {
+          await query(
+            `INSERT INTO project_columns (project_id, name, position, is_default, maps_to_status)
+           VALUES ($1, $2, $3, $4, $5::project_columns_maps_to_status_enum)`,
+            [
+              savedProject.id,
+              col.name,
+              col.position,
+              col.isDefault,
+              col.mapsToStatus,
+            ],
+          );
+        }
+
+        return savedProject;
+      },
+    );
     return this.findById(savedProject.id, userId);
   }
 
@@ -180,7 +242,10 @@ export class ProjectsService {
     const wsMember = await this.getWorkspaceMember(workspaceId, userId);
 
     if (!wsMember)
-      throw new ForbiddenException({ code: ErrorCode.NOT_WORKSPACE_MEMBER, message: 'Not a member of this workspace' });
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_WORKSPACE_MEMBER,
+        message: 'Not a member of this workspace',
+      });
 
     // Non-admins only see projects with no group, or group projects they belong to
     if (!this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN)) {
@@ -200,11 +265,18 @@ export class ProjectsService {
     );
   }
 
-  async findById(id: string, userId: string): Promise<Project & { columns: ProjectColumn[] }> {
+  async findById(
+    id: string,
+    userId: string,
+  ): Promise<Project & { columns: ProjectColumn[] }> {
     await this.checkProjectAccess(id, userId);
     const project = await this.findProjectRow(id);
 
-    if (!project) throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
+    if (!project)
+      throw new NotFoundException({
+        code: ErrorCode.PROJECT_NOT_FOUND,
+        message: 'Project not found',
+      });
 
     const columns: ProjectColumn[] = await this.dataSource.query(
       `SELECT ${PROJECT_COLUMN_COLUMNS_SQL} FROM project_columns WHERE project_id = $1 ORDER BY position ASC`,
@@ -227,9 +299,10 @@ export class ProjectsService {
         [project.workspaceId, dto.slug],
       );
       if (existingProject[0]) {
-        throw new ConflictException(
-          { code: ErrorCode.PROJECT_SLUG_TAKEN, message: 'Project with this slug already exists in the workspace' },
-        );
+        throw new ConflictException({
+          code: ErrorCode.PROJECT_SLUG_TAKEN,
+          message: 'Project with this slug already exists in the workspace',
+        });
       }
     }
 
@@ -286,7 +359,13 @@ export class ProjectsService {
       `INSERT INTO project_columns (project_id, name, color, maps_to_status, position)
        VALUES ($1, $2, $3, $4::project_columns_maps_to_status_enum, $5)
        RETURNING ${PROJECT_COLUMN_COLUMNS_SQL}`,
-      [projectId, dto.name, dto.color ?? null, dto.mapsToStatus ?? null, maxPosition + 1],
+      [
+        projectId,
+        dto.name,
+        dto.color ?? null,
+        dto.mapsToStatus ?? null,
+        maxPosition + 1,
+      ],
     );
     return rows[0];
   }
@@ -303,11 +382,19 @@ export class ProjectsService {
       `SELECT ${PROJECT_COLUMN_COLUMNS_SQL} FROM project_columns WHERE id = $1 AND project_id = $2`,
       [columnId, projectId],
     );
-    if (!columnRows[0]) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found' });
+    if (!columnRows[0])
+      throw new NotFoundException({
+        code: ErrorCode.COLUMN_NOT_FOUND,
+        message: 'Column not found',
+      });
 
-    const { setClause, values } = buildUpdateSet(dto as Record<string, unknown>, 2, {
-      maps_to_status: 'project_columns_maps_to_status_enum',
-    });
+    const { setClause, values } = buildUpdateSet(
+      dto as Record<string, unknown>,
+      2,
+      {
+        maps_to_status: 'project_columns_maps_to_status_enum',
+      },
+    );
     if (!setClause) return columnRows[0];
 
     const rows: ProjectColumn[] = normalizeReturning(
@@ -331,12 +418,21 @@ export class ProjectsService {
       [columnId, projectId],
     );
     const column = columnRows[0];
-    if (!column) throw new NotFoundException({ code: ErrorCode.COLUMN_NOT_FOUND, message: 'Column not found' });
+    if (!column)
+      throw new NotFoundException({
+        code: ErrorCode.COLUMN_NOT_FOUND,
+        message: 'Column not found',
+      });
 
     if (column.isDefault) {
-      throw new ConflictException({ code: ErrorCode.COLUMN_DEFAULT_DELETE, message: 'Cannot delete a default column' });
+      throw new ConflictException({
+        code: ErrorCode.COLUMN_DEFAULT_DELETE,
+        message: 'Cannot delete a default column',
+      });
     }
 
-    await this.dataSource.query(`DELETE FROM project_columns WHERE id = $1`, [columnId]);
+    await this.dataSource.query(`DELETE FROM project_columns WHERE id = $1`, [
+      columnId,
+    ]);
   }
 }

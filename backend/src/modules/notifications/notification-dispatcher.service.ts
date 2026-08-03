@@ -45,15 +45,10 @@ const PRIORITY_CHANNELS: Record<NotificationPriority, NotificationChannel[]> = {
     NotificationChannel.TELEGRAM,
     NotificationChannel.IN_APP,
   ],
-  [NotificationPriority.LOW]: [
-    NotificationChannel.IN_APP,
-  ],
+  [NotificationPriority.LOW]: [NotificationChannel.IN_APP],
 };
 
-/** Channels that bypass quiet hours */
-const QUIET_HOURS_BYPASS = new Set<NotificationChannel>([
-  // All channels for critical notifications bypass quiet hours
-]);
+/** Categories that bypass quiet hours */
 const QUIET_HOURS_BYPASS_CATEGORIES = new Set<NotificationCategory>([
   NotificationCategory.SECURITY,
 ]);
@@ -77,7 +72,8 @@ export class NotificationDispatcherService {
   // ── Main entry point ────────────────────────────────────────────────────────
 
   async dispatch(payload: DispatchPayload): Promise<void> {
-    const { userId, notificationId, forceChannels, priority, category } = payload;
+    const { userId, notificationId, forceChannels, priority, category } =
+      payload;
 
     let channels: NotificationChannel[];
 
@@ -92,22 +88,27 @@ export class NotificationDispatcherService {
       if (notificationId && channels.includes(NotificationChannel.SMS)) {
         const tgRead = await this.wasTelegramRead(notificationId);
         if (tgRead) {
-          this.logger.log(`Smart SMS suppressed for notif=${notificationId} (Telegram was read)`);
-          channels = channels.filter(c => c !== NotificationChannel.SMS);
+          this.logger.log(
+            `Smart SMS suppressed for notif=${notificationId} (Telegram was read)`,
+          );
+          channels = channels.filter((c) => c !== NotificationChannel.SMS);
         }
       }
 
       // Quiet hours check (skip for security/critical)
-      const isBypass = category === NotificationCategory.SECURITY
-        || priority === NotificationPriority.CRITICAL
-        || QUIET_HOURS_BYPASS_CATEGORIES.has(category);
+      const isBypass =
+        category === NotificationCategory.SECURITY ||
+        priority === NotificationPriority.CRITICAL ||
+        QUIET_HOURS_BYPASS_CATEGORIES.has(category);
 
       if (!isBypass) {
         const prefs2 = await this.getPrefs(userId);
         if (this.isInQuietHours(prefs2)) {
           // Only keep in_app during quiet hours (non-critical)
-          channels = channels.filter(c => c === NotificationChannel.IN_APP);
-          this.logger.log(`Quiet hours active for user=${userId}, suppressed external channels`);
+          channels = channels.filter((c) => c === NotificationChannel.IN_APP);
+          this.logger.log(
+            `Quiet hours active for user=${userId}, suppressed external channels`,
+          );
         }
       }
     }
@@ -115,21 +116,29 @@ export class NotificationDispatcherService {
     // Fire all channels in parallel
     await Promise.allSettled(
       channels
-        .filter(c => c !== NotificationChannel.IN_APP) // in_app handled by NotificationsService
-        .map(channel => this.sendToChannel(channel, payload)),
+        .filter((c) => c !== NotificationChannel.IN_APP) // in_app handled by NotificationsService
+        .map((channel) => this.sendToChannel(channel, payload)),
     );
   }
 
   // ── Channel dispatchers ─────────────────────────────────────────────────────
 
-  private async sendToChannel(channel: NotificationChannel, payload: DispatchPayload): Promise<void> {
+  private async sendToChannel(
+    channel: NotificationChannel,
+    payload: DispatchPayload,
+  ): Promise<void> {
     const { userId, title, message, notificationId } = payload;
 
     try {
       let result: { success: boolean; externalId?: string; error?: string };
 
       if (channel === NotificationChannel.TELEGRAM) {
-        result = await this.sendTelegram(userId, title, message, notificationId);
+        result = await this.sendTelegram(
+          userId,
+          title,
+          message,
+          notificationId,
+        );
       } else if (channel === NotificationChannel.SMS) {
         result = await this.sendSms(userId, message);
       } else if (channel === NotificationChannel.EMAIL) {
@@ -152,7 +161,9 @@ export class NotificationDispatcherService {
         ],
       );
     } catch (err) {
-      this.logger.error(`Channel ${channel} dispatch error for user=${userId}: ${err}`);
+      this.logger.error(
+        `Channel ${channel} dispatch error for user=${userId}: ${err}`,
+      );
     }
   }
 
@@ -175,7 +186,12 @@ export class NotificationDispatcherService {
       const client = this.redis.getClient();
       if (client) {
         const key = `upz:tg_msgid:${notificationId}`;
-        await client.set(key, `${prefs.telegramChatId}:${result.messageId}`, 'EX', 48 * 3600);
+        await client.set(
+          key,
+          `${prefs.telegramChatId}:${result.messageId}`,
+          'EX',
+          48 * 3600,
+        );
       }
     }
 
@@ -190,10 +206,11 @@ export class NotificationDispatcherService {
     userId: string,
     message: string,
   ): Promise<{ success: boolean; externalId?: string; error?: string }> {
-    const userRows: Array<{ id: string; phoneNumber: string | null }> = await this.dataSource.query(
-      `SELECT id, phone_number AS "phoneNumber" FROM users WHERE id = $1`,
-      [userId],
-    );
+    const userRows: Array<{ id: string; phoneNumber: string | null }> =
+      await this.dataSource.query(
+        `SELECT id, phone_number AS "phoneNumber" FROM users WHERE id = $1`,
+        [userId],
+      );
     const user = userRows[0];
 
     if (!user?.phoneNumber) {
@@ -206,7 +223,11 @@ export class NotificationDispatcherService {
     }
 
     const result = await this.sms.send(user.phoneNumber.toString(), message);
-    return { success: result.success, externalId: result.messageId, error: result.error };
+    return {
+      success: result.success,
+      externalId: result.messageId,
+      error: result.error,
+    };
   }
 
   private async sendEmail(
@@ -214,7 +235,11 @@ export class NotificationDispatcherService {
     title: string,
     message: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const userRows: Array<{ id: string; email: string | null; firstName: string }> = await this.dataSource.query(
+    const userRows: Array<{
+      id: string;
+      email: string | null;
+      firstName: string;
+    }> = await this.dataSource.query(
       `SELECT id, email, first_name AS "firstName" FROM users WHERE id = $1`,
       [userId],
     );
@@ -222,10 +247,18 @@ export class NotificationDispatcherService {
     if (!user?.email) return { success: false, error: 'No email' };
 
     try {
-      await this.mail.sendNotificationEmail(user.email, user.firstName, title, message);
+      await this.mail.sendNotificationEmail(
+        user.email,
+        user.firstName,
+        title,
+        message,
+      );
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 
@@ -271,7 +304,12 @@ export class NotificationDispatcherService {
     try {
       const client = this.redis.getClient();
       if (!client) return;
-      await client.set(RedisKeys.telegramRead(notificationId), '1', 'EX', 48 * 3600);
+      await client.set(
+        RedisKeys.telegramRead(notificationId),
+        '1',
+        'EX',
+        48 * 3600,
+      );
     } catch (err) {
       this.logger.warn(`markTelegramRead failed: ${err}`);
     }
@@ -279,7 +317,9 @@ export class NotificationDispatcherService {
 
   // ── Prefs helpers ───────────────────────────────────────────────────────────
 
-  private async getPrefs(userId: string): Promise<UserNotificationPrefs | null> {
+  private async getPrefs(
+    userId: string,
+  ): Promise<UserNotificationPrefs | null> {
     // Try Redis cache first
     try {
       const client = this.redis.getClient();
@@ -287,7 +327,14 @@ export class NotificationDispatcherService {
         const cached = await client.get(RedisKeys.notifPrefs(userId));
         if (cached) return JSON.parse(cached);
       }
-    } catch {}
+    } catch (e) {
+      // Redis is a cache here, not the source of truth — reading cached notification prefs
+      // failing must not break the caller. Logged rather than swallowed
+      // silently, so an outage is visible instead of just slow.
+      this.logger.warn(
+        `Redis unavailable while reading cached notification prefs: ${e instanceof Error ? e.message : e}`,
+      );
+    }
 
     const rows: UserNotificationPrefs[] = await this.dataSource.query(
       `SELECT ${NOTIFICATION_PREFS_COLUMNS_SQL} FROM user_notification_prefs WHERE user_id = $1`,
@@ -299,9 +346,21 @@ export class NotificationDispatcherService {
     try {
       const client = this.redis.getClient();
       if (client && prefs) {
-        await client.set(RedisKeys.notifPrefs(userId), JSON.stringify(prefs), 'EX', 300);
+        await client.set(
+          RedisKeys.notifPrefs(userId),
+          JSON.stringify(prefs),
+          'EX',
+          300,
+        );
       }
-    } catch {}
+    } catch (e) {
+      // Redis is a cache here, not the source of truth — caching notification prefs
+      // failing must not break the caller. Logged rather than swallowed
+      // silently, so an outage is visible instead of just slow.
+      this.logger.warn(
+        `Redis unavailable while caching notification prefs: ${e instanceof Error ? e.message : e}`,
+      );
+    }
 
     return prefs;
   }
@@ -313,7 +372,7 @@ export class NotificationDispatcherService {
   ): NotificationChannel[] {
     if (!prefs) return baseChannels;
 
-    return baseChannels.filter(channel => {
+    return baseChannels.filter((channel) => {
       if (channel === NotificationChannel.IN_APP) {
         return this.getCategoryPref(prefs, category, 'in_app');
       }
@@ -338,55 +397,58 @@ export class NotificationDispatcherService {
   ): boolean {
     const map: Record<NotificationCategory, Record<string, boolean>> = {
       [NotificationCategory.MEETING]: {
-        sms:      prefs.meetingSms,
+        sms: prefs.meetingSms,
         telegram: prefs.meetingTelegram,
-        email:    prefs.meetingEmail,
-        in_app:   prefs.meetingInApp,
+        email: prefs.meetingEmail,
+        in_app: prefs.meetingInApp,
       },
       [NotificationCategory.TASK]: {
-        sms:      prefs.taskSms,
+        sms: prefs.taskSms,
         telegram: prefs.taskTelegram,
-        email:    prefs.taskEmail,
-        in_app:   prefs.taskInApp,
+        email: prefs.taskEmail,
+        in_app: prefs.taskInApp,
       },
       [NotificationCategory.HOMEWORK]: {
-        sms:      prefs.homeworkSms,
+        sms: prefs.homeworkSms,
         telegram: prefs.homeworkTelegram,
-        email:    prefs.homeworkEmail,
-        in_app:   prefs.homeworkInApp,
+        email: prefs.homeworkEmail,
+        in_app: prefs.homeworkInApp,
       },
       [NotificationCategory.PAYMENT]: {
-        sms:      prefs.paymentSms,
+        sms: prefs.paymentSms,
         telegram: prefs.paymentTelegram,
-        email:    prefs.paymentEmail,
-        in_app:   prefs.paymentInApp,
+        email: prefs.paymentEmail,
+        in_app: prefs.paymentInApp,
       },
       [NotificationCategory.SECURITY]: {
-        sms:      prefs.securitySms,
+        sms: prefs.securitySms,
         telegram: prefs.securityTelegram,
-        email:    prefs.securityEmail,
-        in_app:   prefs.securityInApp,
+        email: prefs.securityEmail,
+        in_app: prefs.securityInApp,
       },
       [NotificationCategory.COURSE]: {
-        sms:      false,
+        sms: false,
         telegram: prefs.courseTelegram,
-        email:    false,
-        in_app:   prefs.courseInApp,
+        email: false,
+        in_app: prefs.courseInApp,
       },
       [NotificationCategory.MARKETING]: {
-        sms:      false,
+        sms: false,
         telegram: prefs.marketingTelegram,
-        email:    prefs.marketingEmail,
-        in_app:   prefs.marketingInApp,
+        email: prefs.marketingEmail,
+        in_app: prefs.marketingInApp,
       },
       [NotificationCategory.CERTIFICATE]: {
-        sms:      false,
+        sms: false,
         telegram: prefs.certificateTelegram,
-        email:    prefs.certificateEmail,
-        in_app:   prefs.certificateInApp,
+        email: prefs.certificateEmail,
+        in_app: prefs.certificateInApp,
       },
       [NotificationCategory.SYSTEM]: {
-        sms: false, telegram: true, email: true, in_app: true,
+        sms: false,
+        telegram: true,
+        email: true,
+        in_app: true,
       },
     };
     return map[category]?.[channel] ?? true;
@@ -397,6 +459,13 @@ export class NotificationDispatcherService {
     try {
       const client = this.redis.getClient();
       if (client) await client.del(RedisKeys.notifPrefs(userId));
-    } catch {}
+    } catch (e) {
+      // Redis is a cache here, not the source of truth — invalidating the notification-prefs cache
+      // failing must not break the caller. Logged rather than swallowed
+      // silently, so an outage is visible instead of just slow.
+      this.logger.warn(
+        `Redis unavailable while invalidating the notification-prefs cache: ${e instanceof Error ? e.message : e}`,
+      );
+    }
   }
 }

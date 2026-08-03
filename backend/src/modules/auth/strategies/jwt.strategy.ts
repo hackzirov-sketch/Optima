@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { UsersService } from '../../users/services/users.service';
@@ -24,9 +24,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; jti?: string; workspaceId?: string }) {
+  async validate(payload: {
+    sub: string;
+    jti?: string;
+    iat?: number;
+    workspaceId?: string;
+  }) {
     // OPTIMIZED: Single pipeline — blacklist + sessionBlock + cachedUser in 1 Redis RTT
-    const [blacklisted, sessionBlocked, cachedUser] =
+    const [blacklisted, sessionBlockCutoff, cachedUser] =
       await this.redisService.validateTokenPipeline(payload.sub, payload.jti);
 
     if (blacklisted) {
@@ -36,7 +41,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
-    if (sessionBlocked) {
+    // "Revoke all sessions" can't just flag the account — that would lock the
+    // user out of the session they log into next. It records a cutoff instead,
+    // and only tokens minted at or before it are rejected.
+    if (
+      sessionBlockCutoff !== null &&
+      (payload.iat === undefined || payload.iat <= sessionBlockCutoff)
+    ) {
       throw new UnauthorizedException({
         code: ErrorCode.TOKEN_REVOKED,
         message: 'All sessions for this account have been revoked',

@@ -1,5 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { EarningsService } from './earnings.service';
 import { CreateEarningDto } from './dto/create-earning.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';

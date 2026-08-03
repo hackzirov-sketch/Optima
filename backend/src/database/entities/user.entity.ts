@@ -1,4 +1,4 @@
-import { UserTheme, UserLanguage, UserOccupation } from '../../common/enums';
+import { UserTheme, UserLanguage } from '../../common/enums';
 import { Workspace } from './workspace.entity';
 import { WorkspaceMember } from './workspace-member.entity';
 import { UserSettings } from './user-settings.entity';

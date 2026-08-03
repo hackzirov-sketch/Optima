@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   ParseUUIDPipe,
-  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -17,7 +16,6 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { MeetingsService } from './meetings.service';
@@ -221,7 +219,7 @@ export class MeetingsController {
     if (result.status === 'pending') {
       const waitingCount =
         await this.meetingsService.getWaitingCount(meetingId);
-      this.gateway.notifyMeetingHosts(
+      void this.gateway.notifyMeetingHosts(
         meetingId,
         'meeting:join_request:created',
         {
@@ -277,7 +275,7 @@ export class MeetingsController {
       requestId,
     });
     const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
-    this.gateway.notifyMeetingHosts(
+    void this.gateway.notifyMeetingHosts(
       meetingId,
       'meeting:join_request:reviewed',
       { meetingId, requestId, waitingCount },
@@ -305,7 +303,7 @@ export class MeetingsController {
       requestId,
     });
     const waitingCount = await this.meetingsService.getWaitingCount(meetingId);
-    this.gateway.notifyMeetingHosts(
+    void this.gateway.notifyMeetingHosts(
       meetingId,
       'meeting:join_request:reviewed',
       { meetingId, requestId, waitingCount },
@@ -333,7 +331,7 @@ export class MeetingsController {
         requestId: request.id,
       });
     }
-    this.gateway.notifyMeetingHosts(
+    void this.gateway.notifyMeetingHosts(
       meetingId,
       'meeting:join_request:reviewed',
       { meetingId, waitingCount: 0 },
@@ -361,7 +359,7 @@ export class MeetingsController {
         requestId: request.id,
       });
     }
-    this.gateway.notifyMeetingHosts(
+    void this.gateway.notifyMeetingHosts(
       meetingId,
       'meeting:join_request:reviewed',
       { meetingId, waitingCount: 0 },

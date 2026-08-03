@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { MembersService } from '../workspaces/services/members.service';
 import { PermissionService } from '../../common/services/permission.service';
@@ -92,10 +96,15 @@ export class EarningsService {
       try {
         this.permission.assertCanManageWorkspace(member);
       } catch {
-        throw new ForbiddenException('You can only delete your own earning records');
+        throw new ForbiddenException(
+          'You can only delete your own earning records',
+        );
       }
     }
 
-    await this.dataSource.query(`DELETE FROM earnings WHERE id = $1 AND workspace_id = $2`, [earningId, workspaceId]);
+    await this.dataSource.query(
+      `DELETE FROM earnings WHERE id = $1 AND workspace_id = $2`,
+      [earningId, workspaceId],
+    );
   }
 }

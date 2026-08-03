@@ -11,14 +11,23 @@ export class AnalyticsService {
     private readonly membersService: MembersService,
   ) {}
 
-  private async getActiveProject(projectId: string): Promise<{ id: string; workspaceId: string }> {
-    const rows: Array<{ id: string; workspaceId: string; deletedAt: Date | null }> = await this.dataSource.query(
+  private async getActiveProject(
+    projectId: string,
+  ): Promise<{ id: string; workspaceId: string }> {
+    const rows: Array<{
+      id: string;
+      workspaceId: string;
+      deletedAt: Date | null;
+    }> = await this.dataSource.query(
       `SELECT id, workspace_id AS "workspaceId", deleted_at AS "deletedAt" FROM projects WHERE id = $1`,
       [projectId],
     );
     const project = rows[0];
     if (!project || project.deletedAt) {
-      throw new NotFoundException({ code: ErrorCode.PROJECT_NOT_FOUND, message: 'Project not found' });
+      throw new NotFoundException({
+        code: ErrorCode.PROJECT_NOT_FOUND,
+        message: 'Project not found',
+      });
     }
     return project;
   }
@@ -26,22 +35,24 @@ export class AnalyticsService {
   async workspaceOverview(workspaceId: string, userId: string) {
     await this.membersService.assertMember(workspaceId, userId);
 
-    const [projectCountRows, memberCountRows, taskByStatus] = await Promise.all([
-      this.dataSource.query(
-        `SELECT COUNT(*) FROM projects WHERE workspace_id = $1 AND deleted_at IS NULL`,
-        [workspaceId],
-      ),
-      this.dataSource.query(
-        `SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1`,
-        [workspaceId],
-      ),
-      this.dataSource.query(
-        `SELECT status, COUNT(*) AS count FROM tasks
+    const [projectCountRows, memberCountRows, taskByStatus] = await Promise.all(
+      [
+        this.dataSource.query(
+          `SELECT COUNT(*) FROM projects WHERE workspace_id = $1 AND deleted_at IS NULL`,
+          [workspaceId],
+        ),
+        this.dataSource.query(
+          `SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1`,
+          [workspaceId],
+        ),
+        this.dataSource.query(
+          `SELECT status, COUNT(*) AS count FROM tasks
          WHERE workspace_id = $1 AND deleted_at IS NULL
          GROUP BY status`,
-        [workspaceId],
-      ),
-    ]);
+          [workspaceId],
+        ),
+      ],
+    );
 
     const projectCount = Number(projectCountRows[0]?.count ?? 0);
     const memberCount = Number(memberCountRows[0]?.count ?? 0);
@@ -108,7 +119,17 @@ export class AnalyticsService {
 
     return rows.map((r) => {
       const { u_id, u_firstName, u_lastName, u_avatarUrl, ...stats } = r;
-      return { ...stats, user: u_id ? { id: u_id, firstName: u_firstName, lastName: u_lastName, avatarUrl: u_avatarUrl } : null };
+      return {
+        ...stats,
+        user: u_id
+          ? {
+              id: u_id,
+              firstName: u_firstName,
+              lastName: u_lastName,
+              avatarUrl: u_avatarUrl,
+            }
+          : null,
+      };
     });
   }
 
@@ -146,7 +167,10 @@ export class AnalyticsService {
 
     const projectStats = rows.map((r: any) => {
       const { p_id, p_name, p_slug, ...stats } = r;
-      return { ...stats, project: p_id ? { id: p_id, name: p_name, slug: p_slug } : null };
+      return {
+        ...stats,
+        project: p_id ? { id: p_id, name: p_name, slug: p_slug } : null,
+      };
     });
 
     return { projectStats, recentDaily };
