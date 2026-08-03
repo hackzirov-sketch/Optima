@@ -91,6 +91,23 @@ export class ChatRoomInviteService {
   ): Promise<void> {
     if (room.createdById === userId) return;
 
+    // The room's own role is the primary authority: a group or channel has no
+    // workspace at all, so its admins would otherwise be told they are "not a
+    // workspace member" while looking at a room they administer.
+    const roomRoleRows = await this.dataSource.query<{ role: string }>(
+      `SELECT role FROM chat_members
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
+      [room.id, userId],
+    );
+    if (['owner', 'admin'].includes(roomRoleRows[0]?.role)) return;
+
+    if (!room.workspaceId) {
+      throw new ForbiddenException({
+        code: ErrorCode.ROOM_INVITE_FORBIDDEN,
+        message: 'Only room admins can manage invite links',
+      });
+    }
+
     const rows = await this.dataSource.query<WorkspaceMember>(
       `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [room.workspaceId, userId],
@@ -261,11 +278,16 @@ export class ChatRoomInviteService {
           message: 'This invite link has reached its usage limit',
         });
       }
-      await query(
-        `INSERT INTO workspace_members (workspace_id, user_id, role)
-         VALUES ($1, $2, 'junior') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
-        [lockedRoom.workspaceId, userId],
-      );
+      // Only rooms that actually belong to a workspace pull the joiner into it.
+      // Groups and channels are user-owned and carry no workspace, so this
+      // insert used to pass NULL into a NOT NULL column and fail the join.
+      if (lockedRoom.workspaceId) {
+        await query(
+          `INSERT INTO workspace_members (workspace_id, user_id, role)
+           VALUES ($1, $2, 'junior') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+          [lockedRoom.workspaceId, userId],
+        );
+      }
       await query(
         `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`,
         [lockedRoom.id, userId],

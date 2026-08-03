@@ -84,6 +84,23 @@ function check(label, expectBlocked, r) {
   check('outsider joins as a public room', true,
     await call('POST', `/chat/rooms/${roomId}/join`, outsider, {}));
 
+  // ── Invite links on a workspace-less room ──────────────────────────
+  // Regression guard: joinByCode used to insert the joiner into the room's
+  // workspace unconditionally, which passed NULL into workspace_members'
+  // NOT NULL column for a group/channel that has no workspace at all.
+  const invite = await call('POST', `/chat/rooms/${roomId}/invites`, owner, {});
+  check('owner creates an invite link', false, invite);
+  if (invite.data?.code) {
+    check('outsider joins via invite code', false,
+      await call('POST', `/chat/join/${invite.data.code}`, outsider, {}));
+    check('joined member reads messages', false,
+      await call('GET', `/chat/rooms/${roomId}/messages?limit=10`, outsider));
+    // Joining a channel does not make you an editor of it.
+    check('joined member posts to channel', true,
+      await call('POST', `/chat/rooms/${roomId}/messages`, outsider,
+        { content: 'nope', clientMessageId: crypto.randomUUID() }));
+  }
+
   // ── Forged / missing credentials ───────────────────────────────────
   check('forged token (wrong secret)', true,
     await call('GET', '/chat/rooms', jwt.sign({ sub: users[1].id }, 'not-the-secret')));
