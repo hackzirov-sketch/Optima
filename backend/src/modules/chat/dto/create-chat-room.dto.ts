@@ -24,11 +24,17 @@ export class CreateChatRoomDto {
   @IsEnum(RoomScope)
   scope?: RoomScope;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Required for group and channel rooms' })
   @IsOptional()
   @IsString()
   @MaxLength(200)
   name?: string;
+
+  @ApiPropertyOptional({ description: 'Group/channel description' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

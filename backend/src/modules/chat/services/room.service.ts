@@ -20,6 +20,20 @@ import {
   normalizeReturning,
 } from '../../../common/utils/sql.util';
 
+/**
+ * Canonical key for a pair of users, matching chat_rooms.dm_key exactly (see
+ * migration 004). Order-independent, so both sides of a conversation compute
+ * the same value and find the same room.
+ */
+export function directPairKey(a: string, b: string): string {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+/** Postgres unique-violation SQLSTATE. */
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string })?.code === '23505';
+}
+
 /** Peer identity a DM/group row needs to render — title, avatar and /u route. */
 export interface MemberProfile {
   id: string;
@@ -55,6 +69,10 @@ export interface ChatRoomDto {
   backgroundType: string;
   publicId: number;
   slug: string | null;
+  isSystem: boolean;
+  membershipLocked: boolean;
+  postingMode: 'members' | 'admins_only';
+  linkedRoomId: string | null;
   lastMessage: {
     id: string;
     content: string;
@@ -169,27 +187,53 @@ export class ChatRoomService {
       backgroundType: room.backgroundType ?? 'DEFAULT',
       publicId: room.publicId,
       slug: room.slug ?? null,
+      isSystem: room.isSystem ?? false,
+      membershipLocked: room.membershipLocked ?? false,
+      postingMode: room.postingMode ?? 'members',
+      linkedRoomId: room.linkedRoomId ?? null,
       lastMessage,
       unreadCount,
       isMember: true,
     };
   }
 
+  /**
+   * Every room the caller belongs to, workspace or not — the JWT is the only
+   * authorisation needed, since membership in chat_members is itself the
+   * permission. This is the primary listing; the workspace-scoped variant
+   * below is a filtered view of the same data.
+   */
+  async listUserRooms(userId: string) {
+    return this.queryRooms(userId, null);
+  }
+
   async listRooms(workspaceId: string, userId: string) {
     await this.wsMembersService.assertMember(workspaceId, userId);
+    return this.queryRooms(userId, workspaceId);
+  }
 
+  /**
+   * @param workspaceId when set, restricts to that workspace's rooms — except
+   *   direct/group/channel rooms, which are user-owned and carry no workspace,
+   *   so filtering them out would hide the user's own conversations.
+   */
+  private async queryRooms(userId: string, workspaceId: string | null) {
     const myRooms = await this.dataSource.query<
       ChatRoom & { myLastReadSeq: number; myStatus: string }
     >(
-      // Direct rooms are deliberately not workspace-filtered: a DM is created in
-      // the initiator's workspace, but the recipient usually lives in their own
-      // one (every account bootstraps a personal workspace). Scoping DMs by
-      // workspace made the room invisible to the other side entirely.
+      // $1 NULL = no workspace filter at all. When a workspace *is* given, the
+      // user-owned kinds still come through: a DM, group or channel belongs to
+      // its members, not to an organisation, so filtering them by workspace
+      // hid conversations from whichever side didn't share the creator's one.
       `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
-       WHERE (r.workspace_id = $1 OR r.type = $3)`,
-      [workspaceId, userId, ChatRoomType.DIRECT],
+       WHERE ($1::uuid IS NULL OR r.workspace_id = $1 OR r.type = ANY($3::chat_rooms_type_enum[]))`,
+      [
+        workspaceId,
+        userId,
+        [ChatRoomType.DIRECT, ChatRoomType.GROUP, ChatRoomType.CHANNEL],
+      ],
     );
 
     if (myRooms.length === 0) return [];
@@ -282,6 +326,10 @@ export class ChatRoomService {
         backgroundType: room.backgroundType ?? 'DEFAULT',
         publicId: room.publicId,
         slug: room.slug ?? null,
+        isSystem: room.isSystem ?? false,
+        membershipLocked: room.membershipLocked ?? false,
+        postingMode: room.postingMode ?? 'members',
+        linkedRoomId: room.linkedRoomId ?? null,
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
@@ -639,29 +687,68 @@ export class ChatRoomService {
     return rows[0];
   }
 
+  /**
+   * Creates a direct/group/channel room.
+   *
+   * Workspace is optional by design: a user opens a group or channel straight
+   * from chat, authorised by their JWT alone (see the workspace-less
+   * `POST /chat/rooms` route). `workspaceId` is only an association for rooms
+   * that genuinely belong to one, and is verified when present. DMs never
+   * carry a workspace at all — a conversation belongs to the two people in it,
+   * not to an organisation, and scoping them by workspace is what previously
+   * hid a DM from whichever side didn't share the creator's workspace.
+   *
+   * The whole write runs in one transaction: room, members and notification
+   * land together or not at all. Without it a failure between the inserts left
+   * a memberless room stranded in chat_rooms.
+   */
   async createRoom(
     workspaceId: string | null,
     userId: string,
     dto: CreateChatRoomDto,
   ) {
-    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
-    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+    const isDirect = dto.type === ChatRoomType.DIRECT;
+    // A DM is never workspace-scoped; the unique dm_key spans the whole table.
+    const effectiveWorkspaceId = isDirect ? null : workspaceId;
+    const scope =
+      dto.scope ??
+      (effectiveWorkspaceId ? RoomScope.WORKSPACE_ONLY : RoomScope.PRIVATE);
+
+    if (scope === RoomScope.WORKSPACE_ONLY && !effectiveWorkspaceId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
         message: 'workspace_only rooms require a workspace',
       });
     }
-    if ((dto.groupId || dto.projectId) && !workspaceId) {
+    if ((dto.groupId || dto.projectId) && !effectiveWorkspaceId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
         message: 'Group/project rooms require a workspace',
       });
     }
-    if (workspaceId) {
-      await this.wsMembersService.assertMember(workspaceId, userId);
+    if (effectiveWorkspaceId) {
+      await this.wsMembersService.assertMember(effectiveWorkspaceId, userId);
+    }
+    if (
+      !isDirect &&
+      dto.type !== ChatRoomType.GROUP &&
+      dto.type !== ChatRoomType.CHANNEL &&
+      !dto.groupId &&
+      !dto.projectId
+    ) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Only direct, group and channel rooms can be created',
+      });
+    }
+    if (!isDirect && !dto.name?.trim()) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'A name is required for group and channel rooms',
+      });
     }
 
-    if (dto.type === ChatRoomType.DIRECT) {
+    if (isDirect) {
       let directTargetUserId = dto.targetUserId;
       if (!directTargetUserId && dto.targetPublicId) {
         const targetRows = await this.dataSource.query(
@@ -683,20 +770,12 @@ export class ChatRoomService {
         });
       // Removed assertMember to allow cross-workspace DMs
 
-      // A DM is unique per *pair of people*, never per workspace. Matching on
-      // workspace_id too meant each side created their own copy — both users
-      // bootstrap a personal workspace, so the lookup never saw the room the
-      // other one had already made, and the pair ended up with two chats.
-      // Oldest wins so both sides deterministically converge on the same room.
+      // A DM is unique per *pair of people*, never per workspace. Looked up by
+      // the same canonical dm_key the unique index is built on, so this check
+      // and the constraint can never disagree.
       const existingRows = await this.dataSource.query<ChatRoom>(
-        `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}
-         FROM chat_rooms r
-         JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $1 AND cm1.left_at IS NULL
-         JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $2 AND cm2.left_at IS NULL
-         WHERE r.type = $3
-         ORDER BY r.created_at ASC
-         LIMIT 1`,
-        [userId, dto.targetUserId, ChatRoomType.DIRECT],
+        `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE dm_key = $1`,
+        [directPairKey(userId, dto.targetUserId!)],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
     }
@@ -704,7 +783,7 @@ export class ChatRoomService {
     if (dto.groupId) {
       const g = await this.dataSource.query(
         `SELECT id FROM groups WHERE id = $1 AND workspace_id = $2`,
-        [dto.groupId, workspaceId],
+        [dto.groupId, effectiveWorkspaceId],
       );
       if (!g[0])
         throw new BadRequestException({
@@ -715,7 +794,7 @@ export class ChatRoomService {
     if (dto.projectId) {
       const p = await this.dataSource.query(
         `SELECT id FROM projects WHERE id = $1 AND workspace_id = $2`,
-        [dto.projectId, workspaceId],
+        [dto.projectId, effectiveWorkspaceId],
       );
       if (!p[0])
         throw new BadRequestException({
@@ -736,64 +815,90 @@ export class ChatRoomService {
           ? ChatRoomType.PROJECT
           : dto.type;
 
-    const savedRows = await this.dataSource.query<ChatRoom>(
-      `INSERT INTO chat_rooms (workspace_id, type, scope, name, group_id, project_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
-      [
-        workspaceId,
-        derivedType,
-        scope,
-        dto.name ?? null,
-        dto.groupId ?? null,
-        dto.projectId ?? null,
-        userId,
-      ],
-    );
-    const saved = savedRows[0];
-
     const memberIds = new Set<string>([userId]);
-    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
-      memberIds.add(dto.targetUserId);
-    }
-    if (dto.type !== ChatRoomType.DIRECT && dto.memberIds?.length) {
+    if (isDirect && dto.targetUserId) memberIds.add(dto.targetUserId);
+    if (!isDirect && dto.memberIds?.length) {
       dto.memberIds
         .filter((id) => id !== userId)
         .forEach((id) => memberIds.add(id));
     }
 
-    const values: string[] = [];
-    const params: unknown[] = [];
-    Array.from(memberIds).forEach((id, i) => {
-      // DMs open immediately for both sides (Telegram-style) — only group /
-      // channel invitees have to accept before the room becomes readable.
-      const status =
-        id === userId || derivedType === ChatRoomType.DIRECT
-          ? 'active'
-          : 'pending';
-      values.push(`($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`);
-      params.push(saved.id, id, status);
-    });
-    await this.dataSource.query(
-      `INSERT INTO chat_members (room_id, user_id, status) VALUES ${values.join(', ')}`,
-      params,
-    );
+    // A channel's creator owns it; groups follow the same rule so the room
+    // always has someone who can rename or delete it.
+    const ownerRole = 'owner';
 
-    // Create notification for target user
-    if (dto.type === ChatRoomType.DIRECT && dto.targetUserId) {
-      await this.dataSource.query(
-        `INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          dto.targetUserId,
-          userId,
-          'chat_invite',
-          'Sizni suhbatga taklif qilishdi',
-          'Sizga yangi shaxsiy xabar keldi',
-          'chat_room',
-          saved.id,
-        ],
-      );
+    let saved: ChatRoom;
+    try {
+      saved = await this.dataSource.withTransaction(async (query) => {
+        const savedRows = await query<ChatRoom>(
+          `INSERT INTO chat_rooms (workspace_id, type, scope, name, description, group_id, project_id, created_by, posting_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
+          [
+            effectiveWorkspaceId,
+            derivedType,
+            scope,
+            dto.name?.trim() ?? null,
+            dto.description?.trim() ?? null,
+            dto.groupId ?? null,
+            dto.projectId ?? null,
+            userId,
+            // Channels broadcast: only admins post unless explicitly opened up.
+            derivedType === ChatRoomType.CHANNEL ? 'admins_only' : 'members',
+          ],
+        );
+        const room = savedRows[0];
+
+        const values: string[] = [];
+        const params: unknown[] = [];
+        Array.from(memberIds).forEach((id, i) => {
+          // DMs open immediately for both sides (Telegram-style) — only group
+          // and channel invitees have to accept before the room is readable.
+          const status = id === userId || isDirect ? 'active' : 'pending';
+          const role = id === userId ? ownerRole : 'member';
+          values.push(
+            `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`,
+          );
+          params.push(room.id, id, status, role);
+        });
+        await query(
+          `INSERT INTO chat_members (room_id, user_id, status, role) VALUES ${values.join(', ')}`,
+          params,
+        );
+
+        // Everyone who didn't create the room hears about it.
+        const invitees = Array.from(memberIds).filter((id) => id !== userId);
+        if (invitees.length) {
+          const notification = isDirect
+            ? {
+                title: 'Sizga yangi shaxsiy xabar keldi',
+                message: 'Yangi suhbat ochildi',
+              }
+            : {
+                title: 'Sizni suhbatga taklif qilishdi',
+                message: `"${dto.name?.trim() ?? ''}" ga qo'shildingiz`,
+              };
+          await query(
+            `INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id)
+             SELECT unnest($1::uuid[]), $2, 'chat_invite', $3, $4, 'chat_room', $5`,
+            [invitees, userId, notification.title, notification.message, room.id],
+          );
+        }
+
+        return room;
+      });
+    } catch (err) {
+      // Two clients can still race between the dm_key lookup above and this
+      // insert; the unique index settles it, and the loser simply adopts the
+      // room the winner created rather than surfacing a 500.
+      if (isDirect && isUniqueViolation(err)) {
+        const rows = await this.dataSource.query<ChatRoom>(
+          `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE dm_key = $1`,
+          [directPairKey(userId, dto.targetUserId!)],
+        );
+        if (rows[0]) return this.enrichRoom(rows[0], userId);
+      }
+      throw err;
     }
 
     return this.enrichRoom(saved, userId);

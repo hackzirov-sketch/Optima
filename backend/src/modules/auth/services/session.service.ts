@@ -154,6 +154,21 @@ export class SessionService {
         ctx.provider ?? null,
       ],
     );
+
+    // Opportunistic prune: nothing ever deleted expired or long-revoked rows,
+    // so refresh_tokens grew without bound (86 rows for 2 users in dev). Scoped
+    // to this user and driven off the same index the session list uses, so it
+    // costs one cheap delete on a path that already writes — no scheduler or
+    // extra infrastructure to keep alive.
+    await this.dataSource
+      .query(
+        `DELETE FROM refresh_tokens
+          WHERE user_id = $1
+            AND (expires_at < now() - interval '7 days'
+                 OR (revoked_at IS NOT NULL AND revoked_at < now() - interval '30 days'))`,
+        [userId],
+      )
+      .catch(() => undefined); // housekeeping must never fail a login
   }
 
   async revokeSessionByTokenHash(tokenHash: string) {

@@ -102,14 +102,39 @@ export enum PushStatus {
   MERGED = 'merged',
 }
 
-/** Structural kind of a chat room — what it's attached to. Derived server-side
- * from workspaceId/groupId/projectId/targetUserId, never trusted from the client. */
+/**
+ * Structural kind of a chat room. Mirrors chat_rooms_type_enum exactly — the
+ * two drifted apart once already (the DB had values TS didn't model, and the
+ * frontend branched on a 'channel' type that existed nowhere in the schema),
+ * so any change here needs a migration and vice versa.
+ *
+ * DIRECT/GROUP/CHANNEL are the user-facing kinds:
+ *   DIRECT  — exactly two people, no workspace, unique per pair (dm_key)
+ *   GROUP   — many people, workspace optional
+ *   CHANNEL — broadcast, posting restricted by posting_mode, workspace optional
+ *
+ * WORKSPACE/PROJECT are structural rooms derived from workspaceId/projectId.
+ * PUBLIC/PRIVATE are legacy values kept only so existing rows still parse —
+ * scope, not type, is what governs visibility now.
+ */
 export enum ChatRoomType {
   WORKSPACE = 'workspace',
   PROJECT = 'project',
   GROUP = 'group',
   DIRECT = 'direct',
+  CHANNEL = 'channel',
+  /** @deprecated legacy rows only — use RoomScope for visibility. */
+  PUBLIC = 'public',
+  /** @deprecated legacy rows only — use RoomScope for visibility. */
+  PRIVATE = 'private',
 }
+
+/** The kinds a user is allowed to create from the chat UI. */
+export const CREATABLE_ROOM_TYPES = [
+  ChatRoomType.DIRECT,
+  ChatRoomType.GROUP,
+  ChatRoomType.CHANNEL,
+] as const;
 
 export enum ChatMemberStatus {
   PENDING = 'pending',

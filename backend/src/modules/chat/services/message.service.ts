@@ -355,9 +355,15 @@ export class ChatMessageService {
         message: 'You cannot send messages in this room',
       });
     }
+    // Channel posting is decided by the caller's role *in this room*. It used
+    // to compare against a hardcoded public_id of '777777' — a magic account
+    // that locked every real channel owner out of their own channel, couldn't
+    // be granted or revoked without a deploy, and silently handed the rights
+    // to whoever landed on that sequence value. (The education module had the
+    // same magic number and dropped it for the same reasons.)
     if (
       room.postingMode === 'admins_only' &&
-      member.user.publicId !== '777777'
+      !['owner', 'admin'].includes(member.role)
     ) {
       throw new ForbiddenException({
         code: 'CHANNEL_ADMIN_ONLY',
@@ -469,78 +475,88 @@ export class ChatMessageService {
       if (contentJson) contentToSave = '';
     }
 
-    const savedRows = await this.dataSource.query<ChatMessage>(
-      `INSERT INTO chat_messages
-         (room_id, sender_id, sequence, client_message_id, content, content_json,
-          content_type, reply_to_id, metadata, is_thread_reply)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
-      [
-        roomId,
-        userId,
-        sequence,
-        dto.clientMessageId ?? null,
-        contentToSave,
-        contentJson,
-        contentType,
-        dto.replyToId ?? null,
-        {},
-        !!dto.isThreadReply,
-      ],
-    );
-    const saved: any = savedRows[0];
-
-    // The sender has implicitly "read" up to their own message - keeps their
-    // own unread badge for this room from lagging behind what they just sent.
-    await this.dataSource.query(
-      `UPDATE chat_members SET last_read_seq = GREATEST(last_read_seq, $3), last_read_message_id = $4, last_read_at = now()
-       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
-      [roomId, userId, sequence, saved.id],
-    );
-
-    if (dto.isThreadReply && dto.replyToId) {
-      const threadRows = await this.dataSource.query<{ replyCount: number }>(
-        `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
-         VALUES ($1, $2, 1, now())
-         ON CONFLICT (root_message_id) DO UPDATE SET
-           reply_count = message_threads.reply_count + 1, last_reply_at = now()
-         RETURNING reply_count AS "replyCount"`,
-        [roomId, dto.replyToId],
-      );
-      saved.threadReplyCount = threadRows[0].replyCount;
-      saved.threadRootId = dto.replyToId;
-    }
-
-    // 3b. Persist attachments (already uploaded to R2 via /chat/rooms/:roomId/attachments/presign)
+    // The message, the sender's read marker, the thread counter and the
+    // attachment rows are one unit of work. Previously they were four separate
+    // statements, so a failure partway through could persist a message whose
+    // attachments never arrived — visible to every other member as an empty
+    // bubble that no retry would ever fill in.
     let savedAttachments: MessageAttachment[] = [];
-    if (hasAttachments) {
-      const values: string[] = [];
-      const params: unknown[] = [];
-      dto.attachments!.forEach((a, i) => {
-        const base = i * 9;
-        values.push(
-          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9})`,
-        );
-        params.push(
-          saved.id,
+    const saved: any = await this.dataSource.withTransaction(async (query) => {
+      const savedRows = await query<ChatMessage>(
+        `INSERT INTO chat_messages
+           (room_id, sender_id, sequence, client_message_id, content, content_json,
+            content_type, reply_to_id, metadata, is_thread_reply)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
+        [
+          roomId,
           userId,
-          a.fileName,
-          a.fileSize,
-          a.mimeType,
-          a.storageKey,
-          a.storageUrl,
-          a.width ?? null,
-          a.height ?? null,
-        );
-      });
-      savedAttachments = await this.dataSource.query(
-        `INSERT INTO message_attachments
-           (message_id, uploader_id, file_name, file_size, mime_type, storage_key, storage_url, width, height)
-         VALUES ${values.join(', ')}
-         RETURNING ${MESSAGE_ATTACHMENT_COLUMNS_SQL}`,
-        params,
+          sequence,
+          dto.clientMessageId ?? null,
+          contentToSave,
+          contentJson,
+          contentType,
+          dto.replyToId ?? null,
+          {},
+          !!dto.isThreadReply,
+        ],
       );
-    }
+      const message: any = savedRows[0];
+
+      // The sender has implicitly "read" up to their own message - keeps their
+      // own unread badge for this room from lagging behind what they just sent.
+      await query(
+        `UPDATE chat_members SET last_read_seq = GREATEST(last_read_seq, $3), last_read_message_id = $4, last_read_at = now()
+         WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+        [roomId, userId, sequence, message.id],
+      );
+
+      if (dto.isThreadReply && dto.replyToId) {
+        const threadRows = await query<{ replyCount: number }>(
+          `INSERT INTO message_threads (room_id, root_message_id, reply_count, last_reply_at)
+           VALUES ($1, $2, 1, now())
+           ON CONFLICT (root_message_id) DO UPDATE SET
+             reply_count = message_threads.reply_count + 1, last_reply_at = now()
+           RETURNING reply_count AS "replyCount"`,
+          [roomId, dto.replyToId],
+        );
+        message.threadReplyCount = threadRows[0].replyCount;
+        message.threadRootId = dto.replyToId;
+      }
+
+      // Attachments were already uploaded to storage via
+      // /chat/rooms/:roomId/attachments/presign — this only records them.
+      if (hasAttachments) {
+        const values: string[] = [];
+        const params: unknown[] = [];
+        dto.attachments!.forEach((a, i) => {
+          const base = i * 9;
+          values.push(
+            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9})`,
+          );
+          params.push(
+            message.id,
+            userId,
+            a.fileName,
+            a.fileSize,
+            a.mimeType,
+            a.storageKey,
+            a.storageUrl,
+            a.width ?? null,
+            a.height ?? null,
+          );
+        });
+        savedAttachments = await query(
+          `INSERT INTO message_attachments
+             (message_id, uploader_id, file_name, file_size, mime_type, storage_key, storage_url, width, height)
+           VALUES ${values.join(', ')}
+           RETURNING ${MESSAGE_ATTACHMENT_COLUMNS_SQL}`,
+          params,
+        );
+      }
+
+      return message;
+    });
 
     // 4. Background Jobs — parallel, not sequential
     // Thread replies are hidden from the main timeline (Slack-style), so they must

@@ -6,6 +6,8 @@ export const CHAT_ROOM_COLUMNS_SQL = `
   message_seq AS "messageSeq", created_by AS "createdById",
   background_url AS "backgroundUrl", background_type AS "backgroundType",
   public_id AS "publicId", slug,
+  is_system AS "isSystem", membership_locked AS "membershipLocked",
+  posting_mode AS "postingMode", linked_room_id AS "linkedRoomId",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 
@@ -18,6 +20,8 @@ export const CHAT_ROOM_COLUMNS_SQL_R = `
   r.message_seq AS "messageSeq", r.created_by AS "createdById",
   r.background_url AS "backgroundUrl", r.background_type AS "backgroundType",
   r.public_id AS "publicId", r.slug,
+  r.is_system AS "isSystem", r.membership_locked AS "membershipLocked",
+  r.posting_mode AS "postingMode", r.linked_room_id AS "linkedRoomId",
   r.created_at AS "createdAt", r.updated_at AS "updatedAt"
 `;
 

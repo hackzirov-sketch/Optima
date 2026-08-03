@@ -159,8 +159,22 @@ export class ChatController {
     );
   }
 
+  /**
+   * The primary listing. Chat membership is itself the permission, so the JWT
+   * is all the authorisation needed — no workspace in the path, and DMs,
+   * groups and channels the user opened outside any workspace are included.
+   */
+  @Get('chat/rooms')
+  @ApiOperation({ summary: 'List every chat room the caller belongs to' })
+  listMyRooms(@CurrentUser('id') userId: string) {
+    return this.roomService.listUserRooms(userId);
+  }
+
   @Get('workspaces/:workspaceId/chat/rooms')
-  @ApiOperation({ summary: 'List chat rooms for workspace (membership)' })
+  @ApiOperation({
+    summary:
+      'List chat rooms for a workspace — a filtered view of GET /chat/rooms; user-owned rooms (direct/group/channel) are always included',
+  })
   @ApiParam({ name: 'workspaceId' })
   listWorkspaceRooms(
     @Param('workspaceId') workspaceId: string,
@@ -207,9 +221,15 @@ export class ChatController {
     return this.roomService.resolveRoomIdentifier(identifier, userId);
   }
 
+  /**
+   * Create a direct chat, group or channel with no workspace involved — the
+   * JWT identifies the owner and that is the whole authorisation check. This
+   * is the route the chat UI uses; the workspace-scoped POST above only exists
+   * for rooms that genuinely belong to a workspace.
+   */
   @Post('chat/rooms')
   @ApiOperation({
-    summary: 'Create a standalone chat room (private/public, no workspace)',
+    summary: 'Create a chat room (direct/group/channel) without a workspace',
   })
   createStandaloneRoom(
     @CurrentUser('id') userId: string,
