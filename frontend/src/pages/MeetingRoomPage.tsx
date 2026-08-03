@@ -114,6 +114,11 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     // the route is exactly the "keep running as a widget" case.
   }, [directMode, routeMatch?.[1]]);
   const meetingId = directMode ? meetingIdProp! : standaloneMeetingId;
+  // True only while this instance actually owns the screen (its own
+  // /meetings/:id route, or the direct-call overlay). Off the route it is at
+  // most a floating widget — and when not even in a call, nothing at all.
+  // The lobby camera preview keys off this: see the getUserMedia effect below.
+  const isFullMode = directMode || Boolean(routeMatch);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +142,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [screenSharing, setScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream>();
   const [previewStream, setPreviewStream] = useState<MediaStream>();
+  // Mirrored into a ref so the unmount/pagehide handlers below can release the
+  // camera without re-subscribing on every preview change.
+  const previewStreamRef = useRef<MediaStream | undefined>(undefined);
+  previewStreamRef.current = previewStream;
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevice, setCameraDevice] = useState("");
   const [microphoneDevice, setMicrophoneDevice] = useState("");
@@ -207,8 +216,13 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     setSecurityCodes((current) => ({ ...current, [targetUserId]: emojis }));
   }, [ensureSecurityKey, meetingId]);
 
+  // Lobby preview. Gated on isFullMode: this component stays mounted for the
+  // whole app session, so without that gate leaving a meeting (entered=false,
+  // camera still toggled on) re-acquired the camera and mic and held them open
+  // forever — the OS recording indicator stayed lit while the user was off
+  // reading chat.
   useEffect(() => {
-    if (entered || (!camera && !microphone)) {
+    if (!isFullMode || entered || (!camera && !microphone)) {
       previewStream?.getTracks().forEach((track) => track.stop());
       setPreviewStream(undefined);
       return;
@@ -225,7 +239,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     }).catch(() => setPermissionError(t("meetingRoom.permissionDenied")));
     return () => { cancelled = true; };
   // Device selection intentionally restarts preview.
-  }, [entered, camera, microphone, cameraDevice, microphoneDevice]);
+  }, [isFullMode, entered, camera, microphone, cameraDevice, microphoneDevice]);
 
   useEffect(() => {
     if (!meetingId) return;
@@ -756,11 +770,22 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     screenTrack.current?.stop();
     screenTrack.current = null;
     currentStream.current?.getTracks().forEach((track) => track.stop());
+    currentStream.current = undefined;
+    setLocalStream(undefined);
+    setScreenSharing(false);
+    setScreenStream((current) => {
+      current?.getTracks().forEach((track) => track.stop());
+      return undefined;
+    });
   }, [meetingId]);
 
   function leave() {
     cleanup();
     setEntered(false);
+    // The session is over for this user: drop the meeting this persistent
+    // instance points at, so nothing keeps a lobby preview (or a widget) alive
+    // in the background. Opening /meetings/:id again starts it fresh.
+    if (!directMode) setStandaloneMeetingId(null);
     if (directMode) onDirectClose?.();
     // Called from the meeting page itself -> go back to the list. Called
     // from the floating widget (user is elsewhere in the app) -> just let
@@ -808,6 +833,23 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }
 
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
+
+  // Last-resort release of the camera/mic: on unmount, and when the page is
+  // being torn down or backgrounded on mobile (where pagehide, not unload, is
+  // the event that actually fires). Without this the OS keeps showing the
+  // recording indicator after the tab goes away.
+  useEffect(() => {
+    const release = () => {
+      previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+      currentStream.current?.getTracks().forEach((track) => track.stop());
+      screenTrack.current?.stop();
+    };
+    window.addEventListener("pagehide", release);
+    return () => {
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, []);
 
   /** Lazily creates (or reuses) a Web Audio analyser for one participant's audio track. */
   const ensureAudioAnalyser = useCallback((id: string, stream: MediaStream) => {
@@ -928,8 +970,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // standalone instance (mounted once at the app root) is "full" while on
   // its own /meetings/:id route, becomes a floating widget when the user
   // navigates elsewhere while still in the call, and renders nothing when
-  // there's no active call and no matching route.
-  const isFullMode = directMode || Boolean(routeMatch);
+  // there's no active call and no matching route. (isFullMode is computed up
+  // top, next to routeMatch, because the lobby preview effect needs it too.)
   const isWidgetMode = !isFullMode && entered;
 
   if (!meetingId && !isWidgetMode) return null;
