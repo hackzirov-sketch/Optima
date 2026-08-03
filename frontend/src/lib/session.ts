@@ -1,29 +1,55 @@
 const AUTH_EVENT_KEY = "optima_auth_event";
-const ACCESS_TOKEN_KEY = "optima_access_token";
-const REFRESH_TOKEN_KEY = "optima_refresh_token";
+const ACTIVE_KEY = "optima_session_active";
+/** Pre-cookie-era keys. Only referenced to purge them — see below. */
+const LEGACY_TOKEN_KEYS = ["optima_access_token", "optima_refresh_token"];
 
 /**
- * Auth now lives entirely in httpOnly cookies set by the backend — nothing
- * token- or user-related is readable or stored by frontend JS anymore (that's
- * the whole point: an XSS bug can't exfiltrate a cookie it can't read).
- * This module is just a same-tab + cross-tab "something about the session
- * changed, go re-check" signal; callers re-fetch `/users/me` in response
- * rather than trusting any locally cached state.
+ * Auth lives entirely in httpOnly cookies set by the backend — the JWT
+ * strategies read the token from `req.cookies` and ignore the Authorization
+ * header outright, so nothing token-related is readable or stored by frontend
+ * JS (that's the whole point: an XSS bug can't exfiltrate a cookie it can't
+ * read). This module is just a same-tab + cross-tab "something about the
+ * session changed, go re-check" signal plus a flag saying whether a session is
+ * believed to exist; callers re-fetch `/users/me` rather than trusting any
+ * locally cached state.
+ *
+ * The flag is deliberately NOT a token. An earlier version stored
+ * `result.accessToken` here, but the backend strips tokens out of the response
+ * body, so what actually landed in localStorage was the string "undefined" —
+ * truthy, and duly sent as `Authorization: Bearer undefined` on every request.
  */
+function purgeLegacyTokens() {
+  try {
+    LEGACY_TOKEN_KEYS.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Storage disabled — nothing to purge.
+  }
+}
+
+purgeLegacyTokens();
+
 export const session = {
-  accessToken() {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  /** Whether a session is believed to exist. Cookie presence isn't readable
+   *  from JS, so this is a hint for skipping the bootstrap fetch — never a
+   *  substitute for the server's answer. */
+  isActive() {
+    return localStorage.getItem(ACTIVE_KEY) === "1";
   },
-  refreshToken() {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
-  },
-  save(accessToken: string, refreshToken: string) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  /** Call after login/refresh succeeds. Tokens are in cookies already. */
+  markActive() {
+    try {
+      localStorage.setItem(ACTIVE_KEY, "1");
+    } catch {
+      // Private browsing — the app still works, it just re-bootstraps.
+    }
   },
   clear() {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    try {
+      localStorage.removeItem(ACTIVE_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+    purgeLegacyTokens();
   },
   notify() {
     try {

@@ -97,6 +97,28 @@ function DirectRoomAvatar({ peer, size = "md" }: {
   );
 }
 
+/**
+ * The avatar for a non-DM room. Telegram-style: an uploaded photo when there
+ * is one, otherwise a glyph that says what *kind* of room this is — a
+ * broadcast tower for channels, people for groups — rather than the first
+ * letter of the name, which told the user nothing (a channel called "Elbek
+ * Rustamjanov" was indistinguishable from a personal chat).
+ */
+function RoomAvatar({ room, size = "md" }: { room: ChatRoom; size?: "sm" | "md" }) {
+  const sizeClass = size === "sm" ? "room-avatar-sm" : "";
+  if (room.avatarUrl) {
+    return <span className={`room-avatar ${sizeClass} room-avatar-image`}><img src={room.avatarUrl} alt="" /></span>;
+  }
+  const isChannel = room.type === "channel";
+  const iconSize = size === "sm" ? 16 : 19;
+  return (
+    <span className={`room-avatar ${sizeClass} room-avatar-kind ${isChannel ? "room-avatar-channel" : "room-avatar-group"}`}
+          aria-hidden="true">
+      {isChannel ? <RadioTower size={iconSize} /> : <Users size={iconSize} />}
+    </span>
+  );
+}
+
 function memberUser(member: WorkspaceMember, t: TranslateFn): User {
   return (member.user || {
     id: member.userId,
@@ -207,7 +229,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState<"group" | "direct">("group");
+  const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
   const [creating, setCreating] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
@@ -622,7 +644,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }) {
     if (!workspace) return;
-    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(workspace.id), api.workspaces.members(workspace.id), api.chat.community()]);
+    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.workspaces.members(workspace.id), api.chat.community()]);
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
       ...room!, memberIds: room!.memberIds || [], memberProfiles: room!.memberProfiles || [],
       unreadCount: room!.unreadCount || 0, memberCount: room!.memberCount || 0,
@@ -958,7 +980,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     setOpeningDirect(targetUserId);
     try {
-      const room = await api.chat.createRoom(workspace.id, { type: "direct", targetUserId });
+      const room = await api.chat.createRoom({ type: "direct", targetUserId });
       await loadRooms(room.id);
       setSearch("");
       setAiOpen(false);
@@ -1344,19 +1366,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setCreating(true);
     const data = new FormData(event.currentTarget);
     try {
+      // No `visibility` field: CreateChatRoomDto doesn't declare one and the
+      // global ValidationPipe runs with forbidNonWhitelisted, so sending it
+      // failed the whole request with a 400. Groups and channels default to
+      // scope `private`, which listPublicRooms never surfaces.
       const room = createMode === "direct"
-        ? await api.chat.createRoom(workspace.id, { type: "direct", targetUserId: selectedMembers[0] })
-        : await api.chat.createRoom(workspace.id, {
-          type: "group",
-          visibility: "members_only",
+        ? await api.chat.createRoom({ type: "direct", targetUserId: selectedMembers[0] })
+        : await api.chat.createRoom({
+          type: createMode,
           name: String(data.get("name") || "").trim(),
+          description: String(data.get("description") || "").trim() || undefined,
           memberIds: selectedMembers
         });
       await loadRooms(room.id);
       setCreateOpen(false);
       setSelectedMembers([]);
       setMemberSearch("");
-      show(createMode === "direct" ? t("chat.directChatOpened") : t("chat.groupCreated"));
+      show(createMode === "direct" ? t("chat.directChatOpened") : createMode === "channel" ? t("chat.channelCreated") : t("chat.groupCreated"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.conversationCreateFailed"), "error");
     } finally {
@@ -1710,10 +1736,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       title={t("chat.chatsTitle")}><ArrowLeft size={16} /></button>
               {selectedRoom.type === "direct" && other ?
                 <Avatar firstName={other.firstName} lastName={other.lastName} url={other.avatarUrl}
-                        size="sm" /> : selectedRoom.avatarUrl ?
-                  <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl}
-                                                                                      alt="" /></span> : <span
-                    className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || "G").trim().charAt(0).toUpperCase()}</span>}
+                        size="sm" /> : <RoomAvatar room={selectedRoom} size="sm" />}
               <strong>{roomTitle(selectedRoom)}</strong>
               <button className="icon-button" onClick={() => expand(selectedRoom.id)}
                       aria-label={t("chat.expandChatAria")} title={t("chat.expandChatAria")}><Maximize2 size={15} />
@@ -1765,10 +1788,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
               return (
                 <button key={room.id} className="chat-mini-row" onClick={() => chooseRoom(room.id, { silent: true })}>
-                  {room.type === "direct" ? <DirectRoomAvatar peer={other} size="sm" /> : room.avatarUrl ?
-                    <span className="room-avatar room-avatar-sm room-avatar-image"><img src={room.avatarUrl}
-                                                                                        alt="" /></span> : <span
-                      className="room-avatar room-avatar-sm room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                  {room.type === "direct" ? <DirectRoomAvatar peer={other} size="sm" /> :
+                    <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
                   <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
@@ -1869,9 +1890,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <button key={room.id}
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
-                {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : room.avatarUrl ?
-                  <span className="room-avatar room-avatar-image"><img src={room.avatarUrl} alt="" /></span> : <span
-                    className="room-avatar room-avatar-letter">{(room.name || (room.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
                 <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
@@ -1973,10 +1992,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
               {selectedRoom.type === "direct" && detailPeer ?
                 <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
-                        size="sm" /> : selectedRoom.avatarUrl ?
-                  <span className="room-avatar room-avatar-sm room-avatar-image"><img src={selectedRoom.avatarUrl}
-                                                                                      alt="" /></span> : <span
-                    className="room-avatar room-avatar-sm room-avatar-letter">{(selectedRoom.name || (selectedRoom.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                        size="sm" /> : <RoomAvatar room={selectedRoom} size="sm" />}
               <button className="conversation-title" onClick={() => {
                 setDetailsTab(selectedRoom.type === "direct" ? "media" : "members");
                 setDetailMemberSearch("");
@@ -2322,10 +2338,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           <section className="chat-details-hero">
             {detailPeer ?
               <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
-                      size="lg" /> : selectedRoom?.avatarUrl ?
-                <span className="room-avatar room-avatar-image"><img src={selectedRoom.avatarUrl} alt="" /></span> :
-                <span
-                  className="room-avatar room-avatar-letter">{(selectedRoom?.name || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</span>}
+                      size="lg" /> : selectedRoom ? <RoomAvatar room={selectedRoom} /> : null}
             <div className="details-identity">
               <strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? t("chat.usernameNotSet") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}</small>{selectedRoom?.description &&
               <p>{selectedRoom.description}</p>}</div>
@@ -2489,20 +2502,30 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")}
              description={t("chat.newConversationModalDesc")}>
         <form className="modal-form" onSubmit={createConversation}>
-          <div className="segmented-control"><span className="segmented-indicator" aria-hidden="true"
-                                                   style={{ transform: `translateX(${createMode === "direct" ? "100%" : "0"})` }} />
+          <div className="segmented-control segmented-control-3"><span className="segmented-indicator"
+                                                                      aria-hidden="true"
+                                                                      style={{ transform: `translateX(${createMode === "direct" ? "200%" : createMode === "channel" ? "100%" : "0"})` }} />
             <button type="button" className={createMode === "group" ? "active" : ""} onClick={() => {
               setCreateMode("group");
               setSelectedMembers([]);
             }}><UsersRound size={17} /> {t("chat.groupWord")}</button>
+            <button type="button" className={createMode === "channel" ? "active" : ""} onClick={() => {
+              setCreateMode("channel");
+              setSelectedMembers([]);
+            }}><RadioTower size={17} /> {t("chat.channelWord")}</button>
             <button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => {
               setCreateMode("direct");
               setSelectedMembers([]);
             }}><UserRound size={17} /> {t("chat.personalWord")}</button>
           </div>
-          {createMode === "group" &&
-            <label>{t("chat.groupNameLabel")}<input name="name" placeholder={t("chat.groupNamePlaceholder")} required
-                                                    maxLength={200} /></label>}
+          {createMode !== "direct" && <>
+            <label>{createMode === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input name="name"
+                                                                                                           placeholder={createMode === "channel" ? t("chat.channelNamePlaceholder") : t("chat.groupNamePlaceholder")}
+                                                                                                           required
+                                                                                                           maxLength={200} /></label>
+            <label>{t("chat.descriptionLabel")}<input name="description" placeholder={t("chat.descriptionPlaceholder")}
+                                                      maxLength={1000} /></label>
+          </>}
           <label className="search-field member-search"><Search size={17} /><input value={memberSearch}
                                                                                    onChange={(event) => setMemberSearch(event.target.value)}
                                                                                    placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")}
@@ -2513,7 +2536,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X
               size={15} /></button>}</label>
           <fieldset className="member-picker">
-            <legend>{createMode === "group" ? t("chat.selectMembersLegend") : t("chat.whoToChatLegend")}</legend>
+            <legend>{createMode === "direct" ? t("chat.whoToChatLegend") : createMode === "channel" ? t("chat.selectSubscribersLegend") : t("chat.selectMembersLegend")}</legend>
             {pickerCandidates.length === 0 && <p
               className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}{pickerCandidates.map((member) => {
             const checked = selectedMembers.includes(member.id);
@@ -2533,7 +2556,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           <div className="modal-actions"><Button type="button" variant="secondary"
                                                  onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button
             type="submit" loading={creating}
-            disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : t("chat.openChatButton")}</Button>
+            disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : createMode === "channel" ? t("chat.createChannelButton") : t("chat.openChatButton")}</Button>
           </div>
         </form>
       </Modal>

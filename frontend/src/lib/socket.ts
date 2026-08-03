@@ -1,5 +1,4 @@
 import { io, type Socket } from "socket.io-client";
-import { session } from "./session";
 
 let socket: Socket | null = null;
 
@@ -19,14 +18,11 @@ export function getSocket(): Socket {
       // browser attach it to the handshake request automatically, same as
       // any other same-site request. Nothing for JS to read or hand over.
       withCredentials: true,
-      auth: { token: session.accessToken() },
       transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 8,
     });
-  } else {
-    socket.auth = { token: session.accessToken() };
   }
   if (!socket.connected) socket.connect();
   return socket;

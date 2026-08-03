@@ -27,10 +27,10 @@ export interface User {
 }
 
 export interface AuthResult {
-  accessToken: string;
-  refreshToken: string;
-  // Tokens are never in the response body — the backend sets them as httpOnly
-  // cookies directly, so nothing JS-readable holds them.
+  // No accessToken/refreshToken here on purpose: the backend strips them out
+  // of the body and sets them as httpOnly cookies instead. Declaring them
+  // anyway is what produced `Authorization: Bearer undefined` — the fields
+  // were always undefined, and got stringified into localStorage.
   user: User;
   requiresPasswordSetup?: boolean;
 }

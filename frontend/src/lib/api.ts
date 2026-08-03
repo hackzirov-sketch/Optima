@@ -91,15 +91,16 @@ interface RefreshResult {
  * function to read, compare, or store; it only needs to know whether the
  * rotation succeeded. */
 async function renewSession(): Promise<RefreshResult> {
-  const refreshToken = session.refreshToken();
-  if (!refreshToken) return { ok: false, networkError: false };
+  if (!session.isActive()) return { ok: false, networkError: false };
   let response: Response;
   try {
+    // No body: the refresh token is an httpOnly cookie, and JwtRefreshStrategy
+    // reads it from there. `credentials: "include"` is what carries it.
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: "{}",
     });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -107,8 +108,8 @@ async function renewSession(): Promise<RefreshResult> {
     return { ok: false, networkError: true };
   }
   if (response.ok) {
-    const result = unwrapEnvelope<AuthResult>(await response.json());
-    session.save(result.accessToken, result.refreshToken);
+    // The rotated pair arrives as Set-Cookie; the body carries no tokens.
+    session.markActive();
     return { ok: true, networkError: false };
   }
 
@@ -134,8 +135,10 @@ export async function refreshSession(): Promise<RefreshResult> {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
-  const accessToken = session.accessToken();
-  if (!options.anonymous && accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  // No Authorization header on purpose: JwtStrategy/JwtRefreshStrategy read the
+  // token from the httpOnly cookie only, so `credentials: "include"` below is
+  // the whole auth mechanism. Setting the header did nothing but leak a
+  // "Bearer undefined" once the token stopped being returned in the body.
 
   const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: "include" });
   if (response.status === 401 && !options.anonymous && options.retry !== false) {
@@ -219,9 +222,10 @@ export const api = {
         anonymous: true,
         body: JSON.stringify({ code }),
       }),
+    // The server revokes the pair it reads from the request cookies.
     logout: () => apiFetch<{ message: string }>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refreshToken: session.refreshToken() }),
+      body: "{}",
     }),
     /** The access token is an httpOnly cookie the frontend can't decode — this
      * is how it learns which workspace the current session is scoped to. */
@@ -300,9 +304,12 @@ export const api = {
     readReceipts: (roomId: string) => apiFetch<Array<{ userId: string; lastReadSeq: number }>>(`/chat/rooms/${roomId}/read-receipts`),
     presence: (userIds: string[]) => apiFetch<Record<string, { status: string; lastSeenAt: string | null }>>(`/chat/presence?ids=${userIds.map(encodeURIComponent).join(",")}`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
-    rooms: (workspaceId: string) => apiFetch<ChatRoom[]>(`/workspaces/${workspaceId}/chat/rooms`),
-    createRoom: (workspaceId: string, data: Record<string, unknown>) =>
-      apiFetch<ChatRoom>(`/workspaces/${workspaceId}/chat/rooms`, {
+    // Chat membership is its own permission, so both of these are
+    // workspace-less: the JWT identifies the user and that's the whole check.
+    // A DM, group or channel belongs to its members, not to an organisation.
+    rooms: () => apiFetch<ChatRoom[]>("/chat/rooms"),
+    createRoom: (data: Record<string, unknown>) =>
+      apiFetch<ChatRoom>("/chat/rooms", {
         method: "POST",
         body: JSON.stringify(data),
       }),

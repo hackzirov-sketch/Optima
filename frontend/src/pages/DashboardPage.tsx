@@ -36,7 +36,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!workspace) return;
     setLoading(true);
-    Promise.all([api.chat.rooms(workspace.id), api.meetings.list(workspace.id), api.workspaces.members(workspace.id)])
+    Promise.all([api.chat.rooms(), api.meetings.list(workspace.id), api.workspaces.members(workspace.id)])
       .then(([nextRooms, nextMeetings, nextMembers]) => {
         setRooms(nextRooms);
         setMeetings(nextMeetings);

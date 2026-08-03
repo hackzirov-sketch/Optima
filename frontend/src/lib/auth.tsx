@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const bootstrap = useCallback(async () => {
-    if (!session.accessToken()) {
+    if (!session.isActive()) {
       setReady(true);
       return;
     }
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Cookies are already set by the time this resolves (Set-Cookie on the
     // login/verify response) — nothing to store client-side, just adopt the
     // user and resolve which workspace is active.
-    session.save(result.accessToken, result.refreshToken);
+    session.markActive();
     setUser(result.user);
     setReady(true);
     await refreshWorkspaces();
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const completeOAuth = useCallback(async (code: string) => {
     const result = await api.auth.exchangeOAuthCode(code);
-    session.save(result.accessToken, result.refreshToken);
+    session.markActive();
     try {
       const [nextUser, items] = await Promise.all([api.users.me(), api.workspaces.list()]);
       setUser(nextUser);
