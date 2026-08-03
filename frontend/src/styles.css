@@ -1019,6 +1019,23 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .modal-layer { position: fixed; inset: 0; z-index: 100; padding: 20px; display: grid; place-items: center; background: rgba(24,29,26,.38); backdrop-filter: blur(3px); }
 .modal { width: min(100%, 430px); max-height: min(90dvh, 760px); overflow: auto; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); box-shadow: 0 24px 70px rgba(20,27,23,.18); }
 .modal-md { width: min(100%, 610px); }.modal-lg { width: min(100%, 820px); }
+
+/* Confirm dialog — the in-app replacement for window.confirm() */
+.confirm-layer { position: fixed; inset: 0; z-index: 3000; padding: 20px; display: grid; place-items: center; background: rgba(11,18,32,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: confirm-layer-in 160ms var(--easing-standard); }
+.confirm-layer.confirm-closing { animation: confirm-layer-in 140ms var(--easing-standard) reverse forwards; }
+.confirm-dialog { width: min(100%, 400px); padding: 26px 24px 20px; border: 1px solid var(--line); border-radius: var(--radius-modal); background: var(--card); box-shadow: var(--shadow-lg); text-align: center; animation: confirm-pop-in var(--dur-enter) var(--easing-spring); }
+.confirm-closing .confirm-dialog { animation: confirm-pop-in 140ms var(--easing-standard) reverse forwards; }
+.confirm-icon { width: 52px; height: 52px; margin: 0 auto 15px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-bg-medium); color: var(--brand-600); }
+.confirm-danger .confirm-icon { background: var(--danger-soft); color: var(--danger); }
+.confirm-dialog h2 { margin: 0 0 7px; font-size: 18px; line-height: 1.35; letter-spacing: -.01em; }
+.confirm-dialog p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.confirm-actions { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.confirm-actions .button { width: 100%; justify-content: center; font-size: 13px; }
+.confirm-actions .button-ghost { border: 1px solid var(--line); }
+@keyframes confirm-layer-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes confirm-pop-in { from { opacity: 0; transform: scale(.94) translateY(10px); } to { opacity: 1; transform: none; } }
+@media (max-width: 520px) { .confirm-actions { grid-template-columns: 1fr; } .confirm-actions .button-ghost { order: 2; } }
+@media (prefers-reduced-motion: reduce) { .confirm-layer, .confirm-dialog, .confirm-layer.confirm-closing, .confirm-closing .confirm-dialog { animation: none; } }
 .modal-header { min-height: 78px; padding: 19px 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); }
 .modal-header h2 { margin-bottom: 5px; font-size: 18px; }
 .modal-header p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -1762,6 +1779,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 @media (prefers-reduced-motion: reduce) { .chat-catalog .catalog-indicator { transition: none; } }
 .page, .chat-page { animation: page-soft-enter 150ms var(--easing-standard) both; }
 .room-list-transition { animation: content-soft-enter 260ms var(--easing-standard) both; }
+.room-list-section { margin: 12px 10px 4px; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
 @keyframes page-soft-enter { from { opacity: .72; } to { opacity: 1; } }
 @keyframes content-soft-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 

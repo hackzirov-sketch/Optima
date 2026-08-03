@@ -2,6 +2,7 @@ import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon
 import { FormEvent, useEffect, useState } from "react";
 import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/ConfirmDialog";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
@@ -24,6 +25,7 @@ const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US
 export function ProfilePage() {
   const { user, workspace, refreshUser, logout } = useAuth();
   const { show } = useToast();
+  const confirm = useConfirm();
   const { t, locale } = useI18n();
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -170,7 +172,11 @@ export function ProfilePage() {
   }
 
   async function revokeOtherSessions() {
-    if (!window.confirm(t("profile.confirmCloseOthers"))) return;
+    if (!(await confirm({
+      title: t("profile.closeOthers"),
+      description: t("profile.confirmCloseOthers"),
+      confirmLabel: t("profile.closeOthers")
+    }))) return;
     setRevokingAll(true);
     try {
       await Promise.all(sessions.slice(1).map((entry) => api.auth.revokeSession(entry.id)));

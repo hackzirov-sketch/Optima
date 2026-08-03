@@ -587,6 +587,17 @@ export class ChatController {
     return this.memberService.setMuted(roomId, userId, dto.muted);
   }
 
+  @Post('chat/rooms/:roomId/leave')
+  @ApiOperation({
+    summary: 'Leave a group/channel (the room stays for everyone else)',
+  })
+  leaveRoom(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.roomService.leaveRoom(roomId, userId);
+  }
+
   @Delete('chat/rooms/:roomId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a chat room (DM or group if creator)' })

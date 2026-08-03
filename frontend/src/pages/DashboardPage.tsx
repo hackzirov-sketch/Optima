@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, Skeleton } from "../components/ui";
 import { StarfieldBackground } from "../components/StarfieldBackground";
+import { useConfirm } from "../components/ConfirmDialog";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
@@ -14,6 +15,7 @@ const subjectKeys: Record<string, string> = { ielts: "ielts", cefr: "cefr", math
 export function DashboardPage() {
   const { user, workspace } = useAuth();
   const { t, locale } = useI18n();
+  const confirm = useConfirm();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -49,13 +51,21 @@ export function DashboardPage() {
   const unread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
 
   async function removeMeeting(id: string) {
-    if (!window.confirm(t("dashboard.deleteMeetingConfirm"))) return;
+    if (!(await confirm({
+      title: t("common.delete"),
+      description: t("dashboard.deleteMeetingConfirm"),
+      confirmLabel: t("common.delete")
+    }))) return;
     await api.meetings.remove(id);
     setMeetings((current) => current.filter((meeting) => meeting.id !== id));
   }
 
   async function removeRoom(id: string) {
-    if (!window.confirm(t("dashboard.deleteGroupConfirm"))) return;
+    if (!(await confirm({
+      title: t("chat.deleteGroup"),
+      description: t("dashboard.deleteGroupConfirm"),
+      confirmLabel: t("common.delete")
+    }))) return;
     await api.chat.deleteRoom(id);
     setRooms((current) => current.filter((room) => room.id !== id));
   }

@@ -15,6 +15,7 @@ import {
   ImagePlus,
   Link2,
   LoaderCircle,
+  LogOut,
   MailPlus,
   Maximize2,
   Megaphone,
@@ -66,6 +67,7 @@ import { StarfieldBackground }                                              from
 import { AudioMessage }                                                     from "../components/AudioMessage";
 import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
 import { useToast }                                                         from "../components/Toast";
+import { useConfirm }                                                       from "../components/ConfirmDialog";
 import { api }                                                              from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { getSocket }                                                        from "../lib/socket";
@@ -131,6 +133,7 @@ type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: strin
 export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
   const { user, workspace } = useAuth();
   const { show } = useToast();
+  const confirm = useConfirm();
   const { t, locale } = useI18n();
   const [location, navigate] = useLocation();
   const [minimized, setMinimized] = useState(false);
@@ -210,6 +213,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [memberSearch, setMemberSearch] = useState("");
   const [globalUsers, setGlobalUsers] = useState<Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  // Telegram-style: the sidebar search box looks past the joined rooms and
+  // finds people you have never written to yet.
+  const [sidebarUsers, setSidebarUsers] = useState<Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>>([]);
+  const [sidebarSearching, setSidebarSearching] = useState(false);
+  const [openingDirect, setOpeningDirect] = useState<string | null>(null);
   const [workspaceInviteOpen, setWorkspaceInviteOpen] = useState(false);
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
@@ -306,9 +314,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     members.forEach((member) => result.set(member.userId, memberUser(member, t)));
     rooms.flatMap((room) => room.memberProfiles || []).forEach((profile) => result.set(profile.id, profile));
     globalUsers.forEach((profile) => result.set(profile.id, profile));
+    sidebarUsers.forEach((profile) => result.set(profile.id, profile));
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, rooms, globalUsers]);
+  }, [members, rooms, globalUsers, sidebarUsers]);
   const memberMapRef = useRef(memberMap);
   useEffect(() => {
     memberMapRef.current = memberMap;
@@ -538,13 +547,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setRoomContext({
       roomId: room.id,
       x: Math.min(event.clientX, window.innerWidth - 250),
-      y: Math.min(event.clientY, window.innerHeight - 230)
+      y: Math.min(event.clientY, window.innerHeight - 280)
     });
   }
 
   async function deleteSelectedRoom() {
     if (!selectedRoom || selectedRoom.isSystem || selectedRoom.type === "direct") return;
-    if (!window.confirm(t("chat.deleteGroupConfirm", { title: roomTitle(selectedRoom) }))) return;
+    if (!(await confirm({
+      title: t("chat.deleteGroup"),
+      description: t("chat.deleteGroupConfirm", { title: roomTitle(selectedRoom) }),
+      confirmLabel: t("common.delete")
+    }))) return;
     try {
       await api.chat.deleteRoom(selectedRoom.id);
       const remaining = rooms.filter((room) => room.id !== selectedRoom.id);
@@ -561,21 +574,53 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
   }
 
-  async function deleteRoomFromContext(room: ChatRoom) {
-    if (!window.confirm(t("chat.deleteGroupConfirm", { title: roomTitle(room) }))) return;
-    try {
-      await api.chat.deleteRoom(room.id);
-      const remaining = rooms.filter((item) => item.id !== room.id);
-      setRooms(remaining);
-      setRoomContext(null);
-      if (selectedId === room.id) remaining[0] ? chooseRoom(remaining[0].id) : setSelectedId(null);
-      show(t("chat.groupDeleted"));
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("chat.groupDeleteFailed"), "error");
+  /** Drops a room from the sidebar after a delete/leave, moving off it if it was open. */
+  function forgetRoom(roomId: string) {
+    const remaining = rooms.filter((item) => item.id !== roomId);
+    setRooms(remaining);
+    setRoomContext(null);
+    if (selectedId !== roomId) return;
+    if (remaining[0]) chooseRoom(remaining[0].id);
+    else {
+      setSelectedId(null);
+      navigate("/chat");
     }
   }
 
-  async function loadRooms(preferredId?: string) {
+  async function deleteRoomFromContext(room: ChatRoom) {
+    // A DM is deleted (there's no one to leave it to); a group is left.
+    const isDirect = room.type === "direct";
+    if (!(await confirm({
+      title: t(isDirect ? "chat.deleteChat" : "chat.deleteGroup"),
+      description: t(isDirect ? "chat.deleteChatConfirm" : "chat.deleteGroupConfirm", { title: roomTitle(room) }),
+      confirmLabel: t("common.delete")
+    }))) return;
+    try {
+      await api.chat.deleteRoom(room.id);
+      forgetRoom(room.id);
+      show(t(isDirect ? "chat.chatDeleted" : "chat.groupDeleted"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t(isDirect ? "chat.chatDeleteFailed" : "chat.groupDeleteFailed"), "error");
+    }
+  }
+
+  async function leaveRoomFromContext(room: ChatRoom) {
+    const leaveLabel = t(room.type === "channel" ? "chat.leaveChannel" : "chat.leaveGroup");
+    if (!(await confirm({
+      title: leaveLabel,
+      description: t("chat.leaveGroupConfirm", { title: roomTitle(room) }),
+      confirmLabel: leaveLabel
+    }))) return;
+    try {
+      await api.chat.leaveRoom(room.id);
+      forgetRoom(room.id);
+      show(t("chat.groupLeft"));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.groupLeaveFailed"), "error");
+    }
+  }
+
+  async function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }) {
     if (!workspace) return;
     const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(workspace.id), api.workspaces.members(workspace.id), api.chat.community()]);
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
@@ -588,6 +633,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setMembers(nextMembers);
     const target = preferredId || selectedId;
     if (target && mergedRooms.some((room) => room.id === target)) setSelectedId(target);
+    // A background refresh (e.g. a DM that just arrived) must never yank the
+    // user into another conversation.
+    else if (options?.keepSelection) setSelectedId(null);
       // A pending routeTarget (deep link, e.g. /g/backend-team) resolves and picks its own
     // room shortly after - don't let the "open the first room" fallback race ahead of it.
     else if (!routeTarget && mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
@@ -705,6 +753,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const onDisconnect = () => setConnected(false);
     const onMessage = (message: ChatMessage) => {
       if (message.roomId !== selectedId) {
+        // First message of a DM somebody just opened with us: the room isn't in
+        // our list yet, so patching `rooms` would silently drop it. Pull the
+        // list instead so the conversation appears without a reload.
+        if (!roomsRef.current.some((room) => room.id === message.roomId)) {
+          void loadRooms(undefined, { keepSelection: true }).catch(() => undefined);
+          return;
+        }
         setRooms((current) => current.map((room) => room.id === message.roomId ? {
           ...room,
           unreadCount: message.senderId === user?.id ? room.unreadCount : room.unreadCount + 1,
@@ -872,6 +927,51 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }, 280);
     return () => window.clearTimeout(timer);
   }, [createMode, createOpen, memberSearch, show, user?.id]);
+
+  // The sidebar box searches people as well as rooms (Telegram behaviour) —
+  // typing a name that has no conversation yet still surfaces the user, and
+  // picking them opens/creates the DM.
+  useEffect(() => {
+    const query = search.trim();
+    if (query.length < 2 || catalog === "bot") {
+      setSidebarUsers([]);
+      setSidebarSearching(false);
+      return;
+    }
+    setSidebarSearching(true);
+    const timer = window.setTimeout(() => {
+      api.users.search(query)
+        .then((result) => setSidebarUsers(result.data.filter((entry) => entry.id !== user?.id)))
+        .catch(() => setSidebarUsers([]))
+        .finally(() => setSidebarSearching(false));
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [search, catalog, user?.id]);
+
+  async function openDirectWith(targetUserId: string) {
+    if (!workspace || openingDirect) return;
+    const existing = rooms.find((room) => room.type === "direct" && room.memberIds.includes(targetUserId));
+    if (existing) {
+      setSearch("");
+      chooseRoom(existing.id);
+      return;
+    }
+    setOpeningDirect(targetUserId);
+    try {
+      const room = await api.chat.createRoom(workspace.id, { type: "direct", targetUserId });
+      await loadRooms(room.id);
+      setSearch("");
+      setAiOpen(false);
+      setSelectedId(room.id);
+      // `rooms` is still the pre-load snapshot in this closure, so the route is
+      // built from the freshly returned room rather than via chooseRoom().
+      navigate(canonicalRoute(room));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.conversationCreateFailed"), "error");
+    } finally {
+      setOpeningDirect(null);
+    }
+  }
 
   function announceTyping(value: string) {
     setDraft(value);
@@ -1542,6 +1642,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog]);
   const filteredRooms = rooms.filter((room) => (catalog === "all" || roomCatalog(room) === catalog) && roomTitle(room).toLowerCase().includes(search.toLowerCase()));
+  // Only people you don't already have a visible conversation with — an
+  // existing DM is already listed above as a room.
+  const sidebarPeople = sidebarUsers.filter((person) => !filteredRooms.some((room) => room.type === "direct" && room.memberIds.includes(person.id)));
   const visibleMessages = messageSearch.trim()
     ? messages.filter((message) => `${message.content} ${message.attachments?.map((attachment) => attachment.fileName).join(" ") || ""}`.toLowerCase().includes(messageSearch.trim().toLowerCase()))
     : messages;
@@ -1710,6 +1813,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             setRoomContext(null);
             window.setTimeout(() => void openRoomInvites(), 0);
           }}><UserPlus size={17} />{t("chat.inviteToGroup")}</button>}
+          {/* A group/channel you're in offers "leave"; a DM offers "delete" —
+              only the creator of a group can destroy it for everyone. */}
+          {contextRoom.type !== "direct" && !contextRoom.isSystem && !contextRoom.membershipLocked &&
+            <button className="danger" onClick={() => void leaveRoomFromContext(contextRoom)}><LogOut
+              size={17} />{t(contextRoom.type === "channel" ? "chat.leaveChannel" : "chat.leaveGroup")}</button>}
+          {contextRoom.type === "direct" &&
+            <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2
+              size={17} />{t("chat.deleteChat")}</button>}
           {contextRoom.type !== "direct" && !contextRoom.isSystem && contextRoom.createdById === user?.id &&
             <button className="danger" onClick={() => void deleteRoomFromContext(contextRoom)}><Trash2
               size={17} />{t("chat.deleteGroup")}</button>}
@@ -1746,7 +1857,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               className="room-avatar"><Bot size={18} /></span><span
               className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>{t("chat.aiRoomSubtitle")}</small></span></span>
             </button>}
-          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" &&
+          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && !sidebarSearching && sidebarPeople.length === 0 &&
             <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> :
               <MessageCircle size={22} />}
               <p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p>
@@ -1766,6 +1877,22 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               </button>
             );
           })}
+          {catalog !== "bot" && (sidebarSearching || sidebarPeople.length > 0) && <>
+            <p className="room-list-section">{t("chat.globalPeopleSection")}</p>
+            {sidebarSearching && sidebarPeople.length === 0 &&
+              <div className="center-loader"><LoaderCircle className="spin" size={18} /></div>}
+            {sidebarPeople.map((person) => (
+              <button key={person.id} className="room-item" disabled={openingDirect === person.id}
+                      onClick={() => void openDirectWith(person.id)}>
+                <DirectRoomAvatar peer={person} />
+                <span className="room-copy">
+                  <span><strong>{`${person.firstName} ${person.lastName}`.trim()}</strong></span>
+                  <span><small>{person.username ? `@${person.username}` : t("chat.usernameNotSet")}</small></span>
+                </span>
+                {openingDirect === person.id && <LoaderCircle className="spin" size={16} />}
+              </button>
+            ))}
+          </>}
         </div>
         <footer className="chat-connection"><span
           className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small>
@@ -1895,6 +2022,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       void openRoomInvites();
                     }}><UserPlus
                       size={17} /><span><strong>{t("chat.inviteToGroup")}</strong><small>{t("chat.createManageLinkHint")}</small></span>
+                    </button>}{!selectedRoom.isSystem && !selectedRoom.membershipLocked && <button className="danger"
+                                                                                                 onClick={() => {
+                                                                                                   setHeaderMenuOpen(false);
+                                                                                                   void leaveRoomFromContext(selectedRoom);
+                                                                                                 }}><LogOut
+                      size={17} /><span><strong>{t(selectedRoom.type === "channel" ? "chat.leaveChannel" : "chat.leaveGroup")}</strong><small>{t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</small></span>
                     </button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id &&
                       <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2
                         size={17} /><span><strong>{t("chat.deleteGroup")}</strong><small>{t("chat.deletesAllMessagesHint")}</small></span>

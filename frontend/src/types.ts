@@ -71,7 +71,7 @@ export interface ChatRoom {
   avatarUrl?: string | null;
   createdById: string;
   memberIds: string[];
-  memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>;
+  memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl" | "publicId">>;
   memberCount: number;
   unreadCount: number;
   isReadOnly: boolean;

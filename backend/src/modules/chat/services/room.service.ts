@@ -20,6 +20,16 @@ import {
   normalizeReturning,
 } from '../../../common/utils/sql.util';
 
+/** Peer identity a DM/group row needs to render — title, avatar and /u route. */
+export interface MemberProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  publicId: number;
+}
+
 export interface ChatRoomDto {
   id: string;
   workspaceId: string | null;
@@ -38,6 +48,8 @@ export interface ChatRoomDto {
   createdAt: Date;
   updatedAt: Date;
   memberIds: string[];
+  memberProfiles: MemberProfile[];
+  memberStatus: 'pending' | 'active';
   memberCount: number;
   backgroundUrl: string | null;
   backgroundType: string;
@@ -100,9 +112,19 @@ export class ChatRoomService {
     const members = await this.dataSource.query<{
       userId: string;
       lastReadSeq: number;
+      status: string;
+      firstName: string;
+      lastName: string;
+      username: string | null;
+      avatarUrl: string | null;
+      publicId: number;
     }>(
-      `SELECT user_id AS "userId", last_read_seq AS "lastReadSeq"
-       FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
+      `SELECT cm.user_id AS "userId", cm.last_read_seq AS "lastReadSeq", cm.status,
+              u.first_name AS "firstName", u.last_name AS "lastName",
+              u.username, u.avatar_url AS "avatarUrl", u.public_id AS "publicId"
+       FROM chat_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.room_id = $1 AND cm.left_at IS NULL`,
       [room.id],
     );
 
@@ -133,6 +155,15 @@ export class ChatRoomService {
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       memberIds: members.map((m) => m.userId),
+      memberProfiles: members.map((m) => ({
+        id: m.userId,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        username: m.username ?? null,
+        avatarUrl: m.avatarUrl ?? null,
+        publicId: m.publicId,
+      })),
+      memberStatus: (myMembership?.status as 'pending' | 'active') ?? 'active',
       memberCount: members.length,
       backgroundUrl: room.backgroundUrl ?? null,
       backgroundType: room.backgroundType ?? 'DEFAULT',
@@ -150,30 +181,59 @@ export class ChatRoomService {
     const myRooms = await this.dataSource.query<
       ChatRoom & { myLastReadSeq: number; myStatus: string }
     >(
+      // Direct rooms are deliberately not workspace-filtered: a DM is created in
+      // the initiator's workspace, but the recipient usually lives in their own
+      // one (every account bootstraps a personal workspace). Scoping DMs by
+      // workspace made the room invisible to the other side entirely.
       `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
-       WHERE r.workspace_id = $1`,
-      [workspaceId, userId],
+       WHERE (r.workspace_id = $1 OR r.type = $3)`,
+      [workspaceId, userId, ChatRoomType.DIRECT],
     );
 
     if (myRooms.length === 0) return [];
 
     const roomIds = myRooms.map((r) => r.id);
 
+    // The user profile is joined in here on purpose: a DM's title, avatar and
+    // /u/<username> route all come from the peer, who is frequently *not* a
+    // member of the caller's workspace, so the workspace member list can't
+    // supply them.
     const allMembers = await this.dataSource.query<{
       roomId: string;
       userId: string;
+      firstName: string;
+      lastName: string;
+      username: string | null;
+      avatarUrl: string | null;
+      publicId: number;
     }>(
-      `SELECT room_id AS "roomId", user_id AS "userId" FROM chat_members
-       WHERE room_id = ANY($1::uuid[]) AND left_at IS NULL`,
+      `SELECT cm.room_id AS "roomId", cm.user_id AS "userId",
+              u.first_name AS "firstName", u.last_name AS "lastName",
+              u.username, u.avatar_url AS "avatarUrl", u.public_id AS "publicId"
+       FROM chat_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.room_id = ANY($1::uuid[]) AND cm.left_at IS NULL`,
       [roomIds],
     );
 
     const membersByRoom = new Map<string, string[]>();
+    const profilesByRoom = new Map<string, MemberProfile[]>();
     for (const m of allMembers) {
-      if (!membersByRoom.has(m.roomId)) membersByRoom.set(m.roomId, []);
+      if (!membersByRoom.has(m.roomId)) {
+        membersByRoom.set(m.roomId, []);
+        profilesByRoom.set(m.roomId, []);
+      }
       membersByRoom.get(m.roomId)!.push(m.userId);
+      profilesByRoom.get(m.roomId)!.push({
+        id: m.userId,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        username: m.username ?? null,
+        avatarUrl: m.avatarUrl ?? null,
+        publicId: m.publicId,
+      });
     }
 
     const lastMsgIds = myRooms.map((r) => r.lastMessageId).filter(Boolean);
@@ -216,6 +276,7 @@ export class ChatRoomService {
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
         memberIds: roomMemberIds,
+        memberProfiles: profilesByRoom.get(room.id) ?? [],
         memberCount: roomMemberIds.length,
         backgroundUrl: room.backgroundUrl ?? null,
         backgroundType: room.backgroundType ?? 'DEFAULT',
@@ -622,13 +683,20 @@ export class ChatRoomService {
         });
       // Removed assertMember to allow cross-workspace DMs
 
+      // A DM is unique per *pair of people*, never per workspace. Matching on
+      // workspace_id too meant each side created their own copy — both users
+      // bootstrap a personal workspace, so the lookup never saw the room the
+      // other one had already made, and the pair ended up with two chats.
+      // Oldest wins so both sides deterministically converge on the same room.
       const existingRows = await this.dataSource.query<ChatRoom>(
         `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}
          FROM chat_rooms r
-         JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $2 AND cm1.left_at IS NULL
-         JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $3 AND cm2.left_at IS NULL
-         WHERE r.workspace_id IS NOT DISTINCT FROM $1 AND r.type = $4`,
-        [workspaceId, userId, dto.targetUserId, ChatRoomType.DIRECT],
+         JOIN chat_members cm1 ON cm1.room_id = r.id AND cm1.user_id = $1 AND cm1.left_at IS NULL
+         JOIN chat_members cm2 ON cm2.room_id = r.id AND cm2.user_id = $2 AND cm2.left_at IS NULL
+         WHERE r.type = $3
+         ORDER BY r.created_at ASC
+         LIMIT 1`,
+        [userId, dto.targetUserId, ChatRoomType.DIRECT],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
     }
@@ -697,7 +765,12 @@ export class ChatRoomService {
     const values: string[] = [];
     const params: unknown[] = [];
     Array.from(memberIds).forEach((id, i) => {
-      const status = id === userId ? 'active' : 'pending';
+      // DMs open immediately for both sides (Telegram-style) — only group /
+      // channel invitees have to accept before the room becomes readable.
+      const status =
+        id === userId || derivedType === ChatRoomType.DIRECT
+          ? 'active'
+          : 'pending';
       values.push(`($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`);
       params.push(saved.id, id, status);
     });
@@ -735,6 +808,53 @@ export class ChatRoomService {
       });
     await this.chatMemberService.assertRoomMember(roomId, userId);
     return this.enrichRoom(room, userId);
+  }
+
+  /**
+   * Leaves a group/channel without deleting it for anyone else — the
+   * counterpart to deleteRoom, which is what a DM offers instead. System rooms
+   * (#general and the OTIMA community pair) are membership-locked and can't be
+   * left, and a DM has no "leave" at all: there'd be nothing left to rejoin.
+   */
+  async leaveRoom(roomId: string, userId: string) {
+    const room = await this.findRoomById(roomId);
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
+    if (room.type === ChatRoomType.DIRECT)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Direct conversations are deleted, not left',
+      });
+
+    const flagRows = await this.dataSource.query<{
+      isSystem: boolean;
+      membershipLocked: boolean;
+    }>(
+      `SELECT is_system AS "isSystem", membership_locked AS "membershipLocked"
+       FROM chat_rooms WHERE id = $1`,
+      [roomId],
+    );
+    if (flagRows[0]?.isSystem || flagRows[0]?.membershipLocked)
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You cannot leave this room',
+      });
+
+    const rows = await this.dataSource.query(
+      `UPDATE chat_members SET left_at = now()
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
+       RETURNING id`,
+      [roomId, userId],
+    );
+    if (!rows[0])
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
+      });
+    return { left: true };
   }
 
   async deleteRoom(roomId: string, userId: string) {

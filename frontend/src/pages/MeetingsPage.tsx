@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, EmptyState, Modal, PageHeader, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/ConfirmDialog";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
@@ -14,6 +15,7 @@ const VISIBILITY_OPTIONS: MeetingVisibility[] = ["workspace_only", "private", "p
 export function MeetingsPage() {
   const { user, workspace } = useAuth();
   const { show } = useToast();
+  const confirm = useConfirm();
   const { t, locale } = useI18n();
   const [, navigate] = useLocation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -140,7 +142,11 @@ export function MeetingsPage() {
   }
 
   async function removeMeeting(meeting: Meeting) {
-    if (!window.confirm(t("meetings.deleteConfirm", { title: meeting.title }))) return;
+    if (!(await confirm({
+      title: t("common.delete"),
+      description: t("meetings.deleteConfirm", { title: meeting.title }),
+      confirmLabel: t("common.delete")
+    }))) return;
     try {
       await api.meetings.remove(meeting.id);
       setMeetings((current) => current.filter((item) => item.id !== meeting.id));
