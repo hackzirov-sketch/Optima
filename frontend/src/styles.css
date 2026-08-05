@@ -687,6 +687,13 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .discuss-button:hover { background: color-mix(in srgb, var(--brand-100) 70%, transparent); color: var(--brand-900); }
 .message-mine .discuss-button { border-top-color: rgba(255,255,255,.28); background: rgba(255,255,255,.12); color: #fff; }
 .message-mine .discuss-button:hover { background: rgba(255,255,255,.22); color: #fff; }
+.create-scope { display: grid; gap: 8px; border: 0; padding: 0; margin: 0; }
+.create-scope legend { padding: 0; margin-bottom: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.create-scope label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); cursor: pointer; }
+.create-scope label:has(input:checked) { border-color: var(--accent, currentColor); background: var(--surface-muted); }
+.create-scope label input { margin-top: 3px; flex: 0 0 auto; }
+.create-scope label span { display: grid; gap: 2px; }
+.create-scope label small { color: var(--muted); font-size: 12px; }
 .channel-subscribe-bar { min-height: 66px; padding: 10px 18px; display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--line); background: var(--surface); }
 .channel-subscribe-bar button { min-width: 180px; min-height: 44px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-ink); font-weight: 800; }
 .channel-subscribe-bar button:hover { transform: translateY(-1px); background: #d8e9df; }
@@ -1877,6 +1884,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .chat-mini-message.mine { border-radius: 14px 14px 4px 14px; background: var(--gradient-primary); color: #fff; align-self: flex-end; }
 .chat-mini-message p { margin: 0; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.4; }
 .chat-mini-composer { flex: 0 0 auto; padding: 8px; display: flex; gap: 6px; border-top: 1px solid var(--line); }
+.chat-mini-readonly { flex: 0 0 auto; padding: 12px 8px; text-align: center; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--line); }
 .chat-mini-composer input { flex: 1; min-height: 36px; min-width: 0; padding: 0 12px; border-radius: 999px; background: var(--surface-muted); font-size: 12.5px; }
 .chat-mini-composer button { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--gradient-primary); color: #fff; }
 .chat-mini-composer button:disabled { opacity: .45; }
@@ -2862,3 +2870,127 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 :root[data-theme="dark"] .modal-lg:has(.chat-details) .detail-member-profile small { color: rgba(229,229,232,.35) !important; }
 :root[data-theme="dark"] .modal-lg:has(.chat-details) .detail-member-profile > i { background: rgba(229,229,232,.2) !important; }
 :root[data-theme="dark"] .modal-lg:has(.chat-details) .detail-member-profile > i.online { background: #4ade80 !important; }
+
+/* ── Composer attachment staging ─────────────────────────────────────────────
+   Files wait here after upload until the user presses send, so a picture and
+   its caption leave as one message (Telegram behaviour). */
+.composer-staged { flex: 1 1 100%; order: -1; display: grid; gap: 8px; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-muted); }
+.composer-staged header { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }
+.composer-staged header button { border: 0; background: none; padding: 0; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.composer-staged header button:hover { color: var(--text); }
+.composer-staged ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.composer-staged li { position: relative; width: 76px; }
+.composer-staged li img,
+.composer-staged li .staged-file { display: grid; place-items: center; width: 76px; height: 76px; object-fit: cover; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.composer-staged li small { display: block; margin-top: 4px; font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-staged li > button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--text); color: var(--surface); cursor: pointer; }
+.composer-staged .staged-spinner { position: absolute; inset: 0 0 auto 0; height: 76px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--surface) 65%, transparent); color: var(--muted); }
+.composer-staged .staged-badge { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: #d94a4a; color: #fff; font-size: 11px; font-weight: 800; }
+.composer-staged .staged-error img,
+.composer-staged .staged-error .staged-file { opacity: .5; border-color: #d94a4a; }
+
+/* ── Channel settings panel ──────────────────────────────────────────────────
+   Every rule is scoped under .channel-settings so it outranks the global
+   `label { display: grid }` — without that the toggles rendered as a stacked
+   grid with the checkbox in its own row.
+
+   `min-width: 0` on both grid children is what keeps the panel inside the
+   modal: a grid track defaults to min-content, so a long label made the
+   content column refuse to shrink, the panel overflowed, and the modal
+   scrolled sideways with the nav clipped off the edge.
+
+   Colours are theme tokens only — no literals — so light and dark both get an
+   opaque surface instead of the page showing through. */
+.channel-settings { display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; width: 100%; max-width: 100%; min-height: 440px; max-height: min(74vh, 660px); overflow: hidden; border-radius: 18px; background: var(--surface); color: var(--text); }
+.cs-loading { display: grid; place-items: center; min-height: 240px; color: var(--muted); }
+
+.channel-settings .cs-nav { grid-row: 1 / 3; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 12px 10px; overflow-y: auto; background: var(--surface-muted); border-right: 1px solid var(--line); }
+.channel-settings .cs-nav button { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; padding: 9px 11px; border: 0; border-radius: 10px; background: none; color: var(--text-soft); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.channel-settings .cs-nav button:hover { background: var(--surface); color: var(--text); }
+.channel-settings .cs-nav button.active { background: var(--surface); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.channel-settings .cs-nav button > svg { flex: 0 0 auto; }
+.channel-settings .cs-nav button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings .cs-nav button em { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-size: 9px; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+
+.channel-settings .cs-body { min-width: 0; padding: 20px 22px; overflow-y: auto; display: grid; gap: 14px; align-content: start; background: var(--surface); }
+.channel-settings .cs-body h4 { margin: 0; color: var(--text); font-size: 16px; font-weight: 800; }
+.channel-settings .cs-body h5 { margin: 12px 0 0; color: var(--muted); font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+
+.channel-settings .cs-preview-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--surface-muted); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.channel-settings .cs-preview-note svg { flex: 0 0 auto; margin-top: 1px; }
+
+.channel-settings .cs-field { display: grid; gap: 6px; min-width: 0; color: var(--text); font-size: 13px; font-weight: 500; }
+.channel-settings .cs-field > span { color: var(--text); font-size: 13px; font-weight: 650; }
+.channel-settings .cs-field input,
+.channel-settings .cs-field select,
+.channel-settings .cs-field textarea { width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 13px; font-weight: 500; }
+.channel-settings .cs-field select { appearance: auto; }
+.channel-settings .cs-field input:focus-visible,
+.channel-settings .cs-field select:focus-visible,
+.channel-settings .cs-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.channel-settings .cs-field :disabled { opacity: .55; cursor: not-allowed; }
+.channel-settings .cs-field textarea { resize: vertical; line-height: 1.5; }
+
+.channel-settings .cs-toggle { display: flex; align-items: flex-start; gap: 11px; min-width: 0; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-muted); cursor: pointer; }
+.channel-settings .cs-toggle input[type="checkbox"] { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+.channel-settings .cs-toggle > span { display: grid; gap: 3px; min-width: 0; }
+.channel-settings .cs-toggle strong { color: var(--text); font-size: 13px; font-weight: 650; }
+.channel-settings .cs-toggle small { color: var(--muted); font-size: 11.5px; font-weight: 450; line-height: 1.45; }
+.channel-settings .cs-toggle:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+
+.channel-settings .cs-members { display: grid; gap: 7px; min-width: 0; }
+.channel-settings .cs-member { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 11px; background: var(--surface-muted); }
+.channel-settings .cs-member > span { display: grid; gap: 1px; min-width: 0; }
+.channel-settings .cs-member strong { color: var(--text); font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings .cs-member small { color: var(--muted); font-size: 11px; }
+.channel-settings .cs-member select { flex: 0 0 auto; padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+
+.channel-settings .cs-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.channel-settings .cs-stats > div { display: grid; gap: 3px; padding: 13px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-muted); }
+.channel-settings .cs-stats strong { color: var(--text); font-size: 21px; font-weight: 800; }
+.channel-settings .cs-stats small { color: var(--muted); font-size: 11.5px; }
+
+.channel-settings .cs-readonly { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; }
+.channel-settings .cs-readonly code { padding: 2px 7px; border-radius: 6px; background: var(--surface-muted); color: var(--text-soft); font-size: 11.5px; }
+.channel-settings .cs-danger { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--danger, #d94a4a); border-radius: 12px; background: color-mix(in srgb, var(--danger, #d94a4a) 8%, var(--surface)); }
+
+.channel-settings .cs-audit { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: 260px; overflow-y: auto; }
+.channel-settings .cs-audit li { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); font-size: 12px; }
+.channel-settings .cs-audit b { color: var(--text); font-weight: 650; }
+.channel-settings .cs-audit small { color: var(--muted); font-size: 11px; }
+
+.channel-settings .cs-actions { grid-column: 2; display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; padding: 13px 22px; border-top: 1px solid var(--line); background: var(--surface); }
+.channel-settings .cs-actions .cs-readonly { margin-right: auto; }
+
+/* The panel supplies its own header row and padding, so the modal chrome would
+   only duplicate it. */
+.modal-lg:has(.channel-settings) { width: min(100%, 940px); padding: 0; overflow: hidden; }
+.modal-lg:has(.channel-settings) > .modal-header { padding: 16px 22px; min-height: 0; }
+
+@media (max-width: 760px) {
+  .channel-settings { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; max-height: 82vh; }
+  .channel-settings .cs-nav { grid-row: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .channel-settings .cs-nav button { width: auto; white-space: nowrap; }
+  .channel-settings .cs-nav button span { overflow: visible; }
+  .channel-settings .cs-actions { grid-column: 1; }
+}
+
+/* Read counts. A channel shows a bare number to everyone; in a group the
+   number is a button only the message's author sees, opening the read list. */
+.message-views, .message-views-link { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+.message-views-link { border: 0; padding: 0; background: none; cursor: pointer; font: inherit; font-size: 11px; }
+.message-views-link:hover { color: var(--text); text-decoration: underline; }
+.viewers-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.viewers-list li { display: flex; align-items: center; gap: 10px; }
+.viewers-list li span { display: grid; gap: 1px; font-size: 13px; }
+.viewers-list li small { color: var(--muted); font-size: 11px; }
+
+/* Public-channel preview shown before joining. */
+.room-preview { display: grid; justify-items: center; gap: 8px; padding: 8px 4px 4px; text-align: center; }
+.room-preview-avatar { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; background: var(--surface-muted); color: var(--muted); overflow: hidden; }
+.room-preview-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.room-preview strong { font-size: 17px; }
+.room-preview small { color: var(--muted); font-size: 12.5px; }
+.room-preview p { margin: 4px 0 0; color: var(--text-soft); font-size: 13px; line-height: 1.5; }
+.room-preview code { padding: 3px 8px; border-radius: 6px; background: var(--surface-muted); color: var(--muted); font-size: 11.5px; }
+.room-preview button { margin-top: 8px; min-width: 180px; }

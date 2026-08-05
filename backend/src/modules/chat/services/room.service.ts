@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
 import { UserChatSettings } from '../../../database/entities/user-chat-settings.entity';
@@ -64,6 +65,14 @@ export interface ChatRoomDto {
   memberIds: string[];
   memberProfiles: MemberProfile[];
   memberStatus: 'pending' | 'active';
+  /**
+   * The caller's own role in this room. The client needs it to decide whether
+   * to show a composer at all: an `admins_only` channel accepts posts from
+   * owners and admins only, and a UI that can't see the role has to offer the
+   * input to everyone and let the send fail.
+   */
+  myRole: 'member' | 'admin' | 'owner';
+  isMuted: boolean;
   memberCount: number;
   backgroundUrl: string | null;
   backgroundType: string;
@@ -90,6 +99,7 @@ export class ChatRoomService {
     private readonly wsMembersService: MembersService,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatEncryption: ChatEncryptionService,
+    private readonly events: EventEmitter2,
   ) {}
 
   private async findRoomById(roomId: string): Promise<ChatRoom | null> {
@@ -131,6 +141,8 @@ export class ChatRoomService {
       userId: string;
       lastReadSeq: number;
       status: string;
+      role: string;
+      isMuted: boolean;
       firstName: string;
       lastName: string;
       username: string | null;
@@ -138,6 +150,7 @@ export class ChatRoomService {
       publicId: number;
     }>(
       `SELECT cm.user_id AS "userId", cm.last_read_seq AS "lastReadSeq", cm.status,
+              cm.role, cm.is_muted AS "isMuted",
               u.first_name AS "firstName", u.last_name AS "lastName",
               u.username, u.avatar_url AS "avatarUrl", u.public_id AS "publicId"
        FROM chat_members cm
@@ -182,6 +195,10 @@ export class ChatRoomService {
         publicId: m.publicId,
       })),
       memberStatus: (myMembership?.status as 'pending' | 'active') ?? 'active',
+      myRole:
+        (myMembership?.role as 'member' | 'admin' | 'owner' | undefined) ??
+        'member',
+      isMuted: myMembership?.isMuted ?? false,
       memberCount: members.length,
       backgroundUrl: room.backgroundUrl ?? null,
       backgroundType: room.backgroundType ?? 'DEFAULT',
@@ -219,13 +236,19 @@ export class ChatRoomService {
    */
   private async queryRooms(userId: string, workspaceId: string | null) {
     const myRooms = await this.dataSource.query<
-      ChatRoom & { myLastReadSeq: number; myStatus: string }
+      ChatRoom & {
+        myLastReadSeq: number;
+        myStatus: string;
+        myRole: string;
+        myIsMuted: boolean;
+      }
     >(
       // $1 NULL = no workspace filter at all. When a workspace *is* given, the
       // user-owned kinds still come through: a DM, group or channel belongs to
       // its members, not to an organisation, so filtering them by workspace
       // hid conversations from whichever side didn't share the creator's one.
-      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus"
+      `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus",
+              cm.role AS "myRole", cm.is_muted AS "myIsMuted"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
        WHERE ($1::uuid IS NULL OR r.workspace_id = $1 OR r.type = ANY($3::chat_rooms_type_enum[]))`,
@@ -321,6 +344,10 @@ export class ChatRoomService {
         updatedAt: room.updatedAt,
         memberIds: roomMemberIds,
         memberProfiles: profilesByRoom.get(room.id) ?? [],
+        memberStatus: (room.myStatus as 'pending' | 'active') ?? 'active',
+        myRole:
+          (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
+        isMuted: room.myIsMuted ?? false,
         memberCount: roomMemberIds.length,
         backgroundUrl: room.backgroundUrl ?? null,
         backgroundType: room.backgroundType ?? 'DEFAULT',
@@ -346,9 +373,79 @@ export class ChatRoomService {
           : null,
         unreadCount,
         isMember: true,
-        memberStatus: (room as any).myStatus ?? 'active',
       };
     });
+  }
+
+  /**
+   * Global discovery for the sidebar search box: public channels and groups
+   * the caller has *not* joined yet.
+   *
+   * `listPublicRooms` below only ever looked inside one workspace, so a
+   * channel opened from chat — which carries no workspace at all — could not
+   * be found by anyone who wasn't already a member. Visibility here is
+   * `scope = 'public'` plus one of:
+   *   - no workspace: user-owned channels/groups, public to the whole platform;
+   *   - a workspace the caller belongs to: keeps a workspace's internal rooms
+   *     from leaking to outsiders, which is what "public" means inside one.
+   *
+   * An all-numeric query also matches `public_id` exactly, so the 6-digit id
+   * from a /ch or /g link resolves here as well as by name.
+   */
+  async discoverRooms(userId: string, rawQuery: string, limit = 20) {
+    const q = rawQuery.trim();
+    if (q.length < 2) return [];
+
+    // Same escaping as users.searchPublic: without it a query of `%` matches
+    // every public room in the table.
+    const term = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    const exactPublicId = /^\d+$/.test(q) ? Number(q) : null;
+    const safeLimit = Math.min(Math.max(limit, 1), 50);
+
+    return this.dataSource.query<{
+      id: string;
+      type: ChatRoomType;
+      name: string | null;
+      description: string | null;
+      avatarUrl: string | null;
+      slug: string | null;
+      publicId: number;
+      memberCount: number;
+    }>(
+      `SELECT r.id, r.type, r.name, r.description, r.avatar_url AS "avatarUrl",
+              r.slug, r.public_id AS "publicId",
+              (SELECT count(*)::int FROM chat_members cm2
+                WHERE cm2.room_id = r.id AND cm2.left_at IS NULL) AS "memberCount"
+       FROM chat_rooms r
+       WHERE r.scope = 'public'
+         AND r.is_archived = false
+         AND r.type = ANY($1::chat_rooms_type_enum[])
+         AND (
+           r.workspace_id IS NULL
+           OR r.workspace_id IN (
+             SELECT workspace_id FROM workspace_members WHERE user_id = $2
+           )
+         )
+         AND (
+           r.name ILIKE $3 ESCAPE '\\'
+           OR r.description ILIKE $3 ESCAPE '\\'
+           OR r.slug ILIKE $3 ESCAPE '\\'
+           OR ($4::int IS NOT NULL AND r.public_id = $4)
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM chat_members cm
+           WHERE cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
+         )
+       ORDER BY "memberCount" DESC, r.name ASC
+       LIMIT $5`,
+      [
+        [ChatRoomType.CHANNEL, ChatRoomType.GROUP],
+        userId,
+        term,
+        exactPublicId,
+        safeLimit,
+      ],
+    );
   }
 
   async listPublicRooms(workspaceId: string, userId: string) {
@@ -418,10 +515,22 @@ export class ChatRoomService {
         message: 'Already a member',
       });
 
+    // Joining a public room needs no approval, so the membership is 'active'
+    // outright — leaving it to the column default meant a joiner could land in
+    // 'pending' and see nothing. `ON CONFLICT` covers both re-joining after a
+    // leave (the row still exists with left_at set) and two clicks racing.
     await this.dataSource.query(
-      `INSERT INTO chat_members (room_id, user_id) VALUES ($1, $2)`,
+      `INSERT INTO chat_members (room_id, user_id, status, role)
+       VALUES ($1, $2, 'active', 'member')
+       ON CONFLICT (room_id, user_id)
+       DO UPDATE SET left_at = NULL, status = 'active', joined_at = now()`,
       [roomId, userId],
     );
+    this.events.emit('chat.member_changed', {
+      roomId,
+      userId,
+      action: 'joined',
+    });
     return this.enrichRoom(room, userId);
   }
 
@@ -496,6 +605,22 @@ export class ChatRoomService {
         message: 'Invalid backgroundType',
       });
 
+    // This body has no DTO class, so the global ValidationPipe never inspects
+    // it — an unrecognised scope would otherwise reach the enum column and come
+    // back as an opaque 500.
+    if (
+      dto.scope !== undefined &&
+      !Object.values(RoomScope).includes(dto.scope)
+    )
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: `scope must be one of: ${Object.values(RoomScope).join(', ')}`,
+      });
+    if (dto.scope === RoomScope.WORKSPACE_ONLY && !room.workspaceId)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'This room has no workspace, so it cannot be workspace-only',
+      });
     if (
       dto.name !== undefined &&
       (dto.name.trim().length < 1 || dto.name.trim().length > 200)
@@ -775,7 +900,7 @@ export class ChatRoomService {
       // and the constraint can never disagree.
       const existingRows = await this.dataSource.query<ChatRoom>(
         `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE dm_key = $1`,
-        [directPairKey(userId, dto.targetUserId!)],
+        [directPairKey(userId, dto.targetUserId)],
       );
       if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
     }
@@ -881,7 +1006,13 @@ export class ChatRoomService {
           await query(
             `INSERT INTO notifications (user_id, actor_id, type, title, message, entity_type, entity_id)
              SELECT unnest($1::uuid[]), $2, 'chat_invite', $3, $4, 'chat_room', $5`,
-            [invitees, userId, notification.title, notification.message, room.id],
+            [
+              invitees,
+              userId,
+              notification.title,
+              notification.message,
+              room.id,
+            ],
           );
         }
 
@@ -901,6 +1032,14 @@ export class ChatRoomService {
       throw err;
     }
 
+    // Everyone else in the room learns about it now rather than on their next
+    // reload — the notification row alone never reached the open client, which
+    // is why a new DM only showed up for the person who started it.
+    this.events.emit('chat.room_created', {
+      roomId: saved.id,
+      memberIds: Array.from(memberIds).filter((id) => id !== userId),
+      createdBy: userId,
+    });
     return this.enrichRoom(saved, userId);
   }
 
@@ -959,6 +1098,11 @@ export class ChatRoomService {
         code: ErrorCode.NOT_ROOM_MEMBER,
         message: 'Not a member of this chat room',
       });
+    this.events.emit('chat.member_changed', {
+      roomId,
+      userId,
+      action: 'left',
+    });
     return { left: true };
   }
 

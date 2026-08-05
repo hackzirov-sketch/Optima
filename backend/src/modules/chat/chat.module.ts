@@ -17,6 +17,8 @@ import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatProcessor } from './workers/chat.processor';
 import { CommunityService } from './services/community.service';
+import { ChannelSettingsService } from './services/channel-settings.service';
+import { MessageViewService } from './services/message-view.service';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { CommunityService } from './services/community.service';
     ChatAiService,
     ChatRoomInviteService,
     CommunityService,
+    ChannelSettingsService,
+    MessageViewService,
     ChatProcessor,
     CommunityService,
   ],
@@ -49,6 +53,8 @@ import { CommunityService } from './services/community.service';
     ChatPresenceService,
     ChatRoomInviteService,
     ChatAiService,
+    ChannelSettingsService,
+    MessageViewService,
   ],
 })
 export class ChatModule {}

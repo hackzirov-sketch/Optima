@@ -1,0 +1,268 @@
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+  ForbiddenException,
+} from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DatabaseService } from '../../../database/database.service';
+import { RedisService } from '../../../redis/redis.service';
+import { ErrorCode } from '../../../common/enums/error-code.enum';
+
+/** How often the buffer is drained into Postgres. */
+const FLUSH_INTERVAL_MS = 10_000;
+
+/** Messages drained per tick — bounds one transaction's size under a spike. */
+const MAX_MESSAGES_PER_FLUSH = 500;
+
+const viewersKey = (messageId: string) => `message:${messageId}:viewers`;
+const PENDING_KEY = 'message:views:pending';
+
+/**
+ * View tracking, buffered in Redis and written in batches.
+ *
+ * A view is the highest-frequency event in the product — every message that
+ * scrolls past every member produces one — and the naive implementation is one
+ * INSERT per view. Redis absorbs them instead: `SADD` makes a repeat view from
+ * the same person free (a Set stores them once no matter how many times they
+ * scroll back), and a worker drains the whole buffer every 10 seconds into a
+ * single bulk INSERT ... ON CONFLICT DO NOTHING.
+ *
+ * The API therefore answers in the time of one Redis round-trip, and Postgres
+ * sees one write per 10 seconds instead of thousands.
+ *
+ * With Redis unavailable this degrades to writing straight to Postgres —
+ * slower, but views keep working rather than silently vanishing.
+ */
+@Injectable()
+export class MessageViewService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(MessageViewService.name);
+  private timer: NodeJS.Timeout | null = null;
+  private flushing = false;
+
+  constructor(
+    private readonly dataSource: DatabaseService,
+    private readonly redisService: RedisService,
+    private readonly events: EventEmitter2,
+  ) {}
+
+  onModuleInit() {
+    // unref() so a pending tick never holds the process open during shutdown.
+    this.timer = setInterval(() => {
+      void this.flush();
+    }, FLUSH_INTERVAL_MS);
+    this.timer.unref();
+  }
+
+  async onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    // Drain what's buffered rather than losing the last window on deploy.
+    await this.flush();
+  }
+
+  /**
+   * Records that `userId` has seen these messages. Membership is checked once
+   * for the room, not once per message — they all belong to the same room.
+   */
+  async recordViews(roomId: string, userId: string, messageIds: string[]) {
+    if (messageIds.length === 0) return { buffered: 0 };
+
+    const member = await this.dataSource.query(
+      `SELECT 1 FROM chat_members
+        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
+      [roomId, userId],
+    );
+    if (!member[0])
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
+      });
+
+    // Only messages that really belong to this room, so a caller can't inflate
+    // the view count of a message in a room they aren't in by naming its id.
+    const owned = await this.dataSource.query<{ id: string }>(
+      `SELECT id FROM chat_messages
+        WHERE id = ANY($1::uuid[]) AND room_id = $2 AND deleted_at IS NULL
+          AND sender_id IS DISTINCT FROM $3`,
+      [messageIds.slice(0, MAX_MESSAGES_PER_FLUSH), roomId, userId],
+    );
+    if (owned.length === 0) return { buffered: 0 };
+
+    const client = this.redisService.getClient();
+    if (!client) {
+      await this.persist(owned.map((row) => ({ messageId: row.id, userId })));
+      return { buffered: owned.length };
+    }
+
+    const pipeline = client.pipeline();
+    for (const row of owned) {
+      pipeline.sadd(viewersKey(row.id), userId);
+      // The buffer is only discoverable through this index — without it the
+      // flusher would have to SCAN the keyspace every 10 seconds.
+      pipeline.sadd(PENDING_KEY, row.id);
+    }
+    await pipeline.exec();
+    return { buffered: owned.length };
+  }
+
+  /**
+   * Drains the buffer. Safe to call concurrently — the `flushing` guard keeps
+   * a slow tick from overlapping the next one and double-counting.
+   */
+  async flush(): Promise<number> {
+    if (this.flushing) return 0;
+    const client = this.redisService.getClient();
+    if (!client) return 0;
+
+    this.flushing = true;
+    try {
+      const messageIds = await client.spop(PENDING_KEY, MAX_MESSAGES_PER_FLUSH);
+      if (!messageIds || messageIds.length === 0) return 0;
+
+      const pairs: Array<{ messageId: string; userId: string }> = [];
+      const perMessage = new Map<string, number>();
+
+      for (const messageId of messageIds) {
+        // RENAME then read: a viewer arriving mid-flush lands in a freshly
+        // created key and is picked up next tick, rather than being read and
+        // then deleted out from under itself.
+        const staging = `${viewersKey(messageId)}:flushing`;
+        try {
+          await client.rename(viewersKey(messageId), staging);
+        } catch {
+          continue; // key vanished — already drained
+        }
+        const viewers = await client.smembers(staging);
+        await client.del(staging);
+        if (viewers.length === 0) continue;
+        perMessage.set(messageId, viewers.length);
+        for (const userId of viewers) pairs.push({ messageId, userId });
+      }
+
+      if (pairs.length === 0) return 0;
+      const inserted = await this.persist(pairs);
+      this.emitCounts(perMessage);
+      return inserted;
+    } catch (err) {
+      this.logger.error(
+        `View flush failed: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      return 0;
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  /**
+   * One bulk INSERT plus one counter update, in a transaction so the
+   * denormalised `view_count` can never disagree with the rows behind it.
+   * `ON CONFLICT DO NOTHING` makes a redelivered batch a no-op, and the
+   * counter is derived from what was actually inserted rather than from the
+   * batch size — so re-counting the same viewer twice is impossible.
+   */
+  private async persist(
+    pairs: Array<{ messageId: string; userId: string }>,
+  ): Promise<number> {
+    if (pairs.length === 0) return 0;
+
+    return this.dataSource.withTransaction(async (query) => {
+      const values: string[] = [];
+      const params: unknown[] = [];
+      pairs.forEach((pair, index) => {
+        values.push(`($${index * 2 + 1}::uuid, $${index * 2 + 2}::uuid)`);
+        params.push(pair.messageId, pair.userId);
+      });
+
+      const inserted = await query<{ messageId: string }>(
+        `INSERT INTO message_views (message_id, user_id)
+         VALUES ${values.join(', ')}
+         ON CONFLICT (message_id, user_id) DO NOTHING
+         RETURNING message_id AS "messageId"`,
+        params,
+      );
+      if (inserted.length === 0) return 0;
+
+      await query(
+        `UPDATE chat_messages m
+            SET view_count = m.view_count + c.n
+           FROM (
+             SELECT id, count(*)::int AS n
+               FROM unnest($1::uuid[]) AS t(id)
+              GROUP BY id
+           ) c
+          WHERE m.id = c.id`,
+        [inserted.map((row) => row.messageId)],
+      );
+      return inserted.length;
+    });
+  }
+
+  /** Lets the gateway push fresh counts without this service knowing about it. */
+  private emitCounts(perMessage: Map<string, number>) {
+    if (perMessage.size === 0) return;
+    this.events.emit('chat.views_updated', {
+      messageIds: [...perMessage.keys()],
+    });
+  }
+
+  /**
+   * Who has read a message.
+   *
+   * Only the author may ask: in a group the read list is the author's own
+   * delivery receipt, and exposing it to everyone turns a chat into a
+   * presence-tracking tool. Channels report a count instead — a channel's
+   * audience is not a list its members are entitled to enumerate.
+   */
+  async listViewers(messageId: string, userId: string) {
+    const rows = await this.dataSource.query<{
+      senderId: string | null;
+      roomId: string;
+      type: string;
+      viewsCount: number;
+    }>(
+      `SELECT m.sender_id AS "senderId", m.room_id AS "roomId",
+              r.type, m.view_count AS "viewsCount"
+         FROM chat_messages m
+         JOIN chat_rooms r ON r.id = m.room_id
+        WHERE m.id = $1`,
+      [messageId],
+    );
+    const message = rows[0];
+    if (!message)
+      throw new ForbiddenException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
+
+    if (message.type === 'channel')
+      return { count: message.viewsCount, viewers: null };
+
+    if (message.senderId !== userId)
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Only the author can see who read a message',
+      });
+
+    const viewers = await this.dataSource.query<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      username: string | null;
+      avatarUrl: string | null;
+      viewedAt: Date;
+    }>(
+      `SELECT u.id, u.first_name AS "firstName", u.last_name AS "lastName",
+              u.username, u.avatar_url AS "avatarUrl", v.viewed_at AS "viewedAt"
+         FROM message_views v
+         JOIN users u ON u.id = v.user_id
+        WHERE v.message_id = $1
+        ORDER BY v.viewed_at DESC
+        LIMIT 200`,
+      [messageId],
+    );
+    return { count: message.viewsCount, viewers };
+  }
+}

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { ChatReaction } from '../../../database/entities/chat-reaction.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -12,7 +13,10 @@ import { CHAT_REACTION_COLUMNS_SQL } from '../chat.sql';
 
 @Injectable()
 export class ChatReactionService {
-  constructor(private readonly dataSource: DatabaseService) {}
+  constructor(
+    private readonly dataSource: DatabaseService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   groupReactions(
     reactions: ChatReaction[],
@@ -117,6 +121,16 @@ export class ChatReactionService {
       `DELETE FROM chat_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
       [messageId, userId, emoji],
     );
+    // The socket path already broadcast reaction changes; this REST path never
+    // did, so removing a reaction only disappeared for the person who removed
+    // it. Same event name, so the client needs no second code path.
+    this.events.emit('chat.reaction_updated', {
+      roomId: msg.roomId,
+      messageId,
+      userId,
+      emoji,
+      action: 'removed',
+    });
   }
 
   /** Returns the room the reacted-to message actually lives in, so callers
@@ -149,6 +163,23 @@ export class ChatReactionService {
         code: ErrorCode.NOT_ROOM_MEMBER,
         message: 'Not a member of this chat room',
       });
+    }
+
+    // A room can switch reactions off entirely (Telegram channels do). Removing
+    // one stays allowed either way — turning the setting off should let people
+    // clean up reactions they already left, not freeze them in place.
+    if (!existing) {
+      const settings = await this.dataSource.query<{
+        reactionsEnabled: boolean;
+      }>(
+        `SELECT reactions_enabled AS "reactionsEnabled" FROM channel_settings WHERE room_id = $1`,
+        [msg.roomId],
+      );
+      if (settings[0] && !settings[0].reactionsEnabled)
+        throw new ForbiddenException({
+          code: 'CHAT_REACTIONS_DISABLED',
+          message: 'Reactions are turned off in this room',
+        });
     }
 
     if (existing) {

@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -153,6 +158,70 @@ export class StorageService {
     });
   }
 
+  /**
+   * DNS and socket failures that mean "we never reached Cloudinary", as
+   * opposed to "Cloudinary answered and said no". The distinction matters:
+   * these are transient and say nothing about the asset, so they must never be
+   * reported as a bad request from the user.
+   */
+  private static readonly TRANSPORT_ERROR_CODES = new Set([
+    'EAI_AGAIN', // DNS lookup failed — the one that took the server down
+    'ENOTFOUND',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'EPIPE',
+    'ENETUNREACH',
+    'EHOSTUNREACH',
+  ]);
+
+  private static isTransportError(err: unknown): boolean {
+    const code = (err as { code?: unknown; errno?: unknown })?.code;
+    return (
+      typeof code === 'string' && StorageService.TRANSPORT_ERROR_CODES.has(code)
+    );
+  }
+
+  /**
+   * Runs a Cloudinary call and turns a lost connection into a clean 503.
+   *
+   * Without this a DNS blip (`getaddrinfo EAI_AGAIN api.cloudinary.com`)
+   * escaped as a raw Error: the global filter logged it as "Unhandled
+   * Exception" with a stack trace and returned an opaque 500, so an outage at
+   * the image host looked to everyone like a broken backend. One retry covers
+   * the common case where the resolver recovers immediately; anything longer
+   * is a real outage and is reported as one.
+   */
+  private async callCloudinary<T>(
+    operation: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await run();
+      } catch (err) {
+        if (!StorageService.isTransportError(err)) throw err;
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          continue;
+        }
+        this.logger.error(
+          `Cloudinary unreachable during ${operation}: ${(err as Error).message}`,
+        );
+        throw new ServiceUnavailableException({
+          code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
+          message:
+            'The file service is temporarily unreachable — try again shortly',
+        });
+      }
+    }
+    // Unreachable: the loop either returns or throws.
+    throw new ServiceUnavailableException({
+      code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
+      message: 'The file service is temporarily unreachable',
+    });
+  }
+
   // ── Cloudinary: signed upload params ─────────────────────────────────────
 
   /**
@@ -241,8 +310,15 @@ export class StorageService {
 
     let asset: { bytes?: number; format?: string; secure_url?: string };
     try {
-      asset = await cloudinary.api.resource(publicId);
-    } catch {
+      asset = await this.callCloudinary('resource lookup', () =>
+        cloudinary.api.resource(publicId),
+      );
+    } catch (err) {
+      // Only a real answer from Cloudinary means the asset isn't there. A
+      // transport failure arrives as ServiceUnavailableException and must pass
+      // through untouched — reporting "upload it first" for a DNS outage sends
+      // the user to re-upload a file that is already stored.
+      if (err instanceof ServiceUnavailableException) throw err;
       throw new BadRequestException({
         code: ErrorCode.STORAGE_ASSET_NOT_FOUND,
         message: 'Uploaded file not found — upload it before referencing it',
@@ -277,10 +353,12 @@ export class StorageService {
     return FOLDER_LIMITS[folder]?.maxBytes ?? 5 * 1024 * 1024;
   }
 
-  /** Delete a Cloudinary asset by public_id. */
+  /** Delete a Cloudinary asset by public_id. Best-effort: never throws. */
   async deleteCloudinaryFile(publicId: string): Promise<void> {
     try {
-      await cloudinary.uploader.destroy(publicId);
+      await this.callCloudinary('destroy', () =>
+        cloudinary.uploader.destroy(publicId),
+      );
     } catch (err) {
       this.logger.error(`Failed to delete Cloudinary asset: ${publicId}`, err);
     }
@@ -317,20 +395,34 @@ export class StorageService {
     publicId: string,
     resourceType: 'image' | 'video' | 'raw',
   ): Promise<UploadApiResponse> {
-    return new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { public_id: publicId, resource_type: resourceType },
-        (err, result) =>
-          err || !result
-            ? reject(
-                err instanceof Error
-                  ? err
-                  : new Error('Cloudinary upload returned no result'),
-              )
-            : resolve(result),
-      );
-      stream.end(buffer);
-    });
+    // Each attempt gets a fresh stream — a stream that already failed cannot
+    // be re-ended, so the retry has to build its own.
+    return this.callCloudinary(
+      'upload',
+      () =>
+        new Promise<UploadApiResponse>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { public_id: publicId, resource_type: resourceType },
+            (err, result) => {
+              if (!err && result) return resolve(result);
+              if (err instanceof Error) return reject(err);
+              // Cloudinary reports transport failures as a plain object, so
+              // rejecting with a bare Error would drop the `code` that
+              // isTransportError() keys off. Carry it across.
+              const wrapped = Object.assign(
+                new Error(
+                  (err as { message?: string })?.message ??
+                    'Cloudinary upload returned no result',
+                ),
+                err ?? {},
+              );
+              reject(wrapped);
+            },
+          );
+          stream.on('error', reject);
+          stream.end(buffer);
+        }),
+    );
   }
 
   async uploadChatAudio(buffer: Buffer, userId: string, mimeType: string) {

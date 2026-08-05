@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
@@ -29,6 +30,8 @@ import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
+import { ChannelSettingsService } from './services/channel-settings.service';
+import { MessageViewService } from './services/message-view.service';
 import { ChatMemberService } from './services/member.service';
 import { CommunityService } from './services/community.service';
 import {
@@ -45,6 +48,12 @@ import { AddReactionDto } from './dto/add-reaction.dto';
 import { CreateRoomInviteDto } from './dto/create-room-invite.dto';
 import { PresignAttachmentDto } from './dto/presing-attachment.dto';
 import { AiRequestDto } from './dto/ai-request.dto';
+import {
+  UpdateChannelSettingsDto,
+  SetMemberRoleDto,
+  TransferOwnershipDto,
+  RecordViewsDto,
+} from './dto/channel-settings.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { RoomScope, ChatRoomType } from '../../common/enums';
 import { RedisService } from '../../redis/redis.service';
@@ -65,6 +74,8 @@ export class ChatController {
     private readonly usersService: UsersService,
     private readonly presenceService: ChatPresenceService,
     private readonly redisService: RedisService,
+    private readonly channelSettings: ChannelSettingsService,
+    private readonly viewService: MessageViewService,
   ) {}
 
   /** Per-user (not per-IP) message send limit — mirrors the socket path's check in EventsGateway. */
@@ -422,6 +433,140 @@ export class ChatController {
       userId,
       decodeURIComponent(emoji),
     );
+  }
+
+  // ── Views ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Reports messages the caller has seen. Batched by the client and buffered
+   * in Redis here, so this stays a single round-trip no matter how fast the
+   * timeline scrolls.
+   */
+  @Post('chat/rooms/:roomId/views')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Mark messages as viewed (buffered, batched)' })
+  @ApiParam({ name: 'roomId' })
+  recordViews(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: RecordViewsDto,
+  ) {
+    return this.viewService.recordViews(roomId, userId, dto.messageIds);
+  }
+
+  @Get('chat/messages/:messageId/views')
+  @ApiOperation({
+    summary:
+      'Who read a message — the full list for the author in a group, a bare count in a channel',
+  })
+  @ApiParam({ name: 'messageId' })
+  listMessageViewers(
+    @Param('messageId') messageId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.viewService.listViewers(messageId, userId);
+  }
+
+  // ── Channel settings ──────────────────────────────────────────────────────
+
+  /**
+   * Members get the subset that describes the room's rules to them;
+   * moderators and above get the full configuration. `canAdminister` tells the
+   * client which it received, so it never has to guess from missing keys.
+   */
+  @Get('chat/rooms/:roomId/settings')
+  @ApiOperation({ summary: 'Read channel settings (scoped to the caller)' })
+  @ApiParam({ name: 'roomId' })
+  getChannelSettings(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.channelSettings.getForUser(roomId, userId);
+  }
+
+  @Patch('chat/rooms/:roomId/settings')
+  @ApiOperation({
+    summary: 'Update channel settings — admins and owners only, fully audited',
+  })
+  @ApiParam({ name: 'roomId' })
+  updateChannelSettings(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateChannelSettingsDto,
+  ) {
+    return this.channelSettings.update(roomId, userId, dto);
+  }
+
+  @Get('chat/rooms/:roomId/settings/stats')
+  @ApiOperation({
+    summary: 'Channel analytics — subscribers, views, reach, top posts, growth',
+  })
+  @ApiParam({ name: 'roomId' })
+  getChannelStats(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.channelSettings.getStats(roomId, userId);
+  }
+
+  @Get('chat/rooms/:roomId/settings/audit')
+  @ApiOperation({ summary: 'Who changed which setting, most recent first' })
+  @ApiParam({ name: 'roomId' })
+  getChannelSettingsAudit(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Query('limit') limit = '50',
+  ) {
+    return this.channelSettings.listAudit(roomId, userId, Number(limit) || 50);
+  }
+
+  @Patch('chat/rooms/:roomId/members/:memberId/role')
+  @ApiOperation({ summary: 'Promote or demote a member (admin/moderator)' })
+  @ApiParam({ name: 'roomId' })
+  @ApiParam({ name: 'memberId' })
+  setMemberRole(
+    @Param('roomId') roomId: string,
+    @Param('memberId') memberId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: SetMemberRoleDto,
+  ) {
+    return this.channelSettings.setMemberRole(
+      roomId,
+      userId,
+      memberId,
+      dto.role,
+    );
+  }
+
+  @Post('chat/rooms/:roomId/transfer-ownership')
+  @ApiOperation({ summary: 'Hand the room to another member — owner only' })
+  @ApiParam({ name: 'roomId' })
+  transferOwnership(
+    @Param('roomId') roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: TransferOwnershipDto,
+  ) {
+    return this.channelSettings.transferOwnership(roomId, userId, dto.userId);
+  }
+
+  /**
+   * Platform-wide search for public channels and groups. Workspace-less by
+   * design — a channel opened from chat belongs to no workspace, so the
+   * workspace-scoped listing below could never surface it.
+   */
+  @Get('chat/discover')
+  @ApiOperation({
+    summary: 'Search public channels and groups the caller has not joined',
+  })
+  @ApiQuery({ name: 'q', required: true, description: 'At least 2 characters' })
+  @ApiQuery({ name: 'limit', required: false })
+  discoverRooms(
+    @CurrentUser('id') userId: string,
+    @Query('q') q = '',
+    @Query('limit') limit = '20',
+  ) {
+    return this.roomService.discoverRooms(userId, q, Number(limit) || 20);
   }
 
   @Get('workspaces/:workspaceId/chat/public-rooms')

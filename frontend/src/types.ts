@@ -90,13 +90,85 @@ export interface ChatRoom {
   membershipLocked?: boolean;
   postingMode?: "members" | "admins_only";
   linkedRoomId?: string | null;
-  myRole?: "member" | "admin" | "owner";
+  myRole?: RoomRole;
   isMuted?: boolean;
   /** Stable 6-digit public identifier for /g, /ch, /u routes — never the internal UUID. */
   publicId?: number;
   /** Admin/owner-managed background shown to every member (see SYSTEM_DESIGN.md §14.10). */
   backgroundUrl?: string | null;
   backgroundType?: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN";
+}
+
+export type RoomRole = "owner" | "admin" | "moderator" | "member";
+export type Audience = "owner" | "admins" | "moderators" | "members";
+export type CommentAudience = "everyone" | "subscribers" | "verified" | "disabled";
+
+/**
+ * Per-room configuration, mirroring the backend's channel_settings table.
+ * Ordinary members receive only the subset that describes the room's rules to
+ * them, which is why every field is optional on the read path.
+ */
+export interface ChannelSettings {
+  roomId: string;
+  bannerUrl: string | null;
+  language: string | null;
+  category: string | null;
+
+  discoverable: boolean;
+  allowInviteLinks: boolean;
+  joinRequiresApproval: boolean;
+
+  whoCanPost: Audience;
+  whoCanComment: CommentAudience;
+  whoCanUploadFiles: Audience;
+  whoCanSendVoice: Audience;
+  whoCanSendMedia: Audience;
+  reactionsEnabled: boolean;
+
+  autoDeleteDays: number | null;
+  slowModeSeconds: number;
+  spamFilter: boolean;
+  linkFilter: boolean;
+  badWordsFilter: boolean;
+  badWords: string[];
+
+  defaultNotifications: boolean;
+  mentionNotifications: boolean;
+  eventNotifications: boolean;
+  emailNotifications: boolean;
+
+  pinnedMessageId: string | null;
+  welcomeMessage: string | null;
+  rules: string | null;
+  faq: string | null;
+
+  maxUploadBytes: number | null;
+  allowedFileTypes: string[];
+
+  requireAdmin2fa: boolean;
+
+  allowMeetings: boolean;
+  allowLiveStream: boolean;
+  allowScreenShare: boolean;
+  allowRecording: boolean;
+  allowMeetingChat: boolean;
+
+  aiModeration: boolean;
+  aiSummary: boolean;
+  aiTags: boolean;
+  aiTranslate: boolean;
+  aiSpamDetect: boolean;
+
+  courseId: string | null;
+  playlistId: string | null;
+  trackProgress: boolean;
+  linkedProjectId: string | null;
+  autoPostTasks: boolean;
+  isVerified: boolean;
+  minReputation: number;
+  joinQuestions: string[];
+
+  integrations: Record<string, unknown>;
 }
 
 /** Caller's personal wallpaper/theme/font-size/compact-mode/animation override for a room. */

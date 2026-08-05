@@ -1,5 +1,6 @@
 import type {
   AuthResult,
+  ChannelSettings,
   ChatMessage,
   ChatRoom,
   GlobalSearchResult,
@@ -9,6 +10,7 @@ import type {
   MeetingRecording,
   NotificationItem,
   RoomInvite,
+  RoomRole,
   User,
   UserChatSettings,
   Workspace,
@@ -291,7 +293,7 @@ export const api = {
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
     updateRoomBackground: (roomId: string, data: { backgroundUrl: string | null; backgroundType: NonNullable<ChatRoom["backgroundType"]> }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
-    updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null; slug?: string | null }) =>
+    updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null; slug?: string | null; scope?: ChatRoom["scope"] }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
     resolveRoute: (workspaceId: string, type: "direct" | "group" | "channel", identifier: string) =>
       apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/workspaces/${workspaceId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
@@ -308,6 +310,21 @@ export const api = {
     // workspace-less: the JWT identifies the user and that's the whole check.
     // A DM, group or channel belongs to its members, not to an organisation.
     rooms: () => apiFetch<ChatRoom[]>("/chat/rooms"),
+    // Public channels/groups the user hasn't joined. Platform-wide, not
+    // workspace-scoped: a channel opened from chat belongs to no workspace.
+    discover: (query: string) =>
+      apiFetch<Array<{
+        id: string;
+        type: ChatRoom["type"];
+        name: string | null;
+        description: string | null;
+        avatarUrl: string | null;
+        slug: string | null;
+        publicId: number;
+        memberCount: number;
+      }>>(`/chat/discover?q=${encodeURIComponent(query)}`),
+    joinRoom: (roomId: string) =>
+      apiFetch<ChatRoom>(`/chat/rooms/${roomId}/join`, { method: "POST" }),
     createRoom: (data: Record<string, unknown>) =>
       apiFetch<ChatRoom>("/chat/rooms", {
         method: "POST",
@@ -362,6 +379,41 @@ export const api = {
       apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
     deleteRoom: (roomId: string) =>
       apiFetch<void>(`/chat/rooms/${roomId}`, { method: "DELETE" }),
+    // ── Channel settings ────────────────────────────────────────────────────
+    channelSettings: (roomId: string) =>
+      apiFetch<{ role: RoomRole; canAdminister: boolean; settings: Partial<ChannelSettings> }>(`/chat/rooms/${roomId}/settings`),
+    updateChannelSettings: (roomId: string, patch: Partial<ChannelSettings>) =>
+      apiFetch<{ settings: ChannelSettings; changes: Record<string, unknown> }>(`/chat/rooms/${roomId}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify(patch)
+      }),
+    channelStats: (roomId: string) =>
+      apiFetch<{
+        subscribers: number; messages: number; views: number; reach: number; reactions: number;
+        storageBytes: number; files: number; engagement: number;
+        topPosts: Array<{ id: string; content: string | null; viewCount: number; createdAt: string }>;
+        growth: Array<{ day: string; joined: number }>;
+      }>(`/chat/rooms/${roomId}/settings/stats`),
+    channelSettingsAudit: (roomId: string) =>
+      apiFetch<Array<{ id: string; userId: string | null; changes: Record<string, { from: unknown; to: unknown }>; createdAt: string; firstName: string | null; lastName: string | null }>>(`/chat/rooms/${roomId}/settings/audit`),
+    setMemberRole: (roomId: string, memberId: string, role: "admin" | "moderator" | "member") =>
+      apiFetch<{ userId: string; role: RoomRole }>(`/chat/rooms/${roomId}/members/${memberId}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role })
+      }),
+    transferOwnership: (roomId: string, userId: string) =>
+      apiFetch<{ ownerId: string }>(`/chat/rooms/${roomId}/transfer-ownership`, {
+        method: "POST",
+        body: JSON.stringify({ userId })
+      }),
+    // ── Views ───────────────────────────────────────────────────────────────
+    recordViews: (roomId: string, messageIds: string[]) =>
+      apiFetch<{ buffered: number }>(`/chat/rooms/${roomId}/views`, {
+        method: "POST",
+        body: JSON.stringify({ messageIds })
+      }),
+    messageViewers: (messageId: string) =>
+      apiFetch<{ count: number; viewers: Array<{ id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; viewedAt: string }> | null }>(`/chat/messages/${messageId}/views`),
     leaveRoom: (roomId: string) =>
       apiFetch<{ left: boolean }>(`/chat/rooms/${roomId}/leave`, { method: "POST" }),
     ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>

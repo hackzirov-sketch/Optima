@@ -36,6 +36,7 @@ import {
   Search,
   Send,
   Settings,
+  Sliders,
   ShieldCheck,
   Smile,
   Sparkles,
@@ -65,6 +66,7 @@ import { useLocation }                                                      from
 import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
 import { AudioMessage }                                                     from "../components/AudioMessage";
+import { ChannelSettingsPanel }                                             from "../components/ChannelSettingsPanel";
 import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
 import { useToast }                                                         from "../components/Toast";
 import { useConfirm }                                                       from "../components/ConfirmDialog";
@@ -75,6 +77,22 @@ import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
+
+/**
+ * Telegram's album size, and the same limit the server enforces in
+ * message.service.ts — kept identical on purpose so the composer never lets
+ * you build a message the send endpoint will reject.
+ */
+const MAX_ATTACHMENTS = 10;
+
+/** A file waiting in the composer: uploaded (or failing) but not yet sent. */
+interface StagedAttachment {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+  attachment: { storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string } | null;
+  error: boolean;
+}
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
@@ -226,10 +244,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [staged, setStaged] = useState<StagedAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
+  const [createScope, setCreateScope] = useState<"public" | "private">("public");
   const [creating, setCreating] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
@@ -239,6 +259,25 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   // finds people you have never written to yet.
   const [sidebarUsers, setSidebarUsers] = useState<Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>>([]);
   const [sidebarSearching, setSidebarSearching] = useState(false);
+  // ...and past your own rooms: public channels and groups anyone can join.
+  const [sidebarPublicRooms, setSidebarPublicRooms] = useState<Array<{
+    id: string;
+    type: ChatRoom["type"];
+    name: string | null;
+    description: string | null;
+    avatarUrl: string | null;
+    slug: string | null;
+    publicId: number;
+    memberCount: number;
+  }>>([]);
+  const [joiningRoom, setJoiningRoom] = useState<string | null>(null);
+  // A public channel opens read-only first, with a Join button — clicking a
+  // search result used to enrol you on the spot, with nothing to confirm and
+  // no way to look before committing.
+  const [previewRoom, setPreviewRoom] = useState<{
+    id: string; type: ChatRoom["type"]; name: string | null; description: string | null;
+    avatarUrl: string | null; slug: string | null; publicId: number; memberCount: number;
+  } | null>(null);
   const [openingDirect, setOpeningDirect] = useState<string | null>(null);
   const [workspaceInviteOpen, setWorkspaceInviteOpen] = useState(false);
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
@@ -248,6 +287,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
   const [roomSettingsSlug, setRoomSettingsSlug] = useState("");
+  const [roomSettingsScope, setRoomSettingsScope] = useState<"public" | "private">("private");
+  const [channelSettingsOpen, setChannelSettingsOpen] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState<string | null>(null);
+  const [viewers, setViewers] = useState<Array<{ id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; viewedAt: string }> | null>(null);
   const [roomSettingsAvatar, setRoomSettingsAvatar] = useState<string | null>(null);
   const [roomSettingsBackground, setRoomSettingsBackground] = useState<string | null>(null);
   const [savingRoomSettings, setSavingRoomSettings] = useState(false);
@@ -858,6 +901,39 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         return new Map(current).set(data.userId, data.lastReadSeq!);
       });
     };
+    /**
+     * The REST paths below used to change state without telling anyone: an
+     * edit, a delete or an un-react was visible only to whoever did it until
+     * the other side reloaded. The server now emits for all of them.
+     */
+    const onMessageUpdated = (data: { roomId: string; messageId: string; content: string; editedAt: string }) => {
+      if (data.roomId !== selectedId) return;
+      setMessages((current) => current.map((item) => item.id === data.messageId
+        ? { ...item, content: data.content, isEdited: true, editedAt: data.editedAt }
+        : item));
+    };
+    const onMessageDeleted = (data: { roomId: string; messageId: string }) => {
+      if (data.roomId !== selectedId) return;
+      setMessages((current) => current.filter((item) => item.id !== data.messageId));
+    };
+    // Membership, roles and room rules can all change under an open client —
+    // reload the room list so myRole, the composer and the settings menu match
+    // what the server now believes.
+    const onRoomChanged = (data: { roomId: string }) => {
+      if (data.roomId && data.roomId !== selectedId && !rooms.some((room) => room.id === data.roomId)) {
+        void loadRooms();
+        return;
+      }
+      void loadRooms();
+    };
+    const onRoomCreated = () => void loadRooms();
+    const onViewsUpdated = (data: { messageIds: string[] }) => {
+      if (!selectedId) return;
+      const affected = new Set(data.messageIds);
+      setMessages((current) => current.some((item) => affected.has(item.id))
+        ? current.map((item) => affected.has(item.id) ? { ...item, viewCount: (item.viewCount ?? 0) + 1 } : item)
+        : current);
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("new_message", onMessage);
@@ -865,6 +941,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("reaction_updated", onReaction);
     socket.on("message_read", onMessageRead);
     socket.on("error", onError);
+    socket.on("message_updated", onMessageUpdated);
+    socket.on("message_deleted", onMessageDeleted);
+    socket.on("room_member_changed", onRoomChanged);
+    socket.on("room_settings_updated", onRoomChanged);
+    socket.on("room_created", onRoomCreated);
+    socket.on("message_views_updated", onViewsUpdated);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -874,7 +956,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("reaction_updated", onReaction);
       socket.off("message_read", onMessageRead);
       socket.off("error", onError);
+      socket.off("message_updated", onMessageUpdated);
+      socket.off("message_deleted", onMessageDeleted);
+      socket.off("room_member_changed", onRoomChanged);
+      socket.off("room_settings_updated", onRoomChanged);
+      socket.off("room_created", onRoomCreated);
+      socket.off("message_views_updated", onViewsUpdated);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
 
   useEffect(() => {
@@ -957,18 +1046,44 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const query = search.trim();
     if (query.length < 2 || catalog === "bot") {
       setSidebarUsers([]);
+      setSidebarPublicRooms([]);
       setSidebarSearching(false);
       return;
     }
     setSidebarSearching(true);
     const timer = window.setTimeout(() => {
-      api.users.search(query)
-        .then((result) => setSidebarUsers(result.data.filter((entry) => entry.id !== user?.id)))
-        .catch(() => setSidebarUsers([]))
-        .finally(() => setSidebarSearching(false));
+      // People and joinable channels/groups are two independent lookups —
+      // neither should be able to blank out the other by failing.
+      void Promise.allSettled([
+        api.users.search(query).then((result) => setSidebarUsers(result.data.filter((entry) => entry.id !== user?.id)), () => setSidebarUsers([])),
+        api.chat.discover(query).then(setSidebarPublicRooms, () => setSidebarPublicRooms([])),
+      ]).finally(() => setSidebarSearching(false));
     }, 280);
     return () => window.clearTimeout(timer);
   }, [search, catalog, user?.id]);
+
+  /**
+   * Join a public channel/group straight from search and open it. Membership
+   * is the permission everywhere else in chat, so joining is the whole step —
+   * there is nothing to approve.
+   */
+  async function joinPublicRoom(roomId: string) {
+    if (joiningRoom) return;
+    setJoiningRoom(roomId);
+    try {
+      const room = await api.chat.joinRoom(roomId);
+      await loadRooms(room.id);
+      setPreviewRoom(null);
+      setSearch("");
+      setAiOpen(false);
+      setSelectedId(room.id);
+      navigate(canonicalRoute(room));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.joinRoomFailed"), "error");
+    } finally {
+      setJoiningRoom(null);
+    }
+  }
 
   async function openDirectWith(targetUserId: string) {
     if (!workspace || openingDirect) return;
@@ -1021,7 +1136,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function sendMessage() {
     const content = draft.trim();
-    if (!content || !selectedRoom) return;
+    const attachments = staged.filter((item) => item.attachment).map((item) => item.attachment!);
+    // A message needs either words or files. Staging means "send" is now the
+    // only thing that publishes, so an empty draft with pending files must
+    // still go through rather than being treated as an empty message.
+    if ((!content && attachments.length === 0) || !selectedRoom) return;
+    if (staged.some((item) => !item.attachment && !item.error)) return; // still uploading
     if (/^\/ai(?:\s|$)/i.test(content)) {
       await runComposerAi();
       return;
@@ -1038,6 +1158,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       return;
     }
     setDraft("");
+    setStaged([]);
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
@@ -1048,7 +1169,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       clientMessageId,
       createdAt: new Date().toISOString(),
       reactions: [],
-      sender: user
+      sender: user,
+      attachments: attachments.map((attachment, index) => ({
+        id: `optimistic-attachment:${index}`,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        mimeType: attachment.mimeType,
+        url: attachment.storageUrl
+      }))
     };
     setMessages((current) => [...current, optimistic]);
     const socket = getSocket();
@@ -1060,20 +1188,24 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             roomId: selectedRoom.id,
             text: content,
             clientMessageId,
+            attachments,
             replyToId: replyingTo?.id
           }, (error: Error | null) => error ? reject(error) : resolve());
         });
       } else {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id, attachments);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       }
     } catch {
       try {
-        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id);
+        const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id, attachments);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
         setMessages((current) => current.filter((item) => item.clientMessageId !== clientMessageId));
         setDraft(content);
+        // Put the files back in the composer rather than making the user pick
+        // and re-upload them all after a failed send.
+        setStaged(staged);
         show(error instanceof Error ? error.message : t("chat.sendMessageFailed"), "error");
       }
     }
@@ -1184,34 +1316,128 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
   }
 
-  async function uploadAttachment(file: File) {
-    if (!selectedRoom || uploading) return;
-    setUploading(true);
-    try {
-      const attachment = await api.chat.uploadFile(selectedRoom.id, file);
-      const socket = getSocket();
-      const clientMessageId = crypto.randomUUID();
-      if (socket.connected) {
-        try {
-          await new Promise<void>((resolve, reject) => socket.timeout(12000).emit("send_message", {
-            roomId: selectedRoom.id,
-            text: draft.trim(),
-            clientMessageId,
-            attachments: [attachment],
-            replyToId: replyingTo?.id
-          }, (error: Error | null) => error ? reject(error) : resolve()));
-        } catch {
-          await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
-        }
-      } else await api.chat.send(selectedRoom.id, draft.trim(), clientMessageId, replyingTo?.id, [attachment]);
-      setDraft("");
-      setReplyingTo(null);
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("chat.fileSendFailed"), "error");
-    } finally {
-      setUploading(false);
-      if (fileInput.current) fileInput.current.value = "";
+  /**
+   * Uploads files and parks them in the composer instead of sending them.
+   *
+   * Picking a file used to *be* the send: the message left before the user had
+   * written a caption, and there was no way to attach a second file to the
+   * same message or to change your mind. Now the upload runs immediately (so
+   * the wait happens while you're still typing) but publishing waits for the
+   * send button, exactly like Telegram.
+   */
+  async function stageFiles(files: File[]) {
+    if (!selectedRoom || files.length === 0) return;
+
+    const room = selectedRoom;
+    const free = MAX_ATTACHMENTS - staged.length;
+    if (free <= 0) {
+      show(t("chat.attachmentLimit", { count: MAX_ATTACHMENTS }), "error");
+      return;
     }
+    if (files.length > free) show(t("chat.attachmentLimit", { count: MAX_ATTACHMENTS }), "error");
+
+    const accepted = files.slice(0, free).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      // Local preview so the thumbnail appears instantly rather than after the
+      // round-trip; revoked in the cleanup effect so these don't leak.
+      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      attachment: null,
+      error: false
+    } satisfies StagedAttachment));
+
+    setStaged((current) => [...current, ...accepted]);
+
+    await Promise.all(accepted.map(async (item) => {
+      try {
+        const attachment = await api.chat.uploadFile(room.id, item.file);
+        setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, attachment } : entry));
+      } catch (error) {
+        setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, error: true } : entry));
+        show(error instanceof Error ? error.message : t("chat.fileSendFailed"), "error");
+      }
+    }));
+  }
+
+  /**
+   * Reports which messages actually reached the screen.
+   *
+   * IntersectionObserver rather than "everything the timeline rendered": a
+   * message scrolled past in a jump was never really seen, and counting it
+   * makes the view number meaningless. Ids are batched and flushed on a timer
+   * so a fast scroll produces one request rather than one per bubble — the
+   * server buffers them again in Redis on the other side.
+   */
+  useEffect(() => {
+    const node = messageList.current;
+    if (!node || !selectedId || selectedRoom?.memberStatus === "pending") return;
+
+    const room = selectedId;
+    const pending = new Set<string>();
+    let timer: number | null = null;
+
+    const flush = () => {
+      timer = null;
+      if (pending.size === 0) return;
+      const batch = [...pending];
+      pending.clear();
+      // Views are advisory — a failed report costs a count, never the session.
+      void api.chat.recordViews(room, batch).catch(() => undefined);
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const id = (entry.target as HTMLElement).dataset.messageId;
+        // Optimistic rows have no server id yet, and your own message is not
+        // something you "view" — the server rejects both anyway.
+        if (!id || id.startsWith("optimistic:")) continue;
+        pending.add(id);
+        observer.unobserve(entry.target);
+      }
+      if (pending.size > 0 && timer === null) timer = window.setTimeout(flush, 1200);
+    }, { root: node, threshold: 0.6 });
+
+    node.querySelectorAll<HTMLElement>("[data-message-id]").forEach((element) => observer.observe(element));
+
+    return () => {
+      observer.disconnect();
+      if (timer !== null) window.clearTimeout(timer);
+      flush();
+    };
+  }, [selectedId, selectedRoom?.memberStatus, messages.length]);
+
+  // Staged files belong to the room they were picked in. Switching rooms drops
+  // them (and their preview URLs) rather than silently carrying a picture into
+  // a different conversation on the next send.
+  useEffect(() => {
+    return () => {
+      setStaged((current) => {
+        current.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+        return [];
+      });
+    };
+  }, [selectedId]);
+
+  /** The read list for one of your own group messages. */
+  async function openViewers(messageId: string) {
+    setViewersOpen(messageId);
+    setViewers(null);
+    try {
+      const result = await api.chat.messageViewers(messageId);
+      setViewers(result.viewers ?? []);
+    } catch (error) {
+      setViewersOpen(null);
+      show(error instanceof Error ? error.message : t("chat.loadDetailsFailed"), "error");
+    }
+  }
+
+  function removeStaged(id: string) {
+    setStaged((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
   }
 
   async function startCall(kind: "audio" | "video") {
@@ -1366,14 +1592,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setCreating(true);
     const data = new FormData(event.currentTarget);
     try {
-      // No `visibility` field: CreateChatRoomDto doesn't declare one and the
-      // global ValidationPipe runs with forbidNonWhitelisted, so sending it
-      // failed the whole request with a 400. Groups and channels default to
-      // scope `private`, which listPublicRooms never surfaces.
+      // The field is `scope`, not `visibility`: CreateChatRoomDto declares
+      // `scope` and the global ValidationPipe runs with forbidNonWhitelisted,
+      // so any other name fails the whole request with a 400.
       const room = createMode === "direct"
         ? await api.chat.createRoom({ type: "direct", targetUserId: selectedMembers[0] })
         : await api.chat.createRoom({
           type: createMode,
+          scope: createScope,
           name: String(data.get("name") || "").trim(),
           description: String(data.get("description") || "").trim() || undefined,
           memberIds: selectedMembers
@@ -1483,6 +1709,30 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     return "channel";
   };
 
+  /**
+   * Mirrors the server's posting rule (sendMessage in message.service.ts) so
+   * the composer is only offered when the send would actually succeed. It used
+   * to key off a hardcoded public_id of "777777", which meant every ordinary
+   * member of an admins-only channel got a text box, typed a post and was
+   * answered with "Only channel admins can publish posts". A channel they
+   * can't post in shows Telegram's mute/unmute bar instead.
+   */
+  /**
+   * Whether the caller may change a room's settings — the same rule the server
+   * enforces in updateRoomSettings. Also replaces the "publicId === 777777"
+   * escape hatch that used to stand in for platform admin: a magic account
+   * number nobody can grant or revoke, which handed the rights to whoever
+   * happened to land on that sequence value.
+   */
+  const canAdminister = (room?: ChatRoom | null) =>
+    Boolean(room) && (room!.createdById === user?.id || room!.myRole === "owner" || room!.myRole === "admin");
+
+  const canPostIn = (room: ChatRoom) => {
+    if (room.isReadOnly) return false;
+    if (room.postingMode !== "admins_only") return true;
+    return room.myRole === "owner" || room.myRole === "admin";
+  };
+
   async function openDiscussion(messageId: string) {
     try {
       const discussion = await api.chat.discussion(messageId);
@@ -1517,6 +1767,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setRoomSettingsAvatar(selectedRoom.avatarUrl || null);
     setRoomSettingsBackground(selectedRoom.backgroundUrl || null);
     setRoomSettingsSlug(selectedRoom.slug || "");
+    setRoomSettingsScope(selectedRoom.scope === "public" ? "public" : "private");
     setDetailsOpen(false);
     setRoomSettingsOpen(true);
   }
@@ -1590,6 +1841,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         name: roomSettingsName.trim(),
         description: roomSettingsDescription.trim(),
         avatarUrl: roomSettingsAvatar,
+        // Only send scope for rooms that own their visibility. A
+        // workspace_only room's scope is the workspace's business, not this
+        // dialog's, so leaving it out keeps that setting untouched.
+        ...(selectedRoom.scope !== "workspace_only" ? { scope: roomSettingsScope } : {}),
         ...(trimmedSlug !== (selectedRoom.slug || "") ? { slug: trimmedSlug || null } : {})
       });
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
@@ -1671,6 +1926,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   // Only people you don't already have a visible conversation with — an
   // existing DM is already listed above as a room.
   const sidebarPeople = sidebarUsers.filter((person) => !filteredRooms.some((room) => room.type === "direct" && room.memberIds.includes(person.id)));
+  // The server already excludes rooms you belong to; this only honours the
+  // catalog tab, so the Channels tab doesn't offer groups and vice versa.
+  const sidebarDiscovered = sidebarPublicRooms.filter((room) => catalog === "all" || catalog === room.type);
   const visibleMessages = messageSearch.trim()
     ? messages.filter((message) => `${message.content} ${message.attachments?.map((attachment) => attachment.fileName).join(" ") || ""}`.toLowerCase().includes(messageSearch.trim().toLowerCase()))
     : messages;
@@ -1752,7 +2010,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 </div>
               ))}
             </div>
-            <form className="chat-mini-composer" onSubmit={(event) => {
+            {canPostIn(selectedRoom) ? <form className="chat-mini-composer" onSubmit={(event) => {
               event.preventDefault();
               void sendMessage();
             }}>
@@ -1760,7 +2018,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                      placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} />
               <button type="submit" disabled={!draft.trim()} aria-label={t("chat.sendMessageAria")}><Send size={16} />
               </button>
-            </form>
+            </form> : <p className="chat-mini-readonly">{t("chat.channelReadOnlyHint")}</p>}
           </div>
         </>
       );
@@ -1878,7 +2136,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               className="room-avatar"><Bot size={18} /></span><span
               className="room-copy"><span><strong>OPTIMA AI</strong></span><span><small>{t("chat.aiRoomSubtitle")}</small></span></span>
             </button>}
-          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && !sidebarSearching && sidebarPeople.length === 0 &&
+          {!loadingRooms && filteredRooms.length === 0 && catalog !== "bot" && !sidebarSearching && sidebarPeople.length === 0 && sidebarDiscovered.length === 0 &&
             <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> :
               <MessageCircle size={22} />}
               <p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p>
@@ -1896,6 +2154,22 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               </button>
             );
           })}
+          {catalog !== "bot" && sidebarDiscovered.length > 0 && <>
+            <p className="room-list-section">{t("chat.publicRoomsSection")}</p>
+            {sidebarDiscovered.map((room) => (
+              <button key={room.id} className="room-item" disabled={joiningRoom === room.id}
+                      onClick={() => setPreviewRoom(room)}>
+                <span className="room-avatar">
+                  {room.avatarUrl ? <img src={room.avatarUrl} alt="" /> : room.type === "channel" ? <RadioTower size={18} /> : <Users size={18} />}
+                </span>
+                <span className="room-copy">
+                  <span><strong>{room.name || (room.slug ? `@${room.slug}` : t("chat.untitledRoom"))}</strong></span>
+                  <span><small>{room.description || t("chat.memberCount", { count: room.memberCount })}</small></span>
+                </span>
+                {joiningRoom === room.id && <LoaderCircle className="spin" size={16} />}
+              </button>
+            ))}
+          </>}
           {catalog !== "bot" && (sidebarSearching || sidebarPeople.length > 0) && <>
             <p className="room-list-section">{t("chat.globalPeopleSection")}</p>
             {sidebarSearching && sidebarPeople.length === 0 &&
@@ -2020,20 +2294,26 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           title={t("chat.videoCallAria")}>{startingCall === "video" ?
                     <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || user?.publicId === "777777") &&
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || canAdminister(selectedRoom)) &&
                   <div className="header-more">
                     <button className={`icon-button ${headerMenuOpen ? "active" : ""}`}
                             onClick={() => setHeaderMenuOpen((value) => !value)}
                             aria-label={t("chat.conversationMenuAria")} aria-expanded={headerMenuOpen}><MoreVertical
                       size={19} /></button>
                     {headerMenuOpen && <div
-                      className="header-more-menu">{(selectedRoom.createdById === user?.id || user?.publicId === "777777") &&
-                      <button onClick={() => {
+                      className="header-more-menu">{canAdminister(selectedRoom) &&
+                      <><button onClick={() => {
                         setHeaderMenuOpen(false);
                         openRoomSettings();
                       }}><Settings
                         size={17} /><span><strong>{selectedRoom.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}</strong><small>{t("chat.photoNameDescHint")}</small></span>
-                      </button>}{!selectedRoom.isSystem && <button onClick={() => {
+                      </button>
+                      <button onClick={() => {
+                        setHeaderMenuOpen(false);
+                        setChannelSettingsOpen(true);
+                      }}><Sliders
+                        size={17} /><span><strong>{t("channelSettings.title")}</strong><small>{t("channelSettings.entryHint")}</small></span>
+                      </button></>}{!selectedRoom.isSystem && <button onClick={() => {
                       setHeaderMenuOpen(false);
                       void openRoomInvites();
                     }}><UserPlus
@@ -2111,7 +2391,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       <div key={message.id}>
                         {showDay && <div className="day-separator"><span>{formatDay(message.createdAt)}</span></div>}
                         <div
-                          id={`message-${message.id}`}
+                          id={`message-${message.id}`} data-message-id={message.id}
                           className={`message ${mine ? "message-mine" : ""} ${grouped ? "message-grouped" : ""} ${swipingMessage?.id === message.id ? "message-swiping" : ""}`}
                           style={swipingMessage?.id === message.id ? { transform: `translate3d(${swipingMessage.offset}px,0,0)` } : undefined}
                           onTouchStart={(event) => startReplySwipe(event, message)}
@@ -2167,6 +2447,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                 onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji}
                                 <span>{reaction.userIds.length}</span></button>)}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>
+                              {/* Channels report a bare count to everyone; in a group
+                                  the author alone can open the list of who read it. */}
+                              {selectedRoom.type === "channel" && (message.viewCount ?? 0) > 0 &&
+                                <small className="message-views"><Eye size={12} />{message.viewCount}</small>}
+                              {selectedRoom.type !== "channel" && selectedRoom.type !== "direct" && mine &&
+                                <button type="button" className="message-views-link"
+                                        onClick={() => void openViewers(message.id)}
+                                        aria-label={t("chat.viewersTitle")}><Eye size={12} />{message.viewCount ?? 0}</button>}
                               {message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && (
                                 selectedRoom.type === "direct"
                                   ? (readByCount > 0 ? <CheckCheck size={14} className="message-read"
@@ -2224,11 +2512,34 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
                   }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
                 </div>
-                {selectedRoom.slug === "otima-community" && user?.publicId !== "777777" ?
+                {!canPostIn(selectedRoom) ?
                   <div className="channel-subscribe-bar">
                     <button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> :
                       <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button>
                   </div> : <div className={`composer ${recording ? "composer-recording" : ""}`}>
+                    {staged.length > 0 && <div className="composer-staged">
+                      <header>
+                        <span>{t("chat.stagedCount", { count: staged.length, max: MAX_ATTACHMENTS })}</span>
+                        <button type="button" onClick={() => {
+                          staged.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+                          setStaged([]);
+                        }}>{t("chat.clearAttachments")}</button>
+                      </header>
+                      <ul>
+                        {staged.map((item) => (
+                          <li key={item.id} className={item.error ? "staged-error" : item.attachment ? "" : "staged-loading"}>
+                            {item.previewUrl
+                              ? <img src={item.previewUrl} alt={item.file.name} />
+                              : <span className="staged-file"><Paperclip size={16} /></span>}
+                            {!item.attachment && !item.error && <span className="staged-spinner"><LoaderCircle className="spin" size={16} /></span>}
+                            {item.error && <span className="staged-badge">!</span>}
+                            <button type="button" onClick={() => removeStaged(item.id)}
+                                    aria-label={t("chat.removeAttachmentAria", { name: item.file.name })}><X size={13} /></button>
+                            <small title={item.file.name}>{item.file.name}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>}
                     {/^\/ai(?:\s|$)/i.test(draft) && <form className="composer-ai-assist" onSubmit={(event) => {
                       event.preventDefault();
                       void runComposerAi();
@@ -2278,14 +2589,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                         setDraft((current) => `${current}${emoji}`);
                         setEmojiOpen(false);
                       }} aria-label={t("chat.addEmojiAria", { emoji })}>{emoji}</button>)}</span>}</span>
-                    <input ref={fileInput} type="file" hidden onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void uploadAttachment(file);
+                    <input ref={fileInput} type="file" hidden multiple onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      if (files.length) void stageFiles(files);
+                      // Reset so picking the same file twice still fires onChange.
+                      if (fileInput.current) fileInput.current.value = "";
                     }} />
                     {!recording &&
-                      <button className="icon-button" onClick={() => fileInput.current?.click()} disabled={uploading}
-                              aria-label={t("chat.attachFileAria")}>{uploading ?
-                        <LoaderCircle className="spin" size={19} /> : <Paperclip size={20} />}</button>}
+                      <button className="icon-button" onClick={() => fileInput.current?.click()}
+                              disabled={staged.length >= MAX_ATTACHMENTS}
+                              aria-label={t("chat.attachFileAria")}><Paperclip size={20} /></button>}
                     {recording ? <div className="recording-status"><i /><strong>{t("chat.recordingInProgress")}</strong>
                       <time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time>
                       <button onClick={() => stopRecording(true)} aria-label={t("chat.cancelRecordingAria")}><Trash2
@@ -2293,8 +2606,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     </div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)}
                                        onKeyDown={keyDown} placeholder={t("chat.messagePlaceholder")} rows={1}
                                        maxLength={1500} aria-label={t("chat.messageTextAria")} />}
-                    {draft.trim() && !recording ?
-                      <button className="send-button" onClick={() => void sendMessage()} disabled={sending}
+                    {(draft.trim() || staged.length > 0) && !recording ?
+                      <button className="send-button" onClick={() => void sendMessage()}
+                              disabled={sending || staged.some((item) => !item.attachment && !item.error)}
                               aria-label={t("chat.sendMessageAria")}>{sending ?
                         <LoaderCircle className="spin" size={19} /> : <Send size={19} />}</button> :
                       <button className={`send-button voice-button ${recording ? "recording" : ""}`}
@@ -2358,7 +2672,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               setDetailsOpen(false);
               void openRoomInvites();
             }}><UserPlus size={19} /><span>{t("chat.inviteActionLabel")}</span></button>}
-            {selectedRoom?.type !== "direct" && (!selectedRoom?.isSystem || user?.publicId === "777777") && (selectedRoom?.createdById === user?.id || user?.publicId === "777777") &&
+            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && canAdminister(selectedRoom) &&
               <button onClick={openRoomSettings}><Settings size={19} /><span>{t("chat.configureActionLabel")}</span>
               </button>}
             <button onClick={() => {
@@ -2424,6 +2738,58 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         </div>
       </Modal>
 
+      {/* The full per-room configuration. Kept separate from the small
+          name/photo dialog above: that one is a quick edit anybody who
+          administers the room reaches in two clicks, this is the fourteen
+          sections behind it. */}
+      {/* Read-only look at a public channel before committing. Telegram does the
+          same: you see the name, description and size, and the only action is
+          an explicit Join at the bottom. */}
+      <Modal open={Boolean(previewRoom)} onClose={() => setPreviewRoom(null)}
+             title={previewRoom?.name || t("chat.untitledRoom")} width="sm">
+        {previewRoom && <div className="room-preview">
+          <span className="room-preview-avatar">
+            {previewRoom.avatarUrl
+              ? <img src={previewRoom.avatarUrl} alt="" />
+              : previewRoom.type === "channel" ? <RadioTower size={26} /> : <Users size={26} />}
+          </span>
+          <strong>{previewRoom.name || t("chat.untitledRoom")}</strong>
+          <small>{t(previewRoom.type === "channel" ? "chat.channelWord" : "chat.groupWord")}
+            {" · "}{t("chat.memberCount", { count: previewRoom.memberCount })}</small>
+          {previewRoom.description && <p>{previewRoom.description}</p>}
+          {previewRoom.slug && <code>{window.location.origin}/{previewRoom.type === "channel" ? "ch" : "g"}/{previewRoom.slug}</code>}
+          <Button type="button" onClick={() => void joinPublicRoom(previewRoom.id)}
+                  disabled={joiningRoom === previewRoom.id}
+                  icon={joiningRoom === previewRoom.id ? <LoaderCircle className="spin" size={17} /> : <UserPlus size={17} />}>
+            {t("chat.joinRoomButton")}
+          </Button>
+        </div>}
+      </Modal>
+
+      <Modal open={Boolean(viewersOpen)} onClose={() => setViewersOpen(null)}
+             title={t("chat.viewersTitle")} width="sm">
+        {viewers === null
+          ? <div className="center-loader"><LoaderCircle className="spin" size={20} /></div>
+          : viewers.length === 0
+            ? <p className="field-hint">{t("chat.noViewsYet")}</p>
+            : <ul className="viewers-list">{viewers.map((viewer) => (
+                <li key={viewer.id}>
+                  <Avatar firstName={viewer.firstName} lastName={viewer.lastName} url={viewer.avatarUrl} size="sm" />
+                  <span><strong>{`${viewer.firstName} ${viewer.lastName}`.trim()}</strong>
+                    <small>{formatTime(viewer.viewedAt)}</small></span>
+                </li>
+              ))}</ul>}
+      </Modal>
+
+      <Modal open={channelSettingsOpen} onClose={() => setChannelSettingsOpen(false)}
+             title={t("channelSettings.title")}
+             description={selectedRoom?.name ?? ""} width="lg">
+        {selectedRoom && channelSettingsOpen && <ChannelSettingsPanel
+          room={selectedRoom}
+          onClose={() => setChannelSettingsOpen(false)}
+          onSaved={() => void loadRooms()} />}
+      </Modal>
+
       <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)}
              title={selectedRoom?.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}
              description={t("chat.roomSettingsDesc")} width="md">
@@ -2476,6 +2842,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                                                                  onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                                                                  maxLength={60}
                                                                                  placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
+          {selectedRoom?.scope !== "workspace_only" && <fieldset className="create-scope">
+            <legend>{t("chat.visibilityLegend")}</legend>
+            <label><input type="radio" name="roomScope" value="public" checked={roomSettingsScope === "public"}
+                          onChange={() => setRoomSettingsScope("public")} />
+              <span><strong>{t("chat.visibilityPublicTitle")}</strong><small>{t("chat.visibilityPublicDesc")}</small></span>
+            </label>
+            <label><input type="radio" name="roomScope" value="private" checked={roomSettingsScope === "private"}
+                          onChange={() => setRoomSettingsScope("private")} />
+              <span><strong>{t("chat.visibilityPrivateTitle")}</strong><small>{t("chat.visibilityPrivateDesc")}</small></span>
+            </label>
+          </fieldset>}
           <div className="room-settings-note"><ShieldCheck
             size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span>
           </div>
@@ -2525,6 +2902,20 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                                                                                            maxLength={200} /></label>
             <label>{t("chat.descriptionLabel")}<input name="description" placeholder={t("chat.descriptionPlaceholder")}
                                                       maxLength={1000} /></label>
+            {/* Without this every room was created `private`, and a private
+                room is invisible to search — so a "public channel" was not
+                something the UI could actually produce. */}
+            <fieldset className="create-scope">
+              <legend>{t("chat.visibilityLegend")}</legend>
+              <label><input type="radio" name="scope" value="public" checked={createScope === "public"}
+                            onChange={() => setCreateScope("public")} />
+                <span><strong>{t("chat.visibilityPublicTitle")}</strong><small>{t("chat.visibilityPublicDesc")}</small></span>
+              </label>
+              <label><input type="radio" name="scope" value="private" checked={createScope === "private"}
+                            onChange={() => setCreateScope("private")} />
+                <span><strong>{t("chat.visibilityPrivateTitle")}</strong><small>{t("chat.visibilityPrivateDesc")}</small></span>
+              </label>
+            </fieldset>
           </>}
           <label className="search-field member-search"><Search size={17} /><input value={memberSearch}
                                                                                    onChange={(event) => setMemberSearch(event.target.value)}

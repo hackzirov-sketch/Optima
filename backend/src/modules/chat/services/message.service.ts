@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { InjectQueue } from '@nestjs/bullmq';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Queue } from 'bullmq';
 
 import { ChatMessage } from '../../../database/entities/chat-message.entity';
@@ -16,6 +17,12 @@ import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
 import { ChatReactionService } from './reaction.service';
+import {
+  ChannelSettings,
+  ChannelSettingsService,
+  RoomRole,
+  roleSatisfies,
+} from './channel-settings.service';
 import { ContentFilterService } from '../../moderation/services/content-filter.service';
 import { StorageService } from '../../storage/storage.service';
 import { RedisService } from '../../../redis/redis.service';
@@ -28,6 +35,13 @@ import {
   MESSAGE_ATTACHMENT_COLUMNS_SQL,
 } from '../chat.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
+
+/**
+ * Telegram's album size. The cap exists on the server as well as the composer
+ * because the composer is only a suggestion: the send endpoint is reachable
+ * directly, and an unbounded attachment array is an unbounded INSERT.
+ */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 /**
  * A `chat_messages` row as this service selects it — camelCase aliases, plus
@@ -111,8 +125,129 @@ export class ChatMessageService {
     private readonly chatEncryption: ChatEncryptionService,
     private readonly storageService: StorageService,
     private readonly redisService: RedisService,
+    private readonly channelSettings: ChannelSettingsService,
+    private readonly events: EventEmitter2,
     @InjectQueue('chat') private readonly chatQueue: Queue,
   ) {}
+
+  /**
+   * Media/voice/file permissions. Each attachment is classified by its MIME
+   * type and checked against the audience the room allows for that kind, so a
+   * channel can accept text and pictures while refusing voice notes.
+   */
+  private assertMediaAllowed(
+    dto: SendMessageDto,
+    settings: ChannelSettings,
+    role: RoomRole,
+  ) {
+    const attachments = dto.attachments ?? [];
+    if (attachments.length === 0) return;
+
+    if (attachments.length > MAX_ATTACHMENTS_PER_MESSAGE)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: `A message can carry at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments`,
+      });
+
+    for (const attachment of attachments) {
+      const mime = attachment.mimeType ?? '';
+      const isVoice =
+        mime.startsWith('audio/') || attachment.fileName?.startsWith('voice-');
+      const isMedia =
+        mime.startsWith('image/') || mime.startsWith('video/') || isVoice;
+
+      const audience = isVoice
+        ? settings.whoCanSendVoice
+        : isMedia
+          ? settings.whoCanSendMedia
+          : settings.whoCanUploadFiles;
+
+      if (!roleSatisfies(role, audience))
+        throw new ForbiddenException({
+          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+          message: isVoice
+            ? 'Voice messages are not allowed in this room'
+            : isMedia
+              ? 'Media is not allowed in this room'
+              : 'File uploads are not allowed in this room',
+        });
+
+      if (
+        settings.maxUploadBytes &&
+        Number(attachment.fileSize) > settings.maxUploadBytes
+      )
+        throw new BadRequestException({
+          code: ErrorCode.STORAGE_FILE_TOO_LARGE,
+          message: `This room limits uploads to ${Math.floor(settings.maxUploadBytes / (1024 * 1024))} MB`,
+        });
+
+      if (
+        settings.allowedFileTypes.length > 0 &&
+        !settings.allowedFileTypes.some((allowed) =>
+          allowed.endsWith('/*')
+            ? mime.startsWith(allowed.slice(0, -1))
+            : allowed === mime,
+        )
+      )
+        throw new BadRequestException({
+          code: ErrorCode.STORAGE_INVALID_MIME,
+          message: `This room only accepts: ${settings.allowedFileTypes.join(', ')}`,
+        });
+    }
+  }
+
+  /**
+   * Slow mode. Enforced in Redis with `SET NX EX` — the key's own expiry is
+   * the timer, so there is no timestamp arithmetic and no row to clean up.
+   * Moderators and above are exempt, as they are the ones moderating.
+   *
+   * Fails open when Redis is down, matching the rest of the chat pipeline:
+   * losing Redis should slow nobody down, and slow mode is a courtesy limit
+   * rather than a security boundary.
+   */
+  private async assertSlowMode(
+    roomId: string,
+    userId: string,
+    seconds: number,
+    role: RoomRole,
+  ) {
+    if (seconds <= 0 || roleSatisfies(role, 'moderators')) return;
+    const client = this.redisService.getClient();
+    if (!client) return;
+
+    const key = `slowmode:${roomId}:${userId}`;
+    const acquired = await client.set(key, '1', 'EX', seconds, 'NX');
+    if (acquired) return;
+
+    const remaining = await client.ttl(key);
+    throw new ForbiddenException({
+      code: 'CHAT_SLOW_MODE',
+      message: `Slow mode is on — wait ${remaining > 0 ? remaining : seconds}s before posting again`,
+    });
+  }
+
+  /** Link and bad-word filters, both opt-in per room. */
+  private assertContentAllowed(content: string, settings: ChannelSettings) {
+    if (!content) return;
+
+    if (settings.linkFilter && /\bhttps?:\/\/|\bwww\./i.test(content))
+      throw new ForbiddenException({
+        code: 'CHAT_LINKS_BLOCKED',
+        message: 'Links are not allowed in this room',
+      });
+
+    if (settings.badWordsFilter && settings.badWords.length > 0) {
+      const haystack = content.toLowerCase();
+      const hit = settings.badWords.find((word) =>
+        haystack.includes(word.toLowerCase()),
+      );
+      if (hit)
+        throw new ForbiddenException({
+          code: 'CHAT_CONTENT_BLOCKED',
+          message: 'Your message contains words blocked in this room',
+        });
+    }
+  }
 
   /**
    * A non-user-authored chat entry (currently: call outcomes — missed/
@@ -355,21 +490,23 @@ export class ChatMessageService {
         message: 'You cannot send messages in this room',
       });
     }
-    // Channel posting is decided by the caller's role *in this room*. It used
-    // to compare against a hardcoded public_id of '777777' — a magic account
-    // that locked every real channel owner out of their own channel, couldn't
-    // be granted or revoked without a deploy, and silently handed the rights
-    // to whoever landed on that sequence value. (The education module had the
-    // same magic number and dropped it for the same reasons.)
-    if (
-      room.postingMode === 'admins_only' &&
-      !['owner', 'admin'].includes(member.role)
-    ) {
+    // Posting rights come from channel_settings, keyed on the caller's role in
+    // this room. This replaced a hardcoded public_id of '777777' — a magic
+    // account that locked every real channel owner out of their own channel,
+    // couldn't be granted or revoked without a deploy, and silently handed the
+    // rights to whoever landed on that sequence value.
+    const settings = await this.channelSettings.getRaw(roomId);
+    const role = (member.role as RoomRole) ?? 'member';
+    if (!roleSatisfies(role, settings.whoCanPost)) {
       throw new ForbiddenException({
         code: 'CHANNEL_ADMIN_ONLY',
         message: 'Only channel admins can publish posts',
       });
     }
+
+    this.assertMediaAllowed(dto, settings, role);
+    await this.assertSlowMode(roomId, userId, settings.slowModeSeconds, role);
+    this.assertContentAllowed(dto.content ?? '', settings);
 
     if (dto.isThreadReply) {
       if (!dto.replyToId) {
@@ -640,6 +777,13 @@ export class ChatMessageService {
       `UPDATE chat_messages SET deleted_at = now() WHERE id = $1`,
       [messageId],
     );
+    // Deletion happened over REST, so nothing had told the other members yet:
+    // the message stayed on their screen until they reloaded.
+    this.events.emit('chat.message_deleted', {
+      roomId: msg.roomId,
+      messageId,
+      deletedBy: userId,
+    });
   }
 
   async updateMessage(
@@ -694,6 +838,15 @@ export class ChatMessageService {
       ),
     );
     const saved = savedRows[0];
+    // Same gap as deletion: an edit made over REST reached nobody until they
+    // reloaded, so two people in the same room saw different text.
+    this.events.emit('chat.message_updated', {
+      roomId: msg.roomId,
+      messageId,
+      content: plainText,
+      isEdited: true,
+      editedAt,
+    });
     return { ...saved, content: plainText, editedAt: saved.editedAt };
   }
 
