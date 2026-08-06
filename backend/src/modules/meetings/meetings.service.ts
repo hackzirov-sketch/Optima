@@ -6,7 +6,9 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -33,6 +35,8 @@ import {
 import {
   MEETING_LIFECYCLE_QUEUE,
   MEETING_AUTO_END_GRACE_SECONDS,
+  MESH_MAX_PARTICIPANTS,
+  effectiveCapacity,
 } from './meetings.constants';
 import { MeetingsRepository } from './repositories/meetings.repository';
 import { MeetingAccessService } from './services/meeting-access.service';
@@ -58,6 +62,8 @@ export type { MeetingAccess } from './services/meeting-access.service';
  */
 @Injectable()
 export class MeetingsService {
+  private readonly logger = new Logger(MeetingsService.name);
+
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly meetingsRepository: MeetingsRepository,
@@ -229,7 +235,7 @@ export class MeetingsService {
         `INSERT INTO meetings
            (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
             max_participants, is_recurring, agenda, scope, join_policy)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 100), COALESCE($9, false), $10, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, $13), COALESCE($9, false), $10, $11, $12)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
           workspaceId,
@@ -244,6 +250,7 @@ export class MeetingsService {
           dto.agenda ?? null,
           scope,
           joinPolicy,
+          MESH_MAX_PARTICIPANTS,
         ],
       );
       saved = rows[0];
@@ -463,7 +470,8 @@ export class MeetingsService {
       [meetingId],
     );
     const activeCount = Number(activeCountRows[0]?.count ?? 0);
-    if (activeCount >= meeting.maxParticipants) {
+    // The stored limit is a host preference; the mesh limit is physics.
+    if (activeCount >= effectiveCapacity(meeting.maxParticipants)) {
       throw new ConflictException({
         code: ErrorCode.MEETING_FULL,
         message: 'Meeting is at full capacity',
@@ -486,11 +494,33 @@ export class MeetingsService {
     return this.getOne(meetingId, userId);
   }
 
-  getIceServers() {
+  /**
+   * STUN/TURN configuration for a caller's peer connections.
+   *
+   * TURN credentials are minted per request and expire, rather than being one
+   * shared username and password handed to everyone. A static credential is
+   * permanent bandwidth: it sits in the browser of every user who has ever
+   * joined a call, in their devtools network log, and in any HAR file they
+   * send to support — and relaying traffic is the expensive thing a TURN
+   * server does. One leak and strangers are proxying through it indefinitely,
+   * with nothing to revoke short of rotating the secret for everybody.
+   *
+   * The scheme is coturn's `use-auth-secret` mode (the TURN REST API in
+   * RFC 7635's lineage), which every mainstream TURN server implements:
+   * the username is an expiry timestamp, optionally with an identifier after
+   * a colon, and the password is its HMAC-SHA1 under a secret shared only
+   * between this service and the TURN server. Nothing is stored on either
+   * side — the server recomputes the same HMAC and checks the timestamp.
+   *
+   * Falls back to the old static pair when no secret is configured, so an
+   * existing deployment keeps working until it sets TURN_SECRET.
+   */
+  getIceServers(userId?: string) {
     const urls = (process.env.TURN_URLS || '')
       .split(',')
       .map((url) => url.trim())
       .filter(Boolean);
+
     const iceServers: Array<{
       urls: string[];
       username?: string;
@@ -500,11 +530,31 @@ export class MeetingsService {
         urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'],
       },
     ];
-    if (
-      urls.length &&
-      process.env.TURN_USERNAME &&
-      process.env.TURN_CREDENTIAL
-    ) {
+
+    if (!urls.length) return iceServers;
+
+    const secret = process.env.TURN_SECRET;
+    if (secret) {
+      // Long enough to place a call and survive an ICE restart, short enough
+      // that a captured credential is worth little. It only has to be valid at
+      // allocation time; an established relay is not torn down when it lapses.
+      const ttlSeconds = Number(process.env.TURN_TTL_SECONDS) || 3600;
+      const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+      // The user id makes each credential attributable, so abuse can be traced
+      // to an account rather than to "someone with the secret".
+      const username = userId ? `${expiresAt}:${userId}` : String(expiresAt);
+      const credential = crypto
+        .createHmac('sha1', secret)
+        .update(username)
+        .digest('base64');
+      iceServers.push({ urls, username, credential });
+      return iceServers;
+    }
+
+    if (process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL) {
+      this.logger.warn(
+        'TURN is using a static credential — set TURN_SECRET to issue expiring ones',
+      );
       iceServers.push({
         urls,
         username: process.env.TURN_USERNAME,

@@ -145,6 +145,22 @@ export class EnvironmentVariables {
   })
   CHAT_ENCRYPTION_KEY?: string;
 
+  /**
+   * Shared with the TURN server (coturn `use-auth-secret`). When set, each
+   * client is issued its own expiring credential instead of everyone sharing
+   * one static username and password — see MeetingsService.getIceServers.
+   */
+  @IsString()
+  @IsOptional()
+  @MinLength(32, {
+    message: 'TURN_SECRET must be at least 32 characters long',
+  })
+  TURN_SECRET?: string;
+
+  @IsNumber()
+  @IsOptional()
+  TURN_TTL_SECONDS?: number = 3600;
+
   @IsString()
   @IsOptional()
   SMTP_HOST?: string;

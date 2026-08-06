@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting, MeetingVisibility } from "../types";
+import { MESH_MAX_PARTICIPANTS, clampParticipants } from "../lib/meeting-limits";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const VISIBILITY_OPTIONS: MeetingVisibility[] = ["workspace_only", "private", "public", "invite_only"];
@@ -109,7 +110,7 @@ export function MeetingsPage() {
         title: String(form.get("title") || "").trim(),
         description: String(form.get("description") || "").trim() || undefined,
         startTime: start.toISOString(),
-        maxParticipants: Number(form.get("maxParticipants") || 20),
+        maxParticipants: clampParticipants(Number(form.get("maxParticipants"))),
         scope: visibility,
         joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
       });
@@ -186,7 +187,7 @@ export function MeetingsPage() {
           <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={3} /></label>
           <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
           <p className="field-hint"><Clock3 size={15} /> {t("meetings.durationHint")}</p>
-          <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={500} defaultValue={20} /></label>
+          <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={MESH_MAX_PARTICIPANTS} defaultValue={MESH_MAX_PARTICIPANTS} /></label>
           <label>{t("meetings.visibilityLabel")}
             <select value={visibility} onChange={(event) => setVisibility(event.target.value as MeetingVisibility)}>
               {VISIBILITY_OPTIONS.map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}

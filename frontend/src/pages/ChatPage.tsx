@@ -77,6 +77,7 @@ import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
+import { clampParticipants } from "../lib/meeting-limits";
 
 /**
  * Telegram's album size, and the same limit the server enforces in
@@ -1452,7 +1453,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         title: roomTitle(selectedRoom),
         description: `${roomTitle(selectedRoom)} suhbati`,
         startTime: new Date().toISOString(),
-        maxParticipants: Math.max(2, selectedRoom.memberCount + 2)
+        maxParticipants: clampParticipants(selectedRoom.memberCount + 2)
       });
       sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
       const call = {

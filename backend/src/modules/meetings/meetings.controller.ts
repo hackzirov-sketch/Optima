@@ -81,8 +81,8 @@ export class MeetingsController {
 
   @Get('meetings/ice-servers')
   @ApiOperation({ summary: 'Get WebRTC STUN/TURN configuration' })
-  iceServers() {
-    return this.meetingsService.getIceServers();
+  iceServers(@CurrentUser('id') userId: string) {
+    return this.meetingsService.getIceServers(userId);
   }
 
   // ─── Join by meeting code (workspace-agnostic) ────────────────────────────

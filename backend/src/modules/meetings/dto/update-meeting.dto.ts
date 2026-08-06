@@ -15,6 +15,7 @@ import {
   MeetingJoinPolicy,
 } from '../../../common/enums/meeting.enum';
 import { RoomScope } from '../../../common/enums';
+import { MESH_MAX_PARTICIPANTS } from '../meetings.constants';
 
 export class UpdateMeetingDto {
   @ApiPropertyOptional()
@@ -47,7 +48,7 @@ export class UpdateMeetingDto {
   @IsOptional()
   @IsInt()
   @Min(2)
-  @Max(500)
+  @Max(MESH_MAX_PARTICIPANTS)
   maxParticipants?: number;
 
   @ApiPropertyOptional()

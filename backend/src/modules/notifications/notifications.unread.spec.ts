@@ -1,9 +1,3 @@
-// NotificationsService imports EventsGateway for its forwardRef, which drags
-// in socket.io and the ESM-only `cookie` package that ts-jest won't transform.
-// The gateway is injected as a stub here anyway, so the real module is never
-// needed — this just stops the import chain from being followed.
-jest.mock('../gateway/events.gateway', () => ({ EventsGateway: class {} }));
-
 import { NotificationsService } from './notifications.service';
 
 /**

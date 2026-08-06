@@ -1,8 +1,3 @@
-// NotificationsService pulls in EventsGateway for its forwardRef, which drags
-// in socket.io and the ESM-only `cookie` package that ts-jest won't transform.
-// It is injected as a stub here, so the real module is never needed.
-jest.mock('../../gateway/events.gateway', () => ({ EventsGateway: class {} }));
-
 import { ChatProcessor } from './chat.processor';
 import { NotificationType } from '../../../common/enums';
 
@@ -22,13 +17,14 @@ describe('ChatProcessor — mention notifications', () => {
   const respondWith = ({
     mentionNotifications = true,
     recipients = [] as Array<{ id: string }>,
-    roomName = 'general' as string | null,
+    roomName = 'general',
   } = {}) => {
     dataSource.query.mockImplementation((sql: string) => {
       const text = String(sql);
       if (text.includes('channel_settings'))
         return Promise.resolve([{ mentionNotifications }]);
-      if (text.includes('FROM chat_members')) return Promise.resolve(recipients);
+      if (text.includes('FROM chat_members'))
+        return Promise.resolve(recipients);
       if (text.includes('FROM chat_rooms'))
         return Promise.resolve([{ name: roomName }]);
       if (text.includes('FROM users'))
@@ -90,7 +86,10 @@ describe('ChatProcessor — mention notifications', () => {
   });
 
   it('respects a room that has mention notifications turned off', async () => {
-    respondWith({ mentionNotifications: false, recipients: [{ id: 'user-2' }] });
+    respondWith({
+      mentionNotifications: false,
+      recipients: [{ id: 'user-2' }],
+    });
 
     await run(['alice']);
 

@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { RoomScope } from '../../../common/enums';
 import { MeetingJoinPolicy } from '../../../common/enums/meeting.enum';
+import { MESH_MAX_PARTICIPANTS } from '../meetings.constants';
 
 export class CreateMeetingDto {
   @ApiProperty()
@@ -37,7 +38,7 @@ export class CreateMeetingDto {
   @IsOptional()
   @IsInt()
   @Min(2)
-  @Max(500)
+  @Max(MESH_MAX_PARTICIPANTS)
   maxParticipants?: number;
 
   @ApiPropertyOptional()
