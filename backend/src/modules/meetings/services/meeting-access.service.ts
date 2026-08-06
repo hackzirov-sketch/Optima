@@ -44,8 +44,15 @@ export class MeetingAccessService {
   async resolveAccess(meeting: any, userId: string): Promise<AccessDecision> {
     if (meeting.hostId === userId) return { kind: 'host' };
 
+    // Only someone *currently* in the meeting counts as a participant. Without
+    // `left_at IS NULL` the row survives the person leaving, so anyone who ever
+    // joined kept a permanent pass — including past the `locked` check below,
+    // which is the one control a host has for "no more people". Rejoining after
+    // a drop still works: the row is only closed when the leave is finalised,
+    // after the reconnect grace window.
     const participantRows = await this.dataSource.query(
-      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+      `SELECT id FROM meeting_participants
+       WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [meeting.id, userId],
     );
     if (participantRows[0]) return { kind: 'participant' };

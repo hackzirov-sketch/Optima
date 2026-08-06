@@ -680,6 +680,176 @@ export class RedisService implements OnModuleDestroy {
     return [false, null, null];
   }
 
+  // ─── Generic JSON cache ────────────────────────────────────────────────
+  //
+  // Every cache in this file predates these and hand-rolls the same three
+  // steps: get client, JSON round-trip, swallow the error. New caches use
+  // these instead so the fail-open behaviour is written once.
+  //
+  // "Fail open" is the important part and it is a deliberate choice: a cache
+  // is an optimisation, so a Redis outage must degrade to "read from
+  // Postgres", never to "throw". Callers therefore treat a null from getJson
+  // as a plain miss and cannot distinguish it from Redis being down.
+
+  async getJson<T>(key: string): Promise<T | null> {
+    try {
+      const client = this.getClient();
+      if (!client) return null;
+      const raw = await client.get(key);
+      return raw ? (JSON.parse(raw) as T) : null;
+    } catch (e) {
+      this.logger.warn(
+        `Redis getJson(${key}) failed: ${e instanceof Error ? e.message : e}`,
+      );
+      return null;
+    }
+  }
+
+  async setJson(
+    key: string,
+    value: unknown,
+    ttlSeconds: number,
+  ): Promise<void> {
+    try {
+      const client = this.getClient();
+      if (!client) return;
+      await client.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+    } catch (e) {
+      this.logger.warn(
+        `Redis setJson(${key}) failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  /**
+   * Drops cache entries. Variadic because invalidation is usually plural —
+   * an ownership transfer changes two members' roles, and forgetting the
+   * second one is the whole class of bug this method exists to make hard.
+   */
+  async drop(...keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    try {
+      const client = this.getClient();
+      if (!client) return;
+      await client.del(...keys);
+    } catch (e) {
+      this.logger.warn(
+        `Redis drop failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  /**
+   * Atomically reads a hash and empties it, returning what was there.
+   *
+   * HGETALL followed by DEL is not the same thing: between the two commands a
+   * writer can stage a field that then gets deleted unread, and two concurrent
+   * drainers can both take the same batch. Redis runs a script to completion
+   * with nothing interleaved, so this cannot happen — anything staged during
+   * the drain is simply part of the next one.
+   */
+  private static readonly DRAIN_HASH = `
+    local values = redis.call('HGETALL', KEYS[1])
+    redis.call('DEL', KEYS[1])
+    return values
+  `;
+
+  async drainHash(key: string): Promise<Record<string, string>> {
+    try {
+      const client = this.getClient();
+      if (!client) return {};
+      const flat = (await client.eval(
+        RedisService.DRAIN_HASH,
+        1,
+        key,
+      )) as string[];
+      const out: Record<string, string> = {};
+      for (let i = 0; i < flat.length; i += 2) out[flat[i]] = flat[i + 1];
+      return out;
+    } catch (e) {
+      this.logger.warn(
+        `Redis drainHash(${key}) failed: ${e instanceof Error ? e.message : e}`,
+      );
+      return {};
+    }
+  }
+
+  // ─── Unread notification counter ───────────────────────────────────────
+  //
+  // Replaces `SELECT COUNT(*) ... WHERE is_read = false`, which ran on every
+  // page load against a table that only grows.
+  //
+  // The counter is a cache, not a ledger: it carries a TTL and is only ever
+  // adjusted while it exists. A create or a read that arrives when the key is
+  // absent changes nothing, and the next reader recomputes the true value from
+  // Postgres. That is what makes drift self-healing — a missed decrement is
+  // corrected within one TTL instead of sticking forever, which is the failure
+  // mode of a counter kept as the source of truth.
+
+  private static readonly ADJUST_IF_PRESENT = `
+    if redis.call('EXISTS', KEYS[1]) == 0 then return -1 end
+    local next = redis.call('INCRBY', KEYS[1], ARGV[1])
+    if next < 0 then
+      redis.call('SET', KEYS[1], 0, 'KEEPTTL')
+      return 0
+    end
+    return next
+  `;
+
+  async getUnreadCount(userId: string): Promise<number | null> {
+    try {
+      const client = this.getClient();
+      if (!client) return null;
+      const raw = await client.get(RedisKeys.notifUnread(userId));
+      return raw === null ? null : Number(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async setUnreadCount(
+    userId: string,
+    count: number,
+    ttlSeconds = 600,
+  ): Promise<void> {
+    try {
+      const client = this.getClient();
+      if (!client) return;
+      await client.set(
+        RedisKeys.notifUnread(userId),
+        String(Math.max(0, count)),
+        'EX',
+        ttlSeconds,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Redis setUnreadCount failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  /** `delta` of +1 on a new notification, -1 when one is read. No-op if absent. */
+  async adjustUnreadCount(userId: string, delta: number): Promise<void> {
+    try {
+      const client = this.getClient();
+      if (!client) return;
+      await client.eval(
+        RedisService.ADJUST_IF_PRESENT,
+        1,
+        RedisKeys.notifUnread(userId),
+        String(delta),
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Redis adjustUnreadCount failed: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  async clearUnreadCount(userId: string): Promise<void> {
+    await this.drop(RedisKeys.notifUnread(userId));
+  }
+
   async cacheUser(
     userId: string,
     user: any,

@@ -28,6 +28,7 @@ import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { SecurityService } from './security.service';
 import { TokenService } from './token.service';
 import { DeviceService } from './device.service';
+import { SessionService } from './session.service';
 import { AuthRepository } from '../repositories/auth.repository';
 
 function generateVerificationCode(): string {
@@ -74,6 +75,7 @@ export class AuthService {
     private securityService: SecurityService,
     private tokenService: TokenService,
     private deviceService: DeviceService,
+    private sessionService: SessionService,
     @InjectQueue('auth') private authQueue: Queue,
     private authRepository: AuthRepository,
   ) {}
@@ -296,15 +298,20 @@ export class AuthService {
     const user = await this.usersService.findByEmail(dto.email);
 
     // No password on file — either the address isn't registered at all, or it
-    // belongs to a Google/GitHub account that never set one. Both answer
-    // identically.
+    // belongs to a Google/GitHub account that never set one. Both answer with
+    // the *same* error a wrong password gets, below.
     //
-    // Splitting them (INVALID_CREDENTIALS vs PASSWORD_SETUP_REQUIRED) told an
-    // unauthenticated caller exactly which addresses have accounts here, one
-    // request each — the whole point of the constant-time bcrypt below. It was
-    // also an email-bomb primitive: the social-account branch sent a
-    // verification mail on every attempt, with no rate limit and no
-    // credentials required.
+    // An earlier version answered this branch with PASSWORD_SETUP_REQUIRED and
+    // a verifyToken while a wrong password on a normal account got
+    // INVALID_CREDENTIALS. Merging "nonexistent" into "OAuth-only" hid one
+    // distinction but left the one that matters: two different responses, so a
+    // single unauthenticated request still told an attacker whether an address
+    // has an account here. Every failure now looks alike.
+    //
+    // The recovery path for an OAuth-only account is unchanged and does not
+    // need this branch: sign in with the provider button, or use forgot-
+    // password, which adds 'local' to providers on completion. Both are
+    // enumeration-safe on their own (see forgotPassword's decoy token).
     if (!user || !user.passwordHash) {
       // Constant-time response to prevent email enumeration
       await this.securityService.comparePassword(
@@ -312,27 +319,9 @@ export class AuthService {
         '$2b$12$invalidhashplaceholderXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
       );
 
-      // A real social account still gets its code (that's the recovery path);
-      // a nonexistent one gets a decoy token so the response is identical.
-      // Rate limited per account, like every other mail-sending path.
-      let verifyToken = decoyToken();
-      if (user) {
-        const limitCheck = await this.redisService.checkEmailVerifyResendLimit(
-          user.id,
-        );
-        if (!limitCheck?.blocked) {
-          verifyToken = await this.issueEmailVerification(user.id, user.email);
-          await this.redisService.markEmailVerifyResendSent(user.id);
-        }
-      }
-
       throw new UnauthorizedException({
-        code: ErrorCode.PASSWORD_SETUP_REQUIRED,
-        message:
-          'If this account exists and was created with Google or GitHub, a verification code has been sent.',
-        requiresPasswordSetup: true,
-        verifyToken,
-        redirect: '/verify',
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'Invalid credentials',
       });
     }
 
@@ -466,6 +455,12 @@ export class AuthService {
     const user = await this.usersService.findById(finalUserId);
     if (!user) throw new UnauthorizedException();
 
+    // Replacing an existing password is a credential *change*; setting the
+    // first one on an OAuth-only account is not. Only the former invalidates
+    // sessions — see the note in resetPassword. Captured before the update,
+    // since the update is what makes passwordHash non-null.
+    const isPasswordChange = !!user.passwordHash;
+
     const passwordHash = await this.securityService.hashPassword(dto.password);
 
     const providers = user.providers || [];
@@ -479,7 +474,17 @@ export class AuthService {
       needsPasswordSetup: false,
     });
 
-    return { message: 'Password set successfully' };
+    if (isPasswordChange) {
+      await this.sessionService.revokeAllSessions(finalUserId);
+    }
+
+    return {
+      message: 'Password set successfully',
+      // The caller's own session is gone too — it was minted before the
+      // cutoff — so the frontend has to send them back through login rather
+      // than leaving them on a screen whose next request will 401.
+      sessionsRevoked: isPasswordChange,
+    };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
@@ -561,6 +566,14 @@ export class AuthService {
       providers,
       needsPasswordSetup: false,
     });
+
+    // A password reset is what someone does *because* they believe the account
+    // is compromised. Leaving the attacker's refresh token alive for the rest
+    // of its 7-day life — renewing itself the whole time — defeats the point of
+    // the reset. revokeAllSessions also records a session-block cutoff, so
+    // access tokens already minted die inside their own TTL rather than
+    // outliving the credential they were issued against.
+    await this.sessionService.revokeAllSessions(userId);
 
     return { message: 'Password reset successfully' };
   }

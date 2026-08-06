@@ -1,3 +1,4 @@
+import { DEFAULT_POOL_SIZE } from '../database.config';
 import {
   IsEnum,
   IsNumber,
@@ -36,7 +37,7 @@ export class EnvironmentVariables {
 
   @IsNumber()
   @IsOptional()
-  DATABASE_POOL_SIZE: number = 20;
+  DATABASE_POOL_SIZE: number = DEFAULT_POOL_SIZE;
 
   @IsString()
   REDIS_URL: string;
@@ -117,12 +118,31 @@ export class EnvironmentVariables {
   @IsOptional()
   R2_PUBLIC_URL?: string;
 
+  /**
+   * Held to the same bar as the JWT secrets: both derive an AES-256 key
+   * through scrypt, and scrypt stretches a weak input without adding entropy
+   * to it — `ENCRYPTION_KEY=secret` yields a perfectly valid 32-byte key that
+   * is still worth about six characters of guessing. What they protect is
+   * stored GitHub OAuth tokens and, for the chat key, message bodies at rest.
+   */
   @IsString()
   @IsOptional()
+  @MinLength(32, {
+    message: 'ENCRYPTION_KEY must be at least 32 characters long',
+  })
+  @NotEquals('change-this-to-strong-32-char-secret', {
+    message: 'ENCRYPTION_KEY is still a placeholder value',
+  })
   ENCRYPTION_KEY?: string;
 
   @IsString()
   @IsOptional()
+  @MinLength(32, {
+    message: 'CHAT_ENCRYPTION_KEY must be at least 32 characters long',
+  })
+  @NotEquals('change-this-to-strong-32-char-secret', {
+    message: 'CHAT_ENCRYPTION_KEY is still a placeholder value',
+  })
   CHAT_ENCRYPTION_KEY?: string;
 
   @IsString()

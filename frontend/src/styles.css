@@ -2994,3 +2994,5 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .room-preview p { margin: 4px 0 0; color: var(--text-soft); font-size: 13px; line-height: 1.5; }
 .room-preview code { padding: 3px 8px; border-radius: 6px; background: var(--surface-muted); color: var(--muted); font-size: 11.5px; }
 .room-preview button { margin-top: 8px; min-width: 180px; }
+.channel-settings .cs-audit-diff { display: grid; gap: 1px; }
+.channel-settings .cs-audit-diff em { color: var(--text-soft); font-size: 11.5px; font-style: normal; overflow-wrap: anywhere; }

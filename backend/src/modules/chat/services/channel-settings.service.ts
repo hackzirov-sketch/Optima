@@ -8,6 +8,19 @@ import { DatabaseService } from '../../../database/database.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatMemberService } from './member.service';
+import { RedisService } from '../../../redis/redis.service';
+import { RedisKeys } from '../../../redis/redis.keys';
+import { AuditService } from '../../../common/services/audit.service';
+import {
+  ChatEncryptionService,
+  EncryptedMessage,
+} from '../chat-encryption.service';
+
+/**
+ * Settings change rarely and every write drops the entry explicitly, so this
+ * TTL is only a backstop against a missed invalidation, not the mechanism.
+ */
+const SETTINGS_TTL_SECONDS = 300;
 
 /** Who a permission is open to, tightest first. */
 export const AUDIENCES = ['owner', 'admins', 'moderators', 'members'] as const;
@@ -208,6 +221,9 @@ export class ChannelSettingsService {
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly memberService: ChatMemberService,
+    private readonly redis: RedisService,
+    private readonly chatEncryption: ChatEncryptionService,
+    private readonly audit: AuditService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -216,7 +232,18 @@ export class ChannelSettingsService {
    * though it has always had one. `ON CONFLICT DO NOTHING` + a re-select keeps
    * two concurrent openers from racing into a unique violation.
    */
+  /**
+   * Read on the send-message hot path — every single message checks who may
+   * post, what MIME types are allowed and whether slow mode is on — so in a
+   * busy room this was one SELECT per message on a row that changes maybe
+   * once a week. Cached with an explicit drop in update(), which is the only
+   * thing that writes it.
+   */
   async getRaw(roomId: string): Promise<ChannelSettings> {
+    const cacheKey = RedisKeys.roomSettings(roomId);
+    const cached = await this.redis.getJson<ChannelSettings>(cacheKey);
+    if (cached) return cached;
+
     const read = async () =>
       (
         await this.dataSource.query<ChannelSettings>(
@@ -226,7 +253,10 @@ export class ChannelSettingsService {
       )[0];
 
     const existing = await read();
-    if (existing) return existing;
+    if (existing) {
+      await this.redis.setJson(cacheKey, existing, SETTINGS_TTL_SECONDS);
+      return existing;
+    }
 
     await this.dataSource.query(
       `INSERT INTO channel_settings (room_id, who_can_post)
@@ -241,6 +271,7 @@ export class ChannelSettingsService {
         code: ErrorCode.ROOM_NOT_FOUND,
         message: 'Room not found',
       });
+    await this.redis.setJson(cacheKey, created, SETTINGS_TTL_SECONDS);
     return created;
   }
 
@@ -325,6 +356,11 @@ export class ChannelSettingsService {
         RETURNING room_id AS "roomId", ${SELECT_SQL}`,
       values,
     );
+    // The only write to this row, so the only place the cache can go stale.
+    // Awaited before anything else observes the change — the send path reads
+    // these settings on every message and must not keep enforcing the old
+    // rules after an admin has tightened them.
+    await this.redis.drop(RedisKeys.roomSettings(roomId));
 
     // posting_mode on chat_rooms drives the send path and the room listing, so
     // it has to follow whoCanPost rather than drift away from it.
@@ -342,10 +378,28 @@ export class ChannelSettingsService {
       );
     }
 
-    await this.dataSource.query(
-      `INSERT INTO channel_settings_audit (room_id, user_id, changes) VALUES ($1, $2, $3)`,
-      [roomId, userId, JSON.stringify(changes)],
-    );
+    // audit_logs is the platform's one trail — the same table that records a
+    // workspace deletion or a project rename, so a room's history and a
+    // workspace's activity feed are one query with a different filter.
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId: userId,
+      action: 'chat_room.settings_updated',
+      entityType: 'chat_room',
+      entityId: roomId,
+      oldValue: Object.fromEntries(
+        Object.entries(changes).map(([key, diff]) => [
+          key,
+          (diff as { from: unknown }).from,
+        ]),
+      ),
+      newValue: Object.fromEntries(
+        Object.entries(changes).map(([key, diff]) => [
+          key,
+          (diff as { to: unknown }).to,
+        ]),
+      ),
+    });
 
     // Everyone in the room is looking at a UI whose rules just changed —
     // whether they may post, whether reactions exist, how long slow mode is.
@@ -463,19 +517,32 @@ export class ChannelSettingsService {
       [roomId],
     );
 
-    const topPosts = await this.dataSource.query<{
+    const topPostRows = await this.dataSource.query<{
       id: string;
       content: string | null;
+      contentJson: EncryptedMessage | null;
       viewCount: number;
       createdAt: Date;
     }>(
-      `SELECT id, content, view_count AS "viewCount", created_at AS "createdAt"
+      `SELECT id, content, content_json AS "contentJson",
+              view_count AS "viewCount", created_at AS "createdAt"
          FROM chat_messages
         WHERE room_id = $1 AND deleted_at IS NULL AND view_count > 0
         ORDER BY view_count DESC
         LIMIT 5`,
       [roomId],
     );
+    // Message bodies are encrypted at rest, so the raw `content` column is
+    // empty — reading it directly is what made every top post render blank.
+    const topPosts = topPostRows.map((row) => ({
+      id: row.id,
+      content: this.chatEncryption.safeDecrypt(
+        row.contentJson,
+        row.content ?? '',
+      ),
+      viewCount: row.viewCount,
+      createdAt: row.createdAt,
+    }));
 
     const growth = await this.dataSource.query<{ day: string; joined: number }>(
       `SELECT to_char(date_trunc('day', joined_at), 'YYYY-MM-DD') AS day,
@@ -500,27 +567,29 @@ export class ChannelSettingsService {
     };
   }
 
-  /** The audit trail — admins only, since it names who changed what. */
+  /** A room's slice of the platform audit trail — admins and above only. */
   async listAudit(roomId: string, userId: string, limit = 50) {
     const role = await this.getRole(roomId, userId);
     this.assertCanManage(role);
-    return this.dataSource.query<{
-      id: string;
-      userId: string | null;
-      changes: Record<string, unknown>;
-      createdAt: Date;
-      firstName: string | null;
-      lastName: string | null;
-    }>(
-      `SELECT a.id, a.user_id AS "userId", a.changes, a.created_at AS "createdAt",
-              u.first_name AS "firstName", u.last_name AS "lastName"
-         FROM channel_settings_audit a
-         LEFT JOIN users u ON u.id = a.user_id
-        WHERE a.room_id = $1
-        ORDER BY a.created_at DESC
-        LIMIT $2`,
-      [roomId, Math.min(Math.max(limit, 1), 200)],
+    const page = await this.audit.list({
+      entityType: 'chat_room',
+      entityId: roomId,
+      limit,
+    });
+    return page.items;
+  }
+
+  /**
+   * The workspace a room belongs to, if any — channels and groups opened from
+   * chat carry none, and audit_logs.workspace_id is nullable precisely so those
+   * rows are still recorded rather than dropped.
+   */
+  private async workspaceOf(roomId: string): Promise<string | null> {
+    const rows = await this.dataSource.query<{ workspaceId: string | null }>(
+      `SELECT workspace_id AS "workspaceId" FROM chat_rooms WHERE id = $1`,
+      [roomId],
     );
+    return rows[0]?.workspaceId ?? null;
   }
 
   /**
@@ -567,19 +636,19 @@ export class ChannelSettingsService {
 
     await this.dataSource.query(
       `UPDATE chat_members SET role = $3
-        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, targetUserId, role],
     );
-    await this.dataSource.query(
-      `INSERT INTO channel_settings_audit (room_id, user_id, changes) VALUES ($1, $2, $3)`,
-      [
-        roomId,
-        actorId,
-        JSON.stringify({
-          memberRole: { userId: targetUserId, from: targetRole, to: role },
-        }),
-      ],
-    );
+    await this.memberService.invalidateRoomMember(roomId, targetUserId);
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId,
+      action: 'chat_room.member_role_changed',
+      entityType: 'chat_room',
+      entityId: roomId,
+      oldValue: { userId: targetUserId, role: targetRole },
+      newValue: { userId: targetUserId, role },
+    });
     this.events.emit('chat.member_changed', {
       roomId,
       userId: targetUserId,
@@ -605,26 +674,37 @@ export class ChannelSettingsService {
     await this.dataSource.withTransaction(async (query) => {
       await query(
         `UPDATE chat_members SET role = 'admin'
-          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
         [roomId, actorId],
       );
       await query(
         `UPDATE chat_members SET role = 'owner'
-          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
         [roomId, targetUserId],
       );
       await query(`UPDATE chat_rooms SET created_by = $2 WHERE id = $1`, [
         roomId,
         targetUserId,
       ]);
-      await query(
-        `INSERT INTO channel_settings_audit (room_id, user_id, changes) VALUES ($1, $2, $3)`,
-        [
-          roomId,
-          actorId,
-          JSON.stringify({ ownership: { from: actorId, to: targetUserId } }),
-        ],
-      );
+    });
+    // Logged after the transaction commits: the audit entry describes a change
+    // that happened, and writing it inside would claim a transfer that a
+    // rollback then undid.
+    // Two roles changed in that transaction — the outgoing owner became an
+    // admin and the target became owner.
+    await this.memberService.invalidateRoomMember(
+      roomId,
+      actorId,
+      targetUserId,
+    );
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId,
+      action: 'chat_room.ownership_transferred',
+      entityType: 'chat_room',
+      entityId: roomId,
+      oldValue: { ownerId: actorId },
+      newValue: { ownerId: targetUserId },
     });
     this.events.emit('chat.member_changed', {
       roomId,

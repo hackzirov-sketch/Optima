@@ -99,6 +99,27 @@ export interface ChatRoom {
   backgroundType?: "DEFAULT" | "IMAGE" | "COLOR" | "GRADIENT" | "PATTERN";
 }
 
+/**
+ * A row from the platform's single audit trail (`audit_logs`). The same shape
+ * backs a workspace's activity feed and a room's change history — they are one
+ * query with a different filter.
+ */
+export interface AuditEntry {
+  id: string;
+  workspaceId: string | null;
+  actorId: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  oldValue: Record<string, unknown> | null;
+  newValue: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+  actorFirstName: string | null;
+  actorLastName: string | null;
+  actorUsername: string | null;
+}
+
 export type RoomRole = "owner" | "admin" | "moderator" | "member";
 export type Audience = "owner" | "admins" | "moderators" | "members";
 export type CommentAudience = "everyone" | "subscribers" | "verified" | "disabled";

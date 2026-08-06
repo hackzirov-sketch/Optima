@@ -4,3 +4,8 @@
 /frontend/.env
 .idea/
 *.tsbuildinfo
+
+# Any .env variant, not just the exact name — a "backup" copy is the same
+# secrets under a name the old rule did not match.
+.env.*
+!.env.example

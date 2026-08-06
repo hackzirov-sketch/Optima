@@ -40,6 +40,18 @@ const SECTIONS: Array<{ id: SectionId; icon: typeof Info }> = [
   { id: "danger", icon: Megaphone }
 ];
 
+/**
+ * Audit actions are stored as stable machine strings (`chat_room.deleted`), so
+ * they survive renames and stay greppable. Anything unmapped falls through to
+ * the raw string rather than rendering blank.
+ */
+const ACTION_LABELS: Record<string, string> = {
+  "chat_room.settings_updated": "Settings updated",
+  "chat_room.member_role_changed": "Role changed",
+  "chat_room.ownership_transferred": "Ownership transferred",
+  "chat_room.deleted": "Room deleted"
+};
+
 const AUDIENCES: Audience[] = ["owner", "admins", "moderators", "members"];
 const COMMENT_AUDIENCES: CommentAudience[] = ["everyone", "subscribers", "verified", "disabled"];
 const SLOW_MODES = [0, 1, 5, 10, 30, 60, 300];
@@ -384,8 +396,14 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
               : <ul className="cs-audit">
                   {audit.map((entry) => (
                     <li key={entry.id}>
-                      <b>{Object.keys(entry.changes).join(", ")}</b>
-                      <small>{`${entry.firstName ?? ""} ${entry.lastName ?? ""}`.trim() || "—"}
+                      <b>{ACTION_LABELS[entry.action] ?? entry.action}</b>
+                      {/* The diff, field by field: "slowModeSeconds: 0 → 10". */}
+                      {entry.newValue && <span className="cs-audit-diff">
+                        {Object.entries(entry.newValue).map(([field, to]) => (
+                          <em key={field}>{field}: {String(entry.oldValue?.[field] ?? "—")} → {String(to)}</em>
+                        ))}
+                      </span>}
+                      <small>{`${entry.actorFirstName ?? ""} ${entry.actorLastName ?? ""}`.trim() || "—"}
                         {" · "}{new Date(entry.createdAt).toLocaleString()}</small>
                     </li>
                   ))}

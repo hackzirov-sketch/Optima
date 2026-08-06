@@ -193,6 +193,7 @@ export class CommunityService {
       [roomId, targetUsername, role],
     );
     if (!result[0]) throw new NotFoundException('Member not found');
+    await this.members.invalidateRoomMember(roomId, result[0].userId);
     return result[0];
   }
 }

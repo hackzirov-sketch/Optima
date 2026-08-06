@@ -37,6 +37,7 @@ import { EducationModule } from './modules/education/education.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { CsrfGuard } from './common/guards/csrf.guard';
 
 @Module({
   controllers: [AppController],
@@ -111,6 +112,13 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     EducationModule,
   ],
   providers: [
+    // Runs before JwtAuthGuard: a forged cross-site request should be turned
+    // away on the shape of the request, without the cookie it carries ever
+    // being honoured.
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

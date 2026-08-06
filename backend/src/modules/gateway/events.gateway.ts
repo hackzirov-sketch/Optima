@@ -368,6 +368,14 @@ export class EventsGateway
     client.data.userId = user.id;
     client.data.auth = user;
 
+    // extractUser only checks the token's signature and expiry. Everything
+    // that can invalidate a still-unexpired token — logout blacklist, a
+    // "revoke all sessions" cutoff, a deactivated account — lives in Redis and
+    // was only consulted by the timer below, one full interval away. That left
+    // a window in which a cookie captured before a logout could open a fresh
+    // socket and listen for a minute. Run the same check once, up front.
+    if (!(await this.revalidateSocket(client))) return;
+
     // Re-check the handshake token periodically for the rest of the socket's
     // life; cleared in handleDisconnect.
     client.data.authTimer = setInterval(() => {
@@ -592,8 +600,14 @@ export class EventsGateway
         message: 'Not authenticated',
       });
 
+    // `status = 'active'` is the difference between "was invited" and "is in
+    // the room". Without it, someone holding an unaccepted invite to a private
+    // group or channel joined this socket room and received every message
+    // broadcast to it from that moment on — the REST history is gated on
+    // assertRoomMember (which does check status), so this was the one way in.
     const chatMemberRows = await this.dataSource.query(
-      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      `SELECT id FROM chat_members
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [data.roomId, userId],
     );
     const member = chatMemberRows[0];
@@ -760,8 +774,13 @@ export class EventsGateway
     event: string,
     payload: unknown,
   ) {
+    // "Active member" in the sense this method's name claims: a pending
+    // invitee has a chat_members row too, and this payload carries the message
+    // body, so without the status filter an unaccepted invite delivered the
+    // room's traffic straight to that user's personal channel.
     const members = await this.dataSource.query<{ userId: string }>(
-      `SELECT user_id AS "userId" FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
+      `SELECT user_id AS "userId" FROM chat_members
+       WHERE room_id = $1 AND left_at IS NULL AND status = 'active'`,
       [roomId],
     );
     for (const { userId } of members) {
@@ -1080,7 +1099,8 @@ export class EventsGateway
       return false;
     const rows = await this.dataSource.query<{ userId: string }>(
       `SELECT user_id AS "userId" FROM chat_members
-       WHERE room_id = $1 AND user_id = ANY($2::uuid[]) AND left_at IS NULL`,
+       WHERE room_id = $1 AND user_id = ANY($2::uuid[])
+         AND left_at IS NULL AND status = 'active'`,
       [roomId, [callerId, calleeId]],
     );
     return rows.length === 2;

@@ -11,6 +11,27 @@ import {
  * 777777 stood in for platform admin. Everything now derives from one ranking,
  * so these tests pin the ranking itself.
  */
+/**
+ * An in-memory stand-in for RedisService's JSON cache. Real enough that the
+ * tests exercise the cache path rather than routing around it — a stub that
+ * always missed would let a broken invalidation pass.
+ */
+function fakeRedis() {
+  const store = new Map<string, unknown>();
+  return {
+    store,
+    getJson: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+    setJson: jest.fn((key: string, value: unknown) => {
+      store.set(key, value);
+      return Promise.resolve();
+    }),
+    drop: jest.fn((...keys: string[]) => {
+      keys.forEach((key) => store.delete(key));
+      return Promise.resolve();
+    }),
+  };
+}
+
 describe('roleSatisfies', () => {
   it('lets a higher role do everything a lower one can', () => {
     expect(roleSatisfies('owner', 'members')).toBe(true);
@@ -37,8 +58,13 @@ describe('roleSatisfies', () => {
 
 describe('ChannelSettingsService', () => {
   let dataSource: { query: jest.Mock; withTransaction: jest.Mock };
-  let memberService: { assertRoomMember: jest.Mock };
+  let redis: ReturnType<typeof fakeRedis>;
+  let memberService: {
+    assertRoomMember: jest.Mock;
+    invalidateRoomMember: jest.Mock;
+  };
   let events: { emit: jest.Mock };
+  let audit: { log: jest.Mock; list: jest.Mock };
   let service: ChannelSettingsService;
 
   const settingsRow = {
@@ -60,11 +86,19 @@ describe('ChannelSettingsService', () => {
       query: jest.fn().mockResolvedValue([settingsRow]),
       withTransaction: jest.fn(),
     };
-    memberService = { assertRoomMember: jest.fn() };
+    memberService = {
+      assertRoomMember: jest.fn(),
+      invalidateRoomMember: jest.fn().mockResolvedValue(undefined),
+    };
     events = { emit: jest.fn() };
+    audit = { log: jest.fn().mockResolvedValue(undefined), list: jest.fn() };
+    redis = fakeRedis();
     service = new ChannelSettingsService(
       dataSource as never,
       memberService as never,
+      redis as never,
+      { safeDecrypt: (_json: unknown, fallback: string) => fallback } as never,
+      audit as never,
       events as never,
     );
   });
@@ -195,6 +229,41 @@ describe('ChannelSettingsService', () => {
       service.transferOwnership('room-1', 'actor', 'target'),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+  describe('settings cache', () => {
+    it('serves a second read without touching the database', async () => {
+      await service.getRaw('room-1');
+      const afterFirst = dataSource.query.mock.calls.length;
+
+      await service.getRaw('room-1');
+
+      // The send-message path calls this for every single message; a busy
+      // room turned that into one SELECT per message on a near-static row.
+      expect(dataSource.query.mock.calls.length).toBe(afterFirst);
+    });
+
+    it('caches per room, not globally', async () => {
+      await service.getRaw('room-1');
+      const afterFirst = dataSource.query.mock.calls.length;
+
+      await service.getRaw('room-2');
+
+      expect(dataSource.query.mock.calls.length).toBeGreaterThan(afterFirst);
+    });
+
+    it('drops the entry when settings are updated', async () => {
+      asRole('admin');
+      await service.getRaw('room-1');
+      expect(redis.store.size).toBe(1);
+
+      await service.update('room-1', 'user-1', {
+        slowModeSeconds: 30,
+      });
+
+      // Stale settings here mean the old posting rules keep being enforced
+      // after an admin has tightened them.
+      expect(redis.store.size).toBe(0);
+    });
+  });
 });
 
 /**
@@ -214,21 +283,27 @@ describe('ChannelSettingsService — DTO instances with undefined fields', () =>
 
   it('ignores properties that are present but undefined', async () => {
     const dataSource = {
-      query: jest.fn().mockImplementation((sql: string) =>
-        String(sql).startsWith('UPDATE channel_settings')
-          ? Promise.resolve([{ roomId: 'room-1', discoverable: false }])
-          : Promise.resolve([
-              { roomId: 'room-1', whoCanPost: 'admins', discoverable: true },
-            ]),
-      ),
+      query: jest
+        .fn()
+        .mockImplementation((sql: string) =>
+          String(sql).startsWith('UPDATE channel_settings')
+            ? Promise.resolve([{ roomId: 'room-1', discoverable: false }])
+            : Promise.resolve([
+                { roomId: 'room-1', whoCanPost: 'admins', discoverable: true },
+              ]),
+        ),
       withTransaction: jest.fn(),
     };
     const memberService = {
       assertRoomMember: jest.fn().mockResolvedValue({ role: 'admin' }),
+      invalidateRoomMember: jest.fn().mockResolvedValue(undefined),
     };
     const service = new ChannelSettingsService(
       dataSource as never,
       memberService as never,
+      fakeRedis() as never,
+      { safeDecrypt: (_json: unknown, fallback: string) => fallback } as never,
+      { log: jest.fn(), list: jest.fn() } as never,
       { emit: jest.fn() } as never,
     );
 

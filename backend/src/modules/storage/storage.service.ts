@@ -159,6 +159,77 @@ export class StorageService {
   }
 
   /**
+   * Confirms an attachment the client is asking us to persist actually came
+   * out of one of our own upload paths, and belongs to the caller.
+   *
+   * Every upload route here is careful — the presigned PUT signs both
+   * `Content-Length` and `Content-Type`, Cloudinary gets an `allowed_formats`
+   * allowlist folded into the signature — but none of that binds the *result*
+   * to the message. The send-message payload carries `storageUrl` as a plain
+   * string, so a client could skip the upload entirely and attach any URL it
+   * likes: the chat then renders an attacker's host as a file card inside a
+   * conversation the recipient trusts, with an attacker-chosen `fileName` and
+   * `mimeType` on it. Malware delivery and phishing, wearing our UI.
+   *
+   * Two things are checked, and both have to hold:
+   *  - the URL sits under a host we actually upload to (R2 public bucket or
+   *    the configured Cloudinary cloud), so it can only ever point at our own
+   *    storage;
+   *  - the caller's id appears as a path segment, which is how every key here
+   *    is minted (`<folder>/<userId>/<uuid>`), so one user cannot attach
+   *    another user's private object by guessing its key.
+   */
+  assertOwnedAttachment(
+    storageUrl: string,
+    storageKey: string,
+    userId: string,
+  ): void {
+    const reject = (message: string): never => {
+      throw new BadRequestException({
+        code: ErrorCode.STORAGE_INVALID_FOLDER,
+        message,
+      });
+    };
+
+    let parsed: URL;
+    try {
+      parsed = new URL(storageUrl);
+    } catch {
+      return reject('Attachment URL is not a valid URL');
+    }
+    if (parsed.protocol !== 'https:') {
+      return reject('Attachment URL must be https');
+    }
+
+    const allowedHosts = new Set<string>();
+    if (this.r2PublicUrl) {
+      try {
+        allowedHosts.add(new URL(this.r2PublicUrl).host);
+      } catch {
+        // Misconfigured R2_PUBLIC_URL — fall through to the Cloudinary host.
+      }
+    }
+    if (this.cloudName) {
+      allowedHosts.add('res.cloudinary.com');
+    }
+    if (!allowedHosts.has(parsed.host)) {
+      return reject('Attachment URL does not point at UPZ storage');
+    }
+    // Cloudinary serves every account off the same host, so the host alone
+    // says nothing — the cloud name is the tenant boundary.
+    if (
+      parsed.host === 'res.cloudinary.com' &&
+      !parsed.pathname.startsWith(`/${this.cloudName}/`)
+    ) {
+      return reject('Attachment URL does not point at UPZ storage');
+    }
+
+    if (!storageKey.split('/').includes(userId)) {
+      return reject('You can only attach your own uploads');
+    }
+  }
+
+  /**
    * DNS and socket failures that mean "we never reached Cloudinary", as
    * opposed to "Cloudinary answered and said no". The distinction matters:
    * these are transient and say nothing about the asset, so they must never be

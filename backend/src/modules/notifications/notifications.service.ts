@@ -16,8 +16,10 @@ import {
 import { UpdateNotifPrefsDto } from './dto/update-notif-prefs.dto';
 import {
   NOTIFICATION_COLUMNS_SQL,
+  NOTIFICATION_COLUMNS_SQL_N,
   NOTIFICATION_PREFS_COLUMNS_SQL,
 } from './notifications.sql';
+import { RedisService } from '../../redis/redis.service';
 import {
   buildUpdateSet,
   normalizeReturning,
@@ -141,6 +143,7 @@ export class NotificationsService {
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
     private readonly dispatcher: NotificationDispatcherService,
+    private readonly redis: RedisService,
   ) {}
 
   async create(input: CreateNotificationInput) {
@@ -162,6 +165,7 @@ export class NotificationsService {
       ],
     );
     const saved = rows[0];
+    await this.redis.adjustUnreadCount(input.userId, 1);
 
     // Real-time in-app push over WebSocket
     this.gateway.sendNotification(input.userId, { notification: saved });
@@ -202,20 +206,36 @@ export class NotificationsService {
     return { data, total, page, limit };
   }
 
+  /**
+   * Read on every page load. The COUNT(*) behind it scans a table that only
+   * grows, so the answer is kept in Redis and adjusted as notifications are
+   * created and read; Postgres is consulted only to seed a missing counter.
+   */
   async unreadCount(userId: string) {
+    const cached = await this.redis.getUnreadCount(userId);
+    if (cached !== null) return { count: cached };
+
     const rows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`,
       [userId],
     );
-    return { count: Number(rows[0]?.count ?? 0) };
+    const count = Number(rows[0]?.count ?? 0);
+    await this.redis.setUnreadCount(userId, count);
+    return { count };
   }
 
   async markRead(userId: string, id: string) {
-    const rows = normalizeReturning(
+    // The self-join against `old` reads the pre-update snapshot of the row, so
+    // one statement both performs the write and reports whether this call is
+    // what flipped the flag. Marking an already-read notification as read stays
+    // a success (the client clicks without checking), but must not decrement
+    // the counter a second time for the same notification.
+    const rows = normalizeReturning<any>(
       await this.dataSource.query(
-        `UPDATE notifications SET is_read = true, read_at = now()
-         WHERE id = $1 AND user_id = $2
-         RETURNING ${NOTIFICATION_COLUMNS_SQL}`,
+        `UPDATE notifications n SET is_read = true, read_at = now()
+         FROM notifications old
+         WHERE n.id = old.id AND n.id = $1 AND n.user_id = $2
+         RETURNING ${NOTIFICATION_COLUMNS_SQL_N}, old.is_read AS "wasRead"`,
         [id, userId],
       ),
     );
@@ -225,7 +245,9 @@ export class NotificationsService {
         message: 'Notification not found',
       });
     }
-    return rows[0];
+    const { wasRead, ...notification } = rows[0];
+    if (!wasRead) await this.redis.adjustUnreadCount(userId, -1);
+    return notification;
   }
 
   async markAllRead(userId: string) {
@@ -233,13 +255,17 @@ export class NotificationsService {
       `UPDATE notifications SET is_read = true, read_at = now() WHERE user_id = $1 AND is_read = false`,
       [userId],
     );
+    await this.redis.setUnreadCount(userId, 0);
     return { message: 'All notifications marked as read' };
   }
 
   async remove(id: string, userId: string) {
-    const rows = normalizeReturning(
+    // `is_read` comes back so an unread notification that is deleted outright
+    // (rather than read) still leaves the counter correct.
+    const rows = normalizeReturning<{ id: string; isRead: boolean }>(
       await this.dataSource.query(
-        `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING id`,
+        `DELETE FROM notifications WHERE id = $1 AND user_id = $2
+         RETURNING id, is_read AS "isRead"`,
         [id, userId],
       ),
     );
@@ -249,6 +275,7 @@ export class NotificationsService {
         message: 'Notification not found',
       });
     }
+    if (!rows[0].isRead) await this.redis.adjustUnreadCount(userId, -1);
   }
 
   async linkTelegram(userId: string, chatId: string) {

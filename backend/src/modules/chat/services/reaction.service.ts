@@ -48,7 +48,8 @@ export class ChatReactionService {
 
   private async assertMember(roomId: string, userId: string): Promise<void> {
     const rows = await this.dataSource.query<{ id: string }>(
-      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      `SELECT id FROM chat_members
+           WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, userId],
     );
     if (!rows[0]) {
@@ -85,7 +86,8 @@ export class ChatReactionService {
     const [memberOk, existing] = await Promise.all([
       this.dataSource
         .query(
-          `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+          `SELECT id FROM chat_members
+           WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
           [msg.roomId, userId],
         )
         .then((rows) => rows[0]),
@@ -151,7 +153,8 @@ export class ChatReactionService {
     const [memberOk, existing] = await Promise.all([
       this.dataSource
         .query(
-          `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+          `SELECT id FROM chat_members
+           WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
           [msg.roomId, userId],
         )
         .then((rows) => rows[0]),

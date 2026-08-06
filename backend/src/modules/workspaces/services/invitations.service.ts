@@ -14,6 +14,7 @@ import { MailService } from '../../mail/mail.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { NotificationType } from '../../../common/enums';
 import { PermissionService } from '../../../common/services/permission.service';
+import { MembersService } from './members.service';
 import * as crypto from 'crypto';
 import {
   WORKSPACE_INVITATION_COLUMNS_SQL,
@@ -29,6 +30,7 @@ export class InvitationsService {
     private readonly mailService: MailService,
     private readonly notificationsService: NotificationsService,
     private readonly permission: PermissionService,
+    private readonly members: MembersService,
   ) {}
 
   async create(
@@ -246,6 +248,11 @@ export class InvitationsService {
           return savedMember;
         },
       );
+
+      // The invitee may have had a cached "not a member" outcome from a
+      // previous attempt; more importantly, they are about to make their first
+      // authenticated requests against this workspace.
+      await this.members.invalidateMember(invitation.workspaceId, userId);
 
       // Notify the inviter that the invitation was accepted
       if (invitation.invitedById && invitation.invitedById !== userId) {

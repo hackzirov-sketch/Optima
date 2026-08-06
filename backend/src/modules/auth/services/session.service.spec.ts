@@ -11,6 +11,7 @@ import { SessionService } from './session.service';
 describe('SessionService.revokeAllSessions', () => {
   let dataSource: { query: jest.Mock };
   let redisService: { blockUserSessions: jest.Mock };
+  let audit: { log: jest.Mock };
   let service: SessionService;
 
   beforeEach(() => {
@@ -18,6 +19,7 @@ describe('SessionService.revokeAllSessions', () => {
     redisService = {
       blockUserSessions: jest.fn().mockResolvedValue(undefined),
     };
+    audit = { log: jest.fn().mockResolvedValue(undefined) };
 
     const config = {
       get: (key: string) =>
@@ -28,6 +30,7 @@ describe('SessionService.revokeAllSessions', () => {
       dataSource as any,
       config,
       redisService as any,
+      audit as any,
     );
   });
 
@@ -57,10 +60,44 @@ describe('SessionService.revokeAllSessions', () => {
       dataSource as any,
       config,
       redisService as any,
+      audit as any,
     );
 
     await svc.revokeAllSessions('user-2');
 
     expect(redisService.blockUserSessions).toHaveBeenCalledWith('user-2', 3600);
+  });
+});
+
+/**
+ * "Log me out everywhere" is what someone presses after a suspected
+ * compromise. audit_logs existed but nothing recorded that event, so the one
+ * action most worth reconstructing later left no trace at all.
+ */
+describe('SessionService — audit trail', () => {
+  it('records a revoke-all on the shared audit log', async () => {
+    const dataSource = { query: jest.fn().mockResolvedValue([]) };
+    const audit = { log: jest.fn().mockResolvedValue(undefined) };
+    const config = {
+      get: (key: string) =>
+        ({ 'app.maxSessions': 5, 'jwt.accessExpires': '20m' })[key],
+    } as unknown as ConfigService;
+
+    const service = new SessionService(
+      dataSource as any,
+      config,
+      { blockUserSessions: jest.fn().mockResolvedValue(undefined) } as any,
+      audit as any,
+    );
+
+    await service.revokeAllSessions('user-9');
+
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 'user-9',
+        action: 'auth.all_sessions_revoked',
+        entityType: 'user',
+      }),
+    );
   });
 });

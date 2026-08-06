@@ -265,7 +265,8 @@ export class ChatMessageService {
     // client payload (call signaling), so re-check the attributed sender really
     // belongs to the room rather than trusting the caller to have done it.
     const memberRows = await this.dataSource.query(
-      `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      `SELECT id FROM chat_members
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, senderId],
     );
     if (!memberRows[0]) {
@@ -505,6 +506,17 @@ export class ChatMessageService {
     }
 
     this.assertMediaAllowed(dto, settings, role);
+    // The room's own upload policy (above) only reads what the client *said*
+    // the file is. This is what ties the claim to a real upload of ours — see
+    // StorageService.assertOwnedAttachment. Both sendMessage and
+    // sendThreadReply come through here, so one check covers both.
+    for (const attachment of dto.attachments ?? []) {
+      this.storageService.assertOwnedAttachment(
+        attachment.storageUrl,
+        attachment.storageKey,
+        userId,
+      );
+    }
     await this.assertSlowMode(roomId, userId, settings.slowModeSeconds, role);
     this.assertContentAllowed(dto.content ?? '', settings);
 

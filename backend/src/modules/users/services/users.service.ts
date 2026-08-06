@@ -157,11 +157,20 @@ export class UsersService {
     const isEmail = q.includes('@');
     const rows: any[] = isEmail
       ? await this.dataSource.query(
+          // `email = $1`, not `email ILIKE $1`. Two separate problems lived in
+          // that one operator: the parameter was the raw query string, so a
+          // search for `%@%` matched every address in the table and turned this
+          // into a bulk directory dump; and a substring match on an address is
+          // an oracle — `?q=someone@example.com` answering with a row confirms
+          // that address is registered, which is exactly what the login flow
+          // goes out of its way not to reveal. An exact match is what the
+          // "I know their address" case actually needs, and lower() keeps it
+          // case-insensitive without reintroducing wildcards.
           `SELECT id, first_name AS "firstName", last_name AS "lastName", username, avatar_url AS "avatarUrl"
            FROM users
-           WHERE deleted_at IS NULL AND (email ILIKE $1 OR first_name ILIKE $2 ESCAPE '\\' OR last_name ILIKE $2 ESCAPE '\\' OR username ILIKE $2 ESCAPE '\\')
+           WHERE deleted_at IS NULL AND (lower(email) = lower($1) OR first_name ILIKE $2 ESCAPE '\\' OR last_name ILIKE $2 ESCAPE '\\' OR username ILIKE $2 ESCAPE '\\')
              AND (account_visibility = 'public' OR lower(username) = lower($4) OR public_id = $5)
-           ORDER BY CASE WHEN email ILIKE $1 THEN 0 WHEN username ILIKE $2 ESCAPE '\\' THEN 1 ELSE 2 END, last_name ASC
+           ORDER BY CASE WHEN lower(email) = lower($1) THEN 0 WHEN username ILIKE $2 ESCAPE '\\' THEN 1 ELSE 2 END, last_name ASC
            LIMIT $3`,
           [q, term, limit, exactUsername, exactPublicId],
         )
@@ -271,17 +280,59 @@ export class UsersService {
     await this.redisService.clearCachedUser(userId).catch(() => null);
   }
 
+  /**
+   * Records that a user was just active. Called from every socket heartbeat
+   * and every login, so it is the highest-frequency write in the app.
+   *
+   * It does not touch Postgres. The 30-second debounce it used to rely on
+   * still meant one UPDATE per active user per 30 seconds — at a thousand
+   * concurrent users that is ~33 writes/second spent entirely on a
+   * "last seen" timestamp, each one a row lock, a WAL record and an index
+   * update. The timestamp is instead staged in a Redis hash and written back
+   * in a single statement by flushLastSeen() below.
+   *
+   * If Redis is unavailable the write goes straight to Postgres, keeping the
+   * old behaviour rather than losing the column entirely.
+   */
   async updateLastSeen(userId: string): Promise<void> {
-    const key = RedisKeys.lastSeen(userId);
     const client = this.redisService.getClient();
-    if (client) {
-      const isSet = await client.set(key, '1', 'EX', 30, 'NX');
-      if (!isSet) return; // Debounce for 30 seconds
+    if (!client) {
+      await this.dataSource.query(
+        `UPDATE users SET last_seen = now() WHERE id = $1`,
+        [userId],
+      );
+      return;
     }
-    await this.dataSource.query(
-      `UPDATE users SET last_seen = now() WHERE id = $1`,
-      [userId],
+    await client.hset(RedisKeys.lastSeenPending, userId, Date.now());
+  }
+
+  /**
+   * Drains the staged last_seen timestamps into one bulk UPDATE.
+   *
+   * The drain is atomic (see RedisService.drainHash), so overlapping ticks —
+   * or several API instances flushing at once — can't take the same batch
+   * twice, and a heartbeat arriving mid-drain lands in the next batch rather
+   * than being dropped. The unnest form keeps this to a single statement
+   * however many users are in it.
+   *
+   * Losing a batch to a crash costs at most one interval of "last seen"
+   * accuracy, which is the right trade for taking the write off the hot path.
+   */
+  async flushLastSeen(): Promise<number> {
+    const staged = await this.redisService.drainHash(RedisKeys.lastSeenPending);
+    const userIds = Object.keys(staged);
+    if (userIds.length === 0) return 0;
+
+    const timestamps = userIds.map((id) =>
+      new Date(Number(staged[id])).toISOString(),
     );
+    await this.dataSource.query(
+      `UPDATE users u SET last_seen = v.seen
+         FROM (SELECT * FROM unnest($1::uuid[], $2::timestamptz[]) AS t(id, seen)) v
+        WHERE u.id = v.id AND (u.last_seen IS NULL OR u.last_seen < v.seen)`,
+      [userIds, timestamps],
+    );
+    return userIds.length;
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {

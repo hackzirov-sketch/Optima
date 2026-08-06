@@ -14,7 +14,10 @@ import { RedisKeys } from '../../redis/redis.keys';
 import { Task } from '../../database/entities/task.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
 import { TaskTag } from '../../database/entities/task-tag.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import {
+  MembersService,
+  WorkspaceMembership,
+} from '../workspaces/services/members.service';
 
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -61,6 +64,7 @@ export class TasksService {
     private readonly notifications: NotificationsService,
     private readonly redisService: RedisService,
     private readonly dailyStats: DailyStatsService,
+    private readonly membersService: MembersService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -144,42 +148,21 @@ export class TasksService {
     });
   }
 
+  /**
+   * Delegates to MembersService, which owns both the cache and — crucially —
+   * its invalidation.
+   *
+   * This used to be a private copy: same Redis key, a 5-minute TTL, and no
+   * invalidation anywhere, because the writes that change a membership live in
+   * MembersService and had no idea this cache existed. A member removed from a
+   * workspace kept full access to its tasks until the entry aged out. Sharing
+   * one implementation is what makes that impossible to reintroduce.
+   */
   private async assertMember(
     workspaceId: string,
     userId: string,
-  ): Promise<{
-    id: string;
-    workspaceId: string;
-    userId: string;
-    role: string;
-  }> {
-    const cacheKey = RedisKeys.workspaceMember(workspaceId, userId);
-    const client = this.redisService.getClient();
-
-    if (client) {
-      const cached = await client.get(cacheKey);
-      if (cached) return JSON.parse(cached);
-    }
-
-    const rows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
-    );
-    const member = rows[0];
-
-    if (!member) {
-      throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'You are not a member of this workspace',
-      });
-    }
-
-    if (client) {
-      await client.set(cacheKey, JSON.stringify(member), 'EX', 300); // cache for 5 minutes
-    }
-
-    return member;
+  ): Promise<WorkspaceMembership> {
+    return this.membersService.assertMember(workspaceId, userId);
   }
 
   private async getTask(taskId: string): Promise<Task> {

@@ -3,13 +3,47 @@ import { ErrorCode } from '../../common/enums/error-code.enum';
 import { DatabaseService } from '../../database/database.service';
 
 import { MembersService } from '../workspaces/services/members.service';
+import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
+
+/**
+ * Analytics are counts and rollups over whole tables — the most expensive
+ * reads in the app, and the ones least sensitive to being a minute old. A
+ * dashboard that says "47 open tasks" is no less useful for having said so
+ * sixty seconds ago, so these are cached on a plain TTL with no invalidation:
+ * every write that could change a number would otherwise have to know about
+ * this cache, which is a lot of coupling to buy freshness nobody is looking at.
+ */
+const ANALYTICS_TTL_SECONDS = 60;
 
 @Injectable()
 export class AnalyticsService {
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly membersService: MembersService,
+    private readonly redis: RedisService,
   ) {}
+
+  /**
+   * Runs `compute` unless a fresh answer is already cached.
+   *
+   * Authorization is deliberately *not* part of this — callers check
+   * membership before calling, so a cached payload is never a way to reach
+   * data the caller couldn't have queried directly. The key is the resource,
+   * not the viewer, so two members of a workspace share one entry.
+   */
+  private async cached<T>(
+    scope: string,
+    id: string,
+    compute: () => Promise<T>,
+  ): Promise<T> {
+    const key = RedisKeys.analytics(scope, id);
+    const hit = await this.redis.getJson<T>(key);
+    if (hit !== null) return hit;
+    const value = await compute();
+    await this.redis.setJson(key, value, ANALYTICS_TTL_SECONDS);
+    return value;
+  }
 
   private async getActiveProject(
     projectId: string,
@@ -34,7 +68,12 @@ export class AnalyticsService {
 
   async workspaceOverview(workspaceId: string, userId: string) {
     await this.membersService.assertMember(workspaceId, userId);
+    return this.cached('ws-overview', workspaceId, () =>
+      this.computeWorkspaceOverview(workspaceId),
+    );
+  }
 
+  private async computeWorkspaceOverview(workspaceId: string) {
     const [projectCountRows, memberCountRows, taskByStatus] = await Promise.all(
       [
         this.dataSource.query(
@@ -79,7 +118,12 @@ export class AnalyticsService {
   async projectAnalytics(projectId: string, userId: string) {
     const project = await this.getActiveProject(projectId);
     await this.membersService.assertMember(project.workspaceId, userId);
+    return this.cached('project', projectId, () =>
+      this.computeProjectAnalytics(projectId),
+    );
+  }
 
+  private async computeProjectAnalytics(projectId: string) {
     const rows = await this.dataSource.query(
       `SELECT
          SUM(commits_count) AS commits,
@@ -98,7 +142,12 @@ export class AnalyticsService {
   async projectDevelopers(projectId: string, userId: string) {
     const project = await this.getActiveProject(projectId);
     await this.membersService.assertMember(project.workspaceId, userId);
+    return this.cached('project-devs', projectId, () =>
+      this.computeProjectDevelopers(projectId),
+    );
+  }
 
+  private async computeProjectDevelopers(projectId: string) {
     const rows = await this.dataSource.query<any>(
       `SELECT
          s.id, s.user_id AS "userId", s.project_id AS "projectId",
@@ -134,6 +183,10 @@ export class AnalyticsService {
   }
 
   async myAnalytics(userId: string) {
+    return this.cached('me', userId, () => this.computeMyAnalytics(userId));
+  }
+
+  private async computeMyAnalytics(userId: string) {
     const [rows, recentDaily] = await Promise.all([
       this.dataSource.query(
         `SELECT

@@ -1,17 +1,28 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { WorkspaceRole } from '../enums';
 import { ErrorCode } from '../enums/error-code.enum';
 import { ROLE_LEVEL } from '../constants/role-levels';
 
+/**
+ * Everything here decides on a role, and assertOutranksTarget also needs to
+ * know who the member is. Taking those two fields rather than the full
+ * WorkspaceMember entity means a caller can pass whatever shape it already
+ * has — including the narrow record MembersService.assertMember caches, which
+ * deliberately omits the relations and timestamps nothing here reads.
+ */
+export interface RoleBearer {
+  userId: string;
+  role: WorkspaceRole;
+}
+
 @Injectable()
 export class PermissionService {
-  isAtLeast(member: WorkspaceMember, role: WorkspaceRole): boolean {
+  isAtLeast(member: Pick<RoleBearer, 'role'>, role: WorkspaceRole): boolean {
     return ROLE_LEVEL[member.role] >= ROLE_LEVEL[role];
   }
 
   // OWNER or ADMIN
-  assertCanManageWorkspace(member: WorkspaceMember): void {
+  assertCanManageWorkspace(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.ADMIN)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -21,7 +32,7 @@ export class PermissionService {
   }
 
   // OWNER, ADMIN, or LEAD
-  assertCanManageProject(member: WorkspaceMember): void {
+  assertCanManageProject(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.LEAD)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -31,7 +42,7 @@ export class PermissionService {
   }
 
   // OWNER, ADMIN, or LEAD (task delete)
-  assertCanDeleteTask(member: WorkspaceMember): void {
+  assertCanDeleteTask(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.LEAD)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -41,7 +52,7 @@ export class PermissionService {
   }
 
   // OWNER, ADMIN, LEAD, SENIOR (code review)
-  assertCanReviewPush(member: WorkspaceMember): void {
+  assertCanReviewPush(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.SENIOR)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -51,7 +62,7 @@ export class PermissionService {
   }
 
   // OWNER, ADMIN, or LEAD (push approve)
-  assertCanApprovePush(member: WorkspaceMember): void {
+  assertCanApprovePush(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.LEAD)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -61,11 +72,31 @@ export class PermissionService {
   }
 
   // OWNER, ADMIN, or LEAD (create chat room)
-  assertCanCreateChatRoom(member: WorkspaceMember): void {
+  assertCanCreateChatRoom(member: Pick<RoleBearer, 'role'>): void {
     if (!this.isAtLeast(member, WorkspaceRole.LEAD)) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
         message: 'Lead, admin or owner required to create chat rooms',
+      });
+    }
+  }
+
+  /**
+   * Guards the *other* half of a role change: who the target currently is.
+   *
+   * assertCanChangeRoleTo only inspects the role being handed out, so an admin
+   * assigning `member` passed it — including when the person on the receiving
+   * end was a fellow admin. One admin could therefore demote every other admin
+   * (and, via the same gap in remove(), eject them), leaving a workspace with a
+   * single self-appointed manager. Only the owner outranks an admin, so only
+   * the owner may act on one.
+   */
+  assertOutranksTarget(requester: RoleBearer, target: RoleBearer): void {
+    if (requester.userId === target.userId) return;
+    if (ROLE_LEVEL[requester.role] <= ROLE_LEVEL[target.role]) {
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You cannot act on a member at or above your own role',
       });
     }
   }
@@ -76,7 +107,7 @@ export class PermissionService {
   //   ADMIN (requester) → can only assign ≤ LEAD (cannot grant ADMIN or OWNER)
   //   Others → cannot change roles at all
   assertCanChangeRoleTo(
-    requester: WorkspaceMember,
+    requester: RoleBearer,
     targetRole: WorkspaceRole,
   ): void {
     if (targetRole === WorkspaceRole.OWNER) {
@@ -106,7 +137,7 @@ export class PermissionService {
 
   // Only the exact OWNER role may delete the workspace (level-based check is
   // not enough — ADMIN must NOT be able to delete, even though it's "close" to OWNER).
-  assertCanDeleteWorkspace(member: WorkspaceMember): void {
+  assertCanDeleteWorkspace(member: Pick<RoleBearer, 'role'>): void {
     if (member.role !== WorkspaceRole.OWNER) {
       throw new ForbiddenException({
         code: ErrorCode.NOT_WORKSPACE_OWNER,

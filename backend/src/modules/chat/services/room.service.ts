@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AuditService } from '../../../common/services/audit.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
 import { UserChatSettings } from '../../../database/entities/user-chat-settings.entity';
@@ -99,6 +100,7 @@ export class ChatRoomService {
     private readonly wsMembersService: MembersService,
     private readonly chatMemberService: ChatMemberService,
     private readonly chatEncryption: ChatEncryptionService,
+    private readonly audit: AuditService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -526,6 +528,9 @@ export class ChatRoomService {
        DO UPDATE SET left_at = NULL, status = 'active', joined_at = now()`,
       [roomId, userId],
     );
+    // Awaited, not left to the event below: the emit is fire-and-forget, and
+    // an authorization cache must be correct by the time this call returns.
+    await this.chatMemberService.invalidateRoomMember(roomId, userId);
     this.events.emit('chat.member_changed', {
       roomId,
       userId,
@@ -1093,6 +1098,7 @@ export class ChatRoomService {
        RETURNING id`,
       [roomId, userId],
     );
+    await this.chatMemberService.invalidateRoomMember(roomId, userId);
     if (!rows[0])
       throw new ForbiddenException({
         code: ErrorCode.NOT_ROOM_MEMBER,
@@ -1126,5 +1132,16 @@ export class ChatRoomService {
     await this.dataSource.query(`DELETE FROM chat_rooms WHERE id = $1`, [
       roomId,
     ]);
+
+    // Destructive and irreversible — the row cascades every message with it,
+    // so the audit entry is the only record that the room ever existed.
+    await this.audit.log({
+      workspaceId: room.workspaceId,
+      actorId: userId,
+      action: 'chat_room.deleted',
+      entityType: 'chat_room',
+      entityId: roomId,
+      oldValue: { name: room.name, type: room.type, slug: room.slug },
+    });
   }
 }

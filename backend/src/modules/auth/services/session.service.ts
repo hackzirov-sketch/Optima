@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import ms from 'ms';
 import { DatabaseService } from '../../../database/database.service';
+import { AuditService } from '../../../common/services/audit.service';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../../redis/redis.service';
 import { RefreshToken } from '../../../database/entities/refresh-token.entity';
@@ -34,6 +35,7 @@ export class SessionService {
     private dataSource: DatabaseService,
     private configService: ConfigService,
     private redisService: RedisService,
+    private readonly audit: AuditService,
   ) {
     this.maxSessions = this.configService.get<number>('app.maxSessions') ?? 5;
     const accessExpires =
@@ -99,6 +101,14 @@ export class SessionService {
       ),
       this.redisService.blockUserSessions(userId, this.accessTokenTtlSeconds),
     ]);
+    // "Log me out everywhere" is what someone presses after a suspected
+    // compromise, so it is exactly the event that must be on the record.
+    await this.audit.log({
+      actorId: userId,
+      action: 'auth.all_sessions_revoked',
+      entityType: 'user',
+      entityId: userId,
+    });
     return { message: 'All sessions revoked successfully' };
   }
 

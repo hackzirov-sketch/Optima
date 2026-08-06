@@ -1,4 +1,5 @@
 import type {
+  AuditEntry,
   AuthResult,
   ChannelSettings,
   ChatMessage,
@@ -20,6 +21,17 @@ import { session } from "./session";
 
 const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
 export type OAuthProvider = "google" | "github";
+
+/**
+ * Sent on every request. The backend's CsrfGuard requires it on any
+ * state-changing request that carries the session cookie: a cross-site form
+ * cannot set a custom header, and a cross-site fetch that tries is stopped by
+ * the CORS preflight first. The value is not a secret and doesn't need to be —
+ * the protection is that the header exists at all. Both call sites below add
+ * it, so keep them in sync if a third one ever appears.
+ */
+const CLIENT_HEADER = "X-UPZ-Client";
+const CLIENT_HEADER_VALUE = "web";
 
 export function oauthStartUrl(provider: OAuthProvider): string {
   return `${API_URL}/auth/${provider}`;
@@ -101,7 +113,7 @@ async function renewSession(): Promise<RefreshResult> {
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", [CLIENT_HEADER]: CLIENT_HEADER_VALUE },
       body: "{}",
     });
   } catch (error) {
@@ -137,6 +149,7 @@ export async function refreshSession(): Promise<RefreshResult> {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
+  headers.set(CLIENT_HEADER, CLIENT_HEADER_VALUE);
   // No Authorization header on purpose: JwtStrategy/JwtRefreshStrategy read the
   // token from the httpOnly cookie only, so `credentials: "include"` below is
   // the whole auth mechanism. Setting the header did nothing but leak a
@@ -268,6 +281,14 @@ export const api = {
     settings: (data: Record<string, boolean>) =>
       apiFetch<User>("/users/me/settings", { method: "PATCH", body: JSON.stringify(data) }),
   },
+  audit: {
+    workspace: (workspaceId: string, params: { action?: string; entityType?: string; limit?: number; offset?: number } = {}) => {
+      const query = new URLSearchParams(
+        Object.entries(params).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])
+      ).toString();
+      return apiFetch<{ items: AuditEntry[]; total: number }>(`/workspaces/${workspaceId}/audit${query ? `?${query}` : ""}`);
+    },
+  },
   workspaces: {
     list: () => apiFetch<Workspace[]>("/workspaces"),
     create: (data: { name: string; slug: string; description?: string }) =>
@@ -394,8 +415,10 @@ export const api = {
         topPosts: Array<{ id: string; content: string | null; viewCount: number; createdAt: string }>;
         growth: Array<{ day: string; joined: number }>;
       }>(`/chat/rooms/${roomId}/settings/stats`),
+    // One shared trail: the same audit_logs rows a workspace's activity feed
+    // reads, filtered to this room.
     channelSettingsAudit: (roomId: string) =>
-      apiFetch<Array<{ id: string; userId: string | null; changes: Record<string, { from: unknown; to: unknown }>; createdAt: string; firstName: string | null; lastName: string | null }>>(`/chat/rooms/${roomId}/settings/audit`),
+      apiFetch<AuditEntry[]>(`/chat/rooms/${roomId}/settings/audit`),
     setMemberRole: (roomId: string, memberId: string, role: "admin" | "moderator" | "member") =>
       apiFetch<{ userId: string; role: RoomRole }>(`/chat/rooms/${roomId}/members/${memberId}/role`, {
         method: "PATCH",

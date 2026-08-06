@@ -5,6 +5,20 @@ export const NOTIFICATION_COLUMNS_SQL = `
   created_at AS "createdAt"
 `;
 
+/**
+ * The same columns qualified with the `n` alias, for the one statement that
+ * joins the table to itself (markRead, which needs the pre-update `is_read`
+ * from an `old` alias). Spelled out rather than derived from the list above:
+ * a regex that prefixes column names is one unusual alias away from producing
+ * silently wrong SQL.
+ */
+export const NOTIFICATION_COLUMNS_SQL_N = `
+  n.id, n.user_id AS "userId", n.actor_id AS "actorId", n.type, n.title, n.message,
+  n.entity_type AS "entityType", n.entity_id AS "entityId", n.metadata,
+  n.is_read AS "isRead", n.read_at AS "readAt", n.action_url AS "actionUrl",
+  n.created_at AS "createdAt"
+`;
+
 export const NOTIFICATION_PREFS_COLUMNS_SQL = `
   id, user_id AS "userId", telegram_chat_id AS "telegramChatId", phone_verified AS "phoneVerified",
   meeting_sms AS "meetingSms", meeting_telegram AS "meetingTelegram", meeting_email AS "meetingEmail",

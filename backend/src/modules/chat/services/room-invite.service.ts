@@ -278,16 +278,17 @@ export class ChatRoomInviteService {
           message: 'This invite link has reached its usage limit',
         });
       }
-      // Only rooms that actually belong to a workspace pull the joiner into it.
-      // Groups and channels are user-owned and carry no workspace, so this
-      // insert used to pass NULL into a NOT NULL column and fail the join.
-      if (lockedRoom.workspaceId) {
-        await query(
-          `INSERT INTO workspace_members (workspace_id, user_id, role)
-           VALUES ($1, $2, 'junior') ON CONFLICT (workspace_id, user_id) DO NOTHING`,
-          [lockedRoom.workspaceId, userId],
-        );
-      }
+      // A chat invite grants exactly one thing: membership of that room.
+      //
+      // It used to also INSERT the joiner into workspace_members as 'junior'.
+      // Chat invite links are meant to be passed around — that is what they are
+      // for — so anyone who received one silently became a member of the whole
+      // workspace, and every workspace-scoped check downstream is a bare
+      // assertMember(): projects, tasks, the analytics overview, the earnings
+      // ledger, and the member list with everyone's email address on it. A link
+      // to one room is not consent to any of that. Workspace membership now only
+      // comes from the workspace invitation flow (InvitationsService), which is
+      // gated on an admin actually inviting the person.
       await query(
         `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`,
         [lockedRoom.id, userId],
@@ -298,6 +299,11 @@ export class ChatRoomInviteService {
       );
       return lockedRoom;
     });
+
+    // After the commit, not inside it: a rollback would otherwise have left
+    // the cache cleared for a join that never happened — harmless here, but
+    // the ordering that is always correct is "persist, then invalidate".
+    await this.chatMemberService.invalidateRoomMember(room.id, userId);
 
     return this.roomService.enrichRoom(room, userId);
   }

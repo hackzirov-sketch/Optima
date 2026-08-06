@@ -19,6 +19,7 @@ import {
 } from '../../../common/utils/soft-delete';
 import { PermissionService } from '../../../common/services/permission.service';
 import { AuditService } from '../../../common/services/audit.service';
+import { MembersService } from './members.service';
 import {
   WORKSPACE_COLUMNS_SQL,
   WORKSPACE_COLUMNS_SQL_W,
@@ -37,6 +38,7 @@ export class WorkspacesService {
     private readonly dataSource: DatabaseService,
     private readonly permission: PermissionService,
     private readonly audit: AuditService,
+    private readonly members: MembersService,
   ) {}
 
   private async getMember(
@@ -298,6 +300,14 @@ export class WorkspacesService {
             ),
           );
         },
+      );
+
+      // Both rows changed role, so both cached memberships are stale — the
+      // outgoing owner is now an admin and the incoming one is the owner.
+      await this.members.invalidateMember(
+        workspaceId,
+        currentOwnerId,
+        newOwnerUserId,
       );
 
       await this.audit.log({

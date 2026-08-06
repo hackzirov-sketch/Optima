@@ -5,9 +5,12 @@ import { ErrorCode } from '../../../common/enums/error-code.enum';
 /**
  * Login must not answer "does this email have an account here?".
  *
- * The tricky case is an account created via Google/GitHub: it has no password
- * to check, so the response for it has to be indistinguishable from the
- * response for an address that was never registered.
+ * Three cases have to be indistinguishable to an unauthenticated caller:
+ * an address that was never registered, an account created via Google/GitHub
+ * that has no password to check, and a real local account given the wrong
+ * password. An earlier version merged the first two but answered the third
+ * differently, which still left one request per address as an oracle — so the
+ * assertions here compare all three against each other, not just the first two.
  */
 describe('AuthService.login — account enumeration', () => {
   const socialUser = {
@@ -16,6 +19,12 @@ describe('AuthService.login — account enumeration', () => {
     passwordHash: null,
     isVerified: true,
     isActive: true,
+  };
+  const localUser = {
+    ...socialUser,
+    id: 'local-1',
+    email: 'real@example.com',
+    passwordHash: '$2b$12$hash',
   };
 
   let usersService: any;
@@ -40,6 +49,7 @@ describe('AuthService.login — account enumeration', () => {
         .mockResolvedValue({ blocked: false }),
       markEmailVerifyResendSent: jest.fn().mockResolvedValue(undefined),
       getAccountLockout: jest.fn().mockResolvedValue(null),
+      incrementAccountLockoutFailures: jest.fn().mockResolvedValue(1),
     };
     mailService = {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
@@ -52,6 +62,7 @@ describe('AuthService.login — account enumeration', () => {
       redisService,
       {} as any,
       securityService,
+      {} as any,
       {} as any,
       {} as any,
       { add: jest.fn() } as any,
@@ -75,76 +86,43 @@ describe('AuthService.login — account enumeration', () => {
     usersService.findByEmail.mockResolvedValue(socialUser);
     const social = await loginAndCatch('social@example.com');
 
-    expect(unknown.code).toBe(social.code);
-    expect(unknown.message).toBe(social.message);
-    expect(unknown.redirect).toBe(social.redirect);
-    expect(Object.keys(unknown).sort()).toEqual(Object.keys(social).sort());
+    expect(unknown).toEqual(social);
   });
 
-  it('returns a token of the same shape in both cases', async () => {
+  it('answers a wrong password the same way as an unknown address', async () => {
     const unknown = await loginAndCatch('nobody@example.com');
 
+    usersService.findByEmail.mockResolvedValue(localUser);
+    const wrongPassword = await loginAndCatch('real@example.com');
+
+    expect(wrongPassword).toEqual(unknown);
+    expect(wrongPassword.code).toBe(ErrorCode.INVALID_CREDENTIALS);
+  });
+
+  it('leaks nothing through extra response fields', async () => {
     usersService.findByEmail.mockResolvedValue(socialUser);
     const social = await loginAndCatch('social@example.com');
 
-    expect(typeof unknown.verifyToken).toBe('string');
-    expect(String(unknown.verifyToken)).toHaveLength(
-      String(social.verifyToken).length,
-    );
+    // No verifyToken, no requiresPasswordSetup, no redirect: each of those
+    // only ever appeared on one branch, so their presence was the tell.
+    expect(Object.keys(social).sort()).toEqual(['code', 'message']);
   });
 
-  it('does not send mail for an address with no account', async () => {
+  it('does not mail anyone on a failed login', async () => {
     await loginAndCatch('nobody@example.com');
 
-    expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
-    expect(redisService.setEmailVerification).not.toHaveBeenCalled();
-  });
-
-  it('sends the real code for a genuine social account', async () => {
     usersService.findByEmail.mockResolvedValue(socialUser);
-
     await loginAndCatch('social@example.com');
 
-    expect(mailService.sendVerificationEmail).toHaveBeenCalledWith(
-      'social@example.com',
-      expect.stringMatching(/^\d{6}$/),
-    );
-  });
-
-  // Previously this branch mailed on every attempt with no limit and no
-  // credentials — an unauthenticated inbox-flooding primitive.
-  it('respects the resend limit instead of mailing on every attempt', async () => {
-    usersService.findByEmail.mockResolvedValue(socialUser);
-    redisService.checkEmailVerifyResendLimit.mockResolvedValue({
-      blocked: true,
-      reason: 'cooldown',
-      retryAfter: 60,
-    });
-
-    const response = await loginAndCatch('social@example.com');
-
+    // This branch used to send a verification code on every attempt, which
+    // was both an oracle and an unauthenticated inbox-flooding primitive.
     expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
-    // Still shaped the same, so the block isn't itself an oracle.
-    expect(typeof response.verifyToken).toBe('string');
+    expect(redisService.setEmailVerification).not.toHaveBeenCalled();
   });
 
   it('still runs bcrypt for an unknown address (constant-time)', async () => {
     await loginAndCatch('nobody@example.com');
 
     expect(securityService.comparePassword).toHaveBeenCalled();
-  });
-
-  it('rejects a wrong password with generic credentials error', async () => {
-    usersService.findByEmail.mockResolvedValue({
-      ...socialUser,
-      passwordHash: '$2b$12$hash',
-    });
-    redisService.incrementAccountLockoutFailures = jest
-      .fn()
-      .mockResolvedValue(1);
-
-    const response = await loginAndCatch('real@example.com');
-
-    expect(response.code).toBe(ErrorCode.INVALID_CREDENTIALS);
   });
 });

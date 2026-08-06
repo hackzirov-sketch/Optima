@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { DEFAULT_POOL_SIZE } from '../config/database.config';
 
 export const PG_POOL = 'PG_POOL';
 
@@ -10,7 +11,10 @@ export const PG_POOL = 'PG_POOL';
 export function createPgPool(): Pool {
   return new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: parseInt(process.env.DATABASE_POOL_SIZE || '20', 10),
+    max: parseInt(
+      process.env.DATABASE_POOL_SIZE || String(DEFAULT_POOL_SIZE),
+      10,
+    ),
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
     idleTimeoutMillis: 60000,

@@ -6,9 +6,16 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Res,
+  ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { WorkspacesService } from '../services/workspaces.service';
@@ -26,6 +33,8 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { TokenService } from '../../auth/services/token.service';
 import { UsersService } from '../../users/services/users.service';
 import { setAuthCookies } from '../../../common/utils/auth-cookies.util';
+import { AuditService } from '../../../common/services/audit.service';
+import { ErrorCode } from '../../../common/enums/error-code.enum';
 
 @ApiTags('Workspaces')
 @ApiBearerAuth('access-token')
@@ -39,7 +48,42 @@ export class WorkspacesController {
     private readonly tokenService: TokenService,
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
+
+  /**
+   * The workspace activity feed.
+   *
+   * audit_logs was written to from five places and read from none — a trail
+   * nobody can open is not a trail. Restricted to owners and admins: it names
+   * who removed whom and who changed which role, which is exactly the record
+   * an ordinary member should not be able to browse.
+   */
+  @Get(':workspaceId/audit')
+  @ApiOperation({ summary: 'Workspace audit trail — owners and admins only' })
+  @ApiParam({ name: 'workspaceId' })
+  async listAudit(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
+    @Query('action') action?: string,
+    @Query('entityType') entityType?: string,
+    @Query('limit') limit = '50',
+    @Query('offset') offset = '0',
+  ) {
+    const member = await this.membersService.assertMember(workspaceId, userId);
+    if (!['owner', 'admin'].includes(member.role))
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Only workspace owners and admins can read the audit log',
+      });
+    return this.audit.list({
+      workspaceId,
+      action,
+      entityType,
+      limit: Number(limit) || 50,
+      offset: Number(offset) || 0,
+    });
+  }
 
   @Post(':wsId/select')
   @ApiOperation({

@@ -7,37 +7,93 @@ import { DatabaseService } from '../../../database/database.service';
 import { ChatMember } from '../../../database/entities/chat-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { CHAT_MEMBER_COLUMNS_SQL } from '../chat.sql';
+import { RedisService } from '../../../redis/redis.service';
+import { RedisKeys } from '../../../redis/redis.keys';
+
+/**
+ * What assertRoomMember caches: the fields an authorization decision reads,
+ * and nothing else.
+ *
+ * Narrow on purpose. Caching the whole chat_members row would mean
+ * last_read_seq — rewritten on every read receipt, several times a second in
+ * a busy room — evicting an entry whose role and status never changed, which
+ * is most of the cost of the cache for none of the benefit.
+ */
+export interface RoomMembership {
+  id: string;
+  roomId: string;
+  userId: string;
+  role: string;
+  status: string;
+}
+
+const ROOM_MEMBERSHIP_TTL_SECONDS = 120;
 
 @Injectable()
 export class ChatMemberService {
-  constructor(private readonly dataSource: DatabaseService) {}
+  constructor(
+    private readonly dataSource: DatabaseService,
+    private readonly redis: RedisService,
+  ) {}
 
-  async assertRoomMember(roomId: string, userId: string): Promise<ChatMember> {
-    const rows = await this.dataSource.query<ChatMember>(
-      `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
+  /**
+   * Gate for 29 call sites — every room read, every message send, every
+   * settings lookup — so it ran more often than any other query in chat.
+   *
+   * Only the active-membership hit is cached. The pending-invite branch below
+   * is a rare, informational path and stays uncached, which also means an
+   * invite acceptance is visible immediately rather than after a TTL.
+   */
+  async assertRoomMember(
+    roomId: string,
+    userId: string,
+  ): Promise<RoomMembership> {
+    const key = RedisKeys.roomMember(roomId, userId);
+    const cached = await this.redis.getJson<RoomMembership>(key);
+    if (cached) return cached;
+
+    const rows = await this.dataSource.query<RoomMembership>(
+      `SELECT id, room_id AS "roomId", user_id AS "userId", role, status
+       FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, userId],
     );
-    if (!rows[0]) {
-      // Check if there's a pending invite
-      const pendingRows = await this.dataSource.query<ChatMember>(
-        `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
-         WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
-        [roomId, userId],
-      );
-      if (pendingRows[0]) {
-        throw new ForbiddenException({
-          code: 'CHAT_INVITE_PENDING',
-          message:
-            'You have a pending invite to this room. Please accept it first.',
-        });
-      }
+    if (rows[0]) {
+      await this.redis.setJson(key, rows[0], ROOM_MEMBERSHIP_TTL_SECONDS);
+      return rows[0];
+    }
+    // Not active. Distinguish "invited, hasn't accepted" from "not involved
+    // at all" so the client can offer the accept action.
+    const pendingRows = await this.dataSource.query<ChatMember>(
+      `SELECT ${CHAT_MEMBER_COLUMNS_SQL} FROM chat_members
+       WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'pending'`,
+      [roomId, userId],
+    );
+    if (pendingRows[0]) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_ROOM_MEMBER,
-        message: 'Not a member of this chat room',
+        code: 'CHAT_INVITE_PENDING',
+        message:
+          'You have a pending invite to this room. Please accept it first.',
       });
     }
-    return rows[0];
+    throw new ForbiddenException({
+      code: ErrorCode.NOT_ROOM_MEMBER,
+      message: 'Not a member of this chat room',
+    });
+  }
+
+  /**
+   * Drops cached room memberships. Every write to chat_members that changes
+   * `role`, `status` or `left_at` has to call this — the volatile columns
+   * (last_read_seq, is_muted) are deliberately not cached and need not.
+   */
+  async invalidateRoomMember(
+    roomId: string,
+    ...userIds: string[]
+  ): Promise<void> {
+    await this.redis.drop(
+      ...userIds.map((id) => RedisKeys.roomMember(roomId, id)),
+    );
   }
 
   async assertRoomMemberWithUser(
@@ -104,6 +160,10 @@ export class ChatMemberService {
    * message can never rewind a newer read position. Returns the resulting
    * seq so the caller can broadcast it — null if the message wasn't found in
    * this room (e.g. deleted) or the user isn't an active member.
+   *
+   * `status = 'active'` matters as much as `left_at IS NULL` here: a pending
+   * invitee is a row in this table too, and without it they could move a read
+   * cursor in a room they have not joined.
    */
   async markRead(
     roomId: string,
@@ -117,6 +177,7 @@ export class ChatMemberService {
          last_read_at = now()
        FROM chat_messages m
        WHERE cm.room_id = $1 AND cm.user_id = $2 AND cm.left_at IS NULL
+         AND cm.status = 'active'
          AND m.id = $3 AND m.room_id = $1
        RETURNING cm.last_read_seq AS "lastReadSeq"`,
       [roomId, userId, messageId],
@@ -183,6 +244,7 @@ export class ChatMemberService {
       `UPDATE chat_members SET status = 'active' WHERE room_id = $1 AND user_id = $2`,
       [roomId, userId],
     );
+    await this.invalidateRoomMember(roomId, userId);
 
     // Notify the room creator
     const roomRows = await this.dataSource.query<any>(
@@ -220,6 +282,7 @@ export class ChatMemberService {
       `UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2`,
       [roomId, userId],
     );
+    await this.invalidateRoomMember(roomId, userId);
 
     const roomRows = await this.dataSource.query<any>(
       `SELECT created_by AS "createdById" FROM chat_rooms WHERE id = $1`,

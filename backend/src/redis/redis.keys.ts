@@ -2,14 +2,8 @@ export const RedisKeys = {
   // ── Notification ─────────────────────────────────────────────────────────────
   /** Track if a Telegram message was read (for smart SMS suppression) */
   telegramRead: (notifId: string) => `upz:tg_read:${notifId}`,
-  /** Reminder job deduplication — prevents double scheduling */
-  reminderScheduled: (entityId: string, type: string) =>
-    `upz:reminder:sched:${entityId}:${type}`,
   /** User notification prefs cache — 5 min TTL */
   notifPrefs: (userId: string) => `upz:notif_prefs:${userId}`,
-  /** Quiet hours bypass tracking */
-  quietBypass: (userId: string, notifId: string) =>
-    `upz:quiet_bypass:${userId}:${notifId}`,
 
   blacklistToken: (jti: string) => `upz:blacklist:${jti}`,
   userBlock: (userId: string) => `upz:user_blocked:${userId}`,
@@ -31,9 +25,26 @@ export const RedisKeys = {
   accountLockoutFailures: (userId: string) =>
     `upz:account_lock:fails:${userId}`,
   cachedUser: (userId: string) => `upz:user_cache:${userId}`,
-  lastSeen: (userId: string) => `upz:last_seen:${userId}`,
+  /**
+   * Authorization caches. These decide whether a request is allowed, so they
+   * hold only the fields that decision needs (id/role/status) — never volatile
+   * ones like last_read_seq, which would otherwise evict the entry on every
+   * read receipt — and every write to the underlying row must drop them. See
+   * MembersService.invalidateMember / ChatMemberService.invalidateRoomMember,
+   * which are the only sanctioned way to write these.
+   */
   workspaceMember: (workspaceId: string, userId: string) =>
     `upz:ws_member:${workspaceId}:${userId}`,
+  roomMember: (roomId: string, userId: string) =>
+    `upz:room_member:${roomId}:${userId}`,
+  /** Per-room chat settings — read on the send-message hot path. */
+  roomSettings: (roomId: string) => `upz:room_settings:${roomId}`,
+  /** Unread notification counter, maintained incrementally instead of COUNT(*). */
+  notifUnread: (userId: string) => `upz:notif_unread:${userId}`,
+  /** Hash of userId -> epoch ms, flushed to users.last_seen in one bulk UPDATE. */
+  lastSeenPending: 'upz:last_seen_pending',
+  /** Pre-aggregated analytics payloads (workspace overview, project rollups). */
+  analytics: (scope: string, id: string) => `upz:analytics:${scope}:${id}`,
   /** Sorted set of userIds waiting for host approval, score = requestedAt epoch ms — fast count/order path for the meeting Waiting Room, mirrors meeting_join_requests (Postgres stays the source of truth). */
   meetingWaiting: (meetingId: string) => `upz:meeting_waiting:${meetingId}`,
 
