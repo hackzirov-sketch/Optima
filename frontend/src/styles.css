@@ -1401,6 +1401,19 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .meeting-file-upload > svg { justify-self: center; }.meeting-file-upload span { min-width: 0; display: grid; gap: 3px; }.meeting-file-upload small { color: var(--muted); font-size: .7rem; font-weight: 500; }
 .meeting-file-upload:hover:not(:disabled) { border-color: var(--brand-500); background: color-mix(in srgb,var(--brand-100) 72%,var(--surface)); transform: translateY(-1px); }
 .meeting-files-empty { min-height: 240px; display: grid; place-content: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }.meeting-files-empty strong { color: var(--text); }.meeting-files-empty small { max-width: 230px; line-height: 1.5; }
+/* Meeting notes — same panel chrome as shared files, with a compose form on top. */
+.meeting-notes-panel { min-height: 0; overflow: auto; padding: 12px; display: grid; gap: 12px; align-content: start; }
+.meeting-notes-panel form { display: grid; gap: 6px; }
+.meeting-notes-panel input, .meeting-notes-panel textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; resize: vertical; }
+.meeting-notes-panel form button { justify-self: end; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; background: var(--brand-600); color: #fff; font-weight: 600; }
+.meeting-notes-panel form button:disabled { opacity: .6; }
+.meeting-note-list { display: grid; gap: 8px; }
+.meeting-note-list article { padding: 10px; border: 1px solid var(--border); border-radius: 9px; display: grid; gap: 5px; }
+.meeting-note-list header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.meeting-note-list header button { color: var(--muted); }
+.meeting-note-list header button:hover { color: var(--danger, #dc2626); }
+.meeting-note-list p { margin: 0; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.meeting-note-list time { color: var(--muted); font-size: 12px; }
 .meeting-file-list { margin-top: 10px; display: grid; gap: 4px; }.meeting-file-list a { min-width: 0; min-height: 62px; padding: 8px; display: grid; grid-template-columns: 38px minmax(0,1fr) 24px; align-items: center; gap: 9px; border-radius: 8px; color: var(--text); }.meeting-file-list a:hover { background: var(--surface-muted); }.meeting-file-list a > span:first-child { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; background: var(--brand-100); color: var(--brand-700); }.meeting-file-list a > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }.meeting-file-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.meeting-file-list small { color: var(--muted); }
 
 /* Meeting Join Policy — waiting room + request-to-join lobby state */

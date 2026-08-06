@@ -1,5 +1,6 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, Mic, MicOff, Minus, MonitorUp, MoreVertical, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Signal, Smile, Unlock, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, Mic, MicOff, Minus, MonitorUp, MoreVertical, NotebookPen, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Signal, Smile, Unlock, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -7,7 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingFile, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
+import type { Meeting, MeetingFile, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
@@ -151,7 +152,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [microphoneDevice, setMicrophoneDevice] = useState("");
   const [permissionError, setPermissionError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | "waiting" | "settings" | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [savingNote, setSavingNote] = useState(false);
+  const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | "notes" | "waiting" | "settings" | null>(null);
   const [accessDenied, setAccessDenied] = useState("");
   const [requestState, setRequestState] = useState<"idle" | "requesting" | "pending" | "rejected">("idle");
   const [waitingRequests, setWaitingRequests] = useState<MeetingJoinRequest[]>([]);
@@ -807,6 +810,42 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }
 
   useEffect(() => {
+    if (sidePanel !== "notes" || !entered) return;
+    void api.notes.forMeeting(meetingId!)
+      .then(setNotes)
+      .catch((error) => show(error instanceof Error ? error.message : t("meetingRoom.notesLoadFailed"), "error"));
+  }, [sidePanel, entered, meetingId, show]);
+
+  async function saveNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const title = String(data.get("title") || "").trim();
+    if (!title) return;
+    setSavingNote(true);
+    try {
+      // Prepended rather than refetched: the list is ordered newest-first, so
+      // the note lands exactly where a reload would put it.
+      const note = await api.notes.createForMeeting(meetingId!, title, String(data.get("content") || "").trim());
+      setNotes((current) => [note, ...current]);
+      form.reset();
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("meetingRoom.noteSaveFailed"), "error");
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function removeNote(noteId: string) {
+    try {
+      await api.notes.remove(noteId);
+      setNotes((current) => current.filter((note) => note.id !== noteId));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("meetingRoom.noteDeleteFailed"), "error");
+    }
+  }
+
+  useEffect(() => {
     if (sidePanel !== "files" || !entered) return;
     void api.meetings.files(meetingId!)
       .then(setFiles)
@@ -1024,7 +1063,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   return (
     <div className={`meeting-room ${directMode ? "direct-call-room" : overlayClass}`}>
-      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{connectionState === "connected" ? t("meetingRoom.connectionStable") : connectionState === "offline" ? t("meetingRoom.reconnecting") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{connectionState === "connected" ? t("meetingRoom.connectionStable") : connectionState === "offline" ? t("meetingRoom.reconnecting") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label={t("meetingRoom.checkSecurityKeyAria")}><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>{t("meetingRoom.compareKeyHint")}</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       {focusedTile ? (
@@ -1045,7 +1084,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>{t("meetingRoom.waitingTitle")}</h2><p>{t("meetingRoom.waitingDesc")}</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> {t("meetingRoom.shareLinkButton")}</button></article>}
         </main>
       )}
-      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? t("meetingRoom.participantsTab") : sidePanel === "files" ? t("meetingRoom.filesTab") : sidePanel === "waiting" ? t("meetingRoom.waitingRoomTab") : sidePanel === "settings" ? t("meetingRoom.settingsTab") : t("meetingRoom.infoTab")}</strong><small>{sidePanel === "participants" ? t("meetingRoom.peopleCount", { count: remoteEntries.length + 1 }) : sidePanel === "files" ? t("meetingRoom.filesCount", { count: files.length }) : sidePanel === "waiting" ? t("meetingRoom.waitingRoomCount", { count: waitingCount ?? waitingRequests.length }) : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label={t("meetingRoom.closePanelAria")}><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName}{t("meetingRoom.youSuffix")}</strong><small>{meeting.hostId === user?.id ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : t("meetingRoom.participantFallback")}</strong><small>{media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.inMeetingLabel")}</small></span>{media?.audio === false ? <MicOff size={16} /> : <Mic size={16} />}</div>; })}</div> : sidePanel === "waiting" ? <div className="waiting-room-panel">
+      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? t("meetingRoom.participantsTab") : sidePanel === "files" ? t("meetingRoom.filesTab") : sidePanel === "notes" ? t("meetingRoom.notesTab") : sidePanel === "waiting" ? t("meetingRoom.waitingRoomTab") : sidePanel === "settings" ? t("meetingRoom.settingsTab") : t("meetingRoom.infoTab")}</strong><small>{sidePanel === "participants" ? t("meetingRoom.peopleCount", { count: remoteEntries.length + 1 }) : sidePanel === "files" ? t("meetingRoom.filesCount", { count: files.length }) : sidePanel === "notes" ? t("meetingRoom.notesCount", { count: notes.length }) : sidePanel === "waiting" ? t("meetingRoom.waitingRoomCount", { count: waitingCount ?? waitingRequests.length }) : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label={t("meetingRoom.closePanelAria")}><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName}{t("meetingRoom.youSuffix")}</strong><small>{meeting.hostId === user?.id ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : t("meetingRoom.participantFallback")}</strong><small>{media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.inMeetingLabel")}</small></span>{media?.audio === false ? <MicOff size={16} /> : <Mic size={16} />}</div>; })}</div> : sidePanel === "waiting" ? <div className="waiting-room-panel">
         {waitingRequests.length > 1 && <div className="waiting-room-batch"><Button variant="secondary" onClick={() => void reviewAllRequests("reject")} icon={<X size={16} />}>{t("meetingRoom.rejectAll")}</Button><Button onClick={() => void reviewAllRequests("approve")} icon={<Check size={16} />}>{t("meetingRoom.acceptAll")}</Button></div>}
         {waitingRequests.length === 0 ? <div className="meeting-files-empty"><Hourglass size={26} /><strong>{t("meetingRoom.waitingRoomEmptyTitle")}</strong><small>{t("meetingRoom.waitingRoomEmptyDesc")}</small></div> : <div className="waiting-room-list">{waitingRequests.map((request) => (
           <div className="waiting-room-item" key={request.id}>
@@ -1055,7 +1094,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
             <button className="waiting-room-reject" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "reject")} aria-label={t("meetingRoom.rejectAria")}><X size={16} /></button>
           </div>
         ))}</div>}
-      </div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}</div> : sidePanel === "settings" ? <div className="meeting-info-panel">
+      </div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}</div> : sidePanel === "notes" ? <div className="meeting-notes-panel"><form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>{notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}</div> : sidePanel === "settings" ? <div className="meeting-info-panel">
         <label>{t("meetings.visibilityLabel")}
           <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
             {(["workspace_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}

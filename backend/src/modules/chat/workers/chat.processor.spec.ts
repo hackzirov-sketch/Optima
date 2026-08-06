@@ -16,8 +16,12 @@ describe('ChatProcessor — mention notifications', () => {
    */
   const respondWith = ({
     mentionNotifications = true,
-    recipients = [] as Array<{ id: string }>,
+    recipients = [],
     roomName = 'general',
+  }: {
+    mentionNotifications?: boolean;
+    recipients?: Array<{ id: string }>;
+    roomName?: string | null;
   } = {}) => {
     dataSource.query.mockImplementation((sql: string) => {
       const text = String(sql);

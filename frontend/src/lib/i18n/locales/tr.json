@@ -918,7 +918,18 @@
     "floatingWidgetAria": "Küçültülmüş toplantı penceresi",
     "expandWidgetAria": "Toplantıyı tam ekranda aç",
     "pipAria": "Resim içinde resim olarak aç",
-    "minimizeMeetingAria": "Toplantıyı küçült (widget olarak devam et)"
+    "minimizeMeetingAria": "Toplantıyı küçült (widget olarak devam et)",
+    "notesTab": "Notlar",
+    "notesCount": "{{count}} not",
+    "noteTitlePlaceholder": "Not başlığı",
+    "noteContentPlaceholder": "Bir karar, bir görev ya da önemli bir düşünce…",
+    "noteSaveButton": "Kaydet",
+    "noNotesTitle": "Henüz not yok",
+    "noNotesDesc": "Toplantıda alınan kararları buraya yazın — tüm katılımcılar görebilir.",
+    "noteDeleteAria": "Notu sil",
+    "notesLoadFailed": "Notlar yüklenemedi",
+    "noteSaveFailed": "Not kaydedilemedi",
+    "noteDeleteFailed": "Not silinemedi"
   },
   "channelSettings": {
     "title": "Channel settings",

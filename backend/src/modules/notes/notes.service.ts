@@ -21,6 +21,7 @@ export interface NoteDto {
   workspaceId: string | null;
   projectId: string | null;
   taskId: string | null;
+  meetingId: string | null;
   creatorId: string;
   title: string;
   content: string;
@@ -44,11 +45,48 @@ export class NotesService {
   }
 
   /**
+   * Whether someone took part in a meeting — as host, or as a participant at
+   * any point.
+   *
+   * Deliberately not `left_at IS NULL`: notes are read after the call, and
+   * someone who wrote them or was in the room when they were written does not
+   * lose the right to read them by hanging up.
+   */
+  private async isMeetingParticipant(
+    meetingId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const rows = await this.dataSource.query(
+      `SELECT 1 FROM meetings m
+        WHERE m.id = $1
+          AND (m.host_id = $2
+               OR EXISTS (SELECT 1 FROM meeting_participants mp
+                           WHERE mp.meeting_id = m.id AND mp.user_id = $2))`,
+      [meetingId, userId],
+    );
+    return !!rows[0];
+  }
+
+  /**
    * A note is visible to a user if:
+   *  - it belongs to a meeting they took part in, or
    *  - it has no workspace at all (a personal/global note — only its creator can see it), or
    *  - it belongs to a workspace the user is a member of.
    */
   private async assertReadable(note: NoteDto, userId: string) {
+    // Checked before the workspace rule, not after: a meeting can belong to a
+    // workspace, and falling through to workspace membership would open the
+    // room's notes to everyone in the organisation rather than to the people
+    // who were actually in the call.
+    if (note.meetingId) {
+      if (!(await this.isMeetingParticipant(note.meetingId, userId))) {
+        throw new ForbiddenException({
+          code: ErrorCode.NOTE_FORBIDDEN,
+          message: 'Not allowed to view this note',
+        });
+      }
+      return;
+    }
     if (!note.workspaceId) {
       if (note.creatorId !== userId) {
         throw new ForbiddenException({
@@ -62,6 +100,20 @@ export class NotesService {
   }
 
   async create(userId: string, dto: CreateNoteDto): Promise<NoteDto> {
+    if (dto.meetingId && (dto.projectId || dto.taskId)) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'meetingId cannot be combined with projectId/taskId',
+      });
+    }
+    if (dto.meetingId) {
+      if (!(await this.isMeetingParticipant(dto.meetingId, userId))) {
+        throw new ForbiddenException({
+          code: ErrorCode.NOTE_FORBIDDEN,
+          message: 'Only people in the meeting can take notes on it',
+        });
+      }
+    }
     if (dto.taskId && !dto.projectId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
@@ -102,13 +154,14 @@ export class NotesService {
     }
 
     const rows = await this.dataSource.query<NoteDto>(
-      `INSERT INTO notes (workspace_id, project_id, task_id, creator_id, title, content)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO notes (workspace_id, project_id, task_id, meeting_id, creator_id, title, content)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${NOTE_COLUMNS_SQL}`,
       [
         dto.workspaceId ?? null,
         dto.projectId ?? null,
         dto.taskId ?? null,
+        dto.meetingId ?? null,
         userId,
         dto.title,
         dto.content ?? '',
@@ -124,8 +177,28 @@ export class NotesService {
    */
   async list(
     userId: string,
-    filter: { workspaceId?: string; projectId?: string; taskId?: string },
+    filter: {
+      workspaceId?: string;
+      projectId?: string;
+      taskId?: string;
+      meetingId?: string;
+    },
   ) {
+    if (filter.meetingId) {
+      if (!(await this.isMeetingParticipant(filter.meetingId, userId))) {
+        throw new ForbiddenException({
+          code: ErrorCode.NOTE_FORBIDDEN,
+          message: 'Not allowed to view notes for this meeting',
+        });
+      }
+      return this.dataSource.query(
+        `SELECT ${NOTE_COLUMNS_SQL} FROM notes
+          WHERE meeting_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at DESC`,
+        [filter.meetingId],
+      );
+    }
+
     if (filter.taskId) {
       const note0 = await this.dataSource.query(
         `SELECT workspace_id FROM notes WHERE task_id = $1 LIMIT 1`,
@@ -175,7 +248,8 @@ export class NotesService {
     // No scope given -> the user's own fully-global notes.
     return this.dataSource.query(
       `SELECT ${NOTE_COLUMNS_SQL} FROM notes
-       WHERE creator_id = $1 AND workspace_id IS NULL AND deleted_at IS NULL
+       WHERE creator_id = $1 AND workspace_id IS NULL AND meeting_id IS NULL
+         AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [userId],
     );

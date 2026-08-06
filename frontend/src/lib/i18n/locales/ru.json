@@ -918,7 +918,18 @@
     "floatingWidgetAria": "Свёрнутое окно встречи",
     "expandWidgetAria": "Открыть встречу на весь экран",
     "pipAria": "Открыть в мини-окне (Картинка в картинке)",
-    "minimizeMeetingAria": "Свернуть встречу (продолжить как виджет)"
+    "minimizeMeetingAria": "Свернуть встречу (продолжить как виджет)",
+    "notesTab": "Заметки",
+    "notesCount": "Заметок: {{count}}",
+    "noteTitlePlaceholder": "Заголовок заметки",
+    "noteContentPlaceholder": "Решение, задача или важная мысль…",
+    "noteSaveButton": "Сохранить",
+    "noNotesTitle": "Заметок пока нет",
+    "noNotesDesc": "Записывайте решения встречи — их увидят все участники.",
+    "noteDeleteAria": "Удалить заметку",
+    "notesLoadFailed": "Не удалось загрузить заметки",
+    "noteSaveFailed": "Не удалось сохранить заметку",
+    "noteDeleteFailed": "Не удалось удалить заметку"
   },
   "channelSettings": {
     "title": "Channel settings",

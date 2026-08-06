@@ -33,4 +33,12 @@ export class CreateNoteDto {
   @IsOptional()
   @IsUUID()
   taskId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Attach the note to a meeting. Mutually exclusive with projectId/taskId — a note belongs to a meeting or to the project hierarchy, not both.',
+  })
+  @IsOptional()
+  @IsUUID()
+  meetingId?: string;
 }

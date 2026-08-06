@@ -353,3 +353,17 @@ export interface NotificationItem {
   isRead: boolean;
   createdAt: string;
 }
+
+/** A note taken during a meeting. Readable by anyone who was in that call. */
+export interface Note {
+  id: string;
+  workspaceId: string | null;
+  projectId: string | null;
+  taskId: string | null;
+  meetingId: string | null;
+  creatorId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}

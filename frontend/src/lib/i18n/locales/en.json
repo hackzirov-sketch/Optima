@@ -918,7 +918,18 @@
     "floatingWidgetAria": "Minimized meeting window",
     "expandWidgetAria": "Expand to full meeting view",
     "pipAria": "Open in Picture-in-Picture",
-    "minimizeMeetingAria": "Minimize meeting (continue as a widget)"
+    "minimizeMeetingAria": "Minimize meeting (continue as a widget)",
+    "notesTab": "Notes",
+    "notesCount": "{{count}} notes",
+    "noteTitlePlaceholder": "Note title",
+    "noteContentPlaceholder": "A decision, an action item, something worth keeping…",
+    "noteSaveButton": "Save",
+    "noNotesTitle": "No notes yet",
+    "noNotesDesc": "Write down what the meeting decided — everyone in the call can read it.",
+    "noteDeleteAria": "Delete note",
+    "notesLoadFailed": "Could not load notes",
+    "noteSaveFailed": "Could not save the note",
+    "noteDeleteFailed": "Could not delete the note"
   },
   "channelSettings": {
     "title": "Channel settings",

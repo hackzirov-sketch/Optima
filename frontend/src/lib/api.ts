@@ -9,6 +9,7 @@ import type {
   MeetingFile,
   MeetingJoinRequest,
   MeetingRecording,
+  Note,
   NotificationItem,
   RoomInvite,
   RoomRole,
@@ -541,6 +542,15 @@ export const api = {
     mentor: (videoId: string, message: string) =>
       apiFetch<{ reply: string; provider: string; contextSources: string[] }>("/education/mentor/chat", { method: "POST", body: JSON.stringify({ videoId, message }) }),
   },
+  notes: {
+    /** Notes for one meeting. The backend allows this only for people who were in the call. */
+    forMeeting: (meetingId: string) =>
+      apiFetch<Note[]>(`/notes?meetingId=${encodeURIComponent(meetingId)}`),
+    createForMeeting: (meetingId: string, title: string, content: string) =>
+      apiFetch<Note>("/notes", { method: "POST", body: JSON.stringify({ meetingId, title, content }) }),
+    remove: (noteId: string) => apiFetch<void>(`/notes/${noteId}`, { method: "DELETE" }),
+  },
+
   notifications: {
     list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),
     readAll: () => apiFetch("/notifications/read-all", { method: "POST" }),

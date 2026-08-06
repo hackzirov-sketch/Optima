@@ -918,7 +918,18 @@
     "floatingWidgetAria": "Kichraytirilgan meeting oynasi",
     "expandWidgetAria": "Meetingni to'liq oynada ochish",
     "pipAria": "Alohida kichik oynada ochish (Picture-in-Picture)",
-    "minimizeMeetingAria": "Meetingni kichraytirish (widget sifatida davom ettirish)"
+    "minimizeMeetingAria": "Meetingni kichraytirish (widget sifatida davom ettirish)",
+    "notesTab": "Eslatmalar",
+    "notesCount": "{{count}} ta eslatma",
+    "noteTitlePlaceholder": "Eslatma sarlavhasi",
+    "noteContentPlaceholder": "Qaror, vazifa yoki muhim fikr…",
+    "noteSaveButton": "Saqlash",
+    "noNotesTitle": "Hali eslatma yo‘q",
+    "noNotesDesc": "Uchrashuvdagi qarorlarni shu yerda yozib boring — ishtirokchilar ko‘radi.",
+    "noteDeleteAria": "Eslatmani o‘chirish",
+    "notesLoadFailed": "Eslatmalarni yuklab bo‘lmadi",
+    "noteSaveFailed": "Eslatmani saqlab bo‘lmadi",
+    "noteDeleteFailed": "Eslatmani o‘chirib bo‘lmadi"
   },
   "channelSettings": {
     "title": "Kanal sozlamalari",
