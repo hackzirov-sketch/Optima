@@ -5,6 +5,7 @@ import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 import { ChatController } from './chat.controller';
 import { ChatEncryptionService } from './chat-encryption.service';
@@ -27,6 +28,8 @@ import { MessageViewService } from './services/message-view.service';
     ModerationModule,
     StorageModule,
     UsersModule,
+    // ChatProcessor turns @mentions into notifications.
+    NotificationsModule,
   ],
   controllers: [ChatController],
   providers: [

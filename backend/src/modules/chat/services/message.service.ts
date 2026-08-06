@@ -35,6 +35,7 @@ import {
   MESSAGE_ATTACHMENT_COLUMNS_SQL,
 } from '../chat.sql';
 import { normalizeReturning } from '../../../common/utils/sql.util';
+import { extractMentions } from '../mention.util';
 
 /**
  * Telegram's album size. The cap exists on the server as well as the composer
@@ -714,7 +715,18 @@ export class ChatMessageService {
     const jobs = [
       this.chatQueue.add(
         'message-side-effects',
-        { messageId: saved.id, roomId, senderId: userId },
+        {
+          messageId: saved.id,
+          roomId,
+          senderId: userId,
+          // Parsed here, where the plaintext already is. Message bodies are
+          // encrypted at rest, so doing it in the worker would mean decrypting
+          // again; passing the extracted handles instead keeps the ciphertext
+          // the only copy of the message and puts nothing but public usernames
+          // on the queue. They are unverified strings at this point — the
+          // worker decides which correspond to real members of this room.
+          mentions: extractMentions(dto.content),
+        },
         { jobId: saved.id },
       ),
     ];
