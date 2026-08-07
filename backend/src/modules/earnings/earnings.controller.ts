@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,7 +27,7 @@ export class EarningsController {
   @ApiOperation({ summary: 'Get earnings summary for workspace' })
   @ApiParam({ name: 'workspaceId' })
   summary(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.earningsService.getSummary(workspaceId, userId);
@@ -29,7 +37,7 @@ export class EarningsController {
   @ApiOperation({ summary: 'List earnings for workspace' })
   @ApiParam({ name: 'workspaceId' })
   list(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.earningsService.list(workspaceId, userId);
@@ -39,7 +47,7 @@ export class EarningsController {
   @ApiOperation({ summary: 'Add an earning record' })
   @ApiParam({ name: 'workspaceId' })
   create(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateEarningDto,
   ) {
@@ -51,8 +59,8 @@ export class EarningsController {
   @ApiParam({ name: 'workspaceId' })
   @ApiParam({ name: 'earningId' })
   remove(
-    @Param('workspaceId') workspaceId: string,
-    @Param('earningId') earningId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('earningId', ParseUUIDPipe) earningId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.earningsService.remove(workspaceId, userId, earningId);

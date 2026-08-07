@@ -38,10 +38,7 @@ import {
   TASK_DEPENDENCY_COLUMNS_SQL,
   TASK_PUSH_COLUMNS_SQL,
 } from './tasks.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 const TASK_ENUM_CASTS = {
   type: 'tasks_type_enum',
@@ -131,15 +128,13 @@ export class TasksService {
       }
     }
 
-    const updatedRows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE projects SET progress = $2, status = $3::projects_status_enum, completed_at = $4
+    const updatedRows = await this.dataSource.query(
+      `UPDATE projects SET progress = $2, status = $3::projects_status_enum, completed_at = $4
          WHERE id = $1
          RETURNING id, workspace_id AS "workspaceId", name, slug, description, status, priority,
                    progress, start_date AS "startDate", deadline, completed_at AS "completedAt",
                    created_by AS "createdById", created_at AS "createdAt", updated_at AS "updatedAt"`,
-        [projectId, progress, status, completedAt],
-      ),
+      [projectId, progress, status, completedAt],
     );
     const updated = updatedRows[0];
 
@@ -696,11 +691,9 @@ export class TasksService {
     const { setClause, values } = buildUpdateSet(patch, 2, TASK_ENUM_CASTS);
     let saved = task;
     if (setClause) {
-      const rows: Task[] = normalizeReturning(
-        await this.dataSource.query(
-          `UPDATE tasks SET ${setClause} WHERE id = $1 RETURNING ${TASK_COLUMNS_SQL}`,
-          [taskId, ...values],
-        ),
+      const rows: Task[] = await this.dataSource.query(
+        `UPDATE tasks SET ${setClause} WHERE id = $1 RETURNING ${TASK_COLUMNS_SQL}`,
+        [taskId, ...values],
       );
       saved = rows[0];
     }
@@ -907,11 +900,9 @@ export class TasksService {
     const { setClause, values } = buildUpdateSet(patch, 2, TASK_ENUM_CASTS);
     let saved = task;
     if (setClause) {
-      const rows: Task[] = normalizeReturning(
-        await this.dataSource.query(
-          `UPDATE tasks SET ${setClause} WHERE id = $1 RETURNING ${TASK_COLUMNS_SQL}`,
-          [taskId, ...values],
-        ),
+      const rows: Task[] = await this.dataSource.query(
+        `UPDATE tasks SET ${setClause} WHERE id = $1 RETURNING ${TASK_COLUMNS_SQL}`,
+        [taskId, ...values],
       );
       saved = rows[0];
     }

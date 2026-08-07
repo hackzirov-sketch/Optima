@@ -8,7 +8,6 @@ import { RefreshToken } from '../../../database/entities/refresh-token.entity';
 import { User } from '../../../database/entities/user.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { mapUserRow } from '../../users/repositories/users.sql';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 
 interface TokenContext {
   ip?: string;
@@ -73,7 +72,7 @@ export class SessionService {
        RETURNING id`,
       [sessionId, userId],
     );
-    const result = normalizeReturning(raw);
+    const result = raw;
     if (!result[0]) {
       throw new NotFoundException({
         code: ErrorCode.SESSION_NOT_FOUND,

@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -63,7 +64,7 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Workspace audit trail — owners and admins only' })
   @ApiParam({ name: 'workspaceId' })
   async listAudit(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Query('action') action?: string,
     @Query('entityType') entityType?: string,
@@ -183,7 +184,7 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Update member role' })
   updateMemberRole(
     @Param('wsId') wsId: string,
-    @Param('userId') targetUserId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
     @CurrentUser('id') requesterId: string,
     @Body() dto: UpdateMemberRoleDto,
   ) {
@@ -194,7 +195,7 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Remove a member from workspace' })
   removeMember(
     @Param('wsId') wsId: string,
-    @Param('userId') targetUserId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
     @CurrentUser('id') requesterId: string,
   ) {
     return this.membersService.remove(wsId, targetUserId, requesterId);
@@ -257,7 +258,7 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Update a workspace tag' })
   updateTag(
     @Param('wsId') wsId: string,
-    @Param('tagId') tagId: string,
+    @Param('tagId', ParseUUIDPipe) tagId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateTagDto,
   ) {
@@ -268,7 +269,7 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Delete a workspace tag' })
   deleteTag(
     @Param('wsId') wsId: string,
-    @Param('tagId') tagId: string,
+    @Param('tagId', ParseUUIDPipe) tagId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tagsService.remove(wsId, tagId, userId);

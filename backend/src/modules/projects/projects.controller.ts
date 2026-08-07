@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -51,7 +52,7 @@ export class ProjectsController {
   @Get('workspace/:workspaceId')
   @ApiOperation({ summary: 'Get all projects in a workspace' })
   getWorkspaceProjects(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.projectsService.findAllInWorkspace(workspaceId, userId);
@@ -83,7 +84,7 @@ export class ProjectsController {
   @Post(':projectId/columns')
   @ApiOperation({ summary: 'Create a new column in project' })
   createColumn(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateColumnDto,
   ) {
@@ -93,8 +94,8 @@ export class ProjectsController {
   @Patch(':projectId/columns/:columnId')
   @ApiOperation({ summary: 'Update a project column' })
   updateColumn(
-    @Param('projectId') projectId: string,
-    @Param('columnId') columnId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('columnId', ParseUUIDPipe) columnId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateColumnDto,
   ) {
@@ -104,8 +105,8 @@ export class ProjectsController {
   @Delete(':projectId/columns/:columnId')
   @ApiOperation({ summary: 'Delete a project column' })
   deleteColumn(
-    @Param('projectId') projectId: string,
-    @Param('columnId') columnId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('columnId', ParseUUIDPipe) columnId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.projectsService.deleteColumn(projectId, columnId, userId);
@@ -116,7 +117,7 @@ export class ProjectsController {
   @Get(':projectId/members')
   @ApiOperation({ summary: 'List project members' })
   listProjectMembers(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.projectMembersService.listMembers(projectId, userId);
@@ -125,7 +126,7 @@ export class ProjectsController {
   @Post(':projectId/members')
   @ApiOperation({ summary: 'Invite a member to project' })
   inviteProjectMember(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: InviteProjectMemberDto,
     @CurrentUser('id') userId: string,
   ) {
@@ -140,7 +141,7 @@ export class ProjectsController {
   @Delete(':projectId/members/:targetUserId')
   @ApiOperation({ summary: 'Remove a member from project' })
   removeProjectMember(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('targetUserId') targetUserId: string,
     @CurrentUser('id') userId: string,
   ) {
@@ -154,7 +155,7 @@ export class ProjectsController {
   @Patch('member-invites/:memberId/respond')
   @ApiOperation({ summary: 'Accept or decline a project invite' })
   respondToInvite(
-    @Param('memberId') memberId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
     @Body() dto: RespondInviteDto,
     @CurrentUser('id') userId: string,
   ) {

@@ -1,11 +1,11 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ChatMemberService } from './member.service';
+import { ChannelSettingsService } from './channel-settings.service';
 
 type SharedKind = 'media' | 'files' | 'links' | 'music' | 'voice';
 
@@ -23,6 +23,9 @@ export class CommunityService {
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly members: ChatMemberService,
+    // Role changes go through the one service that owns the role model —
+    // see updateMemberRole.
+    private readonly channelSettings: ChannelSettingsService,
   ) {}
 
   async overview(userId: string) {
@@ -171,29 +174,49 @@ export class CommunityService {
     });
   }
 
+  /**
+   * Promote/demote a member of a system community room, addressed by username.
+   *
+   * The role arrives from the request body and used to be written to
+   * `chat_members.role` verbatim. TypeScript's `'member' | 'admin'` is gone at
+   * runtime and the column's CHECK constraint admits 'owner', so an admin
+   * could send `{"role":"owner"}` with their own username and take ownership
+   * of the community — the three guards that exist on the ordinary path
+   * (ChannelSettingsService.setMemberRole) were all missing here:
+   * no vocabulary check, no self-target check, no rank check.
+   *
+   * Rather than restate them, this delegates to that method once the username
+   * is resolved to a user id. One place decides who may hold which role.
+   */
   async updateMemberRole(
     roomId: string,
     targetUsername: string,
     role: 'member' | 'admin',
     userId: string,
   ) {
-    const requester = await this.members.assertRoomMember(roomId, userId);
-    if (!['admin', 'owner'].includes(requester.role))
-      throw new ForbiddenException('Admin permission required');
-    const roomRows = await this.dataSource.query(
+    if (role !== 'member' && role !== 'admin')
+      throw new BadRequestException('role must be "member" or "admin"');
+
+    const roomRows = await this.dataSource.query<{ isSystem: boolean }>(
       `SELECT is_system AS "isSystem" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
     if (!roomRows[0]?.isSystem)
       throw new BadRequestException('This endpoint is for system resources');
-    const result = await this.dataSource.query(
-      `UPDATE chat_members cm SET role = $3 FROM users u
-       WHERE cm.room_id = $1 AND cm.user_id = u.id AND u.username = $2
-       RETURNING cm.user_id AS "userId", cm.role`,
-      [roomId, targetUsername, role],
+
+    const targetRows = await this.dataSource.query<{ id: string }>(
+      `SELECT u.id FROM chat_members cm JOIN users u ON u.id = cm.user_id
+        WHERE cm.room_id = $1 AND u.username = $2
+          AND cm.left_at IS NULL AND cm.status = 'active'`,
+      [roomId, targetUsername],
     );
-    if (!result[0]) throw new NotFoundException('Member not found');
-    await this.members.invalidateRoomMember(roomId, result[0].userId);
-    return result[0];
+    if (!targetRows[0]) throw new NotFoundException('Member not found');
+
+    return this.channelSettings.setMemberRole(
+      roomId,
+      userId,
+      targetRows[0].id,
+      role,
+    );
   }
 }

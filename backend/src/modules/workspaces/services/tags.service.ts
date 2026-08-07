@@ -13,10 +13,7 @@ import {
   TAG_COLUMNS_SQL,
   WORKSPACE_MEMBER_COLUMNS_SQL,
 } from '../repositories/workspaces.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../../common/utils/sql.util';
+import { buildUpdateSet } from '../../../common/utils/sql.util';
 import { CreateTagDto } from '../schemas/create-tag.schema';
 import { UpdateTagDto } from '../schemas/update-tag.schema';
 
@@ -119,11 +116,9 @@ export class TagsService {
       2,
     );
     if (!setClause) return tag;
-    const updatedRows: Tag[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE tags SET ${setClause} WHERE id = $1 RETURNING ${TAG_COLUMNS_SQL}`,
-        [tagId, ...values],
-      ),
+    const updatedRows: Tag[] = await this.dataSource.query(
+      `UPDATE tags SET ${setClause} WHERE id = $1 RETURNING ${TAG_COLUMNS_SQL}`,
+      [tagId, ...values],
     );
     return updatedRows[0];
   }

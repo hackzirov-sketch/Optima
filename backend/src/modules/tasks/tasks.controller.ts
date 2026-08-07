@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -36,8 +37,8 @@ export class TasksController {
   @ApiParam({ name: 'projectId' })
   @ApiParam({ name: 'taskId' })
   getPushes(
-    @Param('projectId') projectId: string,
-    @Param('taskId') taskId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.getPushesForTask(projectId, taskId, userId);
@@ -57,7 +58,7 @@ export class TasksController {
   })
   @ApiParam({ name: 'projectId', description: 'Project UUID' })
   findAll(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser('id') userId: string,
     @Query() filters: FilterTasksDto,
   ) {
@@ -71,7 +72,7 @@ export class TasksController {
   })
   @ApiParam({ name: 'workspaceId', description: 'Workspace UUID' })
   findAllByWorkspace(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Query() filters: FilterTasksDto,
   ) {
@@ -80,14 +81,17 @@ export class TasksController {
 
   @Get('tasks/:taskId')
   @ApiOperation({ summary: 'Get task details by ID' })
-  findById(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  findById(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.findById(taskId, userId);
   }
 
   @Patch('tasks/:taskId')
   @ApiOperation({ summary: 'Update a task' })
   update(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateTaskDto,
   ) {
@@ -97,7 +101,10 @@ export class TasksController {
   @Delete('tasks/:taskId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a task' })
-  remove(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  remove(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.remove(taskId, userId);
   }
 
@@ -108,7 +115,7 @@ export class TasksController {
     summary: 'Move task to a different column / position / status',
   })
   move(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: MoveTaskDto,
   ) {
@@ -120,7 +127,7 @@ export class TasksController {
   @Get('tasks/:taskId/watchers')
   @ApiOperation({ summary: 'Get task watchers' })
   getWatchers(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.getWatchers(taskId, userId);
@@ -128,13 +135,19 @@ export class TasksController {
 
   @Post('tasks/:taskId/watch')
   @ApiOperation({ summary: 'Watch a task (subscribe to notifications)' })
-  watch(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  watch(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.watch(taskId, userId);
   }
 
   @Delete('tasks/:taskId/watch')
   @ApiOperation({ summary: 'Unwatch a task' })
-  unwatch(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  unwatch(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.unwatch(taskId, userId);
   }
 
@@ -143,7 +156,7 @@ export class TasksController {
   @Get('tasks/:taskId/activities')
   @ApiOperation({ summary: 'Get activity / audit trail for a task' })
   getActivities(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.getActivities(taskId, userId);
@@ -154,7 +167,7 @@ export class TasksController {
   @Get('tasks/:taskId/dependencies')
   @ApiOperation({ summary: 'Get task dependencies' })
   getDependencies(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.getDependencies(taskId, userId);
@@ -163,7 +176,7 @@ export class TasksController {
   @Post('tasks/:taskId/dependencies')
   @ApiOperation({ summary: 'Add a task dependency' })
   addDependency(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: AddDependencyDto,
   ) {
@@ -174,8 +187,8 @@ export class TasksController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a task dependency' })
   removeDependency(
-    @Param('taskId') taskId: string,
-    @Param('dependencyId') dependencyId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Param('dependencyId', ParseUUIDPipe) dependencyId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.removeDependency(taskId, dependencyId, userId);
@@ -185,14 +198,17 @@ export class TasksController {
 
   @Get('tasks/:taskId/tags')
   @ApiOperation({ summary: 'Get tags attached to a task' })
-  getTags(@Param('taskId') taskId: string, @CurrentUser('id') userId: string) {
+  getTags(
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tasksService.getTags(taskId, userId);
   }
 
   @Post('tasks/:taskId/tags')
   @ApiOperation({ summary: 'Attach a tag to a task' })
   addTag(
-    @Param('taskId') taskId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: AddTagDto,
   ) {
@@ -203,8 +219,8 @@ export class TasksController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a tag from a task' })
   removeTag(
-    @Param('taskId') taskId: string,
-    @Param('tagId') tagId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Param('tagId', ParseUUIDPipe) tagId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.tasksService.removeTag(taskId, tagId, userId);

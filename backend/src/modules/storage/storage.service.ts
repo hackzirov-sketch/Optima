@@ -130,10 +130,32 @@ export class StorageService {
   private readonly apiSecret: string;
   private readonly baseFolder: string;
 
+  /**
+   * Whether R2 is actually usable. An unset account id or key pair still
+   * builds a perfectly valid-looking S3Client — pointed at
+   * `https://.r2.cloudflarestorage.com`, which resolves to nothing — so every
+   * presigned URL handed to a browser was a URL to nowhere and every upload
+   * died at the PUT with a generic "couldn't upload" toast. Configuration
+   * missing is a different problem from an upload failing, and the API should
+   * say which one it is.
+   */
+  private readonly r2Configured: boolean;
+
   constructor(private readonly config: ConfigService) {
     // R2
     this.bucketName = this.config.get<string>('r2.bucketName')!;
     this.r2PublicUrl = this.config.get<string>('r2.publicUrl')!;
+    this.r2Configured = Boolean(
+      this.config.get<string>('r2.accountId') &&
+      this.config.get<string>('r2.accessKeyId') &&
+      this.config.get<string>('r2.secretAccessKey') &&
+      this.bucketName,
+    );
+    if (!this.r2Configured) {
+      this.logger.warn(
+        'R2 is not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) — direct uploads will be refused',
+      );
+    }
 
     this.s3Client = new S3Client({
       region: 'auto',
@@ -226,6 +248,24 @@ export class StorageService {
 
     if (!storageKey.split('/').includes(userId)) {
       return reject('You can only attach your own uploads');
+    }
+
+    // The ownership check above reads the *key*, but what is stored and later
+    // rendered is the *URL* — and nothing tied the two together. Presenting
+    // your own key alongside somebody else's URL satisfied both checks and
+    // attached their file to your message. Same tie
+    // MeetingFilesService.shareFile makes, adjusted for how each provider
+    // builds its URLs: R2 serves the object key verbatim, while Cloudinary
+    // appends a delivery format to the public_id (`.../upz/audio/<id>/x.webm`
+    // for the key `upz/audio/<id>/x`), so the extension is stripped before
+    // comparing rather than the check being skipped for that host.
+    const path = decodeURIComponent(parsed.pathname);
+    const withoutFormat = path.replace(/\.[A-Za-z0-9]{1,8}$/, '');
+    if (
+      !path.endsWith(`/${storageKey}`) &&
+      !withoutFormat.endsWith(`/${storageKey}`)
+    ) {
+      return reject('Attachment URL does not match its storage key');
     }
   }
 
@@ -667,6 +707,14 @@ export class StorageService {
     storageUrl: string;
     expiresIn: number;
   }> {
+    if (!this.r2Configured) {
+      throw new ServiceUnavailableException({
+        code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
+        message:
+          'File storage is not configured on this server — uploads are unavailable',
+      });
+    }
+
     const limits = FOLDER_LIMITS[folder];
     if (!limits)
       throw new BadRequestException({

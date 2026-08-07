@@ -4,7 +4,6 @@ import { Logger } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { NotificationType } from '../../../common/enums';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 
 @Processor('chat')
 export class ChatProcessor extends WorkerHost {
@@ -56,7 +55,7 @@ export class ChatProcessor extends WorkerHost {
         new Date(data.lastMessageAt),
       ],
     );
-    if (!normalizeReturning(rows)[0]) {
+    if (!rows[0]) {
       this.logger.debug(
         `Skipped stale metadata for room ${data.roomId} (sequence ${data.sequence})`,
       );
@@ -126,10 +125,9 @@ export class ChatProcessor extends WorkerHost {
         RETURNING cm.user_id AS "userId"`,
       [data.roomId, data.senderId, data.sequence],
     );
-    const rows = normalizeReturning(reopened);
-    if (rows.length) {
+    if (reopened.length) {
       this.logger.debug(
-        `Reopened direct room ${data.roomId} for ${rows.length} recipient(s)`,
+        `Reopened direct room ${data.roomId} for ${reopened.length} recipient(s)`,
       );
     }
   }

@@ -34,7 +34,6 @@ import {
   CHAT_REACTION_COLUMNS_SQL,
   MESSAGE_ATTACHMENT_COLUMNS_SQL,
 } from '../chat.sql';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 import { extractMentions } from '../mention.util';
 
 /**
@@ -862,14 +861,12 @@ export class ChatMessageService {
     }
 
     const editedAt = new Date();
-    const savedRows: ChatMessage[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE chat_messages
+    const savedRows: ChatMessage[] = await this.dataSource.query(
+      `UPDATE chat_messages
          SET content = $2, content_json = $3, is_edited = true, edited_at = $4
          WHERE id = $1
          RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
-        [messageId, content, contentJson, editedAt],
-      ),
+      [messageId, content, contentJson, editedAt],
     );
     const saved = savedRows[0];
     // Same gap as deletion: an edit made over REST reached nobody until they

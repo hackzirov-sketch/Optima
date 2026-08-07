@@ -704,7 +704,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     else if (options?.keepSelection) setSelectedId(null);
       // A pending routeTarget (deep link, e.g. /g/backend-team) resolves and picks its own
     // room shortly after - don't let the "open the first room" fallback race ahead of it.
-    else if (!routeTarget && mergedRooms[0] && window.innerWidth > 820) chooseRoom(mergedRooms[0].id);
+    //
+    // `location === "/chat"` is what keeps this from hijacking the app. This
+    // component is mounted everywhere (App.tsx keeps one instance alive so a
+    // call or a conversation survives navigation), so loadRooms runs on every
+    // page load — and chooseRoom() navigates. The effect was that refreshing
+    // the dashboard, a meeting, or anything else bounced the user into
+    // whichever conversation happened to be first. `silent` for the same
+    // reason in the other direction: someone who reloads /chat should land
+    // back on /chat, not be redirected to /g/<slug> by a background fetch.
+    else if (!routeTarget && location === "/chat" && mergedRooms[0] && window.innerWidth > 820)
+      chooseRoom(mergedRooms[0].id, { silent: true });
     else setSelectedId(null);
     setLoadingRooms(false);
   }

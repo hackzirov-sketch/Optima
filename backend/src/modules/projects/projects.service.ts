@@ -23,10 +23,7 @@ import {
   PROJECT_COLUMNS_SQL_P,
   PROJECT_COLUMN_COLUMNS_SQL,
 } from './projects.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 @Injectable()
 export class ProjectsService {
@@ -313,11 +310,9 @@ export class ProjectsService {
     );
     if (!setClause) return project;
 
-    const rows: Project[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE projects SET ${setClause} WHERE id = $1 RETURNING ${PROJECT_COLUMNS_SQL}`,
-        [id, ...values],
-      ),
+    const rows: Project[] = await this.dataSource.query(
+      `UPDATE projects SET ${setClause} WHERE id = $1 RETURNING ${PROJECT_COLUMNS_SQL}`,
+      [id, ...values],
     );
     return rows[0];
   }
@@ -397,11 +392,9 @@ export class ProjectsService {
     );
     if (!setClause) return columnRows[0];
 
-    const rows: ProjectColumn[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE project_columns SET ${setClause} WHERE id = $1 RETURNING ${PROJECT_COLUMN_COLUMNS_SQL}`,
-        [columnId, ...values],
-      ),
+    const rows: ProjectColumn[] = await this.dataSource.query(
+      `UPDATE project_columns SET ${setClause} WHERE id = $1 RETURNING ${PROJECT_COLUMN_COLUMNS_SQL}`,
+      [columnId, ...values],
     );
     return rows[0];
   }

@@ -56,6 +56,7 @@ import {
   RecordViewsDto,
 } from './dto/channel-settings.dto';
 import { UpdateRoomSettingsDto } from './dto/update-room-settings.dto';
+import { BanMemberDto } from './dto/moderate-member.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { ChatRoomType } from '../../common/enums';
 import { RedisService } from '../../redis/redis.service';
@@ -532,7 +533,7 @@ export class ChatController {
   @ApiParam({ name: 'memberId' })
   setMemberRole(
     @Param('roomId', ParseUUIDPipe) roomId: string,
-    @Param('memberId') memberId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: SetMemberRoleDto,
   ) {
@@ -542,6 +543,57 @@ export class ChatController {
       memberId,
       dto.role,
     );
+  }
+
+  // ── Moderation: remove / ban / unban ──────────────────────────────────────
+  // Admins and above, and never on someone at or above their own level.
+
+  @Delete('chat/rooms/:roomId/members/:memberId')
+  @ApiOperation({
+    summary: 'Remove a member from the room — they may rejoin normally',
+  })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  @ApiParam({ name: 'memberId', format: 'uuid' })
+  removeMember(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.channelSettings.removeMember(roomId, userId, memberId);
+  }
+
+  @Post('chat/rooms/:roomId/members/:memberId/ban')
+  @ApiOperation({
+    summary: 'Remove a member and keep them out (optionally until a date)',
+  })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  @ApiParam({ name: 'memberId', format: 'uuid' })
+  banMember(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: BanMemberDto,
+  ) {
+    return this.channelSettings.banMember(
+      roomId,
+      userId,
+      memberId,
+      dto.until ? new Date(dto.until) : null,
+    );
+  }
+
+  @Delete('chat/rooms/:roomId/members/:memberId/ban')
+  @ApiOperation({
+    summary: 'Lift a ban — does not put them back in the room',
+  })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  @ApiParam({ name: 'memberId', format: 'uuid' })
+  unbanMember(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.channelSettings.unbanMember(roomId, userId, memberId);
   }
 
   @Post('chat/rooms/:roomId/transfer-ownership')

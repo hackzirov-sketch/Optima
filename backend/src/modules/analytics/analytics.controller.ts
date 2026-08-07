@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -18,7 +18,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Workspace analytics overview' })
   @ApiParam({ name: 'workspaceId' })
   workspaceOverview(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.analyticsService.workspaceOverview(workspaceId, userId);
@@ -28,7 +28,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Project-level aggregates' })
   @ApiParam({ name: 'projectId' })
   projectAnalytics(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.analyticsService.projectAnalytics(projectId, userId);
@@ -38,7 +38,7 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Per-developer stats in a project' })
   @ApiParam({ name: 'projectId' })
   projectDevelopers(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.analyticsService.projectDevelopers(projectId, userId);

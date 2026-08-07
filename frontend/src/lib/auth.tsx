@@ -20,6 +20,25 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * A fresh sign-in starts at Home.
+ *
+ * Signing in is a new session, not a continuation: whatever deep link the
+ * browser happened to still be sitting on — most often /chat, since that is
+ * where people spend their time before a session expires — is not where
+ * someone who just typed their password expects to land. A reload is the
+ * opposite case and is deliberately left alone: wouter reads window.location,
+ * so refreshing keeps you exactly where you were.
+ */
+function landOnHome() {
+  const { pathname, search } = window.location;
+  if (pathname === "/" && !search) return;
+  window.history.replaceState({}, "", "/");
+  // wouter listens for popstate/pushState, not replaceState — nudge it so the
+  // router re-reads the location it has just been given.
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -174,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session.markActive();
     setUser(result.user);
     setReady(true);
+    landOnHome();
     await refreshWorkspaces();
   }, [refreshWorkspaces]);
 
@@ -185,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextUser);
       await applyWorkspaces(items, null);
       setReady(true);
+      landOnHome();
     } catch (error) {
       setUser(null);
       throw error;

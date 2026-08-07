@@ -11,10 +11,7 @@ import { MembersService } from '../workspaces/services/members.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { NOTE_COLUMNS_SQL } from './notes.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 export interface NoteDto {
   id: string;
@@ -283,11 +280,9 @@ export class NotesService {
       2,
     );
     if (!setClause) return note;
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE notes SET ${setClause} WHERE id = $1 RETURNING ${NOTE_COLUMNS_SQL}`,
-        [noteId, ...values],
-      ),
+    const rows = await this.dataSource.query(
+      `UPDATE notes SET ${setClause} WHERE id = $1 RETURNING ${NOTE_COLUMNS_SQL}`,
+      [noteId, ...values],
     );
     return rows[0];
   }

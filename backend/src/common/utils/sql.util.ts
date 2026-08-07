@@ -68,24 +68,3 @@ export function buildUpdateSet(
   const values = entries.map(([, v]) => v);
   return { setClause, values };
 }
-
-/**
- * TypeORM's DataSource/QueryRunner `.query()` is inconsistent for raw SQL on Postgres:
- * SELECT and INSERT ... RETURNING resolve to a plain `Row[]`, but UPDATE ... RETURNING
- * and DELETE ... RETURNING resolve to a `[Row[], affectedCount]` tuple instead.
- *
- * Wrap the result of any UPDATE/DELETE ... RETURNING query in this before indexing
- * into it, or you'll silently get the wrong shape back (an array wrapping an array,
- * instead of the row itself).
- */
-export function normalizeReturning<T = any>(result: unknown): T[] {
-  if (
-    Array.isArray(result) &&
-    result.length === 2 &&
-    Array.isArray(result[0]) &&
-    typeof result[1] === 'number'
-  ) {
-    return result[0] as T[];
-  }
-  return result as T[];
-}

@@ -5,10 +5,7 @@ import { GroupMember } from '../../../database/entities/group-member.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { WorkspaceRole } from '../../../common/enums';
 import { CreateGroupDto } from '../schemas/create-group.schema';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../../common/utils/sql.util';
+import { buildUpdateSet } from '../../../common/utils/sql.util';
 import { GROUP_COLUMNS_SQL, GROUP_MEMBER_COLUMNS_SQL } from './groups.sql';
 
 @Injectable()
@@ -104,11 +101,9 @@ export class GroupsRepository {
     });
     if (!setClause) return this.findById(id);
 
-    const rows: Group[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE groups SET ${setClause} WHERE id = $1 RETURNING ${GROUP_COLUMNS_SQL}`,
-        [id, ...values],
-      ),
+    const rows: Group[] = await this.dataSource.query(
+      `UPDATE groups SET ${setClause} WHERE id = $1 RETURNING ${GROUP_COLUMNS_SQL}`,
+      [id, ...values],
     );
     return rows[0] ?? null;
   }

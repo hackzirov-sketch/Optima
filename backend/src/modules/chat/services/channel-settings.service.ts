@@ -659,6 +659,155 @@ export class ChannelSettingsService {
   }
 
   /**
+   * The common half of every moderation action: who may act on whom.
+   *
+   * Same shape as setMemberRole's checks, for the same reason — a moderator
+   * who can eject their own admin is not a moderator.
+   */
+  private async assertCanActOn(
+    roomId: string,
+    actorId: string,
+    targetUserId: string,
+  ): Promise<RoomRole> {
+    const actorRole = await this.getRole(roomId, actorId);
+    this.assertCanManage(actorRole);
+    if (actorId === targetUserId)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'You cannot do that to yourself',
+      });
+
+    const targetRole = await this.getRole(roomId, targetUserId);
+    if (ROLE_RANK[actorRole] <= ROLE_RANK[targetRole])
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'You can only act on members below your own level',
+      });
+    return targetRole;
+  }
+
+  /**
+   * Remove someone from the room. They keep no access, and may come back the
+   * same way anyone else would (a public join or a fresh invite) — that is
+   * what makes this different from a ban.
+   *
+   * There was no way to do either. `is_banned` and `banned_until` have been
+   * read on the send path since the columns were added, but nothing ever
+   * wrote them and no endpoint removed a member, so a group owner's only
+   * answer to someone flooding their room was to leave it themselves.
+   */
+  async removeMember(roomId: string, actorId: string, targetUserId: string) {
+    await this.assertCanActOn(roomId, actorId, targetUserId);
+
+    const rows = await this.dataSource.query<{ id: string }>(
+      `UPDATE chat_members SET left_at = now()
+        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL
+        RETURNING id`,
+      [roomId, targetUserId],
+    );
+    if (!rows[0])
+      throw new NotFoundException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'That person is not in this room',
+      });
+
+    await this.memberService.invalidateRoomMember(roomId, targetUserId);
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId,
+      action: 'chat_room.member_removed',
+      entityType: 'chat_room',
+      entityId: roomId,
+      oldValue: { userId: targetUserId },
+    });
+    this.events.emit('chat.member_changed', {
+      roomId,
+      userId: targetUserId,
+      action: 'left',
+    });
+    return { userId: targetUserId, removed: true };
+  }
+
+  /**
+   * Remove someone and keep them out.
+   *
+   * `until` makes it a timed ban; omitting it makes it indefinite. The flag
+   * outlives the membership row on purpose: it is what the rejoin paths
+   * (joinPublicRoom, joinByCode) consult, so a ban survives an invite link
+   * being handed to the person who was banned.
+   */
+  async banMember(
+    roomId: string,
+    actorId: string,
+    targetUserId: string,
+    until: Date | null = null,
+  ) {
+    await this.assertCanActOn(roomId, actorId, targetUserId);
+
+    const rows = await this.dataSource.query<{ id: string }>(
+      `UPDATE chat_members
+          SET is_banned = true, banned_until = $3, left_at = COALESCE(left_at, now())
+        WHERE room_id = $1 AND user_id = $2
+        RETURNING id`,
+      [roomId, targetUserId, until],
+    );
+    if (!rows[0])
+      throw new NotFoundException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'That person has never been in this room',
+      });
+
+    await this.memberService.invalidateRoomMember(roomId, targetUserId);
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId,
+      action: 'chat_room.member_banned',
+      entityType: 'chat_room',
+      entityId: roomId,
+      newValue: { userId: targetUserId, until },
+    });
+    this.events.emit('chat.member_changed', {
+      roomId,
+      userId: targetUserId,
+      action: 'left',
+    });
+    return { userId: targetUserId, banned: true, until };
+  }
+
+  /**
+   * Lift a ban. Deliberately does not re-add them to the room: undoing a
+   * punishment and putting someone back into a conversation are different
+   * decisions, and only the first is the moderator's to make unilaterally.
+   */
+  async unbanMember(roomId: string, actorId: string, targetUserId: string) {
+    const actorRole = await this.getRole(roomId, actorId);
+    this.assertCanManage(actorRole);
+
+    const rows = await this.dataSource.query<{ id: string }>(
+      `UPDATE chat_members SET is_banned = false, banned_until = NULL
+        WHERE room_id = $1 AND user_id = $2 AND (is_banned OR banned_until IS NOT NULL)
+        RETURNING id`,
+      [roomId, targetUserId],
+    );
+    if (!rows[0])
+      throw new NotFoundException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'That person is not banned from this room',
+      });
+
+    await this.memberService.invalidateRoomMember(roomId, targetUserId);
+    await this.audit.log({
+      workspaceId: await this.workspaceOf(roomId),
+      actorId,
+      action: 'chat_room.member_unbanned',
+      entityType: 'chat_room',
+      entityId: roomId,
+      newValue: { userId: targetUserId },
+    });
+    return { userId: targetUserId, banned: false };
+  }
+
+  /**
    * Hand the room to someone else. Both writes are one transaction: an
    * interruption between them would leave the room with two owners or none.
    */

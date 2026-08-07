@@ -6,7 +6,6 @@ import {
 import { DatabaseService } from '../../../database/database.service';
 import { StorageService } from '../../storage/storage.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 
 @Injectable()
 export class MeetingFilesService {
@@ -73,23 +72,21 @@ export class MeetingFilesService {
         message: 'Invalid meeting file URL',
       });
     }
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `INSERT INTO meeting_shared_files
+    const rows = await this.dataSource.query(
+      `INSERT INTO meeting_shared_files
          (meeting_id, shared_by, file_name, mime_type, file_size, storage_key, storage_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, meeting_id AS "meetingId", shared_by AS "sharedBy", file_name AS "fileName",
                  mime_type AS "mimeType", file_size::text AS "fileSize", storage_url AS "storageUrl", created_at AS "createdAt"`,
-        [
-          meetingId,
-          userId,
-          file.fileName,
-          file.mimeType,
-          file.fileSize,
-          file.storageKey,
-          file.storageUrl,
-        ],
-      ),
+      [
+        meetingId,
+        userId,
+        file.fileName,
+        file.mimeType,
+        file.fileSize,
+        file.storageKey,
+        file.storageUrl,
+      ],
     );
     return rows[0];
   }

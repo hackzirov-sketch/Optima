@@ -13,7 +13,6 @@ import { PermissionService } from '../../../common/services/permission.service';
 import { AuditService } from '../../../common/services/audit.service';
 import { ROLE_LEVEL } from '../../../common/constants/role-levels';
 import { WORKSPACE_MEMBER_COLUMNS_SQL } from '../repositories/workspaces.sql';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 import { RedisService } from '../../../redis/redis.service';
 import { RedisKeys } from '../../../redis/redis.keys';
 
@@ -253,12 +252,10 @@ export class MembersService {
     this.permission.assertOutranksTarget(requester, member);
     const oldRole = member.role;
 
-    const savedRows: WorkspaceMember[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE workspace_members SET role = $2 WHERE workspace_id = $1 AND user_id = $3
+    const savedRows: WorkspaceMember[] = await this.dataSource.query(
+      `UPDATE workspace_members SET role = $2 WHERE workspace_id = $1 AND user_id = $3
          RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
-        [workspaceId, dto.role, targetUserId],
-      ),
+      [workspaceId, dto.role, targetUserId],
     );
     const saved = savedRows[0];
     // Before the audit write, and awaited: until this lands, every guard in

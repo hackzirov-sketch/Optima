@@ -1,11 +1,10 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
-import { NotificationsModule } from '../notifications/notifications.module';
 
 import { ChatController } from './chat.controller';
 import { ChatEncryptionService } from './chat-encryption.service';
@@ -20,6 +19,7 @@ import { ChatProcessor } from './workers/chat.processor';
 import { CommunityService } from './services/community.service';
 import { ChannelSettingsService } from './services/channel-settings.service';
 import { MessageViewService } from './services/message-view.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -29,7 +29,7 @@ import { MessageViewService } from './services/message-view.service';
     StorageModule,
     UsersModule,
     // ChatProcessor turns @mentions into notifications.
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [ChatController],
   providers: [

@@ -8,7 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingFile, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
+import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
@@ -179,6 +179,20 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const speakerStableTicks = useRef(new Map<string, number>());
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  /**
+   * Who else is in the room, independent of whether any media has arrived
+   * from them.
+   *
+   * The grid, the header count and the participants panel all used to be
+   * derived from `remoteStreams`, i.e. from WebRTC tracks. Someone who joins
+   * with the camera and microphone off publishes no track at all, so they
+   * were invisible to everyone already in the call — the room kept saying
+   * "waiting for others" while they sat in it, and whichever side happened to
+   * publish something first was the only one anybody could see. Presence is a
+   * roster fact, not a media fact; the stream is attached to a tile when and
+   * if it shows up.
+   */
+  const [roster, setRoster] = useState<Record<string, MeetingUser | null>>({});
   const [remoteMedia, setRemoteMedia] = useState<Record<string, { audio: boolean; video: boolean; screen: boolean }>>({});
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "offline">("connecting");
   const peers = useRef(new Map<string, RTCPeerConnection>());
@@ -266,7 +280,27 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       .finally(() => setLoading(false));
   }, [meetingId, workspace?.id, show, t]);
 
-  const users = useMemo(() => new Map(members.map((member) => [member.userId, member.user as User])), [members]);
+  /**
+   * Identities for everyone on screen.
+   *
+   * The meeting's own roster comes first: it covers guests, standalone
+   * meetings with no workspace at all, and anyone who simply isn't in the
+   * viewer's organisation — all of whom used to fall through to the generic
+   * "Qatnashchi" label because this map was built purely from the workspace
+   * member list. That list is still consulted as a fallback, since it carries
+   * the richer profile for colleagues.
+   */
+  const users = useMemo(() => {
+    const map = new Map<string, User>();
+    for (const member of members) map.set(member.userId, member.user as User);
+    for (const participant of meeting?.participants ?? []) {
+      if (participant.user) map.set(participant.userId, participant.user as unknown as User);
+    }
+    for (const [userId, profile] of Object.entries(roster)) {
+      if (profile) map.set(userId, profile as unknown as User);
+    }
+    return map;
+  }, [members, meeting?.participants, roster]);
 
   const canManageWaitingRoom = useMemo(() => {
     if (!meeting || !user) return false;
@@ -544,14 +578,34 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (!entered) return;
     const socket = getSocket();
     const onConnect = () => { setConnectionState("connected"); socket.emit("meeting:join", { meetingId }); };
+    // A reload mid-call re-enters an already-populated room: the socket only
+    // reports who joins *after* this point, so the people already present come
+    // from the participant list the REST fetch returned.
+    setRoster((current) => {
+      const next = { ...current };
+      for (const participant of meeting?.participants ?? []) {
+        if (participant.leftAt || participant.userId === user?.id) continue;
+        next[participant.userId] = next[participant.userId] ?? participant.user ?? null;
+      }
+      return next;
+    });
     const onDisconnect = () => setConnectionState("offline");
-    const onParticipants = async ({ userIds }: { userIds: string[] }) => {
+    const onParticipants = async ({ userIds, participants }: { userIds: string[]; participants?: Array<{ userId: string; user: MeetingUser | null }> }) => {
+      // The roster first, so everyone already here is on screen before a
+      // single offer/answer round trip has happened.
+      setRoster((current) => {
+        const next = { ...current };
+        for (const id of userIds) next[id] = next[id] ?? null;
+        for (const entry of participants ?? []) next[entry.userId] = entry.user;
+        return next;
+      });
       for (const targetUserId of userIds) {
         await sendSecurityKey(targetUserId);
         if (user?.id && user.id.localeCompare(targetUserId) < 0) await sendOffer(targetUserId);
       }
     };
-    const onUserJoined = ({ userId: joinedUserId }: { userId: string }) => {
+    const onUserJoined = ({ userId: joinedUserId, user: joinedUser }: { userId: string; user?: MeetingUser | null }) => {
+      setRoster((current) => ({ ...current, [joinedUserId]: joinedUser ?? current[joinedUserId] ?? null }));
       void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
         if (user?.id && user.id.localeCompare(joinedUserId) < 0 && !peers.current.has(joinedUserId)) void sendOffer(joinedUserId);
@@ -585,7 +639,15 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       if (peer?.remoteDescription) await peer.addIceCandidate(candidate).catch(() => {});
       else iceQueue.current.set(fromUserId, [...(iceQueue.current.get(fromUserId) || []), candidate]);
     };
-    const onLeft = ({ userId }: { userId: string }) => closePeer(userId);
+    const onLeft = ({ userId: leftUserId }: { userId: string }) => {
+      setRoster((current) => {
+        if (!(leftUserId in current)) return current;
+        const next = { ...current };
+        delete next[leftUserId];
+        return next;
+      });
+      closePeer(leftUserId);
+    };
     const onHand = ({ userId, raised }: { userId: string; raised: boolean }) => setRaisedHands((current) => { const next = new Set(current); if (raised) next.add(userId); else next.delete(userId); return next; });
     const onReaction = (reaction: { id: string; userId: string; emoji: string }) => {
       setReactions((current) => [...current, reaction]);
@@ -636,7 +698,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
+  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id, meeting?.participants]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -768,6 +830,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     getSocket().emit("meeting:leave", { meetingId });
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
+    setRoster({});
+    setRemoteStreams({});
     disconnectTimers.current.forEach(window.clearTimeout);
     disconnectTimers.current.clear();
     screenTrack.current?.stop();
@@ -955,7 +1019,13 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     audioAnalysers.current.clear();
   }, []);
 
-  const remoteEntries = Object.entries(remoteStreams);
+  // One entry per person in the room; `stream` stays undefined until (or
+  // unless) their media arrives, which is exactly how a camera-off
+  // participant should render — an avatar tile, not an absence.
+  const remoteEntries = useMemo(
+    () => Object.keys(roster).map((id) => [id, remoteStreams[id]] as const),
+    [roster, remoteStreams],
+  );
   const securityCode = Object.values(securityCodes)[0];
 
   // ── Screen Share / Active Speaker auto-focus ──────────────────────────────

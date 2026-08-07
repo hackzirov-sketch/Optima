@@ -11,7 +11,6 @@ import { NotificationType } from '../../common/enums';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { PermissionService } from '../../common/services/permission.service';
 import { PROJECT_COLUMNS_SQL } from './projects.sql';
-import { normalizeReturning } from '../../common/utils/sql.util';
 
 const PROJECT_MEMBER_COLUMNS_SQL = `
   id, project_id AS "projectId", user_id AS "userId", role, status,
@@ -203,12 +202,10 @@ export class ProjectMembersService {
     }
 
     const newStatus = accept ? 'accepted' : 'declined';
-    const savedRows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE project_members SET status = $2, joined_at = $3 WHERE id = $1
+    const savedRows = await this.dataSource.query(
+      `UPDATE project_members SET status = $2, joined_at = $3 WHERE id = $1
          RETURNING ${PROJECT_MEMBER_COLUMNS_SQL}`,
-        [memberId, newStatus, accept ? new Date() : null],
-      ),
+      [memberId, newStatus, accept ? new Date() : null],
     );
     const saved = savedRows[0];
 

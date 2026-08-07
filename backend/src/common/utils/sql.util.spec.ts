@@ -1,4 +1,4 @@
-import { buildUpdateSet, normalizeReturning, toSnakeCase } from './sql.util';
+import { buildUpdateSet, toSnakeCase } from './sql.util';
 
 describe('toSnakeCase', () => {
   it('converts camelCase to snake_case', () => {
@@ -72,20 +72,5 @@ describe('buildUpdateSet', () => {
         buildUpdateSet({ firstName: 'Ada', githubPrUrl: 'x' }),
       ).not.toThrow();
     });
-  });
-});
-
-describe('normalizeReturning', () => {
-  it('unwraps the [rows, count] tuple shape', () => {
-    expect(normalizeReturning([[{ id: 1 }], 1])).toEqual([{ id: 1 }]);
-  });
-
-  it('passes a plain row array through', () => {
-    expect(normalizeReturning([{ id: 1 }])).toEqual([{ id: 1 }]);
-  });
-
-  it('does not mistake a two-row result for a tuple', () => {
-    const rows = [{ id: 1 }, { id: 2 }];
-    expect(normalizeReturning(rows)).toEqual(rows);
   });
 });

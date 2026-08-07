@@ -98,4 +98,27 @@ describe('StorageService.assertOwnedAttachment', () => {
       ),
     ).toThrow(BadRequestException);
   });
+
+  // The key proves ownership, but the URL is what gets stored and rendered —
+  // so the two have to describe the same object. Pairing an own-looking key
+  // with someone else's URL used to satisfy every check above.
+  it("rejects an own key paired with another user's URL", () => {
+    expect(() =>
+      ok(
+        `https://files.honeymedia.uz/attachments/${OTHER}/private.pdf`,
+        `attachments/${USER}/private.pdf`,
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it('does not let a key match mid-segment', () => {
+    // The leading slash matters: `.../not-attachments/<user>/x` ends with the
+    // key's characters but is a different object, under someone else's prefix.
+    expect(() =>
+      ok(
+        `https://files.honeymedia.uz/${OTHER}/not-attachments/${USER}/x`,
+        `attachments/${USER}/x`,
+      ),
+    ).toThrow(BadRequestException);
+  });
 });

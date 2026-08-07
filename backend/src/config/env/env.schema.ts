@@ -233,13 +233,27 @@ export class EnvironmentVariables {
   @IsOptional()
   GOOGLE_VISION_API_KEY?: string;
 
+  /**
+   * Join-by-code guard (see moderation.config.ts).
+   *
+   * These defaults were 3 attempts per 24 hours, and they are what the app
+   * actually ran on — the validated env wins over moderation.config's own
+   * fallbacks, so the third meeting anyone opened from one IP locked that IP
+   * out for a day. That is a denial of service against ordinary use with a
+   * brute-force guard's name on it.
+   */
   @IsNumber()
   @IsOptional()
-  IP_RATE_MAX_ATTEMPTS?: number = 3;
+  IP_RATE_MAX_ATTEMPTS?: number = 40;
 
   @IsNumber()
   @IsOptional()
-  IP_RATE_WINDOW_HOURS?: number = 24;
+  IP_RATE_WINDOW_SECONDS?: number = 60;
+
+  /** Nothing this guard issues may exceed this, in seconds. */
+  @IsNumber()
+  @IsOptional()
+  IP_RATE_MAX_BLOCK_SECONDS?: number = 90;
 
   @IsNumber()
   @IsOptional()

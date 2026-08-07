@@ -229,6 +229,24 @@ export class ChatRoomInviteService {
 
   async joinByCode(code: string, userId: string) {
     const room = await this.dataSource.withTransaction(async (query) => {
+      // Checked inside the transaction, before the row is reopened below: an
+      // invite link is exactly what a banned person would be handed by a
+      // friend still in the room.
+      const bannedRows = await query<{ bannedUntil: Date | null }>(
+        `SELECT cm.banned_until AS "bannedUntil"
+           FROM chat_members cm
+           JOIN chat_room_invites i ON i.room_id = cm.room_id
+          WHERE i.code = $1 AND cm.user_id = $2
+            AND cm.is_banned = true
+            AND (cm.banned_until IS NULL OR cm.banned_until > now())`,
+        [code, userId],
+      );
+      if (bannedRows[0])
+        throw new ForbiddenException({
+          code: 'CHAT_MEMBER_BANNED',
+          message: 'You are banned from this room',
+        });
+
       const inviteRows: ChatRoomInviteRow[] = await query(
         `SELECT ${CHAT_ROOM_INVITE_COLUMNS_SQL} FROM chat_room_invites
          WHERE code = $1 AND revoked_at IS NULL FOR UPDATE`,

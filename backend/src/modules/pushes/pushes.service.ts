@@ -28,10 +28,7 @@ import {
   TASK_PUSH_COLUMNS_SQL,
   TASK_PUSH_COLUMNS_SQL_P,
 } from '../tasks/tasks.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 const PUSH_COMMENT_COLUMNS_SQL = `
   id, push_id AS "pushId", author_id AS "authorId", parent_id AS "parentId",
@@ -248,12 +245,10 @@ export class PushesService {
       const expires = new Date();
       expires.setDate(expires.getDate() + this.artifactTtlDays());
 
-      const updatedRows: TaskPush[] = normalizeReturning(
-        await this.dataSource.query(
-          `UPDATE task_pushes SET storage_key = $2, storage_url = $3, status = $4::task_pushes_status_enum, expires_at = $5
+      const updatedRows: TaskPush[] = await this.dataSource.query(
+        `UPDATE task_pushes SET storage_key = $2, storage_url = $3, status = $4::task_pushes_status_enum, expires_at = $5
            WHERE id = $1 RETURNING ${TASK_PUSH_COLUMNS_SQL}`,
-          [saved.id, key, url, PushStatus.UPLOADED, expires],
-        ),
+        [saved.id, key, url, PushStatus.UPLOADED, expires],
       );
       saved = updatedRows[0];
 
@@ -352,12 +347,10 @@ export class PushesService {
       ? await this.resolvePushType(task.workspaceId, submitter, repo)
       : PushType.UPZ_REVIEW;
 
-    const savedRows: TaskPush[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE task_pushes SET repository_id = $2, type = $3::task_pushes_type_enum
+    const savedRows: TaskPush[] = await this.dataSource.query(
+      `UPDATE task_pushes SET repository_id = $2, type = $3::task_pushes_type_enum
          WHERE id = $1 RETURNING ${TASK_PUSH_COLUMNS_SQL}`,
-        [push.id, repo.id, newType],
-      ),
+      [push.id, repo.id, newType],
     );
     const saved = savedRows[0];
 
@@ -413,12 +406,10 @@ export class PushesService {
       });
     }
 
-    const savedRows: TaskPush[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE task_pushes SET status = $2::task_pushes_status_enum, reviewed_by = $3, reviewed_at = now()
+    const savedRows: TaskPush[] = await this.dataSource.query(
+      `UPDATE task_pushes SET status = $2::task_pushes_status_enum, reviewed_by = $3, reviewed_at = now()
          WHERE id = $1 RETURNING ${TASK_PUSH_COLUMNS_SQL}`,
-        [pushId, PushStatus.APPROVED, userId],
-      ),
+      [pushId, PushStatus.APPROVED, userId],
     );
     const saved = savedRows[0];
 
@@ -466,13 +457,11 @@ export class PushesService {
       });
     }
 
-    const savedRows: TaskPush[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE task_pushes
+    const savedRows: TaskPush[] = await this.dataSource.query(
+      `UPDATE task_pushes
          SET status = $2::task_pushes_status_enum, reviewed_by = $3, reviewed_at = now(), rejected_reason = $4
          WHERE id = $1 RETURNING ${TASK_PUSH_COLUMNS_SQL}`,
-        [pushId, PushStatus.REJECTED, userId, dto.reason ?? null],
-      ),
+      [pushId, PushStatus.REJECTED, userId, dto.reason ?? null],
     );
     const saved = savedRows[0];
 
@@ -586,11 +575,9 @@ export class PushesService {
     const { setClause, values } = buildUpdateSet(patch, 2);
     if (!setClause) return c;
 
-    const updatedRows: PushReviewComment[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE push_review_comments SET ${setClause} WHERE id = $1 RETURNING ${PUSH_COMMENT_COLUMNS_SQL}`,
-        [commentId, ...values],
-      ),
+    const updatedRows: PushReviewComment[] = await this.dataSource.query(
+      `UPDATE push_review_comments SET ${setClause} WHERE id = $1 RETURNING ${PUSH_COMMENT_COLUMNS_SQL}`,
+      [commentId, ...values],
     );
     return updatedRows[0];
   }
@@ -629,13 +616,11 @@ export class PushesService {
     const member = await this.assertMember(task.workspaceId, userId);
     this.assertReviewer(member);
 
-    const rows: PushReviewComment[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE push_review_comments SET is_resolved = true, resolved_by = $2, resolved_at = now()
+    const rows: PushReviewComment[] = await this.dataSource.query(
+      `UPDATE push_review_comments SET is_resolved = true, resolved_by = $2, resolved_at = now()
          WHERE id = $1 AND push_id = $3
          RETURNING ${PUSH_COMMENT_COLUMNS_SQL}`,
-        [commentId, userId, pushId],
-      ),
+      [commentId, userId, pushId],
     );
     if (!rows[0])
       throw new NotFoundException({

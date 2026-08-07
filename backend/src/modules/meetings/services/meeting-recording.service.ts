@@ -9,7 +9,6 @@ import { Queue } from 'bullmq';
 import { DatabaseService } from '../../../database/database.service';
 import { StorageService } from '../../storage/storage.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 import { MeetingParticipantRole } from '../../../common/enums/meeting.enum';
 import { RECORDING_COLUMNS_SQL } from '../meetings.sql';
 import { MeetingsRepository } from '../repositories/meetings.repository';
@@ -127,23 +126,21 @@ export class MeetingRecordingService {
       Math.floor((Date.now() - new Date(recording.startedAt).getTime()) / 1000),
     );
 
-    const updatedRows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_recordings
+    const updatedRows = await this.dataSource.query(
+      `UPDATE meeting_recordings
          SET status = 'completed', stopped_at = now(), duration_seconds = $2,
              auto_stopped = $3, storage_key = COALESCE($4, storage_key),
              storage_url = COALESCE($5, storage_url), file_size = COALESCE($6, file_size)
          WHERE id = $1
          RETURNING ${RECORDING_COLUMNS_SQL}`,
-        [
-          recording.id,
-          durationSeconds,
-          opts.autoStopped ?? false,
-          opts.storageKey ?? null,
-          opts.storageUrl ?? null,
-          opts.fileSize ?? null,
-        ],
-      ),
+      [
+        recording.id,
+        durationSeconds,
+        opts.autoStopped ?? false,
+        opts.storageKey ?? null,
+        opts.storageUrl ?? null,
+        opts.fileSize ?? null,
+      ],
     );
 
     // If this was a manual stop, cancel the pending auto-stop job so it

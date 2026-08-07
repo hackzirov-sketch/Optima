@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -51,7 +52,7 @@ export class PushesController {
       "draft → github_direct'ga avtomatik aylanmaydi. Faqat lead/admin/owner ushbu action orqali qo'lda repo bog'laydi va push_type qayta hisoblanadi.",
   })
   linkAndPromote(
-    @Param('pushId') pushId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: LinkAndPromotePushDto,
   ) {
@@ -61,26 +62,35 @@ export class PushesController {
   @Get(':pushId')
   @ApiOperation({ summary: 'Get push by id' })
   @ApiParam({ name: 'pushId' })
-  getOne(@Param('pushId') pushId: string, @CurrentUser('id') userId: string) {
+  getOne(
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.pushesService.getById(pushId, userId);
   }
 
   @Get(':pushId/download')
   @ApiOperation({ summary: 'Presigned URL to download diff artifact from R2' })
-  download(@Param('pushId') pushId: string, @CurrentUser('id') userId: string) {
+  download(
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.pushesService.presignedDownload(pushId, userId);
   }
 
   @Patch(':pushId/approve')
   @ApiOperation({ summary: 'Approve push (owner / admin / lead)' })
-  approve(@Param('pushId') pushId: string, @CurrentUser('id') userId: string) {
+  approve(
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.pushesService.approve(pushId, userId);
   }
 
   @Patch(':pushId/reject')
   @ApiOperation({ summary: 'Reject push (owner / admin / lead)' })
   reject(
-    @Param('pushId') pushId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: ReviewPushDto,
   ) {
@@ -90,7 +100,7 @@ export class PushesController {
   @Get(':pushId/comments')
   @ApiOperation({ summary: 'List inline review comments' })
   listComments(
-    @Param('pushId') pushId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.pushesService.listComments(pushId, userId);
@@ -99,7 +109,7 @@ export class PushesController {
   @Post(':pushId/comments')
   @ApiOperation({ summary: 'Add review comment' })
   addComment(
-    @Param('pushId') pushId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: AddReviewCommentDto,
   ) {
@@ -109,8 +119,8 @@ export class PushesController {
   @Patch(':pushId/comments/:commentId')
   @ApiOperation({ summary: 'Update own comment (or resolve flags if allowed)' })
   patchComment(
-    @Param('pushId') pushId: string,
-    @Param('commentId') commentId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdatePushCommentDto,
   ) {
@@ -121,8 +131,8 @@ export class PushesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete own comment' })
   async deleteComment(
-    @Param('pushId') pushId: string,
-    @Param('commentId') commentId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.pushesService.deleteComment(pushId, commentId, userId);
@@ -131,8 +141,8 @@ export class PushesController {
   @Patch(':pushId/comments/:commentId/resolve')
   @ApiOperation({ summary: 'Mark comment resolved (reviewer roles)' })
   resolveComment(
-    @Param('pushId') pushId: string,
-    @Param('commentId') commentId: string,
+    @Param('pushId', ParseUUIDPipe) pushId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.pushesService.resolveComment(pushId, commentId, userId);

@@ -22,10 +22,7 @@ import { RoomScope } from '../../common/enums';
 import { MembersService } from '../workspaces/services/members.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 import {
   MEETING_COLUMNS_SQL,
   PARTICIPANT_COLUMNS_SQL,
@@ -231,11 +228,18 @@ export class MeetingsService {
 
     let saved: any;
     try {
+      // The ::int casts on the max_participants COALESCE are load-bearing.
+      // Postgres resolves a COALESCE from its own arguments before the target
+      // column is considered, so two bare placeholders have nothing to resolve
+      // against and the whole expression comes back as text — "column
+      // max_participants is of type integer but expression is of type text",
+      // on every meeting creation rather than in some edge case. The boolean
+      // COALESCE beside it needs no cast: the `false` literal supplies a type.
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
            (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
             max_participants, is_recurring, agenda, scope, join_policy)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, $13), COALESCE($9, false), $10, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::int, $13::int), COALESCE($9, false), $10, $11, $12)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
           workspaceId,
@@ -364,11 +368,9 @@ export class MeetingsService {
     });
     let saved = meeting;
     if (setClause) {
-      const rows = normalizeReturning(
-        await this.dataSource.query(
-          `UPDATE meetings SET ${setClause} WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
-          [meetingId, ...values],
-        ),
+      const rows = await this.dataSource.query(
+        `UPDATE meetings SET ${setClause} WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
+        [meetingId, ...values],
       );
       saved = rows[0];
     }
@@ -399,22 +401,18 @@ export class MeetingsService {
   /** Host-only: block any further NEW joins ("🔒 Lock Meeting"). Existing participants can still reconnect. */
   async lockMeeting(meetingId: string, userId: string) {
     await this.assertHost(meetingId, userId);
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meetings SET locked = true WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
-        [meetingId],
-      ),
+    const rows = await this.dataSource.query(
+      `UPDATE meetings SET locked = true WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
+      [meetingId],
     );
     return rows[0];
   }
 
   async unlockMeeting(meetingId: string, userId: string) {
     await this.assertHost(meetingId, userId);
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meetings SET locked = false WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
-        [meetingId],
-      ),
+    const rows = await this.dataSource.query(
+      `UPDATE meetings SET locked = false WHERE id = $1 RETURNING ${MEETING_COLUMNS_SQL}`,
+      [meetingId],
     );
     return rows[0];
   }
@@ -700,13 +698,11 @@ export class MeetingsService {
       });
     }
 
-    const rows = normalizeReturning<{ id: string; role: string }>(
-      await this.dataSource.query(
-        `UPDATE meeting_participants SET role = $3::meeting_participant_role_enum
+    const rows = await this.dataSource.query<{ id: string; role: string }>(
+      `UPDATE meeting_participants SET role = $3::meeting_participant_role_enum
           WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL
           RETURNING ${PARTICIPANT_COLUMNS_SQL}`,
-        [meetingId, targetUserId, role],
-      ),
+      [meetingId, targetUserId, role],
     );
     if (!rows[0]) {
       throw new NotFoundException({
@@ -850,13 +846,11 @@ export class MeetingsService {
    * recording, and cancels any pending auto-end job so it doesn't fire twice.
    */
   private async finishMeeting(meetingId: string) {
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
+    const rows = await this.dataSource.query(
+      `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
          WHERE id = $1 AND status = $3::meeting_status_enum
          RETURNING ${MEETING_COLUMNS_SQL}`,
-        [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
-      ),
+      [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
     );
     const meeting = rows[0];
     if (!meeting) return null; // already ended/cancelled — no-op
@@ -898,6 +892,11 @@ export class MeetingsService {
   //  Delegated to focused sub-services — kept here so the controller,
   //  gateway, and processors have a single stable entry point.
   // ─────────────────────────────────────────────
+
+  /** Identities for a set of user ids — used by the gateway's roster payloads. */
+  getParticipantProfiles(userIds: string[]) {
+    return this.meetingsRepository.findUserProfiles([...new Set(userIds)]);
+  }
 
   getWaitingCount(meetingId: string) {
     return this.joinRequestService.getWaitingCount(meetingId);

@@ -17,10 +17,7 @@ import { ChatMemberService } from './member.service';
 import { MembersService } from '../../workspaces/services/members.service';
 import { CreateChatRoomDto } from '../dto/create-chat-room.dto';
 import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_COLUMNS_SQL_R } from '../chat.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../../common/utils/sql.util';
+import { buildUpdateSet } from '../../../common/utils/sql.util';
 
 /**
  * Canonical key for a pair of users, matching chat_rooms.dm_key exactly (see
@@ -494,6 +491,32 @@ export class ChatRoomService {
     }));
   }
 
+  /**
+   * A ban has to be checked by everything that lets someone *in*, not only by
+   * the send path — otherwise being banned from a public room means waiting
+   * for the join button, and being banned from a private one means waiting
+   * for anybody to paste an invite link.
+   *
+   * The row survives the removal (banMember only closes `left_at`), so this
+   * reads it whether or not they are currently a member.
+   */
+  async assertNotBanned(roomId: string, userId: string): Promise<void> {
+    const rows = await this.dataSource.query<{ bannedUntil: Date | null }>(
+      `SELECT banned_until AS "bannedUntil" FROM chat_members
+        WHERE room_id = $1 AND user_id = $2
+          AND is_banned = true
+          AND (banned_until IS NULL OR banned_until > now())`,
+      [roomId, userId],
+    );
+    if (!rows[0]) return;
+    throw new ForbiddenException({
+      code: 'CHAT_MEMBER_BANNED',
+      message: rows[0].bannedUntil
+        ? `You are banned from this room until ${new Date(rows[0].bannedUntil).toISOString()}`
+        : 'You are banned from this room',
+    });
+  }
+
   async joinPublicRoom(roomId: string, userId: string) {
     const room = await this.findRoomById(roomId);
     if (!room)
@@ -515,6 +538,8 @@ export class ChatRoomService {
     if (room.workspaceId) {
       await this.wsMembersService.assertMember(room.workspaceId, userId);
     }
+
+    await this.assertNotBanned(roomId, userId);
 
     const existingRows = await this.dataSource.query(
       `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -671,11 +696,9 @@ export class ChatRoomService {
     const { setClause, values } = buildUpdateSet(allowedUpdates, 2);
     let updated = room;
     if (setClause) {
-      const rows: ChatRoom[] = normalizeReturning(
-        await this.dataSource.query(
-          `UPDATE chat_rooms SET ${setClause} WHERE id = $1 RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
-          [roomId, ...values],
-        ),
+      const rows: ChatRoom[] = await this.dataSource.query(
+        `UPDATE chat_rooms SET ${setClause} WHERE id = $1 RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
+        [roomId, ...values],
       );
       updated = rows[0];
     }

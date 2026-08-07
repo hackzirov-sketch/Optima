@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -67,14 +68,17 @@ export class NotesController {
 
   @Get(':noteId')
   @ApiOperation({ summary: 'Get a note' })
-  getOne(@Param('noteId') noteId: string, @CurrentUser('id') userId: string) {
+  getOne(
+    @Param('noteId', ParseUUIDPipe) noteId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.notesService.getOne(noteId, userId);
   }
 
   @Patch(':noteId')
   @ApiOperation({ summary: 'Update a note (creator only)' })
   update(
-    @Param('noteId') noteId: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateNoteDto,
   ) {
@@ -85,7 +89,7 @@ export class NotesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a note (creator only)' })
   async remove(
-    @Param('noteId') noteId: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.notesService.remove(noteId, userId);

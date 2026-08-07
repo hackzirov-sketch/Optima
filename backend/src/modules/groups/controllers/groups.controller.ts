@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -29,7 +30,7 @@ export class GroupsController {
   @Get('workspace/:workspaceId')
   @ApiOperation({ summary: 'Get all groups in a workspace' })
   getWorkspaceGroups(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.groupsService.findAllInWorkspace(workspaceId, userId);
@@ -71,7 +72,7 @@ export class GroupsController {
   @ApiOperation({ summary: 'Remove a member from the group' })
   removeMember(
     @Param('id') id: string,
-    @Param('userId') targetUserId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
     @CurrentUser('id') requesterId: string,
   ) {
     return this.groupsService.removeMember(id, targetUserId, requesterId);

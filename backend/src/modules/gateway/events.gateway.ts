@@ -1012,15 +1012,35 @@ export class EventsGateway
       }
     }
 
+    // Both payloads carry identities, not just ids.
+    //
+    // A tile used to appear only once a media stream arrived, and the name on
+    // it was looked up in the viewer's workspace member list. So someone who
+    // joined with their camera and microphone off was invisible to everyone
+    // else — the room said "waiting for others" while they sat in it — and
+    // anyone outside the viewer's workspace rendered as "Qatnashchi". The
+    // roster is what the client draws from now, so it has to be complete.
+    const profiles = await this.meetingsService.getParticipantProfiles([
+      ...participants,
+      userId,
+    ]);
+    const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+
     client.emit('meeting:participants', {
       meetingId,
       userIds: Array.from(participants),
+      participants: Array.from(participants).map((id) => ({
+        userId: id,
+        user: byId.get(id) ?? null,
+      })),
     });
 
     // Notify everyone else that this user joined
-    client
-      .to(`meeting:${meetingId}`)
-      .emit('meeting:user-joined', { meetingId, userId });
+    client.to(`meeting:${meetingId}`).emit('meeting:user-joined', {
+      meetingId,
+      userId,
+      user: byId.get(userId) ?? null,
+    });
 
     // Auto-presence: joining a call is a strong, unambiguous "in a meeting"
     // signal - no reason to make the user set this by hand.

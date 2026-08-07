@@ -20,10 +20,7 @@ import {
   NOTIFICATION_PREFS_COLUMNS_SQL,
 } from './notifications.sql';
 import { RedisService } from '../../redis/redis.service';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../common/utils/sql.util';
+import { buildUpdateSet } from '../../common/utils/sql.util';
 
 // NotificationDispatcherService.dispatch() routes channels off `category` +
 // `priority`, but nothing populated them from the notification `type` being
@@ -230,14 +227,12 @@ export class NotificationsService {
     // what flipped the flag. Marking an already-read notification as read stays
     // a success (the client clicks without checking), but must not decrement
     // the counter a second time for the same notification.
-    const rows = normalizeReturning<any>(
-      await this.dataSource.query(
-        `UPDATE notifications n SET is_read = true, read_at = now()
+    const rows = await this.dataSource.query<any>(
+      `UPDATE notifications n SET is_read = true, read_at = now()
          FROM notifications old
          WHERE n.id = old.id AND n.id = $1 AND n.user_id = $2
          RETURNING ${NOTIFICATION_COLUMNS_SQL_N}, old.is_read AS "wasRead"`,
-        [id, userId],
-      ),
+      [id, userId],
     );
     if (!rows[0]) {
       throw new NotFoundException({
@@ -262,12 +257,10 @@ export class NotificationsService {
   async remove(id: string, userId: string) {
     // `is_read` comes back so an unread notification that is deleted outright
     // (rather than read) still leaves the counter correct.
-    const rows = normalizeReturning<{ id: string; isRead: boolean }>(
-      await this.dataSource.query(
-        `DELETE FROM notifications WHERE id = $1 AND user_id = $2
+    const rows = await this.dataSource.query<{ id: string; isRead: boolean }>(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2
          RETURNING id, is_read AS "isRead"`,
-        [id, userId],
-      ),
+      [id, userId],
     );
     if (!rows[0]) {
       throw new NotFoundException({
@@ -280,26 +273,22 @@ export class NotificationsService {
 
   async linkTelegram(userId: string, chatId: string) {
     await this.getPrefs(userId); // ensures a row exists
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE user_notification_prefs SET telegram_chat_id = $2, updated_at = now()
+    const rows = await this.dataSource.query(
+      `UPDATE user_notification_prefs SET telegram_chat_id = $2, updated_at = now()
          WHERE user_id = $1
          RETURNING ${NOTIFICATION_PREFS_COLUMNS_SQL}`,
-        [userId, chatId],
-      ),
+      [userId, chatId],
     );
     return rows[0];
   }
 
   async unlinkTelegram(userId: string) {
     await this.getPrefs(userId);
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE user_notification_prefs SET telegram_chat_id = NULL, updated_at = now()
+    const rows = await this.dataSource.query(
+      `UPDATE user_notification_prefs SET telegram_chat_id = NULL, updated_at = now()
          WHERE user_id = $1
          RETURNING ${NOTIFICATION_PREFS_COLUMNS_SQL}`,
-        [userId],
-      ),
+      [userId],
     );
     return rows[0];
   }
@@ -337,13 +326,11 @@ export class NotificationsService {
     );
     if (!setClause) return this.getPrefs(userId);
 
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE user_notification_prefs SET ${setClause}, updated_at = now()
+    const rows = await this.dataSource.query(
+      `UPDATE user_notification_prefs SET ${setClause}, updated_at = now()
          WHERE user_id = $1
          RETURNING ${NOTIFICATION_PREFS_COLUMNS_SQL}`,
-        [userId, ...values],
-      ),
+      [userId, ...values],
     );
     return rows[0];
   }

@@ -25,10 +25,7 @@ import {
   WORKSPACE_COLUMNS_SQL_W,
   WORKSPACE_MEMBER_COLUMNS_SQL,
 } from '../repositories/workspaces.sql';
-import {
-  buildUpdateSet,
-  normalizeReturning,
-} from '../../../common/utils/sql.util';
+import { buildUpdateSet } from '../../../common/utils/sql.util';
 
 @Injectable()
 export class WorkspacesService {
@@ -211,11 +208,9 @@ export class WorkspacesService {
       },
     );
     if (!setClause) return workspace;
-    const rows: Workspace[] = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE workspaces SET ${setClause} WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
-        [id, ...values],
-      ),
+    const rows: Workspace[] = await this.dataSource.query(
+      `UPDATE workspaces SET ${setClause} WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+      [id, ...values],
     );
     return rows[0];
   }
@@ -293,11 +288,9 @@ export class WorkspacesService {
             `UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
             [workspaceId, newOwnerUserId, WorkspaceRole.OWNER],
           );
-          return normalizeReturning(
-            await query(
-              `UPDATE workspaces SET owner_id = $2 WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
-              [workspaceId, newOwnerUserId],
-            ),
+          return await query(
+            `UPDATE workspaces SET owner_id = $2 WHERE id = $1 RETURNING ${WORKSPACE_COLUMNS_SQL}`,
+            [workspaceId, newOwnerUserId],
           );
         },
       );

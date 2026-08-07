@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
 } from '@nestjs/common';
@@ -36,7 +37,7 @@ export class EducationController {
   @Get('channels') channels(@Query('subject') subject?: string) {
     return this.education.channels(subject);
   }
-  @Get('channels/:id') channel(@Param('id') id: string) {
+  @Get('channels/:id') channel(@Param('id', ParseUUIDPipe) id: string) {
     return this.education.channel(id);
   }
   @Get('playlists') playlists(
@@ -52,7 +53,7 @@ export class EducationController {
     return this.education.videos(userId, query);
   }
   @Get('videos/:id') video(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.education.video(id, userId);
@@ -72,45 +73,45 @@ export class EducationController {
     return this.education.saved(userId);
   }
   @Get('videos/:id/notes') notes(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.education.notes(id, userId);
   }
   @Post('videos/:id/save') save(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.education.save(id, userId);
   }
   @Delete('videos/:id/save') unsave(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.education.unsave(id, userId);
   }
   @Post('videos/:id/progress') progress(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: VideoProgressDto,
   ) {
     return this.education.progress(id, userId, dto);
   }
   @Post('videos/:id/complete') complete(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.education.complete(id, userId);
   }
   @Post('videos/:id/notes') addNote(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: AddNoteDto,
   ) {
     return this.education.addNote(id, userId, dto);
   }
   @Post('videos/:id/report') report(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: ReportVideoDto,
   ) {

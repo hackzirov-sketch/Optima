@@ -365,6 +365,22 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .button-danger { background: var(--danger); color: #fff; }
 .button-row { display: flex; gap: 8px; }
 .text-button { border: 0; background: transparent; padding: 0; color: var(--accent); font-weight: 700; }
+/* Off-screen but still focusable and still clickable via ref — the pattern the
+   hidden file inputs rely on. The class was in use without ever being defined,
+   so the browser's default "Browse… No file selected" control was rendering
+   across the meeting room in plain sight. `display: none` would not do: an
+   input that isn't rendered can't be opened with .click() in every browser. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .icon-button {
   width: 38px;
   height: 38px;

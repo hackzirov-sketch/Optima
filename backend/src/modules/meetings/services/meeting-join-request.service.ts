@@ -17,7 +17,6 @@ import {
   MeetingParticipantRole,
   MeetingStatus,
 } from '../../../common/enums/meeting.enum';
-import { normalizeReturning } from '../../../common/utils/sql.util';
 import { JOIN_REQUEST_COLUMNS_SQL } from '../meetings.sql';
 import { MeetingsRepository } from '../repositories/meetings.repository';
 import { MeetingAccessService } from './meeting-access.service';
@@ -187,15 +186,13 @@ export class MeetingJoinRequestService {
       }
     }
 
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at)
+    const rows = await this.dataSource.query(
+      `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at)
          VALUES ($1, $2, 'pending', now())
          ON CONFLICT (meeting_id, user_id)
          DO UPDATE SET status = 'pending', requested_at = now(), reviewed_by = NULL, reviewed_at = NULL
          RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, userId],
-      ),
+      [meetingId, userId],
     );
     await this.markWaiting(meetingId, userId);
     return { status: 'pending' as const, requestId: rows[0].id };
@@ -203,14 +200,12 @@ export class MeetingJoinRequestService {
 
   /** Requester cancels their own pending request (e.g. gave up waiting). */
   async cancelMyJoinRequest(meetingId: string, userId: string) {
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
+    const rows = await this.dataSource.query(
+      `UPDATE meeting_join_requests
          SET status = 'cancelled', reviewed_at = now()
          WHERE meeting_id = $1 AND user_id = $2 AND status = 'pending'
          RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, userId],
-      ),
+      [meetingId, userId],
     );
     if (!rows[0]) {
       throw new NotFoundException({
@@ -246,14 +241,12 @@ export class MeetingJoinRequestService {
   ) {
     await this.assertCanManageJoinRequests(meetingId, reviewerId);
 
-    const rows = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
+    const rows = await this.dataSource.query(
+      `UPDATE meeting_join_requests
          SET status = $3::meeting_join_request_status_enum, reviewed_by = $4, reviewed_at = now()
          WHERE id = $1 AND meeting_id = $2 AND status = 'pending'
          RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [requestId, meetingId, decision, reviewerId],
-      ),
+      [requestId, meetingId, decision, reviewerId],
     );
     const updated = rows[0];
     if (!updated) {
@@ -273,14 +266,12 @@ export class MeetingJoinRequestService {
     decision: 'approved' | 'rejected',
   ) {
     await this.assertCanManageJoinRequests(meetingId, reviewerId);
-    const updated = normalizeReturning(
-      await this.dataSource.query(
-        `UPDATE meeting_join_requests
+    const updated = await this.dataSource.query(
+      `UPDATE meeting_join_requests
          SET status = $2::meeting_join_request_status_enum, reviewed_by = $3, reviewed_at = now()
          WHERE meeting_id = $1 AND status = 'pending'
          RETURNING ${JOIN_REQUEST_COLUMNS_SQL}`,
-        [meetingId, decision, reviewerId],
-      ),
+      [meetingId, decision, reviewerId],
     );
     await this.unmarkWaiting(
       meetingId,

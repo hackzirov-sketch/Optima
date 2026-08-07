@@ -1,4 +1,11 @@
-import { Body, Controller, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { EducationSyncService } from './education-sync.service';
@@ -27,13 +34,13 @@ export class EducationAdminController {
   }
   @Post('playlists/:id/sync') syncPlaylist(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sync.syncPlaylist(id, userId);
   }
   @Patch('videos/:id/moderation') moderate(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ModerateVideoDto,
   ) {
     return this.sync.moderate(id, dto.status, userId);

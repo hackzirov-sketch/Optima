@@ -37,10 +37,17 @@ export class IpRateLimitGuard implements CanActivate {
       (request.route as { path?: string } | undefined)?.path ?? request.path;
 
     const maxAttempts =
-      this.config.get<number>('moderation.ipMaxAttempts') ?? 100;
-    const windowHours =
-      this.config.get<number>('moderation.ipWindowHours') ?? 1;
-    const windowMs = windowHours * 60 * 60 * 1000;
+      this.config.get<number>('moderation.ipMaxAttempts') ?? 40;
+    const windowSeconds =
+      this.config.get<number>('moderation.ipWindowSeconds') ?? 60;
+    const windowMs = windowSeconds * 1000;
+    // Every block this guard hands out is clamped to this, on the way in as
+    // well as on the way out: rows written by an earlier, hour-long policy are
+    // still sitting in ip_rate_limits, and without the clamp on read those
+    // people stay locked out for the rest of the old block.
+    const maxBlockSeconds =
+      this.config.get<number>('moderation.ipMaxBlockSeconds') ?? 90;
+    const maxBlockMs = maxBlockSeconds * 1000;
 
     const now = new Date();
 
@@ -61,9 +68,17 @@ export class IpRateLimitGuard implements CanActivate {
         if (record) {
           // Currently blocked
           if (record.blockedUntil && record.blockedUntil > now) {
-            return Math.ceil(
-              (record.blockedUntil.getTime() - now.getTime()) / 1000,
+            const remainingMs = record.blockedUntil.getTime() - now.getTime();
+            if (remainingMs <= maxBlockMs)
+              return Math.ceil(remainingMs / 1000);
+            // An over-long block from a previous policy: shorten it in place
+            // rather than honouring it.
+            const clamped = new Date(now.getTime() + maxBlockMs);
+            await query(
+              `UPDATE ip_rate_limits SET blocked_until = $2, updated_at = now() WHERE id = $1`,
+              [record.id, clamped],
             );
+            return maxBlockSeconds;
           }
 
           let newCount: number;
@@ -81,7 +96,7 @@ export class IpRateLimitGuard implements CanActivate {
             newBlockedUntil = null;
 
             if (newCount >= maxAttempts) {
-              newBlockedUntil = new Date(now.getTime() + windowMs);
+              newBlockedUntil = new Date(now.getTime() + maxBlockMs);
             }
           }
 
@@ -91,7 +106,7 @@ export class IpRateLimitGuard implements CanActivate {
             [record.id, newCount, newWindowStart, newBlockedUntil],
           );
 
-          return newBlockedUntil ? windowHours * 3600 : null;
+          return newBlockedUntil ? maxBlockSeconds : null;
         }
 
         await query(
@@ -107,7 +122,7 @@ export class IpRateLimitGuard implements CanActivate {
       throw new HttpException(
         {
           code: ErrorCode.RATE_LIMIT_EXCEEDED,
-          message: `Too many attempts. Try again in ${Math.ceil(blockedRetryAfter / 3600)} hour(s).`,
+          message: `Too many attempts. Try again in ${blockedRetryAfter}s.`,
           retryAfter: blockedRetryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,

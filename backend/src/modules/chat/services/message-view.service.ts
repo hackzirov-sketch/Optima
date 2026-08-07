@@ -117,9 +117,18 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
     if (!client) return 0;
 
     this.flushing = true;
+    // What has been taken out of Redis but not yet committed to Postgres.
+    // SPOP and RENAME both remove data the moment they run, so between them
+    // and a successful INSERT the only copy of these views lives in this
+    // process — a crash, an OOM kill or a failed transaction in that window
+    // used to drop the batch silently. Restored in the catch below so the
+    // next tick picks them up again.
+    let claimedIds: string[] = [];
+    const staged: string[] = [];
     try {
       const messageIds = await client.spop(PENDING_KEY, MAX_MESSAGES_PER_FLUSH);
       if (!messageIds || messageIds.length === 0) return 0;
+      claimedIds = messageIds;
 
       const pairs: Array<{ messageId: string; userId: string }> = [];
       const perMessage = new Map<string, number>();
@@ -134,15 +143,29 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
         } catch {
           continue; // key vanished — already drained
         }
+        staged.push(messageId);
         const viewers = await client.smembers(staging);
-        await client.del(staging);
-        if (viewers.length === 0) continue;
+        if (viewers.length === 0) {
+          await client.del(staging);
+          continue;
+        }
         perMessage.set(messageId, viewers.length);
         for (const userId of viewers) pairs.push({ messageId, userId });
       }
 
-      if (pairs.length === 0) return 0;
+      if (pairs.length === 0) {
+        claimedIds = [];
+        return 0;
+      }
       const inserted = await this.persist(pairs);
+      // Only once Postgres has the rows. Deleting the staging keys before the
+      // insert committed is what made a failed transaction a silent loss.
+      const cleanup = client.pipeline();
+      for (const messageId of staged)
+        cleanup.del(`${viewersKey(messageId)}:flushing`);
+      await cleanup.exec();
+      claimedIds = [];
+
       this.emitCounts(perMessage);
       return inserted;
     } catch (err) {
@@ -150,9 +173,40 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
         `View flush failed: ${(err as Error).message}`,
         (err as Error).stack,
       );
+      await this.restoreClaimed(claimedIds, staged);
       return 0;
     } finally {
       this.flushing = false;
+    }
+  }
+
+  /**
+   * Puts a failed batch back where the next tick will find it: staged viewer
+   * sets are merged back into their live key, and the message ids return to
+   * the pending index. Best-effort — if Redis itself is what failed there is
+   * nothing to restore into, and the views are lost either way; this covers
+   * the far more common case of a Postgres error or a restart.
+   */
+  private async restoreClaimed(claimedIds: string[], staged: string[]) {
+    if (claimedIds.length === 0) return;
+    const client = this.redisService.getClient();
+    if (!client) return;
+    try {
+      for (const messageId of staged) {
+        const staging = `${viewersKey(messageId)}:flushing`;
+        const viewers = await client.smembers(staging);
+        if (viewers.length)
+          await client.sadd(viewersKey(messageId), ...viewers);
+        await client.del(staging);
+      }
+      await client.sadd(PENDING_KEY, ...claimedIds);
+      this.logger.warn(
+        `Returned ${claimedIds.length} message(s) to the view buffer after a failed flush`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Could not restore the view buffer: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -235,6 +289,21 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException({
         code: ErrorCode.MESSAGE_NOT_FOUND,
         message: 'Message not found',
+      });
+
+    // Before anything is reported, including the bare count. The channel
+    // branch below used to return ahead of every check, so knowing a message
+    // id was enough to read the reach of a post in a channel the caller had
+    // no access to.
+    const member = await this.dataSource.query(
+      `SELECT 1 FROM chat_members
+        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
+      [message.roomId, userId],
+    );
+    if (!member[0])
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
       });
 
     if (message.type === 'channel')

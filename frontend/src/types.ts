@@ -255,6 +255,15 @@ export interface ChatMessage {
   systemMetadata?: { kind: "missed_call" | "declined_call" | "call_ended"; callType: "audio" | "video"; durationSeconds?: number } | null;
 }
 
+/** Who a participant is — enough to label a tile without a second lookup. */
+export interface MeetingUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  username?: string | null;
+  avatarUrl: string | null;
+}
+
 export interface MeetingParticipant {
   id: string;
   userId: string;
@@ -264,6 +273,8 @@ export interface MeetingParticipant {
   isMuted: boolean;
   cameraEnabled: boolean;
   screenSharing: boolean;
+  /** Joined server-side; the workspace member list can't supply guests. */
+  user?: MeetingUser | null;
 }
 
 export type MeetingVisibility = "workspace_only" | "private" | "public" | "invite_only";
