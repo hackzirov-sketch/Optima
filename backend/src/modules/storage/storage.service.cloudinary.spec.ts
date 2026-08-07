@@ -27,11 +27,11 @@ describe('StorageService — Cloudinary transport failures', () => {
     const config = {
       get: (key: string) =>
         ({
-          'r2.bucketName': 'bucket',
-          'r2.publicUrl': 'https://cdn.example',
-          'r2.accountId': 'acct',
-          'r2.accessKeyId': 'key',
-          'r2.secretAccessKey': 'secret',
+          'storage.bucketName': 'bucket',
+          'storage.publicUrl': 'https://cdn.example',
+          'storage.region': 'eu-central-1',
+          'storage.accessKeyId': 'key',
+          'storage.secretAccessKey': 'secret',
           'cloudinary.cloudName': 'cloud',
           'cloudinary.apiKey': 'api-key',
           'cloudinary.apiSecret': 'api-secret',

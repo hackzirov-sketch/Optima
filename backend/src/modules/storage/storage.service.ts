@@ -131,38 +131,43 @@ export class StorageService {
   private readonly baseFolder: string;
 
   /**
-   * Whether R2 is actually usable. An unset account id or key pair still
-   * builds a perfectly valid-looking S3Client — pointed at
-   * `https://.r2.cloudflarestorage.com`, which resolves to nothing — so every
-   * presigned URL handed to a browser was a URL to nowhere and every upload
-   * died at the PUT with a generic "couldn't upload" toast. Configuration
-   * missing is a different problem from an upload failing, and the API should
-   * say which one it is.
+   * Whether object storage is actually usable. Missing credentials still build
+   * a perfectly valid-looking S3Client — pointed at a host that resolves to
+   * nothing — so every presigned URL handed to a browser was a URL to nowhere
+   * and every upload died at the PUT with a generic "couldn't upload" toast.
+   * Configuration missing is a different problem from an upload failing, and
+   * the API should say which one it is.
    */
-  private readonly r2Configured: boolean;
+  private readonly storageConfigured: boolean;
 
   constructor(private readonly config: ConfigService) {
-    // R2
-    this.bucketName = this.config.get<string>('r2.bucketName')!;
-    this.r2PublicUrl = this.config.get<string>('r2.publicUrl')!;
-    this.r2Configured = Boolean(
-      this.config.get<string>('r2.accountId') &&
-      this.config.get<string>('r2.accessKeyId') &&
-      this.config.get<string>('r2.secretAccessKey') &&
-      this.bucketName,
+    this.bucketName = this.config.get<string>('storage.bucketName')!;
+    this.r2PublicUrl = this.config.get<string>('storage.publicUrl')!;
+    const accessKeyId = this.config.get<string>('storage.accessKeyId');
+    const secretAccessKey = this.config.get<string>('storage.secretAccessKey');
+    const endpoint = this.config.get<string>('storage.endpoint');
+    const region = this.config.get<string>('storage.region');
+
+    // A region alone is enough for AWS (the SDK derives the host from it); an
+    // endpoint alone is enough for R2 and MinIO. Neither present means nothing
+    // has been configured at all.
+    this.storageConfigured = Boolean(
+      accessKeyId && secretAccessKey && this.bucketName && (endpoint || region),
     );
-    if (!this.r2Configured) {
+    if (!this.storageConfigured) {
       this.logger.warn(
-        'R2 is not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) — direct uploads will be refused',
+        'Object storage is not configured (S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_BUCKET / S3_REGION, or the R2_* equivalents) — direct uploads will be refused',
       );
     }
 
     this.s3Client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${this.config.get<string>('r2.accountId')}.r2.cloudflarestorage.com`,
+      region: region ?? 'us-east-1',
+      // Only when there is one to give: handing AWS an endpoint overrides the
+      // region-derived host, which is exactly what must not happen there.
+      ...(endpoint ? { endpoint } : {}),
       credentials: {
-        accessKeyId: this.config.get<string>('r2.accessKeyId')!,
-        secretAccessKey: this.config.get<string>('r2.secretAccessKey')!,
+        accessKeyId: accessKeyId!,
+        secretAccessKey: secretAccessKey!,
       },
     });
 
@@ -707,7 +712,7 @@ export class StorageService {
     storageUrl: string;
     expiresIn: number;
   }> {
-    if (!this.r2Configured) {
+    if (!this.storageConfigured) {
       throw new ServiceUnavailableException({
         code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
         message:

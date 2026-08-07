@@ -14,11 +14,11 @@ describe('StorageService.assertOwnedAttachment', () => {
   const config = {
     get: (key: string) =>
       ({
-        'r2.bucketName': 'upz',
-        'r2.publicUrl': 'https://files.honeymedia.uz',
-        'r2.accountId': 'acct',
-        'r2.accessKeyId': 'key',
-        'r2.secretAccessKey': 'secret',
+        'storage.bucketName': 'upz',
+        'storage.publicUrl': 'https://files.honeymedia.uz',
+        'storage.region': 'eu-central-1',
+        'storage.accessKeyId': 'key',
+        'storage.secretAccessKey': 'secret',
         'cloudinary.cloudName': 'upzcloud',
         'cloudinary.apiKey': 'k',
         'cloudinary.apiSecret': 's',
