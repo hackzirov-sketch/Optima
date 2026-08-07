@@ -289,8 +289,14 @@ export class ChatRoomInviteService {
       // to one room is not consent to any of that. Workspace membership now only
       // comes from the workspace invitation flow (InvitationsService), which is
       // gated on an admin actually inviting the person.
+      // ON CONFLICT because the check above only looks at *open* memberships:
+      // someone who left the room still has their row, so a plain INSERT hit
+      // the (room_id, user_id) unique index and returned a 500 to anyone
+      // rejoining by link. Same reopen semantics as joinPublicRoom.
       await query(
-        `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')`,
+        `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')
+         ON CONFLICT (room_id, user_id)
+         DO UPDATE SET left_at = NULL, status = 'active', joined_at = now()`,
         [lockedRoom.id, userId],
       );
       await query(

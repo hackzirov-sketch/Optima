@@ -536,7 +536,7 @@
     "groupLeft": "Guruhdan chiqdingiz",
     "groupLeaveFailed": "Guruhdan chiqib bo‘lmadi",
     "deleteChat": "Suhbatni o‘chirish",
-    "deleteChatConfirm": "“{{title}}” bilan suhbatni barcha xabarlari bilan o‘chirasizmi?",
+    "deleteChatConfirm": "“{{title}}” bilan suhbat faqat sizda o‘chirilsinmi? Suhbatdoshda qoladi, qayta ochsangiz sizga ham qaytadi.",
     "chatDeleted": "Suhbat o‘chirildi",
     "chatDeleteFailed": "Suhbat o‘chirilmadi",
     "backToHomeAria": "Bosh sahifaga qaytish",

@@ -1,15 +1,12 @@
 import {
   ConflictException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DatabaseService } from '../../../database/database.service';
-import { MembersService } from '../../workspaces/services/members.service';
 import { StorageService } from '../../storage/storage.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { normalizeReturning } from '../../../common/utils/sql.util';
@@ -26,10 +23,6 @@ export class MeetingRecordingService {
   constructor(
     private readonly dataSource: DatabaseService,
     private readonly meetingsRepository: MeetingsRepository,
-    // WorkspacesModule <-> MeetingsModule is a forwardRef'd module import
-    // (see meetings.module.ts) — mirror that on the injected service too.
-    @Inject(forwardRef(() => MembersService))
-    private readonly membersService: MembersService,
     @InjectQueue(MEETING_RECORDING_QUEUE)
     private readonly recordingQueue: Queue,
     private readonly storageService: StorageService,
@@ -163,6 +156,37 @@ export class MeetingRecordingService {
     return updatedRows[0];
   }
 
+  /**
+   * Taking part in the meeting is what grants access to its recordings —
+   * not membership of some workspace.
+   *
+   * This used to call `assertMember(meeting.workspaceId, …)`, which is wrong
+   * in both directions. A standalone meeting (POST /meetings, no workspace)
+   * has `workspaceId = null`, so the lookup matched nothing and *everyone*
+   * was refused, the host who made the recording included. And for a
+   * workspace meeting it asked the wrong question: any colleague who never
+   * joined the call could list its recordings.
+   *
+   * `left_at` is deliberately not checked — recordings are watched after the
+   * call, and hanging up is not meant to revoke access to it.
+   */
+  private async assertWasInMeeting(meetingId: string, userId: string) {
+    const rows = await this.dataSource.query(
+      `SELECT 1 FROM meetings m
+        WHERE m.id = $1
+          AND (m.host_id = $2
+               OR EXISTS (SELECT 1 FROM meeting_participants mp
+                           WHERE mp.meeting_id = m.id AND mp.user_id = $2))`,
+      [meetingId, userId],
+    );
+    if (!rows[0]) {
+      throw new ForbiddenException({
+        code: ErrorCode.MEETING_NOT_PARTICIPANT,
+        message: 'Only people who took part in this meeting can see it',
+      });
+    }
+  }
+
   async listRecordings(meetingId: string, userId: string) {
     const meeting = await this.meetingsRepository.findMeeting(meetingId);
     if (!meeting)
@@ -170,7 +194,7 @@ export class MeetingRecordingService {
         code: ErrorCode.MEETING_NOT_FOUND,
         message: 'Meeting not found',
       });
-    await this.membersService.assertMember(meeting.workspaceId, userId);
+    await this.assertWasInMeeting(meetingId, userId);
 
     return this.dataSource.query(
       `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 ORDER BY started_at DESC`,

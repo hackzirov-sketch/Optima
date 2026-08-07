@@ -1,5 +1,6 @@
 import {
   Controller,
+  ParseUUIDPipe,
   Get,
   Post,
   Patch,
@@ -54,8 +55,9 @@ import {
   TransferOwnershipDto,
   RecordViewsDto,
 } from './dto/channel-settings.dto';
+import { UpdateRoomSettingsDto } from './dto/update-room-settings.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
-import { RoomScope, ChatRoomType } from '../../common/enums';
+import { ChatRoomType } from '../../common/enums';
 import { RedisService } from '../../redis/redis.service';
 
 @ApiTags('Chat')
@@ -106,7 +108,7 @@ export class ChatController {
   @Get('chat/community/:roomId/members')
   @ApiOperation({ summary: 'List community room members' })
   communityMembers(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Query('query') query = '',
     @Query('page') page?: string,
@@ -126,7 +128,7 @@ export class ChatController {
     summary: 'List shared media/files/links/music/voice in a community room',
   })
   communityShared(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @Param('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
     @CurrentUser('id') userId: string,
     @Query('cursor') cursor?: string,
@@ -146,7 +148,7 @@ export class ChatController {
     summary: 'Get or create the discussion-group thread for a channel post',
   })
   communityDiscussion(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.communityService.getOrCreateDiscussion(messageId, userId);
@@ -157,7 +159,7 @@ export class ChatController {
     summary: 'Promote/demote a community member (admin/owner only)',
   })
   communityUpdateMemberRole(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @Param('username') username: string,
     @Body('role') role: 'member' | 'admin',
     @CurrentUser('id') userId: string,
@@ -188,7 +190,7 @@ export class ChatController {
   })
   @ApiParam({ name: 'workspaceId' })
   listWorkspaceRooms(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomService.listRooms(workspaceId, userId);
@@ -197,7 +199,7 @@ export class ChatController {
   @Post('workspaces/:workspaceId/chat/rooms')
   @ApiOperation({ summary: 'Create chat room in a workspace' })
   createRoom(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateChatRoomDto,
   ) {
@@ -211,7 +213,7 @@ export class ChatController {
   })
   @ApiParam({ name: 'type', enum: ['direct', 'group', 'channel'] })
   async resolveRoute(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Param('type') type: string,
     @Param('identifier') identifier: string,
     @CurrentUser('id') userId: string,
@@ -251,14 +253,17 @@ export class ChatController {
 
   @Get('chat/rooms/:roomId')
   @ApiOperation({ summary: 'Get chat room' })
-  getRoom(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+  getRoom(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.roomService.getRoom(roomId, userId);
   }
 
   @Get('chat/rooms/:roomId/members')
   @ApiOperation({ summary: 'List room members (search + paginated)' })
   listRoomMembers(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Query('q') q = '',
     @Query('page') page?: string,
@@ -308,7 +313,7 @@ export class ChatController {
     summary: "Other active members' read position (last_read_seq) in a room",
   })
   getReadReceipts(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.memberService.getReadReceipts(roomId, userId);
@@ -319,7 +324,7 @@ export class ChatController {
     summary: 'List shared media/files/links/music/voice in a room',
   })
   listRoomShared(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Query('kind') kind: 'media' | 'files' | 'links' | 'music' | 'voice',
     @Query('cursor') cursor?: string,
@@ -337,7 +342,7 @@ export class ChatController {
   @Get('chat/rooms/:roomId/messages')
   @ApiOperation({ summary: 'List messages (paginated by sequence or offset)' })
   listMessages(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -356,7 +361,7 @@ export class ChatController {
   @SkipThrottle()
   @ApiOperation({ summary: 'Send message (REST fallback)' })
   async sendMessage(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: SendMessageDto,
   ) {
@@ -368,7 +373,7 @@ export class ChatController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete message' })
   async deleteMessage(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.messageService.deleteMessage(messageId, userId);
@@ -377,7 +382,7 @@ export class ChatController {
   @Patch('chat/messages/:messageId')
   @ApiOperation({ summary: 'Edit message' })
   updateMessage(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateMessageDto,
   ) {
@@ -389,7 +394,7 @@ export class ChatController {
     summary: 'Get a message’s Slack-style thread (root + replies)',
   })
   getThread(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.messageService.getThread(messageId, userId);
@@ -402,7 +407,7 @@ export class ChatController {
       'Post a reply into a message’s thread (REST fallback — prefer the socket event)',
   })
   async sendThreadReply(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: SendMessageDto,
   ) {
@@ -413,7 +418,7 @@ export class ChatController {
   @Post('chat/messages/:messageId/reactions')
   @ApiOperation({ summary: 'Add reaction' })
   addReaction(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: AddReactionDto,
   ) {
@@ -424,7 +429,7 @@ export class ChatController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove own reaction' })
   async removeReaction(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @Param('emoji') emoji: string,
     @CurrentUser('id') userId: string,
   ) {
@@ -448,7 +453,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Mark messages as viewed (buffered, batched)' })
   @ApiParam({ name: 'roomId' })
   recordViews(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: RecordViewsDto,
   ) {
@@ -462,7 +467,7 @@ export class ChatController {
   })
   @ApiParam({ name: 'messageId' })
   listMessageViewers(
-    @Param('messageId') messageId: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.viewService.listViewers(messageId, userId);
@@ -479,7 +484,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Read channel settings (scoped to the caller)' })
   @ApiParam({ name: 'roomId' })
   getChannelSettings(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.channelSettings.getForUser(roomId, userId);
@@ -491,7 +496,7 @@ export class ChatController {
   })
   @ApiParam({ name: 'roomId' })
   updateChannelSettings(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateChannelSettingsDto,
   ) {
@@ -504,7 +509,7 @@ export class ChatController {
   })
   @ApiParam({ name: 'roomId' })
   getChannelStats(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.channelSettings.getStats(roomId, userId);
@@ -514,7 +519,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Who changed which setting, most recent first' })
   @ApiParam({ name: 'roomId' })
   getChannelSettingsAudit(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Query('limit') limit = '50',
   ) {
@@ -526,7 +531,7 @@ export class ChatController {
   @ApiParam({ name: 'roomId' })
   @ApiParam({ name: 'memberId' })
   setMemberRole(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @Param('memberId') memberId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: SetMemberRoleDto,
@@ -543,7 +548,7 @@ export class ChatController {
   @ApiOperation({ summary: 'Hand the room to another member — owner only' })
   @ApiParam({ name: 'roomId' })
   transferOwnership(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: TransferOwnershipDto,
   ) {
@@ -572,7 +577,7 @@ export class ChatController {
   @Get('workspaces/:workspaceId/chat/public-rooms')
   @ApiOperation({ summary: 'List public rooms the user has not joined' })
   listPublicRooms(
-    @Param('workspaceId') workspaceId: string,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomService.listPublicRooms(workspaceId, userId);
@@ -581,7 +586,7 @@ export class ChatController {
   @Post('chat/rooms/:roomId/join')
   @ApiOperation({ summary: 'Join a public room' })
   joinPublicRoom(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomService.joinPublicRoom(roomId, userId);
@@ -594,7 +599,7 @@ export class ChatController {
       'Kept for backward compatibility. New clients should use POST /chat/rooms/:roomId/invites for full control (max uses, expiry, multiple links).',
   })
   async getInviteCode(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     const invites = await this.roomInviteService.list(roomId, userId);
@@ -612,7 +617,7 @@ export class ChatController {
     summary: '(legacy) Revoke the single unlimited room invite link',
   })
   async revokeInviteCode(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     const invites = await this.roomInviteService.list(roomId, userId);
@@ -630,7 +635,7 @@ export class ChatController {
     summary: 'Create a room invite link (optionally limited uses / expiry)',
   })
   createRoomInvite(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateRoomInviteDto,
   ) {
@@ -642,7 +647,7 @@ export class ChatController {
     summary: 'List invite links for a room (creator or lead+ only)',
   })
   listRoomInvites(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomInviteService.list(roomId, userId);
@@ -652,8 +657,8 @@ export class ChatController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke a specific room invite link' })
   async revokeRoomInvite(
-    @Param('roomId') roomId: string,
-    @Param('inviteId') inviteId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.roomInviteService.revoke(roomId, inviteId, userId);
@@ -666,23 +671,22 @@ export class ChatController {
     return this.roomInviteService.joinByCode(code, userId);
   }
 
-  @Patch('chat/rooms/:roomId/settings')
+  /**
+   * The room resource itself — name, description, avatar, wallpaper, slug,
+   * visibility. Deliberately NOT `/settings`: that path belongs to
+   * updateChannelSettings above, and declaring both on it meant only the
+   * first-registered handler was ever reachable (see UpdateRoomSettingsDto).
+   */
+  @Patch('chat/rooms/:roomId')
   @ApiOperation({
     summary:
-      'Update room settings (scope, name, description; background changes require owner/admin)',
+      'Update room identity/appearance (name, description, avatar, background, slug, scope) — owner/admin only',
   })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
   updateRoomSettings(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
-    @Body()
-    dto: {
-      scope?: RoomScope;
-      name?: string;
-      description?: string;
-      avatarUrl?: string | null;
-      backgroundUrl?: string | null;
-      backgroundType?: 'DEFAULT' | 'IMAGE' | 'COLOR' | 'GRADIENT' | 'PATTERN';
-    },
+    @Body() dto: UpdateRoomSettingsDto,
   ) {
     return this.roomService.updateRoomSettings(roomId, userId, dto);
   }
@@ -692,7 +696,7 @@ export class ChatController {
     summary: 'Get the caller’s personal appearance override for a room',
   })
   getChatAppearance(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomService.getUserChatSettings(roomId, userId);
@@ -704,7 +708,7 @@ export class ChatController {
       'Update the caller’s personal wallpaper/theme/font-size/compact-mode/animation for a room',
   })
   updateChatAppearance(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body()
     dto: {
@@ -724,7 +728,10 @@ export class ChatController {
   @ApiOperation({
     summary: 'Get the caller’s unsent draft text for a room (Telegram-style)',
   })
-  getDraft(@Param('roomId') roomId: string, @CurrentUser('id') userId: string) {
+  getDraft(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.messageService.getDraft(roomId, userId);
   }
 
@@ -733,7 +740,7 @@ export class ChatController {
     summary: 'Save (or, if empty, clear) the caller’s draft text for a room',
   })
   saveDraft(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body('content') content: string,
   ) {
@@ -745,7 +752,7 @@ export class ChatController {
     summary: 'Mute/unmute notifications for a room (caller only)',
   })
   setRoomMuted(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: { muted: boolean },
   ) {
@@ -757,7 +764,7 @@ export class ChatController {
     summary: 'Leave a group/channel (the room stays for everyone else)',
   })
   leaveRoom(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.roomService.leaveRoom(roomId, userId);
@@ -767,7 +774,7 @@ export class ChatController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a chat room (DM or group if creator)' })
   async deleteRoom(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     await this.roomService.deleteRoom(roomId, userId);
@@ -802,7 +809,7 @@ export class ChatController {
   @Post('chat/rooms/:roomId/attachments/presign')
   @ApiOperation({ summary: 'Get R2 presigned PUT URL for a chat attachment' })
   async presignAttachment(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: PresignAttachmentDto,
   ) {
@@ -823,7 +830,7 @@ export class ChatController {
     FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }),
   )
   async uploadAudio(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @UploadedFile() file?: { buffer: Buffer; mimetype: string; size: number },
   ) {
@@ -851,7 +858,7 @@ export class ChatController {
     FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }),
   )
   async uploadFile(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
     @UploadedFile()
     file?: {
@@ -890,7 +897,7 @@ export class ChatController {
   @Post('chat/rooms/:roomId/invite/accept')
   @ApiOperation({ summary: 'Accept a pending DM / room invite' })
   acceptChatInvite(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.memberService.acceptChatInvite(roomId, userId);
@@ -900,7 +907,7 @@ export class ChatController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Decline a pending DM / room invite' })
   declineChatInvite(
-    @Param('roomId') roomId: string,
+    @Param('roomId', ParseUUIDPipe) roomId: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.memberService.declineChatInvite(roomId, userId);

@@ -435,16 +435,25 @@ export class MeetingsService {
         message: 'Meeting is no longer active',
       });
     }
-    const existingRows = await this.dataSource.query(
-      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+    // Only a row that is still *open* short-circuits the checks below: that is
+    // someone already in the call reconnecting, and re-admitting them costs the
+    // meeting nothing because they were never counted out of it.
+    //
+    // A closed row (left_at set) is a different person entirely as far as this
+    // method is concerned — they left, and the door may have changed since.
+    // Treating any historical row as a permanent pass meant a returning
+    // participant walked straight past both the lock the host had just turned
+    // ("no new participants") and the mesh capacity limit, so a full 8-person
+    // call could be pushed to 9 by anyone who had ever been in it.
+    const openRows = await this.dataSource.query<{ id: string }>(
+      `SELECT id FROM meeting_participants
+        WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [meetingId, userId],
     );
-    const existing = existingRows[0];
-    if (existing) {
-      // Re-joining after leaving — already vetted the first time they joined.
+    if (openRows[0]) {
       await this.dataSource.query(
-        `UPDATE meeting_participants SET joined_at = now(), left_at = NULL WHERE id = $1`,
-        [existing.id],
+        `UPDATE meeting_participants SET joined_at = now() WHERE id = $1`,
+        [openRows[0].id],
       );
       return this.getOne(meetingId, userId);
     }
@@ -486,9 +495,15 @@ export class MeetingsService {
       );
     }
 
+    // ON CONFLICT reopens the closed row of someone who left and has now been
+    // re-vetted above (uq_meeting_participants_meeting_user, migration 012).
+    // The role is left as it was, so a co-host who drops off the call and comes
+    // back is still a co-host.
     await this.dataSource.query(
       `INSERT INTO meeting_participants (meeting_id, user_id, role, joined_at)
-       VALUES ($1, $2, $3::meeting_participant_role_enum, now())`,
+       VALUES ($1, $2, $3::meeting_participant_role_enum, now())
+       ON CONFLICT (meeting_id, user_id)
+       DO UPDATE SET joined_at = now(), left_at = NULL`,
       [meetingId, userId, MeetingParticipantRole.PARTICIPANT],
     );
     return this.getOne(meetingId, userId);
@@ -656,6 +671,52 @@ export class MeetingsService {
     return { stopped: true };
   }
 
+  /**
+   * Host-only: promote a participant to co-host, or demote them back.
+   *
+   * Co-host is checked in four places — recording control, cutting someone
+   * else's screen share, the waiting room, and who gets notified of a join
+   * request — but nothing ever *granted* it: `role` was only ever written as
+   * 'host' (at creation) or 'participant' (on join), so every one of those
+   * branches was unreachable and the host was alone in a call they could not
+   * share moderation of. This is the missing half.
+   *
+   * The host's own row is untouchable: demoting themself would leave the
+   * meeting with a host_id whose participant row says otherwise.
+   */
+  async setParticipantRole(
+    meetingId: string,
+    actorId: string,
+    targetUserId: string,
+    role: MeetingParticipantRole.CO_HOST | MeetingParticipantRole.PARTICIPANT,
+  ) {
+    const meeting = (await this.assertHost(meetingId, actorId)) as {
+      hostId: string;
+    };
+    if (targetUserId === meeting.hostId) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: "The host's own role cannot be changed",
+      });
+    }
+
+    const rows = normalizeReturning<{ id: string; role: string }>(
+      await this.dataSource.query(
+        `UPDATE meeting_participants SET role = $3::meeting_participant_role_enum
+          WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL
+          RETURNING ${PARTICIPANT_COLUMNS_SQL}`,
+        [meetingId, targetUserId, role],
+      ),
+    );
+    if (!rows[0]) {
+      throw new NotFoundException({
+        code: ErrorCode.MEETING_NOT_PARTICIPANT,
+        message: 'That person is not currently in this meeting',
+      });
+    }
+    return rows[0];
+  }
+
   /** Host, or a participant promoted to co-host. */
   async assertHostOrCoHost(meetingId: string, userId: string): Promise<void> {
     const meeting = await this.meetingsRepository.findMeeting(meetingId);
@@ -724,6 +785,29 @@ export class MeetingsService {
         delay: MEETING_AUTO_END_GRACE_SECONDS * 1000,
         jobId: `auto-end_${meetingId}`,
       },
+    );
+  }
+
+  /**
+   * Queues the "did they come back?" check for a socket that just dropped.
+   *
+   * jobId is per (meeting, user) so a flapping connection replaces its own
+   * pending check instead of stacking one per disconnect; the delay is the
+   * reconnect grace window, and the processor re-checks live socket presence
+   * at fire time, so a reconnect inside the window makes it a no-op.
+   */
+  async scheduleMeetingLeaveGrace(
+    meetingId: string,
+    userId: string,
+    delayMs: number,
+  ) {
+    const jobId = `leave-grace_${meetingId}_${userId}`;
+    const pending = await this.lifecycleQueue.getJob(jobId);
+    await pending?.remove().catch(() => undefined);
+    await this.lifecycleQueue.add(
+      'check-leave-grace',
+      { meetingId, userId },
+      { delay: delayMs, jobId },
     );
   }
 

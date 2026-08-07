@@ -578,9 +578,16 @@ export class ChatMessageService {
             `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = $1`,
             [existing.id],
           );
+        // Decrypt, don't read `content` raw. With encryption on, the column is
+        // empty and the body lives in content_json — so a retried send (the
+        // exact case this idempotency check exists for) echoed a blank message
+        // back to the client that sent it.
         return this.mapToResponse(
           existing,
-          existing.content ?? '',
+          this.chatEncryption.safeDecrypt(
+            existing.contentJson,
+            existing.content ?? '',
+          ),
           existingAttachments,
         );
       }
@@ -719,6 +726,9 @@ export class ChatMessageService {
           messageId: saved.id,
           roomId,
           senderId: userId,
+          // Lets the worker place the recipient's read cursor when it reopens
+          // a DM they had deleted — see reopenDirectRoomForRecipients.
+          sequence,
           // Parsed here, where the plaintext already is. Message bodies are
           // encrypted at rest, so doing it in the worker would mean decrypting
           // again; passing the extracted handles instead keeps the ciphertext

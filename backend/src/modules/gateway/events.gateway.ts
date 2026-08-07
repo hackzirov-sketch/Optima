@@ -510,21 +510,36 @@ export class EventsGateway
     // all rooms synchronously, so the `meeting:${id}:user:${userId}` room
     // membership check below correctly reflects "no reconnect happened yet"
     // rather than this socket's own (already-gone) membership.
+    // Scheduled on the shared meeting-lifecycle queue rather than with an
+    // in-process setTimeout. A timer only exists inside the worker that owns
+    // it: a deploy, a crash or a scale-down between the disconnect and the end
+    // of the grace window dropped it silently, and the participant stayed
+    // "in the meeting" in Postgres forever — inflating the capacity count and
+    // holding the meeting open against its own empty-room auto-end.
     const meetingId = client.data?.meetingId;
     if (meetingId) {
-      setTimeout(() => {
-        void this.finalizeMeetingLeaveAfterGrace(meetingId, userId);
-      }, MEETING_RECONNECT_GRACE_MS);
+      await this.meetingsService
+        .scheduleMeetingLeaveGrace(
+          meetingId,
+          userId,
+          MEETING_RECONNECT_GRACE_MS,
+        )
+        .catch((err) =>
+          this.logger.error(
+            `Could not schedule leave grace for ${userId} in ${meetingId}`,
+            err,
+          ),
+        );
     }
 
     this.logger.log(`Client disconnected: ${client.id} → userId=${userId}`);
   }
 
-  /** Tail of handleDisconnect, run once the reconnect grace window expires. */
-  private async finalizeMeetingLeaveAfterGrace(
-    meetingId: string,
-    userId: string,
-  ) {
+  /**
+   * Tail of handleDisconnect, run by MeetingLifecycleProcessor once the
+   * reconnect grace window expires (public because the processor calls it).
+   */
+  async finalizeMeetingLeaveAfterGrace(meetingId: string, userId: string) {
     try {
       const stillPresent = await this.server
         .in(`meeting:${meetingId}:user:${userId}`)
@@ -1143,11 +1158,17 @@ export class EventsGateway
     if (redis) {
       // NX: a meetingId already backing a live call belongs to whoever claimed
       // it first — a second inviter can't overwrite the parties on it.
-      const claimed = await redis.hsetnx(
-        this.callKey(data.meetingId),
-        'callerId',
-        userId,
-      );
+      //
+      // The claim and its expiry go out together. Claiming first and setting
+      // the TTL in a later round trip leaves a window where a crash between
+      // the two strands a key with no expiry at all, and since the claim is
+      // NX, that meetingId can then never host a call again. EXPIRE is issued
+      // unconditionally so it also refreshes the winner's key on a re-invite.
+      const pipeline = redis.pipeline();
+      pipeline.hsetnx(this.callKey(data.meetingId), 'callerId', userId);
+      pipeline.expire(this.callKey(data.meetingId), 3600);
+      const results = await pipeline.exec();
+      const claimed = results?.[0]?.[1];
       if (!claimed) {
         client.emit('call:error', {
           code: 'CALL_ALREADY_ACTIVE',
@@ -1155,15 +1176,12 @@ export class EventsGateway
         });
         return;
       }
-      const pipeline = redis.pipeline();
-      pipeline.hset(this.callKey(data.meetingId), {
+      await redis.hset(this.callKey(data.meetingId), {
         calleeId: data.targetUserId,
         roomId: data.roomId,
         kind: data.kind,
         startedAt: Date.now(),
       });
-      pipeline.expire(this.callKey(data.meetingId), 3600);
-      await pipeline.exec();
     }
     this.server.to(`user:${data.targetUserId}`).emit('call:incoming', {
       meetingId: data.meetingId,
@@ -1422,14 +1440,26 @@ export class EventsGateway
         .emit('meeting:user-left', { meetingId, userId });
       this.logger.log(`User ${userId} left meeting ${meetingId}`);
 
-      await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
-      const wsIds: string[] = client.data?.workspaceIds || [];
-      wsIds.forEach((wsId) =>
-        this.server
-          .to(`workspace:${wsId}`)
-          .emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
-      );
+      // Only undo the status this gateway set itself when the call started.
+      // An unconditional reset to ONLINE overwrote whatever the user had
+      // deliberately chosen — do-not-disturb, away, invisible — so leaving a
+      // call silently made an invisible user visible again.
+      await this.restorePresenceAfterMeeting(client, userId);
     }
+  }
+
+  /** Clears IN_MEETING, leaving any manually chosen status alone. */
+  private async restorePresenceAfterMeeting(client: AppSocket, userId: string) {
+    const current = await this.presenceService.getStatus(userId);
+    if (current !== PresenceStatus.IN_MEETING) return;
+
+    await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
+    const wsIds: string[] = client.data?.workspaceIds || [];
+    wsIds.forEach((wsId) =>
+      this.server
+        .to(`workspace:${wsId}`)
+        .emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
+    );
   }
 
   /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */
@@ -1484,6 +1514,21 @@ export class EventsGateway
   /** Broadcast a message to all members of a chat room */
   broadcastToRoom(roomId: string, event: string, payload: unknown) {
     this.server?.to(`room:${roomId}`)?.emit(event, payload);
+  }
+
+  /**
+   * Broadcast to everyone currently in a meeting.
+   *
+   * Separate from broadcastToRoom because the two namespaces are different:
+   * chat sockets join `room:<id>`, meeting sockets join `meeting:<id>` (see
+   * handleMeetingJoin). Every meeting caller used to reach for broadcastToRoom
+   * and pre-format the name as `meeting:<id>`, which that method then prefixed
+   * again — so `meeting:ended`, `locked`, `file-shared` and the recording
+   * events were all emitted into `room:meeting:<id>`, a room no socket is ever
+   * in, and silently reached nobody.
+   */
+  broadcastToMeeting(meetingId: string, event: string, payload: unknown) {
+    this.server?.to(`meeting:${meetingId}`)?.emit(event, payload);
   }
 
   /** Broadcast an event to all sockets in a workspace room */

@@ -507,6 +507,15 @@ export class ChatRoomService {
         message: 'Room is not public',
       });
 
+    // "Public" inside a workspace means public *to that workspace* — which is
+    // exactly how discoverRooms and listPublicRooms present it. This endpoint
+    // took only a roomId and skipped the check, so the one door that actually
+    // admits people was the one that didn't ask. Workspace-less channels and
+    // groups are public to the whole platform and stay that way.
+    if (room.workspaceId) {
+      await this.wsMembersService.assertMember(room.workspaceId, userId);
+    }
+
     const existingRows = await this.dataSource.query(
       `SELECT id FROM chat_members WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [roomId, userId],
@@ -907,7 +916,25 @@ export class ChatRoomService {
         `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms WHERE dm_key = $1`,
         [directPairKey(userId, dto.targetUserId)],
       );
-      if (existingRows[0]) return this.enrichRoom(existingRows[0], userId);
+      if (existingRows[0]) {
+        // Re-opening a conversation the caller had deleted for themselves
+        // (see deleteDirectRoomForMe) reinstates their membership — the room
+        // still exists, so without this they'd be handed back a DM they are
+        // no longer a member of and locked out of their own chat.
+        await this.dataSource.query(
+          `INSERT INTO chat_members (room_id, user_id, status, role)
+           VALUES ($1, $2, 'active', 'member')
+           ON CONFLICT (room_id, user_id)
+           DO UPDATE SET left_at = NULL, status = 'active'
+           WHERE chat_members.left_at IS NOT NULL`,
+          [existingRows[0].id, userId],
+        );
+        await this.chatMemberService.invalidateRoomMember(
+          existingRows[0].id,
+          userId,
+        );
+        return this.enrichRoom(existingRows[0], userId);
+      }
     }
 
     if (dto.groupId) {
@@ -1121,8 +1148,10 @@ export class ChatRoomService {
       });
 
     if (room.type === ChatRoomType.DIRECT) {
-      await this.chatMemberService.assertRoomMember(roomId, userId);
-    } else if (room.createdById !== userId) {
+      return this.deleteDirectRoomForMe(room, userId);
+    }
+
+    if (room.createdById !== userId) {
       throw new ForbiddenException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
         message: 'Only creator can delete this room',
@@ -1141,6 +1170,49 @@ export class ChatRoomService {
       action: 'chat_room.deleted',
       entityType: 'chat_room',
       entityId: roomId,
+      oldValue: { name: room.name, type: room.type, slug: room.slug },
+    });
+  }
+
+  /**
+   * "Delete chat" on a DM removes it for the person who asked, not for both.
+   *
+   * It used to run the same `DELETE FROM chat_rooms` as a group, which
+   * cascades every message in the conversation — so either side could
+   * unilaterally and irreversibly destroy the other's copy of a history they
+   * both took part in, with no warning and nothing to restore from. Closing
+   * the caller's own membership gives them the same result they were after
+   * (the conversation is gone from their list, and assertRoomMember now
+   * refuses them the history) while leaving the other side's intact.
+   *
+   * The row itself is only physically removed once nobody is left on either
+   * side, which is what keeps deleted DMs from accumulating forever.
+   */
+  private async deleteDirectRoomForMe(room: ChatRoom, userId: string) {
+    await this.chatMemberService.assertRoomMember(room.id, userId);
+
+    await this.dataSource.query(
+      `UPDATE chat_members SET left_at = now()
+        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [room.id, userId],
+    );
+    await this.chatMemberService.invalidateRoomMember(room.id, userId);
+
+    const remaining = await this.dataSource.query<{ count: string }>(
+      `SELECT count(*) FROM chat_members WHERE room_id = $1 AND left_at IS NULL`,
+      [room.id],
+    );
+    if (Number(remaining[0]?.count ?? 0) > 0) return;
+
+    await this.dataSource.query(`DELETE FROM chat_rooms WHERE id = $1`, [
+      room.id,
+    ]);
+    await this.audit.log({
+      workspaceId: room.workspaceId,
+      actorId: userId,
+      action: 'chat_room.deleted',
+      entityType: 'chat_room',
+      entityId: room.id,
       oldValue: { name: room.name, type: room.type, slug: room.slug },
     });
   }

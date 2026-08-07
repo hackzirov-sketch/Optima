@@ -536,7 +536,7 @@
     "groupLeft": "Gruptan ayrıldınız",
     "groupLeaveFailed": "Gruptan ayrılınamadı",
     "deleteChat": "Sohbeti sil",
-    "deleteChatConfirm": "“{{title}}” ile sohbeti tüm mesajlarıyla birlikte silmek istiyor musunuz?",
+    "deleteChatConfirm": "“{{title}}” ile sohbet yalnızca sizde silinsin mi? Karşı tarafta kalır, yeniden açtığınızda size de geri gelir.",
     "chatDeleted": "Sohbet silindi",
     "chatDeleteFailed": "Sohbet silinemedi",
     "backToHomeAria": "Ana sayfaya dön",

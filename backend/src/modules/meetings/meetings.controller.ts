@@ -22,6 +22,8 @@ import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 import { JoinByCodeDto } from './dto/join-by-code.dto';
+import { InviteMembersDto } from './dto/invite-members.dto';
+import { SetParticipantRoleDto } from './dto/set-participant-role.dto';
 import { PresignRecordingDto } from './dto/presign-recording.dto';
 import { StopRecordingDto } from './dto/stop-recording.dto';
 import {
@@ -166,7 +168,7 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
   ) {
     const meeting = await this.meetingsService.endMeeting(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:ended', {
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:ended', {
       meetingId,
       reason: 'host_ended',
     });
@@ -184,7 +186,7 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
   ) {
     const meeting = await this.meetingsService.lockMeeting(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:locked', {
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:locked', {
       meetingId,
     });
     return meeting;
@@ -198,7 +200,7 @@ export class MeetingsController {
     @CurrentUser('id') userId: string,
   ) {
     const meeting = await this.meetingsService.unlockMeeting(meetingId, userId);
-    this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:unlocked', {
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:unlocked', {
       meetingId,
     });
     return meeting;
@@ -376,15 +378,45 @@ export class MeetingsController {
   invite(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
-    @Body('userIds') userIds: string[],
-    @Body('emails') emails: string[],
+    @Body() dto: InviteMembersDto,
   ) {
     return this.meetingsService.inviteMembers(
       meetingId,
       userId,
-      userIds || [],
-      emails || [],
+      dto.userIds ?? [],
+      dto.emails ?? [],
     );
+  }
+
+  /**
+   * Co-host is the only role a host can delegate. Broadcast to the room so
+   * every client re-renders the moderation controls immediately.
+   */
+  @Patch('meetings/:meetingId/participants/:userId/role')
+  @ApiOperation({
+    summary: 'Promote/demote a participant to co-host (host only)',
+  })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  @ApiParam({ name: 'userId', format: 'uuid' })
+  async setParticipantRole(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @Param('userId', ParseUUIDPipe) targetUserId: string,
+    @CurrentUser('id') actorId: string,
+    @Body() dto: SetParticipantRoleDto,
+  ) {
+    const participant = await this.meetingsService.setParticipantRole(
+      meetingId,
+      actorId,
+      targetUserId,
+      dto.role,
+    );
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:role-changed', {
+      meetingId,
+      userId: targetUserId,
+      role: dto.role,
+      changedBy: actorId,
+    });
+    return participant;
   }
 
   // ─── Shared files (ported from main) ───────────────────────────────────────
@@ -422,11 +454,7 @@ export class MeetingsController {
     @Body() dto: ShareMeetingFileDto,
   ) {
     const file = await this.meetingsService.shareFile(meetingId, userId, dto);
-    this.gateway.broadcastToRoom(
-      `meeting:${meetingId}`,
-      'meeting:file-shared',
-      { file },
-    );
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:file-shared', { file });
     return file;
   }
 
@@ -446,11 +474,9 @@ export class MeetingsController {
       meetingId,
       userId,
     );
-    this.gateway.broadcastToRoom(
-      `meeting:${meetingId}`,
-      'meeting:recording:started',
-      { recording },
-    );
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:recording:started', {
+      recording,
+    });
     return recording;
   }
 
@@ -467,11 +493,9 @@ export class MeetingsController {
       userId,
       dto,
     );
-    this.gateway.broadcastToRoom(
-      `meeting:${meetingId}`,
-      'meeting:recording:stopped',
-      { recording },
-    );
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:recording:stopped', {
+      recording,
+    });
     return recording;
   }
 

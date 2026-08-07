@@ -6,6 +6,8 @@ import { EventsGateway } from '../../gateway/events.gateway';
 
 interface AutoEndJobData {
   meetingId: string;
+  /** Set only on 'check-leave-grace' jobs. */
+  userId?: string;
 }
 
 /**
@@ -31,6 +33,16 @@ export class MeetingLifecycleProcessor extends WorkerHost {
   }
 
   async process(job: Job<AutoEndJobData, any, string>): Promise<void> {
+    // A dropped socket's "did they reconnect?" check. Queued rather than kept
+    // as an in-process timer so it survives the deploy or crash that used to
+    // lose it (see EventsGateway.handleDisconnect).
+    if (job.name === 'check-leave-grace') {
+      const { meetingId, userId } = job.data;
+      if (!userId) return;
+      await this.gateway.finalizeMeetingLeaveAfterGrace(meetingId, userId);
+      return;
+    }
+
     if (job.name !== 'check-auto-end') return;
     const { meetingId } = job.data;
 
@@ -38,7 +50,7 @@ export class MeetingLifecycleProcessor extends WorkerHost {
       const meeting = await this.meetingsService.checkAutoEnd(meetingId);
       if (meeting) {
         this.logger.log(`Auto-ended empty meeting ${meetingId}`);
-        this.gateway.broadcastToRoom(`meeting:${meetingId}`, 'meeting:ended', {
+        this.gateway.broadcastToMeeting(meetingId, 'meeting:ended', {
           meetingId,
           reason: 'empty',
         });

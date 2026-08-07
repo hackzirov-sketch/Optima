@@ -126,6 +126,21 @@ export class ChatPresenceService {
     await pipeline.exec();
   }
 
+  /**
+   * The raw stored status, unmasked and without the "are they connected?"
+   * derivation getPresence applies.
+   *
+   * For callers deciding whether to *overwrite* a status rather than display
+   * one — leaving a meeting should clear IN_MEETING but must not stomp on a
+   * do-not-disturb or invisible the user chose for themselves.
+   */
+  async getStatus(userId: string): Promise<PresenceStatus | null> {
+    const client = this.redisService.getClient();
+    if (!client) return null;
+    const status = await client.hget(key(userId), 'status');
+    return (status as PresenceStatus) ?? null;
+  }
+
   async getPresence(userId: string): Promise<PresenceInfo> {
     const client = this.redisService.getClient();
     if (!client) return { status: PresenceStatus.OFFLINE, lastSeenAt: null };

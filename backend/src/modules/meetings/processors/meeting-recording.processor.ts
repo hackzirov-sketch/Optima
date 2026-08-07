@@ -44,8 +44,8 @@ export class MeetingRecordingProcessor extends WorkerHost {
       this.logger.log(
         `Auto-stopped recording ${recordingId} for meeting ${meetingId} (1h cap reached)`,
       );
-      this.gateway.broadcastToRoom(
-        `meeting:${meetingId}`,
+      this.gateway.broadcastToMeeting(
+        meetingId,
         'meeting:recording:auto-stopped',
         { recording },
       );

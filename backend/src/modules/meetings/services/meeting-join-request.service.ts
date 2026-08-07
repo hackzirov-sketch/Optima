@@ -131,8 +131,12 @@ export class MeetingJoinRequestService {
       });
     }
 
+    // `left_at IS NULL`, matching join(): someone who left is not "already
+    // joined", and short-circuiting here for them skipped the whole
+    // approval/lock flow on the way back in.
     const existingRows = await this.dataSource.query(
-      `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2`,
+      `SELECT id FROM meeting_participants
+        WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [meetingId, userId],
     );
     if (existingRows[0]) {
@@ -163,6 +167,24 @@ export class MeetingJoinRequestService {
     // decision.kind === 'approval'
     if (decision.joinRequest?.status === MeetingJoinRequestStatus.PENDING) {
       return { status: 'pending' as const, requestId: decision.joinRequest.id };
+    }
+
+    // A rejection that can be re-sent instantly isn't a rejection — it's a
+    // button the host has to keep pressing. The waiting room notifies every
+    // host and co-host on each request, so an unthrottled re-request is a way
+    // to spam people mid-call. Short enough not to punish someone who was
+    // rejected by a misclick.
+    if (decision.joinRequest?.status === MeetingJoinRequestStatus.REJECTED) {
+      const retryAfterSeconds = this.accessService.rejectionCooldownRemaining(
+        decision.joinRequest.reviewedAt,
+      );
+      if (retryAfterSeconds > 0) {
+        throw new ForbiddenException({
+          code: ErrorCode.MEETING_ACCESS_DENIED,
+          message: `Your request was declined — you can ask again in ${retryAfterSeconds}s.`,
+          retryAfterSeconds,
+        });
+      }
     }
 
     const rows = normalizeReturning(
@@ -334,17 +356,18 @@ export class MeetingJoinRequestService {
       // control — inviting a non-member here would be a promise the meeting
       // can't keep (they'd hit the workspace-membership wall in resolveAccess
       // anyway), so filter to actual members.
-      const validMembers = await Promise.all(
-        targetIds.map(async (uid) => {
-          try {
-            await this.membersService.assertMember(meeting.workspaceId, uid);
-            return uid;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      validUserIds = validMembers.filter(Boolean) as string[];
+      //
+      // One query rather than one assertMember() per invitee: this is a bulk
+      // filter, not an authorization decision about the caller, so it has no
+      // use for the per-user cache and every reason to avoid N round trips.
+      const memberRows = targetIds.length
+        ? await this.dataSource.query<{ userId: string }>(
+            `SELECT user_id AS "userId" FROM workspace_members
+              WHERE workspace_id = $1 AND user_id = ANY($2::uuid[])`,
+            [meeting.workspaceId as string, targetIds],
+          )
+        : [];
+      validUserIds = memberRows.map((row) => row.userId);
     } else {
       // PRIVATE/INVITE_ONLY/PUBLIC: the invite itself IS the access grant —
       // workspace membership is irrelevant here by design (that's the whole

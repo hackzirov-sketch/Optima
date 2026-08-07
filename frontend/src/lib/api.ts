@@ -313,10 +313,14 @@ export const api = {
   chat: {
     community: () => apiFetch<{ channel: ChatRoom | null; group: ChatRoom | null }>("/chat/community"),
     mute: (roomId: string, muted: boolean) => apiFetch<{ isMuted: boolean }>(`/chat/rooms/${roomId}/mute`, { method: "PATCH", body: JSON.stringify({ muted }) }),
+    // The room resource itself. NOT /settings — that path belongs to the
+    // channel-settings endpoint, and when both were declared on it only the
+    // first-registered handler was reachable, so every call here was validated
+    // against the wrong DTO and rejected.
     updateRoomBackground: (roomId: string, data: { backgroundUrl: string | null; backgroundType: NonNullable<ChatRoom["backgroundType"]> }) =>
-      apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+      apiFetch<ChatRoom>(`/chat/rooms/${roomId}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null; slug?: string | null; scope?: ChatRoom["scope"] }) =>
-      apiFetch<ChatRoom>(`/chat/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+      apiFetch<ChatRoom>(`/chat/rooms/${roomId}`, { method: "PATCH", body: JSON.stringify(data) }),
     resolveRoute: (workspaceId: string, type: "direct" | "group" | "channel", identifier: string) =>
       apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/workspaces/${workspaceId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
     getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),

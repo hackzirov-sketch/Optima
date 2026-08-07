@@ -15,8 +15,13 @@ export interface MeetingAccess {
   /** True if calling requestToJoin() right now makes sense (not already pending). */
   canRequest: boolean;
   requestStatus: MeetingJoinRequestStatus | null;
+  /** Seconds until a declined requester may ask again; 0 when they may now. */
+  retryAfterSeconds?: number;
   deniedReason?: 'workspace_only' | 'invite_only' | 'locked';
 }
+
+/** Mirrors REJECTED_REQUEST_COOLDOWN_SECONDS in MeetingJoinRequestService. */
+const REJECTED_REQUEST_COOLDOWN_SECONDS = 60;
 
 export type AccessDecision =
   | { kind: 'host' }
@@ -24,7 +29,12 @@ export type AccessDecision =
   | { kind: 'auto' }
   | {
       kind: 'approval';
-      joinRequest: { id: string; status: MeetingJoinRequestStatus } | null;
+      joinRequest: {
+        id: string;
+        status: MeetingJoinRequestStatus;
+        /** When the host decided; drives the post-rejection cooldown. */
+        reviewedAt: Date | string | null;
+      } | null;
     }
   | { kind: 'denied'; reason: 'workspace_only' | 'invite_only' | 'locked' };
 
@@ -109,6 +119,15 @@ export class MeetingAccessService {
     }
   }
 
+  /** Seconds left before a declined requester may ask again; 0 if they may now. */
+  rejectionCooldownRemaining(reviewedAt: Date | string | null): number {
+    if (!reviewedAt) return 0;
+    const elapsedMs = Date.now() - new Date(reviewedAt).getTime();
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
+    const remainingMs = REJECTED_REQUEST_COOLDOWN_SECONDS * 1000 - elapsedMs;
+    return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+  }
+
   describeAccess(decision: AccessDecision): MeetingAccess {
     switch (decision.kind) {
       case 'host':
@@ -135,15 +154,26 @@ export class MeetingAccessService {
           canRequest: false,
           requestStatus: null,
         };
-      case 'approval':
+      case 'approval': {
+        // The client renders "Request to Join" off canRequest, so it has to
+        // agree with what requestToJoin will actually accept — including the
+        // cooldown a declined request now carries, which is reported here so
+        // the button can show the wait instead of failing on click.
+        const retryAfterSeconds =
+          decision.joinRequest?.status === MeetingJoinRequestStatus.REJECTED
+            ? this.rejectionCooldownRemaining(decision.joinRequest.reviewedAt)
+            : 0;
         return {
           isHost: false,
           isParticipant: false,
           canJoin: false,
           canRequest:
-            decision.joinRequest?.status !== MeetingJoinRequestStatus.PENDING,
+            decision.joinRequest?.status !== MeetingJoinRequestStatus.PENDING &&
+            retryAfterSeconds === 0,
           requestStatus: decision.joinRequest?.status ?? null,
+          retryAfterSeconds,
         };
+      }
       case 'denied':
         return {
           isHost: false,

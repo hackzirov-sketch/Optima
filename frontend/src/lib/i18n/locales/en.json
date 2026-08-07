@@ -536,7 +536,7 @@
     "groupLeft": "You left the group",
     "groupLeaveFailed": "Couldn’t leave the group",
     "deleteChat": "Delete chat",
-    "deleteChatConfirm": "Delete the chat with “{{title}}” along with all its messages?",
+    "deleteChatConfirm": "Delete the chat with “{{title}}” for you? It stays in their inbox, and reopening it restores your view.",
     "chatDeleted": "Chat deleted",
     "chatDeleteFailed": "Couldn’t delete chat",
     "backToHomeAria": "Back to home",
