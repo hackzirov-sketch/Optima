@@ -24,7 +24,7 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
 
   useEffect(() => {
     if (!open || assets.length || failed) return;
-    fetch("/telegram-emojis/manifest.json")
+    fetch("/telegram-emojis/manifest.json?v=2", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Emoji manifest unavailable");
         return response.json() as Promise<EmojiAsset[]>;

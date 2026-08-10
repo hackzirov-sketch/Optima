@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-10T15:30:00+05:00",
+  "title": "Design System: OPTIMA",
+  "extensions": {
+    "colorMeta": {
+      "indigo": { "role": "primary", "displayName": "OPTIMA Indigo", "canonical": "#45429A" },
+      "mist-blue": { "role": "secondary", "displayName": "Calm Mist Blue", "canonical": "#BAC6EA" },
+      "cream": { "role": "neutral", "displayName": "Soft Cream", "canonical": "#FFF6E9" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#171827" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Editorial Display", "purpose": "Major page titles only." },
+      "body": { "displayName": "Interface Body", "purpose": "Operational UI and message copy." }
+    },
+    "shadows": [
+      { "name": "ambient-low", "value": "0 1px 2px rgba(41,39,96,.04), 0 8px 22px rgba(41,39,96,.05)", "purpose": "Resting panels and repeated records." },
+      { "name": "overlay", "value": "0 18px 48px rgba(41,39,96,.12)", "purpose": "Modals, menus and transient layers." }
+    ],
+    "motion": [
+      { "name": "standard", "value": "180ms cubic-bezier(.22,1,.36,1)", "purpose": "Hover, focus and selection transitions." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "390px" },
+      { "name": "shell", "value": "820px" },
+      { "name": "desktop", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary command with restrained lift and visible focus.",
+      "html": "<button class=\"ds-button-primary\">Continue</button>",
+      "css": ".ds-button-primary{min-height:44px;padding:0 17px;border:1px solid #45429A;border-radius:14px;background:#45429A;color:#fff;font:720 13px Inter,system-ui,sans-serif;transition:180ms cubic-bezier(.22,1,.36,1)}.ds-button-primary:hover{background:#393685;transform:translateY(-1px)}.ds-button-primary:focus-visible{outline:2px solid #8296D3;outline-offset:3px}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Warm paper field with mist-blue focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search\" />",
+      "css": ".ds-input{min-height:46px;padding:0 13px;border:1px solid #E7DCC5;border-radius:13px;background:#FFFDFA;color:#171827;font:400 14px Inter,system-ui,sans-serif}.ds-input:hover{border-color:#8296D3}.ds-input:focus-visible{outline:2px solid #8296D3;outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Operating Surface",
+    "overview": "A warm, compact and trustworthy workspace where communication, meetings and learning share one visual language.",
+    "keyCharacteristics": ["warm", "calm", "compact", "trustworthy", "responsive"],
+    "rules": [
+      { "name": "One Accent", "body": "Indigo communicates action or selection; it is not ambient decoration.", "section": "colors" },
+      { "name": "Flat by Default", "body": "Shadows clarify layer or interaction; they do not decorate page sections.", "section": "elevation" }
+    ],
+    "dos": ["Preserve real backend state.", "Keep keyboard focus visible.", "Verify 390px, 768px and 1440px."],
+    "donts": ["Do not add production mock data.", "Do not use starfields or neon decoration.", "Do not nest decorative cards."]
+  }
+}

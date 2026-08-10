@@ -364,6 +364,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [catalogIndicator, setCatalogIndicator] = useState({ left: 0, width: 0 });
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
+  const shouldStickToMessageBottom = useRef(true);
   const aiMessageList = useRef<HTMLDivElement>(null);
   const aiShouldScroll = useRef(false);
   const preserveMessageScroll = useRef(false);
@@ -795,6 +796,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
 
   useEffect(() => {
+    shouldStickToMessageBottom.current = true;
     if (!selectedId) {
       setMessages([]);
       setReadReceipts(new Map());
@@ -1021,6 +1023,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       preserveMessageScroll.current = false;
       return;
     }
+    if (!shouldStickToMessageBottom.current) return;
     messagesEnd.current?.scrollIntoView({ behavior: messages.length > 10 ? "smooth" : "auto" });
     const timer = window.setTimeout(() => {
       const node = messageList.current;
@@ -1201,6 +1204,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     setDraft("");
     setStaged([]);
+    shouldStickToMessageBottom.current = true;
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
@@ -2085,7 +2089,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                     <b>{room.unreadCount}</b>}</span>
                 </span>
                 </button>
@@ -2184,7 +2188,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
@@ -2382,7 +2386,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <>
                 <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => {
                   const node = event.currentTarget;
-                  setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96);
+                  const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+                  shouldStickToMessageBottom.current = distanceFromBottom < 96;
+                  setShowScrollButton(distanceFromBottom > 96);
                   if (node.scrollTop < 90) void loadOlderMessages();
                 }}>
                   {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin"
@@ -2546,6 +2552,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
                   {showScrollButton && <button className="scroll-bottom" onClick={() => {
+                    shouldStickToMessageBottom.current = true;
                     setShowScrollButton(false);
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
                   }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
@@ -2617,6 +2624,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           setDraft("");
                         }} aria-label={t("chat.cancelAria")}><X size={17} /></button>
                       </div>}
+                    <button type="button"
+                            className={`icon-button composer-ai-trigger ${/^\/ai(?:\s|$)/i.test(draft) ? "active" : ""}`}
+                            onClick={() => {
+                              const opening = !/^\/ai(?:\s|$)/i.test(draft);
+                              setDraft(opening ? "/ai " : "");
+                              if (!opening) setAiAssistPrompt("");
+                              window.requestAnimationFrame(() => richMessageInput.current?.focus());
+                            }}
+                            aria-label={t("chat.aiAssistTitle")}
+                            title={t("chat.aiAssistTitle")}
+                            aria-pressed={/^\/ai(?:\s|$)/i.test(draft)}><Sparkles size={19} /></button>
                     <EmojiPickerButton onSelect={(emojiId) => {
                       richMessageInput.current?.insertEmoji(emojiId);
                     }} />
