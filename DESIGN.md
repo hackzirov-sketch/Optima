@@ -104,6 +104,21 @@ The palette combines warm neutral surfaces with a restrained cool accent.
 
 Desktop uses a 248px navigation rail and fluid content. Chat uses a 300-390px conversation list plus a flexible message area. At 820px and below, navigation becomes bottom-mounted and chat becomes a list/detail flow. Stable rows, `minmax(0, 1fr)` and safe-area padding prevent controls from resizing content. Every release is checked at 390px, 768px and 1440px.
 
+### Breakpoints
+
+Layout changes happen at six widths and no others. A one-off width produces a layout that jumps at a size nobody checks.
+
+| Width | Purpose |
+| --- | --- |
+| `1200px` | Wide desktop reflows to fewer columns |
+| `900px` | Small laptop |
+| `820px` | Navigation goes bottom-mounted; chat becomes list/detail |
+| `640px` | Compact phone and landscape |
+| `480px` | Phone |
+| `390px` | Small phone |
+
+`821px` is the `min-width` counterpart of the 820px boundary. When a layout needs a width that is not on this list, move it to the nearest tier rather than adding a seventh.
+
 ## Elevation & Depth
 
 Depth is ambient and sparse. Resting panels use a fine border and low diffuse shadow; modals and transient menus use the stronger shadow. Video surfaces remain neutral and do not use decorative depth.
