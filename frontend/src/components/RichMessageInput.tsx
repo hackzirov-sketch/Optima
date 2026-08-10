@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { emojiAssetUrl, fallbackEmojiImage } from "../lib/emojiAssets";
 
 const TOKEN_PATTERN = /\[\[optima-emoji:(p[1-4]-\d{4})]]/g;
 
@@ -46,7 +47,8 @@ function renderValue(root: HTMLElement, value: string) {
   for (const match of value.matchAll(TOKEN_PATTERN)) {
     if (match.index > cursor) root.append(document.createTextNode(value.slice(cursor, match.index)));
     const image = document.createElement("img");
-    image.src = `/telegram-emojis/${match[1]}.png`;
+    image.src = emojiAssetUrl(match[1]);
+    image.onerror = () => fallbackEmojiImage(image, match[1]);
     image.alt = "emoji";
     image.dataset.emojiId = match[1];
     image.className = "composer-inline-emoji";
@@ -84,7 +86,8 @@ export const RichMessageInput = forwardRef<RichMessageInputHandle, RichMessageIn
       const range = lastRange.current?.cloneRange() || document.createRange();
       if (!lastRange.current) range.selectNodeContents(editor), range.collapse(false);
       const image = document.createElement("img");
-      image.src = `/telegram-emojis/${id}.png`;
+      image.src = emojiAssetUrl(id);
+      image.onerror = () => fallbackEmojiImage(image, id);
       image.alt = "emoji";
       image.dataset.emojiId = id;
       image.className = "composer-inline-emoji";
