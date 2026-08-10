@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Clock3, RefreshCw, Smile, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutsideClose } from "../lib/useOutsideClose";
+import { fallbackEmojiImage, fetchEmojiManifest } from "../lib/emojiAssets";
 
 type EmojiAsset = { id: string; src: string; pack: number };
 
@@ -24,11 +25,7 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
 
   useEffect(() => {
     if (!open || assets.length || failed) return;
-    fetch("/telegram-emojis/manifest.json?v=2", { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("Emoji manifest unavailable");
-        return response.json() as Promise<EmojiAsset[]>;
-      })
+    fetchEmojiManifest<EmojiAsset[]>()
       .then(setAssets)
       .catch(() => setFailed(true));
   }, [open, assets.length, failed]);
@@ -72,7 +69,8 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
                       className={pack === number ? "active" : ""} onClick={() => selectPack(number)}
                       title={`${number}-to‘plam`}>
                 {assets.find((asset) => asset.pack === number) ?
-                  <img src={assets.find((asset) => asset.pack === number)!.src} alt="" /> : <span>{number}</span>}
+                  <img src={assets.find((asset) => asset.pack === number)!.src} alt=""
+                       onError={(event) => fallbackEmojiImage(event.currentTarget, assets.find((asset) => asset.pack === number)!.id)} /> : <span>{number}</span>}
               </button>
             ))}
           </div>
@@ -83,7 +81,8 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
             {visible.map((asset) => (
               <button key={asset.id} type="button" onClick={() => pick(asset.id)}
                       aria-label="Custom emojini matnga qo‘shish">
-                <img src={asset.src} alt="" loading="lazy" decoding="async" />
+                <img src={asset.src} alt="" loading="lazy" decoding="async"
+                     onError={(event) => fallbackEmojiImage(event.currentTarget, asset.id)} />
               </button>
             ))}
           </div>

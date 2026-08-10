@@ -78,6 +78,7 @@ import { setUnreadTotal }                                                   from
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
 import { clampParticipants } from "../lib/meeting-limits";
+import { emojiAssetUrl, fallbackEmojiImage } from "../lib/emojiAssets";
 
 /**
  * Telegram's album size, and the same limit the server enforces in
@@ -109,7 +110,7 @@ function isTelegramEmoji(content: string) {
 
 function telegramEmojiUrl(content: string) {
   const id = telegramEmojiId(content);
-  return `/telegram-emojis/${id}.png`;
+  return emojiAssetUrl(id);
 }
 
 function renderMessageContent(content: string) {
@@ -124,7 +125,8 @@ function renderMessageContent(content: string) {
   if (!parts.length) return content;
   return parts.map((part, index) => part.emojiId ?
     <img key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
-         src={`/telegram-emojis/${part.emojiId}.png`} alt="emoji" loading="lazy" decoding="async" /> :
+         src={emojiAssetUrl(part.emojiId)} alt="emoji" loading="lazy" decoding="async"
+         onError={(event) => fallbackEmojiImage(event.currentTarget, part.emojiId!)} /> :
     <span key={`text-${index}`}>{part.text}</span>);
 }
 
@@ -185,7 +187,8 @@ const CUSTOM_REACTION_PATTERN = /^p[1-4]-\d{4}$/;
 
 function renderReaction(emoji: string) {
   return CUSTOM_REACTION_PATTERN.test(emoji)
-    ? <img className="reaction-custom-emoji" src={`/telegram-emojis/${emoji}.png`} alt="" loading="lazy" decoding="async" />
+    ? <img className="reaction-custom-emoji" src={emojiAssetUrl(emoji)} alt="" loading="lazy" decoding="async"
+           onError={(event) => fallbackEmojiImage(event.currentTarget, emoji)} />
     : <span className="reaction-unicode-emoji">{emoji}</span>;
 }
 
@@ -2474,7 +2477,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
                               <img className="message-custom-emoji" src={telegramEmojiUrl(message.content)}
-                                   alt="Telegram emoji" loading="lazy" decoding="async" /> :
+                                   alt="Telegram emoji" loading="lazy" decoding="async"
+                                   onError={(event) => fallbackEmojiImage(event.currentTarget, telegramEmojiId(message.content))} /> :
                               <p>{renderMessageContent(message.content)}</p>)}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ?
                               <AudioMessage key={attachment.id || attachment.url} src={attachment.url}
