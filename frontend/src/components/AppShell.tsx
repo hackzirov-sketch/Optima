@@ -1,5 +1,5 @@
 import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
@@ -47,6 +47,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       : href === "/chat"
         ? /^\/(chat|u|g|ch)(\/|$)/.test(location)
         : location.startsWith(href);
+  const mobileNav = [nav[1], nav[2], nav[0], location.startsWith("/library") ? nav[3] : nav[4], nav[5]];
+  const mobileActiveIndex = Math.max(0, mobileNav.findIndex((item) => active(item.href)));
+  const mobileDockCenter = 50 + mobileActiveIndex * 100;
+  const mobileDockPath = `M22 20 H${mobileDockCenter - 34} C${mobileDockCenter - 28} 20 ${mobileDockCenter - 27} 45 ${mobileDockCenter} 45 C${mobileDockCenter + 27} 45 ${mobileDockCenter + 28} 20 ${mobileDockCenter + 34} 20 H478 Q496 20 496 38 V82 H4 V38 Q4 20 22 20 Z`;
 
   function chooseLanguage(next: Locale) {
     setLocale(next);
@@ -167,8 +171,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}</Link>;
         })}
       </nav>
-      <nav className="mobile-nav" aria-label={t("shell.mobileNav")}>
-        {nav.map((item) => {
+      <nav className="mobile-nav" aria-label={t("shell.mobileNav")} style={{ "--mobile-active-index": mobileActiveIndex } as CSSProperties}>
+        <svg className="mobile-nav-plate" viewBox="0 0 500 86" preserveAspectRatio="none" aria-hidden="true"><path d={mobileDockPath} /></svg>
+        {mobileNav.map((item) => {
           const Icon = item.icon;
           return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
         })}

@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 
 /**
  * Postgres resolves the type of COALESCE/GREATEST/LEAST/NULLIF from their
@@ -27,12 +26,16 @@ const AMBIGUOUS = [
 describe('raw SQL — parameter type inference', () => {
   const root = join(__dirname, '..', '..');
 
-  const sourceFiles = execSync(
-    `grep -rlE "(COALESCE|GREATEST|LEAST|NULLIF|CASE)" ${root} --include=*.ts || true`,
-    { encoding: 'utf8' },
-  )
-    .split('\n')
-    .filter((path) => path && !path.endsWith('.spec.ts'));
+  function findSourceFiles(directory: string): string[] {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return findSourceFiles(path);
+      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts')) return [];
+      return /\b(COALESCE|GREATEST|LEAST|NULLIF|CASE)\b/i.test(readFileSync(path, 'utf8')) ? [path] : [];
+    });
+  }
+
+  const sourceFiles = findSourceFiles(root);
 
   it('never leaves two placeholders in one type-resolving expression', () => {
     const offenders: string[] = [];
