@@ -2678,12 +2678,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ?
         <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> :
         <section className="direct-call-ringing">
-          <div className="direct-call-glow" />
-          <Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")}
-                  lastName={memberMap.get(directCall.peerId)?.lastName}
-                  url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" /><span
-          className="direct-call-type">{directCall.kind === "video" ? <Video size={17} /> :
-          <Phone size={17} />}{directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}</span>
+          <div className="direct-call-backdrop" aria-hidden="true" />
+          <span className="direct-call-type">
+            {directCall.kind === "video" ? <Video size={16} /> : <Phone size={16} />}
+            {directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}
+          </span>
+          <div className={`direct-call-avatar-wrap ${directCall.phase}`}>
+            <i aria-hidden="true" /><i aria-hidden="true" />
+            <Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")}
+                    lastName={memberMap.get(directCall.peerId)?.lastName}
+                    url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" />
+          </div><span
+          className="direct-call-status-dot" aria-hidden="true" />
           <h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : t("chat.userFallback")}</h2>
           <p>{directCall.phase === "incoming" ? t("chat.incomingCallText") : t("chat.connectingText")}</p>
           <div className="direct-call-ringing-actions">
