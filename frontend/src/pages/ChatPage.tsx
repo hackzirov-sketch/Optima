@@ -38,7 +38,6 @@ import {
   Settings,
   Sliders,
   ShieldCheck,
-  Smile,
   Sparkles,
   Square,
   Trash2,
@@ -53,7 +52,6 @@ import {
 import {
   type CSSProperties,
   FormEvent,
-  KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
   type TouchEvent,
@@ -67,6 +65,8 @@ import { Avatar, Button, EmptyState, Modal }                                from
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
 import { AudioMessage }                                                     from "../components/AudioMessage";
 import { ChannelSettingsPanel }                                             from "../components/ChannelSettingsPanel";
+import { EmojiPickerButton }                                                from "../components/EmojiPicker";
+import { RichMessageInput, type RichMessageInputHandle }                   from "../components/RichMessageInput";
 import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
 import { useToast }                                                         from "../components/Toast";
 import { useConfirm }                                                       from "../components/ConfirmDialog";
@@ -96,6 +96,37 @@ interface StagedAttachment {
 }
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+const TELEGRAM_EMOJI_PATTERN = /^\[\[optima-emoji:(p[1-4]-\d{4})]]$/;
+const TELEGRAM_EMOJI_GLOBAL_PATTERN = /\[\[optima-emoji:(p[1-4]-\d{4})]]/g;
+
+function telegramEmojiId(content: string) {
+  return content.match(TELEGRAM_EMOJI_PATTERN)?.[1] || "";
+}
+
+function isTelegramEmoji(content: string) {
+  return TELEGRAM_EMOJI_PATTERN.test(content);
+}
+
+function telegramEmojiUrl(content: string) {
+  const id = telegramEmojiId(content);
+  return `/telegram-emojis/${id}.png`;
+}
+
+function renderMessageContent(content: string) {
+  const parts: Array<{ text?: string; emojiId?: string }> = [];
+  let cursor = 0;
+  for (const match of content.matchAll(TELEGRAM_EMOJI_GLOBAL_PATTERN)) {
+    if (match.index > cursor) parts.push({ text: content.slice(cursor, match.index) });
+    parts.push({ emojiId: match[1] });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < content.length) parts.push({ text: content.slice(cursor) });
+  if (!parts.length) return content;
+  return parts.map((part, index) => part.emojiId ?
+    <img key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
+         src={`/telegram-emojis/${part.emojiId}.png`} alt="emoji" loading="lazy" decoding="async" /> :
+    <span key={`text-${index}`}>{part.text}</span>);
+}
 
 function MemberPresenceDot({ userId }: { userId: string }) {
   const presence = usePresence(userId);
@@ -239,7 +270,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [readReceipts, setReadReceipts] = useState<Map<string, number>>(new Map());
-  const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -334,10 +364,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [catalogIndicator, setCatalogIndicator] = useState({ left: 0, width: 0 });
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
+  const shouldStickToMessageBottom = useRef(true);
   const aiMessageList = useRef<HTMLDivElement>(null);
   const aiShouldScroll = useRef(false);
   const preserveMessageScroll = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const richMessageInput = useRef<RichMessageInputHandle>(null);
   const roomAvatarInput = useRef<HTMLInputElement>(null);
   const roomBackgroundInput = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number | null>(null);
@@ -764,6 +796,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
 
   useEffect(() => {
+    shouldStickToMessageBottom.current = true;
     if (!selectedId) {
       setMessages([]);
       setReadReceipts(new Map());
@@ -990,6 +1023,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       preserveMessageScroll.current = false;
       return;
     }
+    if (!shouldStickToMessageBottom.current) return;
     messagesEnd.current?.scrollIntoView({ behavior: messages.length > 10 ? "smooth" : "auto" });
     const timer = window.setTimeout(() => {
       const node = messageList.current;
@@ -1170,6 +1204,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     setDraft("");
     setStaged([]);
+    shouldStickToMessageBottom.current = true;
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
       id: `optimistic:${clientMessageId}`,
@@ -1589,13 +1624,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (recorder.current?.state === "recording") recorder.current.stop();
     recordingStream.current?.getTracks().forEach((track) => track.stop());
   }, []);
-
-  function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      void sendMessage();
-    }
-  }
 
   async function createConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2061,7 +2089,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                     <b>{room.unreadCount}</b>}</span>
                 </span>
                 </button>
@@ -2160,7 +2188,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content || (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
@@ -2358,7 +2386,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <>
                 <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => {
                   const node = event.currentTarget;
-                  setShowScrollButton(node.scrollHeight - node.scrollTop - node.clientHeight > 96);
+                  const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+                  shouldStickToMessageBottom.current = distanceFromBottom < 96;
+                  setShowScrollButton(distanceFromBottom > 96);
                   if (node.scrollTop < 90) void loadOlderMessages();
                 }}>
                   {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin"
@@ -2435,7 +2465,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             </button>}
                             {!mine && !grouped &&
                               <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
-                            {message.content && <p>{message.content}</p>}
+                            {message.content && (isTelegramEmoji(message.content) ?
+                              <img className="message-custom-emoji" src={telegramEmojiUrl(message.content)}
+                                   alt="Telegram emoji" loading="lazy" decoding="async" /> :
+                              <p>{renderMessageContent(message.content)}</p>)}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ?
                               <AudioMessage key={attachment.id || attachment.url} src={attachment.url}
                                             fileName={attachment.fileName}
@@ -2519,6 +2552,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
                   {showScrollButton && <button className="scroll-bottom" onClick={() => {
+                    shouldStickToMessageBottom.current = true;
                     setShowScrollButton(false);
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
                   }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
@@ -2590,16 +2624,20 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           setDraft("");
                         }} aria-label={t("chat.cancelAria")}><X size={17} /></button>
                       </div>}
-                    <span className="emoji-menu-wrap"><button className="icon-button"
-                                                              onClick={() => setEmojiOpen((value) => !value)}
-                                                              aria-label={t("chat.chooseEmojiAria")}
-                                                              aria-expanded={emojiOpen}><Smile size={20} /></button>
-                      {emojiOpen && <span className="emoji-menu" role="menu"
-                                          aria-label={t("chat.quickEmojisAria")}>{quickEmojis.map((emoji) => <button
-                        key={emoji} type="button" role="menuitem" onClick={() => {
-                        setDraft((current) => `${current}${emoji}`);
-                        setEmojiOpen(false);
-                      }} aria-label={t("chat.addEmojiAria", { emoji })}>{emoji}</button>)}</span>}</span>
+                    <button type="button"
+                            className={`icon-button composer-ai-trigger ${/^\/ai(?:\s|$)/i.test(draft) ? "active" : ""}`}
+                            onClick={() => {
+                              const opening = !/^\/ai(?:\s|$)/i.test(draft);
+                              setDraft(opening ? "/ai " : "");
+                              if (!opening) setAiAssistPrompt("");
+                              window.requestAnimationFrame(() => richMessageInput.current?.focus());
+                            }}
+                            aria-label={t("chat.aiAssistTitle")}
+                            title={t("chat.aiAssistTitle")}
+                            aria-pressed={/^\/ai(?:\s|$)/i.test(draft)}><Sparkles size={19} /></button>
+                    <EmojiPickerButton onSelect={(emojiId) => {
+                      richMessageInput.current?.insertEmoji(emojiId);
+                    }} />
                     <input ref={fileInput} type="file" hidden multiple onChange={(event) => {
                       const files = Array.from(event.target.files ?? []);
                       if (files.length) void stageFiles(files);
@@ -2614,9 +2652,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       <time>{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</time>
                       <button onClick={() => stopRecording(true)} aria-label={t("chat.cancelRecordingAria")}><Trash2
                         size={18} /></button>
-                    </div> : <textarea value={draft} onChange={(event) => announceTyping(event.target.value)}
-                                       onKeyDown={keyDown} placeholder={t("chat.messagePlaceholder")} rows={1}
-                                       maxLength={1500} aria-label={t("chat.messageTextAria")} />}
+                    </div> : <RichMessageInput ref={richMessageInput} value={draft}
+                                               onChange={announceTyping}
+                                               onSubmit={() => void sendMessage()}
+                                               placeholder={t("chat.messagePlaceholder")}
+                                               maxLength={1500} ariaLabel={t("chat.messageTextAria")} />}
                     {(draft.trim() || staged.length > 0) && !recording ?
                       <button className="send-button" onClick={() => void sendMessage()}
                               disabled={sending || staged.some((item) => !item.attachment && !item.error)}

@@ -6,6 +6,7 @@ import { I18nProvider } from "./lib/i18n/i18n";
 import { ToastProvider } from "./components/Toast";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import "./styles.css";
+import "./premium.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

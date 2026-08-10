@@ -261,6 +261,7 @@ export function AuthPage() {
       </section>
       <section className="auth-panel">
         <div className="auth-card">
+          <Logo />
           {mode !== "login" && <button className="back-button" onClick={() => switchMode("login")}><ArrowLeft size={17} /> {t("auth.backToLogin")}</button>}
           <header className="auth-heading">
             <span className="auth-kicker">OPTIMA</span>
