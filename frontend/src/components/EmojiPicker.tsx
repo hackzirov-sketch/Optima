@@ -1,9 +1,12 @@
 import { ChevronLeft, ChevronRight, Clock3, RefreshCw, Smile, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutsideClose } from "../lib/useOutsideClose";
-import { fallbackEmojiImage, fetchEmojiManifest } from "../lib/emojiAssets";
-
-type EmojiAsset = { id: string; src: string; pack: number };
+import {
+  emojiPreviewUrl,
+  fetchAnimatedEmojiManifest,
+  fetchEmojiManifest,
+  type EmojiAsset
+} from "../lib/emojiAssets";
 
 const PAGE_SIZE = 96;
 const RECENT_KEY = "optima:telegram-emoji-recent";
@@ -25,9 +28,21 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
 
   useEffect(() => {
     if (!open || assets.length || failed) return;
-    fetchEmojiManifest<EmojiAsset[]>()
-      .then(setAssets)
-      .catch(() => setFailed(true));
+    Promise.allSettled([
+      fetchEmojiManifest<Array<Pick<EmojiAsset, "id" | "src" | "pack">>>(),
+      fetchAnimatedEmojiManifest<EmojiAsset[]>()
+    ]).then(([staticResult, animatedResult]) => {
+      const staticAssets = staticResult.status === "fulfilled" ? staticResult.value.map((asset) => ({
+        ...asset,
+        previewSrc: asset.src || emojiPreviewUrl(asset.id),
+        packName: `${asset.pack}-to‘plam`,
+        format: "png" as const
+      })) : [];
+      const animatedAssets = animatedResult.status === "fulfilled" ? animatedResult.value : [];
+      const next = [...staticAssets, ...animatedAssets];
+      if (!next.length) setFailed(true);
+      else setAssets(next);
+    });
   }, [open, assets.length, failed]);
 
   const packAssets = useMemo(() => pack === 0
@@ -35,6 +50,11 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
     : assets.filter((asset) => asset.pack === pack), [assets, pack, recent]);
   const pageCount = Math.max(1, Math.ceil(packAssets.length / PAGE_SIZE));
   const visible = packAssets.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const packs = useMemo(() => Array.from(new Map(assets.map((asset) => [asset.pack, {
+    number: asset.pack,
+    name: asset.packName,
+    preview: asset.previewSrc || emojiPreviewUrl(asset.id)
+  }])).values()), [assets]);
 
   function selectPack(nextPack: number) {
     setPack(nextPack);
@@ -64,13 +84,11 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
           <div className="telegram-emoji-packs" role="tablist" aria-label="Emoji to‘plamlari">
             <button type="button" role="tab" aria-selected={pack === 0} className={pack === 0 ? "active" : ""}
                     onClick={() => selectPack(0)} title="So‘nggi ishlatilganlar"><Clock3 size={18} /></button>
-            {[1, 2, 3, 4].map((number) => (
-              <button key={number} type="button" role="tab" aria-selected={pack === number}
-                      className={pack === number ? "active" : ""} onClick={() => selectPack(number)}
-                      title={`${number}-to‘plam`}>
-                {assets.find((asset) => asset.pack === number) ?
-                  <img src={assets.find((asset) => asset.pack === number)!.src} alt=""
-                       onError={(event) => fallbackEmojiImage(event.currentTarget, assets.find((asset) => asset.pack === number)!.id)} /> : <span>{number}</span>}
+            {packs.map((item) => (
+              <button key={item.number} type="button" role="tab" aria-selected={pack === item.number}
+                      className={pack === item.number ? "active" : ""} onClick={() => selectPack(item.number)}
+                      title={item.name} aria-label={item.name}>
+                <img src={item.preview} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>
@@ -81,8 +99,7 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
             {visible.map((asset) => (
               <button key={asset.id} type="button" onClick={() => pick(asset.id)}
                       aria-label="Custom emojini matnga qo‘shish">
-                <img src={asset.src} alt="" loading="lazy" decoding="async"
-                     onError={(event) => fallbackEmojiImage(event.currentTarget, asset.id)} />
+                <img src={asset.previewSrc || emojiPreviewUrl(asset.id)} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
           </div>

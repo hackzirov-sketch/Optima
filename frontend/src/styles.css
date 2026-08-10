@@ -3545,6 +3545,9 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .telegram-emoji-pagination button:disabled { opacity: .3; }
 .message-custom-emoji { width: clamp(72px, 9vw, 112px); height: clamp(72px, 9vw, 112px); display: block; object-fit: contain; }
 .message-inline-custom-emoji { width: 1.65em; height: 1.65em; margin: -.32em .08em; display: inline-block; vertical-align: middle; object-fit: contain; }
+.message-custom-emoji > canvas,
+.message-inline-custom-emoji > canvas,
+.reaction-custom-emoji > canvas { width: 100% !important; height: 100% !important; display: block; }
 .message-bubble:has(> .message-custom-emoji) { min-width: 110px; background: transparent; box-shadow: none; }
 
 @media (max-width: 820px) {

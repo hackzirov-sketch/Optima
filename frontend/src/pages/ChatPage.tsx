@@ -66,6 +66,7 @@ import { StarfieldBackground }                                              from
 import { AudioMessage }                                                     from "../components/AudioMessage";
 import { ChannelSettingsPanel }                                             from "../components/ChannelSettingsPanel";
 import { EmojiPickerButton }                                                from "../components/EmojiPicker";
+import { AnimatedEmoji }                                                    from "../components/AnimatedEmoji";
 import { RichMessageInput, type RichMessageInputHandle }                   from "../components/RichMessageInput";
 import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
 import { useToast }                                                         from "../components/Toast";
@@ -78,7 +79,7 @@ import { setUnreadTotal }                                                   from
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
 import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
 import { clampParticipants } from "../lib/meeting-limits";
-import { emojiAssetUrl, fallbackEmojiImage } from "../lib/emojiAssets";
+import { CUSTOM_EMOJI_ID_PATTERN, CUSTOM_EMOJI_TOKEN_PATTERN } from "../lib/emojiAssets";
 
 /**
  * Telegram's album size, and the same limit the server enforces in
@@ -97,8 +98,8 @@ interface StagedAttachment {
 }
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
-const TELEGRAM_EMOJI_PATTERN = /^\[\[optima-emoji:(p[1-4]-\d{4})]]$/;
-const TELEGRAM_EMOJI_GLOBAL_PATTERN = /\[\[optima-emoji:(p[1-4]-\d{4})]]/g;
+const TELEGRAM_EMOJI_PATTERN = new RegExp(`^${CUSTOM_EMOJI_TOKEN_PATTERN.source}$`);
+const TELEGRAM_EMOJI_GLOBAL_PATTERN = new RegExp(CUSTOM_EMOJI_TOKEN_PATTERN.source, "g");
 
 function telegramEmojiId(content: string) {
   return content.match(TELEGRAM_EMOJI_PATTERN)?.[1] || "";
@@ -106,11 +107,6 @@ function telegramEmojiId(content: string) {
 
 function isTelegramEmoji(content: string) {
   return TELEGRAM_EMOJI_PATTERN.test(content);
-}
-
-function telegramEmojiUrl(content: string) {
-  const id = telegramEmojiId(content);
-  return emojiAssetUrl(id);
 }
 
 function renderMessageContent(content: string) {
@@ -124,9 +120,8 @@ function renderMessageContent(content: string) {
   if (cursor < content.length) parts.push({ text: content.slice(cursor) });
   if (!parts.length) return content;
   return parts.map((part, index) => part.emojiId ?
-    <img key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
-         src={emojiAssetUrl(part.emojiId)} alt="emoji" loading="lazy" decoding="async"
-         onError={(event) => fallbackEmojiImage(event.currentTarget, part.emojiId!)} /> :
+    <AnimatedEmoji key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
+                   id={part.emojiId} /> :
     <span key={`text-${index}`}>{part.text}</span>);
 }
 
@@ -183,12 +178,9 @@ function memberUser(member: WorkspaceMember, t: TranslateFn): User {
 }
 
 const quickEmojis = ["p1-0001", "p1-0005", "p1-0006", "p1-0008", "p1-0007"];
-const CUSTOM_REACTION_PATTERN = /^p[1-4]-\d{4}$/;
-
 function renderReaction(emoji: string) {
-  return CUSTOM_REACTION_PATTERN.test(emoji)
-    ? <img className="reaction-custom-emoji" src={emojiAssetUrl(emoji)} alt="" loading="lazy" decoding="async"
-           onError={(event) => fallbackEmojiImage(event.currentTarget, emoji)} />
+  return CUSTOM_EMOJI_ID_PATTERN.test(emoji)
+    ? <AnimatedEmoji className="reaction-custom-emoji" id={emoji} />
     : <span className="reaction-unicode-emoji">{emoji}</span>;
 }
 
@@ -2476,9 +2468,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             {!mine && !grouped &&
                               <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
-                              <img className="message-custom-emoji" src={telegramEmojiUrl(message.content)}
-                                   alt="Telegram emoji" loading="lazy" decoding="async"
-                                   onError={(event) => fallbackEmojiImage(event.currentTarget, telegramEmojiId(message.content))} /> :
+                              <AnimatedEmoji className="message-custom-emoji" id={telegramEmojiId(message.content)} /> :
                               <p>{renderMessageContent(message.content)}</p>)}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ?
                               <AudioMessage key={attachment.id || attachment.url} src={attachment.url}
