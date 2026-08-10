@@ -180,7 +180,14 @@ function memberUser(member: WorkspaceMember, t: TranslateFn): User {
   }) as User;
 }
 
-const quickEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👏", "✅", "🙏"];
+const quickEmojis = ["p1-0001", "p1-0005", "p1-0006", "p1-0008", "p1-0007"];
+const CUSTOM_REACTION_PATTERN = /^p[1-4]-\d{4}$/;
+
+function renderReaction(emoji: string) {
+  return CUSTOM_REACTION_PATTERN.test(emoji)
+    ? <img className="reaction-custom-emoji" src={`/telegram-emojis/${emoji}.png`} alt="" loading="lazy" decoding="async" />
+    : <span className="reaction-unicode-emoji">{emoji}</span>;
+}
 
 type AiConversationMessage = {
   id: string;
@@ -2488,7 +2495,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             {message.reactions && message.reactions.length > 0 &&
                               <div className="message-reactions">{message.reactions.map((reaction) => <button
                                 key={reaction.emoji}
-                                onClick={() => void reactToMessage(message, reaction.emoji)}>{reaction.emoji}
+                                onClick={() => void reactToMessage(message, reaction.emoji)}>{renderReaction(reaction.emoji)}
                                 <span>{reaction.userIds.length}</span></button>)}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>
                               {/* Channels report a bare count to everyone; in a group
@@ -2519,8 +2526,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <MoreVertical size={16} /></button>
                             {activeMenu === message.id && <div className="message-context-menu" role="menu"
                                                                onMouseLeave={() => setActiveMenu(null)}>
-                              <div className="reaction-strip">{quickEmojis.slice(0, 5).map((emoji) => <button
-                                key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>)}</div>
+                              <div className="reaction-strip">{quickEmojis.map((emoji) => <button
+                                key={emoji} aria-label="Reaksiya qoldirish" onClick={() => {
+                                  void reactToMessage(message, emoji);
+                                  setActiveMenu(null);
+                                }}>{renderReaction(emoji)}</button>)}</div>
                               <button onClick={() => {
                                 setReplyingTo(message);
                                 setEditing(null);

@@ -3691,3 +3691,22 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 @media (max-width: 390px) {
   .conversation > .message-list .message-bubble { max-width: 91%; }.meeting-controls button { flex-basis: 40px; width: 40px; height: 40px; }.meeting-control-primary { justify-content: flex-start; }
 }
+
+/* Custom Telegram reactions: compact, aligned, and stable around message bubbles. */
+.message-reactions { position: relative; z-index: 2; width: fit-content; max-width: 100%; margin: 5px 0 -2px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.message-reactions button { min-width: 42px; height: 30px; padding: 2px 7px 2px 4px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid color-mix(in srgb,var(--accent) 20%,var(--line)); border-radius: 11px; background: color-mix(in srgb,var(--accent) 7%,var(--surface)); color: var(--accent-ink); box-shadow: 0 2px 7px rgba(41,39,96,.06); }
+.message-reactions button:hover { border-color: color-mix(in srgb,var(--accent) 42%,var(--line)); background: color-mix(in srgb,var(--accent) 13%,var(--surface)); transform: translateY(-1px); }
+.message-reactions button > span:last-child { min-width: 12px; font-size: 11px; font-weight: 800; line-height: 1; }
+.reaction-custom-emoji { width: 23px; height: 23px; flex: 0 0 23px; display: block; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(31,29,55,.12)); }
+.reaction-unicode-emoji { font-size: 17px; line-height: 1; }
+.reaction-strip { min-width: 236px; padding: 7px 8px 8px; margin: -2px -3px 5px; display: grid; grid-template-columns: repeat(5,40px); justify-content: center; gap: 4px; }
+.reaction-strip button { width: 40px; height: 40px; padding: 5px; display: grid; place-items: center; border: 0; border-radius: 11px; background: transparent; }
+.reaction-strip button:hover, .reaction-strip button:focus-visible { background: var(--accent-soft); transform: translateY(-2px) scale(1.06); }
+.reaction-strip .reaction-custom-emoji { width: 30px; height: 30px; }
+:root[data-theme="dark"] .message-reactions button { background: color-mix(in srgb,var(--accent) 16%,var(--surface)); border-color: color-mix(in srgb,var(--accent) 32%,var(--line)); }
+@media (max-width: 820px) {
+  .reaction-strip { min-width: 220px; grid-template-columns: repeat(5,38px); }
+  .reaction-strip button { width: 38px; height: 38px; }
+  .reaction-strip .reaction-custom-emoji { width: 29px; height: 29px; }
+  .message-reactions button { min-width: 40px; height: 29px; }
+}
