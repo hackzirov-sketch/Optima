@@ -50,6 +50,8 @@
     "logout": "Çıkış",
     "settings": "Ayarlar",
     "notifications": "Bildirimler",
+    "markAllRead": "Tümünü okundu işaretle",
+    "noNotifications": "Henüz bildirim yok",
     "language": "Dili değiştir",
     "statusPicker": "Durum seç",
     "openMenu": "Menüyü aç",

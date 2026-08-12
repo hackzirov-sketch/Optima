@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -7,6 +7,7 @@ import { locales, localeMeta, useI18n, type Locale } from "../lib/i18n/i18n";
 import { setMyPresenceStatus, type PresenceStatus } from "../lib/presence";
 import { Avatar, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
+import { NotificationsMenu } from "./NotificationsMenu";
 
 const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_meeting">; dotClass: string }> = [
   { value: "online", dotClass: "status-dot-online" },
@@ -159,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
-            <button className="icon-button topbar-notifications" aria-label={t("shell.notifications")} title={t("shell.notifications")}><Bell size={19} /></button>
+            <NotificationsMenu />
           </div>
         </header>
         <main className="app-main">{children}</main>

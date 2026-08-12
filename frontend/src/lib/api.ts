@@ -556,7 +556,12 @@ export const api = {
   },
 
   notifications: {
-    list: () => apiFetch<NotificationItem[]>("/notifications?limit=20"),
-    readAll: () => apiFetch("/notifications/read-all", { method: "POST" }),
+    // The endpoint is paginated — it answers with an envelope, not a bare
+    // array, which is what this was typed as.
+    list: (limit = 20) =>
+      apiFetch<{ data: NotificationItem[]; total: number; page: number; limit: number }>(`/notifications?limit=${limit}`),
+    unreadCount: () => apiFetch<{ count: number }>("/notifications/unread-count"),
+    markRead: (id: string) => apiFetch<NotificationItem>(`/notifications/${id}/read`, { method: "PATCH" }),
+    readAll: () => apiFetch<{ message: string }>("/notifications/read-all", { method: "POST" }),
   },
 };

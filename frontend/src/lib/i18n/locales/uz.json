@@ -50,6 +50,8 @@
     "logout": "Chiqish",
     "settings": "Sozlamalar",
     "notifications": "Bildirishnomalar",
+    "markAllRead": "Barchasini o‘qilgan deb belgilash",
+    "noNotifications": "Hozircha bildirishnoma yo‘q",
     "language": "Tilni o‘zgartirish",
     "statusPicker": "Holatni tanlash",
     "openMenu": "Menyuni ochish",

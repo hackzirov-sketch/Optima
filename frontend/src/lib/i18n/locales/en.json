@@ -50,6 +50,8 @@
     "logout": "Log out",
     "settings": "Settings",
     "notifications": "Notifications",
+    "markAllRead": "Mark all as read",
+    "noNotifications": "No notifications yet",
     "language": "Change language",
     "statusPicker": "Set status",
     "openMenu": "Open menu",

@@ -213,6 +213,14 @@ input:hover, textarea:hover, select:hover { border-color: var(--op-mist-strong);
 .ai-composer { width: 100%; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; }
 .ai-composer textarea { width: 100%; min-width: 0; max-width: none; }
 .ai-composer .send-button { width: 46px; min-width: 46px; }
+/* styles.css ends with `.composer textarea { flex: 1 1 auto; width: 0 }` so the
+   composer's own input flexes to fill its row. The AI assist panel floats above
+   the composer and lays its textarea out with grid, where `flex` does nothing —
+   leaving the `width: 0` to collapse it to a sliver with the placeholder
+   wrapping one letter per line. Same trap `.ai-composer textarea` above works
+   around; both selectors match `.composer textarea` exactly, and premium.css is
+   loaded second. */
+.ai-assist-input textarea { width: 100%; min-width: 0; max-width: none; }
 .rich-message-input { min-height: 48px; padding: 11px 14px; border-color: transparent; border-radius: 15px; background: var(--surface-muted); }
 .rich-message-input:focus { border-color: var(--op-mist-strong); box-shadow: var(--op-focus); }
 .telegram-emoji-picker { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--op-shadow-2); }

@@ -394,7 +394,11 @@ export class MeetingJoinRequestService {
         message: `Sizni "${meeting.title || 'Uchrashuv'}" nomli meetingga taklif qilishdi.`,
         entityType: 'meeting',
         entityId: meeting.id,
-        actionUrl: `/app/meetings`,
+        // The route the client actually serves, and the specific meeting: an
+        // invite that drops the recipient on a list of every meeting makes
+        // them hunt for the one they were invited to. `/app/meetings` was not
+        // a route at all, so the notification led nowhere.
+        actionUrl: `/meetings/${meeting.id}`,
         metadata: { joinCode: meeting.meetingCode },
       }),
     );

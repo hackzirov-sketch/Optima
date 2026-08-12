@@ -50,6 +50,8 @@
     "logout": "Выйти",
     "settings": "Настройки",
     "notifications": "Уведомления",
+    "markAllRead": "Отметить все как прочитанные",
+    "noNotifications": "Уведомлений пока нет",
     "language": "Изменить язык",
     "statusPicker": "Выбрать статус",
     "openMenu": "Открыть меню",

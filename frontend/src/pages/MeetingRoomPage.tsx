@@ -40,6 +40,13 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
    * happened to force a re-render.
    */
   const [trackEpoch, onTracksChanged] = useReducer((value: number) => value + 1, 0);
+  // Recomputed every render, so a track that appeared since the last one
+  // re-runs the effect below and gets listeners of its own. Relying on the
+  // stream's own addtrack event alone was not enough: a screen share arrives
+  // as a brand new track that is still `muted` until its first frame, and if
+  // nothing was listening for that unmute the tile stayed on the avatar for
+  // good.
+  const videoTrackKey = stream?.getVideoTracks().map((track) => track.id).join("|") ?? "";
   useEffect(() => {
     if (!stream) return;
     const tracks = stream.getVideoTracks();
@@ -59,8 +66,8 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
         track.removeEventListener("ended", onTracksChanged);
       }
     };
-    // trackEpoch re-subscribes onto whatever the track set has become.
-  }, [stream, trackEpoch]);
+    // videoTrackKey/trackEpoch re-subscribe onto whatever the track set has become.
+  }, [stream, videoTrackKey, trackEpoch]);
   // `muted` is the receiver's "no media is arriving on this track" signal —
   // an added-but-not-yet-flowing track must not count as video.
   const hasVideo = videoOn && Boolean(stream?.getVideoTracks().some((track) => track.readyState === "live" && track.enabled && !track.muted));

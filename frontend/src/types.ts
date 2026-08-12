@@ -359,10 +359,16 @@ export interface MeetingFile {
 export interface NotificationItem {
   id: string;
   title: string;
-  message: string;
+  message: string | null;
   type: string;
   isRead: boolean;
   createdAt: string;
+  actorId?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  /** Where clicking the notification should take the user, when the server knows. */
+  actionUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 /** A note taken during a meeting. Readable by anyone who was in that call. */
