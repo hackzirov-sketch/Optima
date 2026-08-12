@@ -76,18 +76,31 @@ services:
     image: coturn/coturn:4.6-alpine
     restart: unless-stopped
 
-    command:
-      - -n
-      - --log-file=stdout
-      - --listening-port=3478
-      - --min-port=49160
-      - --max-port=49200
-      - --realm=${TURN_REALM:-upz.local}
-      - --user=${TURN_USERNAME:-upzturn}:${TURN_CREDENTIAL:?TURN_CREDENTIAL is required}
-      - --no-cli
-      - --no-tls
-      - --no-dtls
-      - --fingerprint
+    # The auth mode has to match what MeetingsService.getIceServers issues to
+    # the browser — TURN_SECRET (use-auth-secret) when set, the static pair
+    # otherwise — and compose cannot branch, so the entrypoint decides.
+    # Pinning `--user` here while the API handed out HMAC credentials meant
+    # every TURN allocation was rejected and no relay candidate existed.
+    entrypoint: ["/entrypoint.sh"]
+
+    volumes:
+      - ./backend/docker/coturn/entrypoint.sh:/entrypoint.sh:ro
+
+    environment:
+      TURN_REALM: ${TURN_REALM:-upz.local}
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      TURN_MIN_PORT: ${TURN_MIN_PORT:-49160}
+      TURN_MAX_PORT: ${TURN_MAX_PORT:-49200}
+      # Required in production whenever this host's own NIC does not hold the
+      # public address (any cloud VM with a 1:1 NAT). Must be an IP.
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+      # Optional TLS, so clients on networks that only allow 443 can still
+      # relay. Mount the certificate into the container to use it.
+      TURN_TLS_CERT: ${TURN_TLS_CERT:-}
+      TURN_TLS_KEY: ${TURN_TLS_KEY:-}
+      TURN_TLS_PORT: ${TURN_TLS_PORT:-5349}
 
     # Host networking so the wide relay port range doesn't need a per-port
     # docker mapping — coturn's srflx/relay candidates must carry the
@@ -97,6 +110,9 @@ services:
     # port-forwarded to it) and TURN_PUBLIC_HOST below points at that
     # address — on a home/office machine behind a router with no port
     # forwarding, coturn here only helps peers already on the same LAN.
+    # If the host reaches the internet through a 1:1 NAT (cloud VMs), also set
+    # TURN_EXTERNAL_IP, or the candidates coturn advertises are private
+    # addresses that no remote peer can use.
     network_mode: host
 
 #

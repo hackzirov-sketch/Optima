@@ -836,6 +836,7 @@
     "connectionStable": "Aloqa barqaror",
     "reconnecting": "Qayta ulanmoqda",
     "connecting": "Ulanmoqda",
+    "mediaFailed": "Video aloqa o‘rnatilmadi",
     "sharedFilesAria": "Ulashilgan fayllar",
     "meetingInfoAria": "Meeting ma’lumoti",
     "participantsAria": "Qatnashchilar",

@@ -836,6 +836,7 @@
     "connectionStable": "Bağlantı stabil",
     "reconnecting": "Yeniden bağlanıyor",
     "connecting": "Bağlanıyor",
+    "mediaFailed": "Medya bağlantısı kurulamadı",
     "sharedFilesAria": "Paylaşılan dosyalar",
     "meetingInfoAria": "Toplantı bilgisi",
     "participantsAria": "Katılımcılar",

@@ -966,6 +966,7 @@ export class EventsGateway
       client.emit('meeting:error', {
         code: 'MEETING_ID_REQUIRED',
         message: 'meetingId is required',
+        fatal: true,
       });
       return;
     }
@@ -981,14 +982,16 @@ export class EventsGateway
     try {
       await this.meetingsService.join(meetingId, userId);
     } catch (err) {
-      client.emit(
-        'meeting:error',
-        extractErrorDetails(
+      client.emit('meeting:error', {
+        ...extractErrorDetails(
           err,
           'MEETING_JOIN_FAILED',
           'Could not join meeting',
         ),
-      );
+        // Failing to join means there is no call to be in — this is the one
+        // meeting:error the client should act on by tearing the room down.
+        fatal: true,
+      });
       return;
     }
 
@@ -1383,14 +1386,17 @@ export class EventsGateway
         data.enabled,
       );
     } catch (err) {
-      client.emit(
-        'meeting:error',
-        extractErrorDetails(
+      // Not fatal: a rejected toggle (someone else already sharing, a stale
+      // participant row) leaves the call itself perfectly healthy. Emitting
+      // this without the flag used to eject the caller from the meeting.
+      client.emit('meeting:error', {
+        ...extractErrorDetails(
           err,
           'MEETING_TOGGLE_FAILED',
           'Could not update media state',
         ),
-      );
+        fatal: false,
+      });
       return;
     }
 
@@ -1418,10 +1424,10 @@ export class EventsGateway
         data.targetUserId,
       );
     } catch (err) {
-      client.emit(
-        'meeting:error',
-        extractErrorDetails(err, 'MEETING_HOST_ONLY', 'Not allowed'),
-      );
+      client.emit('meeting:error', {
+        ...extractErrorDetails(err, 'MEETING_HOST_ONLY', 'Not allowed'),
+        fatal: false,
+      });
       return;
     }
 

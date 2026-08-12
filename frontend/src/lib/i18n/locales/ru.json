@@ -836,6 +836,7 @@
     "connectionStable": "Соединение стабильно",
     "reconnecting": "Переподключение",
     "connecting": "Подключение",
+    "mediaFailed": "Медиасоединение не установлено",
     "sharedFilesAria": "Общие файлы",
     "meetingInfoAria": "Информация о встрече",
     "participantsAria": "Участники",

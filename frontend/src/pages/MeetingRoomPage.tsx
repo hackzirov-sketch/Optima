@@ -1,5 +1,5 @@
 import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, Mic, MicOff, Minus, MonitorUp, MoreVertical, NotebookPen, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Signal, Smile, Unlock, UsersRound, Video, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -31,7 +31,39 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
   const { t } = useI18n();
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
-  const hasVideo = videoOn && Boolean(stream?.getVideoTracks().some((track) => track.readyState === "live" && track.enabled));
+  /**
+   * A remote MediaStream is a live object: renegotiation adds tracks to it,
+   * and the sender muting or removing a track flips the existing one — all
+   * long after React last rendered this tile. Without listening for that, a
+   * camera switched on mid-call kept showing the avatar (and a stopped screen
+   * share kept showing its last frame) until some unrelated state change
+   * happened to force a re-render.
+   */
+  const [trackEpoch, onTracksChanged] = useReducer((value: number) => value + 1, 0);
+  useEffect(() => {
+    if (!stream) return;
+    const tracks = stream.getVideoTracks();
+    stream.addEventListener("addtrack", onTracksChanged);
+    stream.addEventListener("removetrack", onTracksChanged);
+    for (const track of tracks) {
+      track.addEventListener("mute", onTracksChanged);
+      track.addEventListener("unmute", onTracksChanged);
+      track.addEventListener("ended", onTracksChanged);
+    }
+    return () => {
+      stream.removeEventListener("addtrack", onTracksChanged);
+      stream.removeEventListener("removetrack", onTracksChanged);
+      for (const track of tracks) {
+        track.removeEventListener("mute", onTracksChanged);
+        track.removeEventListener("unmute", onTracksChanged);
+        track.removeEventListener("ended", onTracksChanged);
+      }
+    };
+    // trackEpoch re-subscribes onto whatever the track set has become.
+  }, [stream, trackEpoch]);
+  // `muted` is the receiver's "no media is arriving on this track" signal —
+  // an added-but-not-yet-flowing track must not count as video.
+  const hasVideo = videoOn && Boolean(stream?.getVideoTracks().some((track) => track.readyState === "live" && track.enabled && !track.muted));
   const requestPip = () => { void ref.current?.requestPictureInPicture().catch(() => {}); };
   return (
     <article className={`video-tile ${mirrored ? "video-tile-mirrored" : ""} ${pinned ? "video-tile-pinned" : ""} ${speaking ? "video-tile-speaking" : ""}`}>
@@ -195,17 +227,45 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [roster, setRoster] = useState<Record<string, MeetingUser | null>>({});
   const [remoteMedia, setRemoteMedia] = useState<Record<string, { audio: boolean; video: boolean; screen: boolean }>>({});
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "offline">("connecting");
+  /**
+   * Per-peer RTCPeerConnection.connectionState. The header used to report the
+   * *socket* state, so a call whose media never crossed the NAT — every peer
+   * `failed`, nothing visible or audible — still read "connection stable" and
+   * gave the user nothing to go on. Signalling being up says nothing about
+   * whether media is flowing.
+   */
+  const [peerStates, setPeerStates] = useState<Record<string, RTCPeerConnectionState>>({});
   const peers = useRef(new Map<string, RTCPeerConnection>());
   const iceQueue = useRef(new Map<string, RTCIceCandidateInit[]>());
   const currentStream = useRef<MediaStream | undefined>(undefined);
   const screenTrack = useRef<MediaStreamTrack | null>(null);
+  /**
+   * The sender carrying our screen share to each peer, and whether we got it
+   * by borrowing the camera's sender (replaceTrack) or by adding a new one.
+   * Stopping the share has to undo exactly what starting it did.
+   */
+  const screenSenders = useRef(new Map<string, { sender: RTCRtpSender; borrowed: boolean }>());
+  // Perfect negotiation: peers we currently have an offer in flight to.
+  const makingOffer = useRef(new Set<string>());
   const rtcConfig = useRef<RTCConfiguration>(RTC_CONFIG);
   const reconnectAttempts = useRef(new Map<string, number>());
   const disconnectTimers = useRef(new Map<string, number>());
   const securityKeyPair = useRef<Promise<CryptoKeyPair> | null>(null);
   const remoteSecurityKeys = useRef(new Map<string, JsonWebKey>());
   const [securityCodes, setSecurityCodes] = useState<Record<string, string[]>>({});
-  const sendOfferRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+  const negotiateRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+
+  /**
+   * Perfect negotiation's tie-breaker. The same comparison already decides who
+   * sends the *initial* offer, so reusing it keeps one consistent role per
+   * pair: the peer that does not open the connection is the polite one, and
+   * politeness is what resolves a collision when both sides renegotiate at
+   * once (two people switching their cameras on together, say).
+   */
+  const isPolite = useCallback(
+    (targetUserId: string) => Boolean(user?.id) && user!.id.localeCompare(targetUserId) > 0,
+    [user?.id],
+  );
 
   const ensureSecurityKey = useCallback(() => {
     securityKeyPair.current ||= crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
@@ -503,6 +563,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     peers.current.get(userId)?.close();
     peers.current.delete(userId);
     iceQueue.current.delete(userId);
+    makingOffer.current.delete(userId);
+    screenSenders.current.delete(userId);
+    setPeerStates((current) => { const next = { ...current }; delete next[userId]; return next; });
     setRemoteStreams((current) => { const next = { ...current }; delete next[userId]; return next; });
     setRemoteMedia((current) => { const next = { ...current }; delete next[userId]; return next; });
     const node = audioAnalysers.current.get(userId);
@@ -527,12 +590,21 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         ...current,
         [targetUserId]: {
           audio: current[targetUserId]?.audio ?? true,
-          video: current[targetUserId]?.video ?? stream.getVideoTracks().length > 0,
+          // A video track arriving *is* the proof that this peer has video.
+          // Falling back to the remembered value kept the `false` recorded
+          // when they joined audio-only, so a camera switched on mid-call
+          // stayed hidden unless the meeting:toggled event also landed.
+          video: event.track.kind === "video" ? true : current[targetUserId]?.video ?? stream.getVideoTracks().length > 0,
           screen: current[targetUserId]?.screen ?? false,
         },
       }));
     };
+    // Every local media change (a track added, a screen share started or
+    // stopped, an ICE restart requested) funnels through here, so no code path
+    // can add media and then forget to renegotiate.
+    peer.onnegotiationneeded = () => { void negotiateRef.current(targetUserId); };
     peer.onconnectionstatechange = () => {
+      setPeerStates((current) => ({ ...current, [targetUserId]: peer.connectionState }));
       if (peer.connectionState === "connected") {
         reconnectAttempts.current.delete(targetUserId);
         const timer = disconnectTimers.current.get(targetUserId);
@@ -542,7 +614,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       if (peer.connectionState === "disconnected" && !disconnectTimers.current.has(targetUserId)) {
         const timer = window.setTimeout(() => {
           disconnectTimers.current.delete(targetUserId);
-          if (peer.connectionState === "disconnected") void sendOfferRef.current(targetUserId, true);
+          if (peer.connectionState === "disconnected") void negotiateRef.current(targetUserId, true);
         }, 4000);
         disconnectTimers.current.set(targetUserId, timer);
       }
@@ -550,7 +622,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         const attempts = reconnectAttempts.current.get(targetUserId) || 0;
         if (attempts < 2) {
           reconnectAttempts.current.set(targetUserId, attempts + 1);
-          void sendOfferRef.current(targetUserId, true);
+          void negotiateRef.current(targetUserId, true);
         } else closePeer(targetUserId);
       }
       if (peer.connectionState === "closed") closePeer(targetUserId);
@@ -559,14 +631,34 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return peer;
   }, [meetingId, closePeer]);
 
-  const sendOffer = useCallback(async (targetUserId: string, iceRestart = false) => {
+  /**
+   * The one place an offer is ever created. Called directly to open a
+   * connection (a peer with no local tracks never raises negotiationneeded,
+   * so the first offer has to be explicit) and to request an ICE restart;
+   * called by onnegotiationneeded for everything else.
+   *
+   * Bailing out mid-exchange is safe now, which it was not before: the
+   * negotiation-needed flag set by restartIce/addTrack survives, and
+   * onnegotiationneeded re-enters here as soon as we are stable again. The
+   * old early return simply dropped the renegotiation on the floor — that is
+   * how a screen share could report itself as live while no offer describing
+   * it had ever been sent.
+   */
+  const negotiate = useCallback(async (targetUserId: string, iceRestart = false) => {
     const peer = createPeer(targetUserId);
-    if (peer.signalingState !== "stable") return;
-    const offer = await peer.createOffer({ iceRestart });
-    await peer.setLocalDescription(offer);
-    getSocket().emit("meeting:offer", { meetingId, targetUserId, sdp: offer });
+    if (iceRestart) peer.restartIce();
+    if (makingOffer.current.has(targetUserId) || peer.signalingState !== "stable") return;
+    try {
+      makingOffer.current.add(targetUserId);
+      await peer.setLocalDescription();
+      if (peer.localDescription) getSocket().emit("meeting:offer", { meetingId, targetUserId, sdp: peer.localDescription });
+    } catch {
+      // Not fatal: connectionstatechange still retries, and the flag stays set.
+    } finally {
+      makingOffer.current.delete(targetUserId);
+    }
   }, [createPeer, meetingId]);
-  sendOfferRef.current = sendOffer;
+  negotiateRef.current = negotiate;
 
   const flushIce = useCallback(async (userId: string, peer: RTCPeerConnection) => {
     const queued = iceQueue.current.get(userId) || [];
@@ -601,31 +693,53 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       });
       for (const targetUserId of userIds) {
         await sendSecurityKey(targetUserId);
-        if (user?.id && user.id.localeCompare(targetUserId) < 0) await sendOffer(targetUserId);
+        if (user?.id && !isPolite(targetUserId)) await negotiate(targetUserId);
       }
     };
     const onUserJoined = ({ userId: joinedUserId, user: joinedUser }: { userId: string; user?: MeetingUser | null }) => {
       setRoster((current) => ({ ...current, [joinedUserId]: joinedUser ?? current[joinedUserId] ?? null }));
       void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
-        if (user?.id && user.id.localeCompare(joinedUserId) < 0 && !peers.current.has(joinedUserId)) void sendOffer(joinedUserId);
+        if (user?.id && !isPolite(joinedUserId) && !peers.current.has(joinedUserId)) void negotiate(joinedUserId);
       }, 300);
     };
+    /**
+     * Perfect negotiation, answerer half.
+     *
+     * Two peers renegotiating at the same instant (both switching a camera on,
+     * say — far more likely in production than on a loopback connection) used
+     * to leave this side throwing InvalidStateError out of an unhandled
+     * promise: no answer went back, and the peer sat in have-local-offer for
+     * the rest of the call with video permanently stuck. Now the impolite peer
+     * discards the colliding offer and keeps its own, while the polite peer
+     * lets setRemoteDescription roll its offer back and answers.
+     */
     const onOffer = async ({ fromUserId, sdp }: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
       const peer = createPeer(fromUserId);
-      await peer.setRemoteDescription(sdp);
-      await flushIce(fromUserId, peer);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit("meeting:answer", { meetingId, targetUserId: fromUserId, sdp: answer });
-      await updateSecurityCode(fromUserId, peer);
+      const collision = makingOffer.current.has(fromUserId) || peer.signalingState !== "stable";
+      if (collision && !isPolite(fromUserId)) return;
+      try {
+        await peer.setRemoteDescription(sdp);
+        await flushIce(fromUserId, peer);
+        await peer.setLocalDescription();
+        if (peer.localDescription) socket.emit("meeting:answer", { meetingId, targetUserId: fromUserId, sdp: peer.localDescription });
+        await updateSecurityCode(fromUserId, peer);
+      } catch {
+        // The offerer's connectionstatechange retry is the backstop here.
+      }
     };
     const onAnswer = async ({ fromUserId, sdp }: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
       const peer = peers.current.get(fromUserId);
-      if (!peer) return;
-      await peer.setRemoteDescription(sdp);
-      await flushIce(fromUserId, peer);
-      await updateSecurityCode(fromUserId, peer);
+      // An answer to an offer we rolled back (or already superseded) would
+      // throw; only the offer we are actually waiting on is applicable.
+      if (!peer || peer.signalingState !== "have-local-offer") return;
+      try {
+        await peer.setRemoteDescription(sdp);
+        await flushIce(fromUserId, peer);
+        await updateSecurityCode(fromUserId, peer);
+      } catch {
+        // Same backstop as above.
+      }
     };
     const onSecurityKey = async ({ fromUserId, publicKey }: { fromUserId: string; publicKey: JsonWebKey }) => {
       const firstKey = !remoteSecurityKeys.current.has(fromUserId);
@@ -666,7 +780,14 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     const onFileShared = ({ file }: { file: MeetingFile }) => {
       setFiles((current) => current.some((item) => item.id === file.id) ? current : [file, ...current]);
     };
-    const onMeetingError = ({ message }: { message: string }) => { show(message || t("meetingRoom.joinFailed"), "error"); setEntered(false); };
+    // Only a failed *join* means there is no call to stay in. Everything else
+    // (a screen share already claimed by someone else, a rejected moderation
+    // action) is a message, not an eviction — this used to drop the user out
+    // of a perfectly healthy meeting for pressing the share button.
+    const onMeetingError = ({ message, fatal }: { message: string; fatal?: boolean }) => {
+      show(message || t("meetingRoom.joinFailed"), "error");
+      if (fatal) setEntered(false);
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("meeting:participants", onParticipants);
@@ -698,7 +819,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, sendOffer, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id, meeting?.participants]);
+  }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id, meeting?.participants]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -760,21 +881,27 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     const enabled = kind === "audio" ? !microphone : !camera;
     const existing = currentStream.current?.getTracks().find((track) => track.kind === kind);
     if (enabled && !existing) {
+      let track: MediaStreamTrack | undefined;
       try {
-        const track = await requestTrack(kind);
+        track = await requestTrack(kind);
         if (!track) throw new Error("Media track unavailable");
-        currentStream.current ??= new MediaStream();
-        currentStream.current.addTrack(track);
-        setLocalStream(new MediaStream(currentStream.current.getTracks()));
-        for (const [targetUserId, peer] of peers.current) {
-          peer.addTrack(track, currentStream.current);
-          const offer = await peer.createOffer();
-          await peer.setLocalDescription(offer);
-          getSocket().emit("meeting:offer", { meetingId, targetUserId, sdp: offer });
-        }
       } catch {
         show(t("meetingRoom.cameraOrMicFailed", { device: kind === "video" ? t("meetingRoom.cameraWord") : t("meetingRoom.microphoneWord") }), "error");
         return;
+      }
+      currentStream.current ??= new MediaStream();
+      currentStream.current.addTrack(track);
+      setLocalStream(new MediaStream(currentStream.current.getTracks()));
+      // Per peer, and never aborting the loop: one peer that cannot take the
+      // track (a connection already failed, say) used to stop every remaining
+      // participant from being offered it at all. Renegotiation itself is left
+      // to onnegotiationneeded, which addTrack has just armed.
+      for (const peer of peers.current.values()) {
+        try {
+          peer.addTrack(track, currentStream.current);
+        } catch {
+          // Keep going — the others still get the new track.
+        }
       }
     } else {
       existing && (existing.enabled = enabled);
@@ -788,10 +915,21 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (!sharedTrack && !screenSharing) return;
     if (sharedTrack) sharedTrack.onended = null;
     const cameraTrack = currentStream.current?.getVideoTracks()[0] ?? null;
-    for (const peer of peers.current.values()) {
-      const sender = peer.getSenders().find((entry) => entry.track === sharedTrack || entry.track?.kind === "video");
-      if (sender) await sender.replaceTrack(cameraTrack);
+    // Undo exactly what toggleScreen did, per peer. The old code searched for
+    // "any video sender" and handed it replaceTrack(null) whenever the camera
+    // was off, which left the sender alive but empty — the far side kept the
+    // last shared frame frozen on screen indefinitely.
+    for (const [targetUserId, entry] of screenSenders.current) {
+      const peer = peers.current.get(targetUserId);
+      if (!peer) continue;
+      try {
+        if (entry.borrowed && cameraTrack) await entry.sender.replaceTrack(cameraTrack);
+        else peer.removeTrack(entry.sender);
+      } catch {
+        // A peer that is already gone needs no unwinding.
+      }
     }
+    screenSenders.current.clear();
     sharedTrack?.stop();
     screenTrack.current = null;
     setScreenStream(undefined);
@@ -804,32 +942,50 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       await stopScreenShare();
       return;
     }
+    let display: MediaStream;
+    let track: MediaStreamTrack | undefined;
     try {
-      const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      const track = display.getVideoTracks()[0];
+      display = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      track = display.getVideoTracks()[0];
       if (!track) throw new Error("Screen track unavailable");
-      screenTrack.current = track;
-      setScreenStream(display);
-      for (const [targetUserId, peer] of peers.current) {
-        const sender = peer.getSenders().find((entry) => entry.track?.kind === "video");
-        if (sender) await sender.replaceTrack(track);
-        else {
-          peer.addTrack(track, display);
-          await sendOffer(targetUserId);
-        }
-      }
-      setScreenSharing(true);
-      getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: true });
-      track.onended = () => void stopScreenShare();
     } catch {
       show(t("meetingRoom.screenShareCancelled"), "error");
+      return;
     }
+    screenTrack.current = track;
+    setScreenStream(display);
+    const cameraTrack = currentStream.current?.getVideoTracks()[0] ?? null;
+    for (const [targetUserId, peer] of peers.current) {
+      try {
+        const cameraSender = cameraTrack ? peer.getSenders().find((entry) => entry.track === cameraTrack) : undefined;
+        if (cameraSender) {
+          await cameraSender.replaceTrack(track);
+          screenSenders.current.set(targetUserId, { sender: cameraSender, borrowed: true });
+          continue;
+        }
+        // Announced under the stream we already publish, NOT under the fresh
+        // getDisplayMedia stream: the receiver keys its tile off
+        // event.streams[0], so a new stream id replaced the entry holding this
+        // peer's audio and the far side stopped hearing us mid-share.
+        currentStream.current ??= new MediaStream();
+        screenSenders.current.set(targetUserId, { sender: peer.addTrack(track, currentStream.current), borrowed: false });
+      } catch {
+        // Keep sharing with everyone else.
+      }
+    }
+    setScreenSharing(true);
+    getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: true });
+    track.onended = () => void stopScreenShare();
   }
 
   const cleanup = useCallback(() => {
     getSocket().emit("meeting:leave", { meetingId });
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
+    makingOffer.current.clear();
+    screenSenders.current.clear();
+    iceQueue.current.clear();
+    setPeerStates({});
     setRoster({});
     setRemoteStreams({});
     disconnectTimers.current.forEach(window.clearTimeout);
@@ -1046,6 +1202,22 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   const focusedUserId = screenSharingUserId || activeSpeakerId || pinnedUserId || null;
 
+  /**
+   * What the header actually reports. The socket being up only means
+   * signalling works; if every peer connection is `failed` (no route across
+   * the NATs, typically a missing or unreachable TURN relay) there is no
+   * media at all, and saying "connection stable" left the user with a blank
+   * grid and no explanation. Media trouble outranks a healthy socket here.
+   */
+  const callState = useMemo<"connecting" | "connected" | "offline" | "failed">(() => {
+    if (connectionState === "offline") return "offline";
+    const states = Object.values(peerStates);
+    if (!states.length) return connectionState;
+    if (states.some((state) => state === "failed")) return "failed";
+    if (states.every((state) => state === "connected")) return "connected";
+    return "connecting";
+  }, [connectionState, peerStates]);
+
   const allTiles = useMemo(() => {
     const self = {
       id: selfId,
@@ -1133,7 +1305,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   return (
     <div className={`meeting-room ${directMode ? "direct-call-room" : overlayClass}`}>
-      <header className="meeting-room-header"><div><span className={`connection-dot ${connectionState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{connectionState === "connected" ? t("meetingRoom.connectionStable") : connectionState === "offline" ? t("meetingRoom.reconnecting") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
+      <header className="meeting-room-header"><div><span className={`connection-dot ${callState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{callState === "connected" ? t("meetingRoom.connectionStable") : callState === "offline" ? t("meetingRoom.reconnecting") : callState === "failed" ? t("meetingRoom.mediaFailed") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label={t("meetingRoom.checkSecurityKeyAria")}><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>{t("meetingRoom.compareKeyHint")}</small></button>}
       <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
       {focusedTile ? (

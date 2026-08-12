@@ -836,6 +836,7 @@
     "connectionStable": "Connection stable",
     "reconnecting": "Reconnecting",
     "connecting": "Connecting",
+    "mediaFailed": "Media connection failed",
     "sharedFilesAria": "Shared files",
     "meetingInfoAria": "Meeting info",
     "participantsAria": "Participants",
