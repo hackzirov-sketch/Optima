@@ -9,3 +9,5 @@
 # secrets under a name the old rule did not match.
 .env.*
 !.env.example
+
+*.pem

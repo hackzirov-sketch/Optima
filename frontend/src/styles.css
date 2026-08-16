@@ -1256,6 +1256,23 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .bg-upload-trigger.is-loading { cursor: wait; opacity: .75; }
 .bg-upload-trigger input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .profile-summary h2 { margin-bottom: 4px; font-size: 18px; }.profile-summary > p { margin-bottom: 10px; color: var(--muted); font-size: 11px; }
+.display-name { min-width: 0; display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; }
+.display-name > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.display-name-emoji { width: 1.25em; height: 1.25em; flex: 0 0 1.25em; display: inline-grid; place-items: center; object-fit: contain; }
+.display-name-emoji > div, .display-name-emoji canvas, .display-name-emoji svg { width: 100% !important; height: 100% !important; }
+.profile-summary h2 .display-name-emoji, .public-profile-hero h1 .display-name-emoji { width: 1.35em; height: 1.35em; flex-basis: 1.35em; }
+.name-emoji-setting { min-width: 0; min-height: 64px; padding: 10px 12px; display: grid; grid-template-columns: 40px minmax(0,1fr) auto auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-muted); }
+.name-emoji-setting > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+.name-emoji-setting strong { color: var(--text); font-size: 13px; }
+.name-emoji-setting small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+.name-emoji-preview { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--card); color: var(--muted); box-shadow: var(--shadow-sm); }
+.name-emoji-preview > img, .name-emoji-preview > span { width: 29px; height: 29px; object-fit: contain; }
+.name-emoji-picker .telegram-emoji-picker { position: fixed; inset: 50% auto auto 50%; width: min(420px,calc(100vw - 24px)); height: min(560px,calc(100dvh - 96px)); max-height: calc(100dvh - 96px); z-index: 1300; transform: translate(-50%,-50%); animation: none; }
+@media (max-width: 640px) {
+  .name-emoji-setting { grid-template-columns: 38px minmax(0,1fr) auto; }
+  .name-emoji-setting > .icon-button { grid-column: 3; }
+  .name-emoji-picker .telegram-emoji-picker { inset: auto 8px calc(72px + env(safe-area-inset-bottom)); width: auto; height: min(500px,68dvh); max-height: min(500px,68dvh); transform: none; }
+}
 .role-badge { padding: 5px 8px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-ink); font-size: 9px; font-weight: 750; text-transform: capitalize; }
 .profile-meta { margin: 20px 16px 15px; padding: 12px 0; display: grid; gap: 15px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; }
 .profile-meta div { min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--muted); }
@@ -3545,7 +3562,10 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 
 /* Telegram static emoji packs supplied with OPTIMA. */
 /* Head, pack strip, grid. The grid scrolls; there is no pagination row. */
-.telegram-emoji-picker { grid-template-rows: auto auto auto minmax(220px, 1fr); }
+.telegram-emoji-picker { grid-template-rows: auto auto auto auto minmax(220px, 1fr); }
+.telegram-emoji-modes { margin: 6px 10px 0; padding: 3px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 3px; border-radius: 11px; background: var(--surface-muted); }
+.telegram-emoji-modes button { min-width: 0; min-height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; }
+.telegram-emoji-modes button.active { background: var(--card); color: var(--accent-ink); box-shadow: var(--shadow-sm); }
 .telegram-emoji-head { min-height: 48px; padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .telegram-emoji-head strong { font-size: 14px; }
 .telegram-emoji-head button,
@@ -3563,7 +3583,8 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .telegram-emoji-grid button { aspect-ratio: 1; min-width: 0; padding: 3px; border: 0; border-radius: 10px; background: transparent; }
 .telegram-emoji-grid button:hover,
 .telegram-emoji-grid button:focus-visible { background: var(--accent-soft); transform: scale(1.08); }
-.telegram-emoji-grid img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.telegram-emoji-grid img, .telegram-emoji-grid button > span { width: 100%; height: 100%; display: block; object-fit: contain; }
+.telegram-emoji-grid button > span > div, .telegram-emoji-grid button > span canvas, .telegram-emoji-grid button > span svg { width: 100% !important; height: 100% !important; }
 .telegram-emoji-state { grid-column: 1 / -1; padding: 52px 12px; color: var(--muted); text-align: center; }
 /* Marks the end of the rendered batch. The observer needs a real box to watch,
    so `display: contents` is out; it spans the row and mirrors the grid's own
@@ -3619,7 +3640,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   width: min(420px, calc(100vw - 24px));
   height: min(560px, calc(100dvh - 128px));
   max-height: min(560px, calc(100dvh - 128px));
-  grid-template-rows: auto auto 52px minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto 52px minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -3630,24 +3651,51 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .telegram-emoji-head > span { min-width: 0; display: grid; gap: 1px; }
 .telegram-emoji-head strong { color: var(--text); font-size: 14px; line-height: 18px; }
 .telegram-emoji-head small { color: var(--muted); font-size: 10px; line-height: 15px; }
+.telegram-emoji-topics {
+  min-width: 0;
+  padding: 6px 10px 2px;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+.telegram-emoji-topics::-webkit-scrollbar { display: none; }
+.telegram-emoji-topics button {
+  min-height: 30px;
+  padding: 0 11px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.telegram-emoji-topics button.active { border-color: transparent; background: var(--accent-soft); color: var(--accent-ink); }
 .telegram-emoji-packs {
+  position: relative;
+  z-index: 2;
   min-width: 0;
   height: 52px;
   padding: 5px 10px;
   grid-template-columns: none;
   grid-auto-flow: column;
-  grid-auto-columns: 42px;
+  grid-auto-columns: max-content;
   align-items: center;
   justify-content: start;
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
+  background: var(--surface);
   overscroll-behavior-inline: contain;
   scrollbar-width: none;
 }
 .telegram-emoji-packs::-webkit-scrollbar { display: none; }
-.telegram-emoji-packs button { width: 42px; height: 42px; padding: 7px; display: grid; place-items: center; border-radius: 11px; }
-.telegram-emoji-packs button img { width: 28px; height: 28px; object-fit: contain; }
+.telegram-emoji-packs button { width: auto; max-width: 160px; height: 40px; padding: 5px 10px 5px 7px; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 10px; white-space: nowrap; }
+.telegram-emoji-packs button img { width: 28px; height: 28px; flex: 0 0 28px; object-fit: contain; }
+.telegram-emoji-packs button > span { min-width: 0; overflow: hidden; color: inherit; font-size: 10px; font-weight: 800; text-overflow: ellipsis; }
 .telegram-emoji-packs button.active { background: color-mix(in srgb, var(--accent) 13%, var(--card)); box-shadow: inset 0 -2px 0 var(--accent); }
 .telegram-emoji-grid {
   min-height: 0;

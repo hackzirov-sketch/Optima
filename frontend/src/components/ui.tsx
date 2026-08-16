@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import { useI18n } from "../lib/i18n/i18n";
+import { AnimatedEmoji } from "./AnimatedEmoji";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -29,6 +30,19 @@ export function Avatar({ firstName, lastName, url, size = "md" }: { firstName?: 
       {resolvedUrl ? <img src={resolvedUrl} alt="" /> : initials}
     </span>
   );
+}
+
+export function DisplayName({ firstName, lastName, nickname, nameEmoji, className = "" }: {
+  firstName?: string | null;
+  lastName?: string | null;
+  nickname?: string | null;
+  nameEmoji?: string | null;
+  className?: string;
+}) {
+  return <span className={`display-name ${className}`}>
+    {nameEmoji && <AnimatedEmoji id={nameEmoji} className="display-name-emoji" label="" />}
+    <span>{nickname?.trim() || `${firstName || ""} ${lastName || ""}`.trim()}</span>
+  </span>;
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

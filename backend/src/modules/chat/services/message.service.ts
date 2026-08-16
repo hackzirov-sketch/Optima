@@ -348,7 +348,7 @@ export class ChatMessageService {
          m.is_system AS "isSystem", m.system_metadata AS "systemMetadata", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
          m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
          u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
-         u.avatar_url AS "s_avatarUrl",
+         u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname",
          t.reply_count AS "threadReplyCount", t.last_reply_at AS "threadLastReplyAt"
        FROM chat_messages m
        LEFT JOIN users u ON u.id = m.sender_id
@@ -408,6 +408,8 @@ export class ChatMessageService {
             firstName: msg.s_firstName,
             lastName: msg.s_lastName,
             avatarUrl: msg.s_avatarUrl,
+            nameEmoji: msg.s_nameEmoji,
+            nickname: msg.s_nickname,
           }
         : null,
       content:
@@ -950,7 +952,7 @@ export class ChatMessageService {
     m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
     m.is_thread_reply AS "isThreadReply", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
     m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
-    u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName", u.avatar_url AS "s_avatarUrl"
+    u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName", u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname"
   `;
 
   /** Slack-style thread: the root message plus its replies (is_thread_reply = true), oldest first. */
@@ -995,6 +997,8 @@ export class ChatMessageService {
             firstName: row.s_firstName,
             lastName: row.s_lastName,
             avatarUrl: row.s_avatarUrl,
+            nameEmoji: row.s_nameEmoji,
+            nickname: row.s_nickname,
           }
         : null;
     const decrypt = (row: any) =>

@@ -15,6 +15,8 @@ export interface User {
 
   username: string | null;
 
+  nickname: string | null;
+
   email: string;
 
   phoneNumber: number | null;
@@ -22,6 +24,9 @@ export interface User {
   passwordHash: string | null;
 
   avatarUrl: string | null;
+
+  /** Optional custom emoji rendered before the public display name. */
+  nameEmoji: string | null;
 
   /** Profile-level default chat wallpaper — fallback background when a room has no per-user override. */
   backgroundUrl: string | null;

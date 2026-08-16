@@ -1,6 +1,8 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, Lock, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, Lock, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { Avatar, Button, PageHeader, Skeleton } from "../components/ui";
+import { Avatar, Button, DisplayName, PageHeader, Skeleton } from "../components/ui";
+import { EmojiPickerButton } from "../components/EmojiPicker";
+import { AnimatedEmoji } from "../components/AnimatedEmoji";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
 import { api } from "../lib/api";
@@ -35,6 +37,7 @@ export function ProfilePage() {
   const [settingsSection, setSettingsSection] = useState<"profile" | "notifications" | "privacy" | "sessions">("profile");
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [revokingAll, setRevokingAll] = useState(false);
+  const [nameEmoji, setNameEmoji] = useState<string | null>(user?.nameEmoji ?? null);
   const [notifications, setNotifications] = useState({
     notificationsEnabled: user?.notificationsEnabled ?? true,
     emailNotifications: user?.emailNotifications ?? true,
@@ -51,19 +54,24 @@ export function ProfilePage() {
     api.auth.sessions().then(setSessions).catch(() => setSessions([])).finally(() => setSessionsLoading(false));
   }, []);
 
+  useEffect(() => setNameEmoji(user?.nameEmoji ?? null), [user?.nameEmoji]);
+
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     const data = new FormData(event.currentTarget);
     const phone = String(data.get("phoneNumber") || "").replace(/\D/g, "");
+    const username = String(data.get("username") || "").trim().replace(/^@+/, "");
     try {
       await api.users.update({
         firstName: String(data.get("firstName") || "").trim(),
         lastName: String(data.get("lastName") || "").trim(),
-        username: String(data.get("username") || "").trim() || null,
+        nickname: String(data.get("nickname") || "").trim() || null,
+        username: username || null,
         occupation: String(data.get("occupation") || "other"),
         language: String(data.get("language") || "uz") as "uz" | "ru" | "en",
         timezone: String(data.get("timezone") || "Asia/Tashkent"),
+        nameEmoji,
         ...(phone ? { phoneNumber: Number(phone) } : {}),
       });
       await refreshUser();
@@ -203,7 +211,7 @@ export function ProfilePage() {
               <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label={t("profile.selectPhotoAria")} disabled={uploadingAvatar} onChange={(event) => { void uploadAvatar(event.target.files?.[0]); event.currentTarget.value = ""; }} />
             </label>
           </div>
-          <h2>{user?.firstName} {user?.lastName}</h2>
+          <h2><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} nameEmoji={nameEmoji} /></h2>
           <p>{user?.username ? `@${user.username}` : t("profile.usernameNotSet")}</p>
           <div className="public-id-block"><span>{profilePath}</span><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")}><Link2 size={16} /></button></div>
           <span className="role-badge">{user?.occupation ? t(`common.occupations.${user.occupation}`) : t("profile.teamMember")}</span>
@@ -222,7 +230,14 @@ export function ProfilePage() {
             <header className="settings-header"><span><UserRound size={20} /></span><div><h2>{t("profile.personalInfoTitle")}</h2><p>{t("profile.personalInfoDesc")}</p></div></header>
             <form className="settings-form" onSubmit={saveProfile}>
               <div className="form-grid-2"><label>{t("profile.firstNameLabel")}<input name="firstName" defaultValue={user?.firstName} maxLength={50} required /></label><label>{t("profile.lastNameLabel")}<input name="lastName" defaultValue={user?.lastName} maxLength={50} required /></label></div>
-              <label>{t("profile.usernameLabel")} <small>{t("profile.usernameHint")}</small><input name="username" defaultValue={user?.username || ""} placeholder={t("profile.usernamePlaceholder")} pattern="[A-Za-z0-9_-]{3,50}" /></label>
+              <label>{t("profile.usernameLabel")} <small>{t("profile.usernameHint")}</small><input name="username" defaultValue={user?.username || ""} placeholder={t("profile.usernamePlaceholder")} pattern="@?[A-Za-z0-9_-]{3,50}" maxLength={51} autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
+              <label>{t("profile.nicknameLabel")} <small>{t("profile.nicknameHint")}</small><input name="nickname" defaultValue={user?.nickname || ""} placeholder={t("profile.nicknamePlaceholder")} maxLength={50} /></label>
+              <div className="name-emoji-setting">
+                <span className="name-emoji-preview">{nameEmoji ? <AnimatedEmoji id={nameEmoji} label="" /> : <UserRound size={20} />}</span>
+                <span><strong>{t("profile.nameEmojiLabel")}</strong><small>{t("profile.nameEmojiHint")}</small></span>
+                <EmojiPickerButton className="name-emoji-picker" label={t("profile.nameEmojiChoose")} onSelect={setNameEmoji} />
+                {nameEmoji && <button type="button" className="icon-button" onClick={() => setNameEmoji(null)} aria-label={t("profile.nameEmojiRemove")} title={t("profile.nameEmojiRemove")}><X size={17} /></button>}
+              </div>
               <div className="form-grid-2"><label>{t("profile.occupationLabel")}<select name="occupation" defaultValue={user?.occupation || "other"}>{occupationValues.map((value) => <option key={value} value={value}>{t(`common.occupations.${value}`)}</option>)}</select></label><label>{t("profile.phoneLabel")}<input name="phoneNumber" inputMode="numeric" defaultValue={user?.phoneNumber || ""} placeholder="998901234567" /></label></div>
               <div className="form-grid-2"><label>{t("profile.languageLabel")}<select name="language" defaultValue={user?.language || "uz"}><option value="uz">O‘zbekcha</option><option value="ru">Русский</option><option value="en">English</option></select></label><label>{t("profile.timezoneLabel")}<select name="timezone" defaultValue={user?.timezone || "Asia/Tashkent"}><option value="Asia/Tashkent">Tashkent (UTC+5)</option><option value="Asia/Almaty">Almaty (UTC+5)</option><option value="Europe/Moscow">Moscow (UTC+3)</option><option value="UTC">UTC</option></select></label></div>
               <div className="settings-actions"><Button type="submit" loading={saving} icon={<Save size={17} />}>{t("profile.saveChanges")}</Button></div>

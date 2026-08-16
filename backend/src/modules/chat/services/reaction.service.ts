@@ -60,15 +60,11 @@ export class ChatReactionService {
     }
   }
 
-  private async findReaction(
-    messageId: string,
-    userId: string,
-    emoji: string,
-  ): Promise<ChatReaction | null> {
+  private async findReaction(messageId: string, userId: string): Promise<ChatReaction | null> {
     const rows = await this.dataSource.query<ChatReaction>(
       `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions
-       WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
-      [messageId, userId, emoji],
+       WHERE message_id = $1 AND user_id = $2`,
+      [messageId, userId],
     );
     return rows[0] ?? null;
   }
@@ -91,7 +87,7 @@ export class ChatReactionService {
           [msg.roomId, userId],
         )
         .then((rows) => rows[0]),
-      this.findReaction(messageId, userId, dto.emoji),
+      this.findReaction(messageId, userId),
     ]);
 
     if (!memberOk) {
@@ -101,10 +97,10 @@ export class ChatReactionService {
       });
     }
 
-    if (existing) return existing;
-
+    if (existing?.emoji === dto.emoji) return existing;
     const rows = await this.dataSource.query<ChatReaction>(
       `INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()
        RETURNING ${CHAT_REACTION_COLUMNS_SQL}`,
       [messageId, userId, dto.emoji],
     );
@@ -158,7 +154,7 @@ export class ChatReactionService {
           [msg.roomId, userId],
         )
         .then((rows) => rows[0]),
-      this.findReaction(messageId, userId, emoji),
+      this.findReaction(messageId, userId),
     ]);
 
     if (!memberOk) {
@@ -171,7 +167,7 @@ export class ChatReactionService {
     // A room can switch reactions off entirely (Telegram channels do). Removing
     // one stays allowed either way — turning the setting off should let people
     // clean up reactions they already left, not freeze them in place.
-    if (!existing) {
+    if (!existing || existing.emoji !== emoji) {
       const settings = await this.dataSource.query<{
         reactionsEnabled: boolean;
       }>(
@@ -185,7 +181,7 @@ export class ChatReactionService {
         });
     }
 
-    if (existing) {
+    if (existing?.emoji === emoji) {
       await this.dataSource.query(
         `DELETE FROM chat_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
         [messageId, userId, emoji],
@@ -194,7 +190,8 @@ export class ChatReactionService {
     }
 
     await this.dataSource.query(
-      `INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)`,
+      `INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES ($1, $2, $3)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`,
       [messageId, userId, emoji],
     );
     return { action: 'added', roomId: msg.roomId };

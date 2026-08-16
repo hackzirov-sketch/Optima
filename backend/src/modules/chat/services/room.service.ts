@@ -39,7 +39,9 @@ export interface MemberProfile {
   firstName: string;
   lastName: string;
   username: string | null;
+  nickname: string | null;
   avatarUrl: string | null;
+  nameEmoji: string | null;
   publicId: number;
 }
 
@@ -145,13 +147,15 @@ export class ChatRoomService {
       firstName: string;
       lastName: string;
       username: string | null;
+      nickname: string | null;
       avatarUrl: string | null;
+      nameEmoji: string | null;
       publicId: number;
     }>(
       `SELECT cm.user_id AS "userId", cm.last_read_seq AS "lastReadSeq", cm.status,
               cm.role, cm.is_muted AS "isMuted",
               u.first_name AS "firstName", u.last_name AS "lastName",
-              u.username, u.avatar_url AS "avatarUrl", u.public_id AS "publicId"
+              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId"
        FROM chat_members cm
        JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = $1 AND cm.left_at IS NULL`,
@@ -190,7 +194,9 @@ export class ChatRoomService {
         firstName: m.firstName,
         lastName: m.lastName,
         username: m.username ?? null,
+        nickname: m.nickname ?? null,
         avatarUrl: m.avatarUrl ?? null,
+        nameEmoji: m.nameEmoji ?? null,
         publicId: m.publicId,
       })),
       memberStatus: (myMembership?.status as 'pending' | 'active') ?? 'active',
@@ -272,12 +278,14 @@ export class ChatRoomService {
       firstName: string;
       lastName: string;
       username: string | null;
+      nickname: string | null;
       avatarUrl: string | null;
+      nameEmoji: string | null;
       publicId: number;
     }>(
       `SELECT cm.room_id AS "roomId", cm.user_id AS "userId",
               u.first_name AS "firstName", u.last_name AS "lastName",
-              u.username, u.avatar_url AS "avatarUrl", u.public_id AS "publicId"
+              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId"
        FROM chat_members cm
        JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = ANY($1::uuid[]) AND cm.left_at IS NULL`,
@@ -297,7 +305,9 @@ export class ChatRoomService {
         firstName: m.firstName,
         lastName: m.lastName,
         username: m.username ?? null,
+        nickname: m.nickname ?? null,
         avatarUrl: m.avatarUrl ?? null,
+        nameEmoji: m.nameEmoji ?? null,
         publicId: m.publicId,
       });
     }

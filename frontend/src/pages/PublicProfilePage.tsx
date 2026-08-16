@@ -1,14 +1,14 @@
 import { ArrowLeft, AtSign, Copy, Link2, LoaderCircle, MessageCircle, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Avatar, Logo } from "../components/ui";
+import { Avatar, DisplayName, Logo } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import { formatPresenceLabel, isPresenceActive, usePresence } from "../lib/presence";
 import type { User } from "../types";
 
-type PublicProfile = Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">;
+type PublicProfile = Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji">;
 
 export function PublicProfilePage({ identifier }: { identifier: string }) {
   const { user, workspace } = useAuth();
@@ -49,7 +49,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
         <div className="public-profile-hero">
           <Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />
           {isPresenceActive(presence) && <span className="public-profile-presence" />}
-          <h1>{profile.firstName} {profile.lastName}</h1>
+          <h1><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} /></h1>
           <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
           <p className="public-profile-status">{formatPresenceLabel(presence, t)}</p>
         </div>

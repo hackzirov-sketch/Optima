@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { User } from '../../../database/entities/user.entity';
@@ -54,8 +54,8 @@ export class UsersService {
 
   async findPublicById(id: string): Promise<PublicUserDto> {
     const rows = await this.dataSource.query<PublicUserDto>(
-      `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username,
-              avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+      `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, nickname,
+              avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
     );
@@ -76,10 +76,10 @@ export class UsersService {
     const rows = await this.dataSource.query<PublicUserDto>(
       isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
            FROM users WHERE public_id = $1 AND deleted_at IS NULL`
         : `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, avatar_url AS "avatarUrl", last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
            FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
       [isNumeric ? Number(normalized) : normalized],
     );
@@ -336,11 +336,18 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
-    const texts = [dto.firstName, dto.lastName].filter(Boolean) as string[];
+    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(Boolean) as string[];
     for (const t of texts) {
       await this.contentFilter.filterText(t, userId, 'profile');
     }
-    await this.update(userId, dto);
+    try {
+      await this.update(userId, dto);
+    } catch (error) {
+      if ((error as { code?: string })?.code === '23505' && dto.username !== undefined) {
+        throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'Username is already taken' });
+      }
+      throw error;
+    }
     return this.findById(userId);
   }
 
