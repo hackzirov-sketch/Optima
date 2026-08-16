@@ -3545,13 +3545,17 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 
 /* Telegram static emoji packs supplied with OPTIMA. */
 /* Head, pack strip, grid. The grid scrolls; there is no pagination row. */
-.telegram-emoji-picker { grid-template-rows: auto auto minmax(220px, 1fr); }
+.telegram-emoji-picker { grid-template-rows: auto auto auto minmax(220px, 1fr); }
 .telegram-emoji-head { min-height: 48px; padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .telegram-emoji-head strong { font-size: 14px; }
 .telegram-emoji-head button,
 .telegram-emoji-pagination button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--muted); }
 .telegram-emoji-head button:hover,
 .telegram-emoji-pagination button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.telegram-emoji-search { height: 42px; margin: 8px 10px 2px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-muted); color: var(--muted); }
+.telegram-emoji-search:focus-within { border-color: color-mix(in srgb,var(--accent) 58%,var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent); }
+.telegram-emoji-search input { min-width: 0; height: 100%; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; }
+.telegram-emoji-search button { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
 .telegram-emoji-packs { padding: 7px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border-bottom: 1px solid var(--line); }
 .telegram-emoji-packs button { height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 800; }
 .telegram-emoji-packs button.active { background: var(--accent-soft); color: var(--accent); }
@@ -3684,7 +3688,10 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
    of the button's own grid. */
 .message-menu-trigger::after { content: ""; position: absolute; inset: -6px; }
 .message-bubble:hover .message-menu-trigger, .message-menu-trigger[aria-expanded="true"], .message-menu-trigger:focus-visible { opacity: 1; transform: none; }
-.message-context-menu { width: 218px; padding: 6px; border: 1px solid var(--line); border-radius: 13px; background: var(--card); box-shadow: var(--shadow-lg); }
+.message-context-menu { position: fixed; z-index: 140; right: max(12px,env(safe-area-inset-right)); bottom: max(88px,calc(76px + env(safe-area-inset-bottom))); top: auto; left: auto; width: min(250px,calc(100vw - 24px)); max-height: min(520px,calc(100dvh - 116px)); padding: 7px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; isolation: isolate; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 22px 64px rgba(14,18,34,.3); opacity: 1; }
+.message-context-menu::after { content: ""; position: absolute; z-index: -1; inset: 0; background: var(--surface); }
+.message-bubble .message-context-menu,
+.message-mine .message-context-menu { right: max(12px,env(safe-area-inset-right)); left: auto; }
 .message-context-menu > button { min-height: 40px; padding-inline: 10px; border-radius: var(--radius-control); font-size: 12px; font-weight: 650; }
 .reaction-strip { padding-bottom: 5px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }.reaction-strip button { width: 36px; height: 34px; border-radius: 9px; }
 .scroll-bottom { right: 18px; bottom: 88px; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 50%; background: var(--card); box-shadow: var(--shadow-md); }
@@ -3737,7 +3744,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .conversation { height: 100dvh; min-height: 0; }.conversation > .message-list { padding: 14px 9px 18px; scrollbar-gutter: auto; }
   .conversation > .message-list .message-bubble { max-width: 88%; padding: 8px 10px 6px; font-size: 13.5px; }
   .message-menu-trigger { opacity: .78; }.scroll-bottom { right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); }
-  .message-context-menu { position: fixed; inset: auto 8px calc(72px + env(safe-area-inset-bottom)); width: auto; max-height: 56dvh; overflow: auto; border-radius: 15px; }
+  .message-context-menu { inset: auto 8px calc(72px + env(safe-area-inset-bottom)); width: calc(100vw - 16px); max-height: min(58dvh,520px); border-radius: 15px; }
   .ai-message-list { padding: 16px 10px 22px; }.ai-message-list .message-bubble { max-width: 90%; }.ai-provider-badge { width: 30px; padding: 0; justify-content: center; font-size: 0; }
   .ai-composer { min-height: calc(68px + env(safe-area-inset-bottom)); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }.ai-composer textarea { min-height: 46px; }
   .modal-layer:has(.chat-details) { padding: 0 !important; align-items: stretch !important; }.modal-lg:has(.chat-details) { width: 100% !important; height: 100dvh !important; max-height: 100dvh !important; border: 0 !important; border-radius: 0 !important; }
@@ -3749,6 +3756,8 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 
 @media (max-width: 390px) {
   .conversation > .message-list .message-bubble { max-width: 91%; }.meeting-controls button { flex-basis: 40px; width: 40px; height: 40px; }.meeting-control-primary { justify-content: flex-start; }
+  .telegram-emoji-grid, .telegram-emoji-sentinel { grid-template-columns: repeat(5,1fr); }
+  .telegram-emoji-picker { inset-inline: 4px; max-height: min(500px,72dvh); }
 }
 
 /* Custom Telegram reactions: compact, aligned, and stable around message bubbles. */

@@ -1,4 +1,4 @@
-import { Clock3, RefreshCw, Smile, X } from "lucide-react";
+import { Clock3, LayoutGrid, RefreshCw, Search, Smile, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutsideClose } from "../lib/useOutsideClose";
 import {
@@ -38,7 +38,8 @@ function readRecent(): string[] {
 export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) => void }) {
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<EmojiAsset[]>([]);
-  const [pack, setPack] = useState(1);
+  const [pack, setPack] = useState(-1);
+  const [query, setQuery] = useState("");
   const [shown, setShown] = useState(BATCH_SIZE);
   const [failed, setFailed] = useState(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
@@ -66,9 +67,16 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
     });
   }, [open, assets.length, failed]);
 
-  const packAssets = useMemo(() => pack === 0
-    ? recent.map((id) => assets.find((asset) => asset.id === id)).filter((asset): asset is EmojiAsset => Boolean(asset))
-    : assets.filter((asset) => asset.pack === pack), [assets, pack, recent]);
+  const packAssets = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const source = normalizedQuery || pack === -1
+      ? assets
+      : pack === 0
+        ? recent.map((id) => assets.find((asset) => asset.id === id)).filter((asset): asset is EmojiAsset => Boolean(asset))
+        : assets.filter((asset) => asset.pack === pack);
+    if (!normalizedQuery) return source;
+    return source.filter((asset) => `${asset.id} ${asset.packName}`.toLocaleLowerCase().includes(normalizedQuery));
+  }, [assets, pack, query, recent]);
   const visible = packAssets.slice(0, shown);
   const packs = useMemo(() => labelPacks(Array.from(new Map(assets.map((asset) => [asset.pack, {
     number: asset.pack,
@@ -94,6 +102,7 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
 
   function selectPack(nextPack: number) {
     setPack(nextPack);
+    setQuery("");
     setShown(BATCH_SIZE);
     gridRef.current?.scrollTo({ top: 0 });
   }
@@ -115,11 +124,19 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
       {open && (
         <div className="emoji-picker telegram-emoji-picker" role="dialog" aria-label="Telegram emojilari">
           <div className="telegram-emoji-head">
-            <span><strong>{pack === 0 ? "So‘nggi ishlatilganlar" : activePack?.name || "Custom emojilar"}</strong>
+            <span><strong>{query ? "Qidiruv natijalari" : pack === -1 ? "Barcha emojilar" : pack === 0 ? "So‘nggi ishlatilganlar" : activePack?.name || "Custom emojilar"}</strong>
               <small>{assets.length ? `${packAssets.length} ta · jami ${assets.length}` : "Telegram to‘plami"}</small></span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Yopish"><X size={16} /></button>
           </div>
+          <label className="telegram-emoji-search">
+            <Search size={16} aria-hidden="true" />
+            <input value={query} onChange={(event) => { setQuery(event.target.value); setShown(BATCH_SIZE); }}
+                   placeholder="Emoji yoki to‘plamni qidirish" aria-label="Emojilarni qidirish" />
+            {query && <button type="button" onClick={() => setQuery("")} aria-label="Qidiruvni tozalash"><X size={14} /></button>}
+          </label>
           <div className="telegram-emoji-packs" role="tablist" aria-label="Emoji to‘plamlari">
+            <button type="button" role="tab" aria-selected={pack === -1} className={pack === -1 ? "active" : ""}
+                    onClick={() => selectPack(-1)} title="Barcha emojilar"><LayoutGrid size={18} /></button>
             <button type="button" role="tab" aria-selected={pack === 0} className={pack === 0 ? "active" : ""}
                     onClick={() => selectPack(0)} title="So‘nggi ishlatilganlar"><Clock3 size={18} /></button>
             {packs.map((item) => (

@@ -60,6 +60,7 @@ import {
   useRef,
   useState
 }                                                                           from "react";
+import { createPortal }                                                     from "react-dom";
 import { useLocation }                                                      from "wouter";
 import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
@@ -2518,8 +2519,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                     onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)}
                                     aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}>
                               <MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu"
-                                                               onMouseLeave={() => setActiveMenu(null)}>
+                            {activeMenu === message.id && createPortal(<>
+                              <button type="button" className="message-menu-backdrop"
+                                      onClick={() => setActiveMenu(null)} aria-label="Xabar amallarini yopish" />
+                              <div className="message-context-menu" role="menu">
                               <div className="reaction-strip">{quickEmojis.map((emoji) => <button
                                 key={emoji} aria-label="Reaksiya qoldirish" onClick={() => {
                                   void reactToMessage(message, emoji);
@@ -2547,7 +2550,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <button disabled><Pin size={16} />{t("chat.pinAction")}
                                 <small>{t("chat.comingSoon")}</small></button>
                               {mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2
-                                size={16} />{t("chat.deleteAction")}</button>}</div>}
+                                size={16} />{t("chat.deleteAction")}</button>}</div>
+                            </>, document.body)}
                           </div>
                         </div>
                       </div>
