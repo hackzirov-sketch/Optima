@@ -768,8 +768,24 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         return next;
       });
       closePeer(leftUserId);
+      setRaisedHands((current) => {
+        if (!current.has(leftUserId)) return current;
+        const next = new Set(current);
+        next.delete(leftUserId);
+        return next;
+      });
     };
     const onHand = ({ userId, raised }: { userId: string; raised: boolean }) => setRaisedHands((current) => { const next = new Set(current); if (raised) next.add(userId); else next.delete(userId); return next; });
+    // Reconnect/late-join snapshot: without this, refreshing mid-call would
+    // silently drop every hand that was already raised before the socket
+    // reconnected — the server still has them (Redis), the client just
+    // hadn't been told yet.
+    const onHandsSnapshot = ({ userIds }: { userIds: string[] }) =>
+      setRaisedHands((current) => {
+        const next = new Set(current);
+        userIds.forEach((id) => next.add(id));
+        return next;
+      });
     const onReaction = (reaction: { id: string; userId: string; emoji: string }) => {
       setReactions((current) => [...current, reaction]);
       window.setTimeout(() => setReactions((current) => current.filter((item) => item.id !== reaction.id)), 3200);
@@ -805,6 +821,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     socket.on("meeting:ice-candidate", onIce);
     socket.on("meeting:user-left", onLeft);
     socket.on("meeting:hand", onHand);
+    socket.on("meeting:hands-snapshot", onHandsSnapshot);
     socket.on("meeting:reaction", onReaction);
     socket.on("meeting:toggled", onToggle);
     socket.on("meeting:file-shared", onFileShared);
@@ -821,6 +838,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:ice-candidate", onIce);
       socket.off("meeting:user-left", onLeft);
       socket.off("meeting:hand", onHand);
+      socket.off("meeting:hands-snapshot", onHandsSnapshot);
       socket.off("meeting:reaction", onReaction);
       socket.off("meeting:toggled", onToggle);
       socket.off("meeting:file-shared", onFileShared);

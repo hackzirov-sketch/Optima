@@ -261,7 +261,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "avatarUrl">>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji">>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -328,7 +328,7 @@ export const api = {
     saveDraft: (roomId: string, content: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify({ content }) }),
     updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
       apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
-    roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
+    roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; nickname?: string | null; nameEmoji?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
     readReceipts: (roomId: string) => apiFetch<Array<{ userId: string; lastReadSeq: number }>>(`/chat/rooms/${roomId}/read-receipts`),
     presence: (userIds: string[]) => apiFetch<Record<string, { status: string; lastSeenAt: string | null }>>(`/chat/presence?ids=${userIds.map(encodeURIComponent).join(",")}`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),

@@ -6,9 +6,11 @@ export interface User {
   publicId?: string;
   email: string;
   username: string | null;
+  nickname?: string | null;
   firstName: string;
   lastName: string;
   avatarUrl?: string | null;
+  nameEmoji?: string | null;
   backgroundUrl?: string | null;
   accountVisibility?: "public" | "private";
   phoneNumber?: number | null;
@@ -71,7 +73,7 @@ export interface ChatRoom {
   avatarUrl?: string | null;
   createdById: string;
   memberIds: string[];
-  memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl" | "publicId">>;
+  memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "publicId" | "nameEmoji">>;
   memberCount: number;
   unreadCount: number;
   isReadOnly: boolean;
@@ -240,7 +242,7 @@ export interface ChatMessage {
   editedAt?: string | null;
   createdAt: string;
   reactions?: Array<{ emoji: string; userIds: string[] }>;
-  sender?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
+  sender?: Pick<User, "id" | "firstName" | "lastName" | "nickname" | "avatarUrl" | "nameEmoji"> | null;
   /** OTIMA community discussion-thread fields (ported from main). */
   sourceChannelMessageId?: string | null;
   discussionRootMessageId?: string | null;

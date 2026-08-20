@@ -60,8 +60,9 @@ import {
   useRef,
   useState
 }                                                                           from "react";
+import { createPortal }                                                     from "react-dom";
 import { useLocation }                                                      from "wouter";
-import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
+import { Avatar, Button, DisplayName, EmptyState, Modal }                   from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
 import { AudioMessage }                                                     from "../components/AudioMessage";
 import { ChannelSettingsPanel }                                             from "../components/ChannelSettingsPanel";
@@ -339,6 +340,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     firstName: string;
     lastName: string;
     username?: string | null;
+    nickname?: string | null;
+    nameEmoji?: string | null;
     avatarUrl?: string | null;
     lastSeen?: string | null;
     role: string
@@ -410,7 +413,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   const memberMap = useMemo(() => {
-    const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl" | "publicId">>();
+    const result = new Map<string, Pick<User, "id" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "publicId" | "nameEmoji">>();
     members.forEach((member) => result.set(member.userId, memberUser(member, t)));
     rooms.flatMap((room) => room.memberProfiles || []).forEach((profile) => result.set(profile.id, profile));
     globalUsers.forEach((profile) => result.set(profile.id, profile));
@@ -569,7 +572,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (room.name) return room.name;
     if (room.type === "direct") {
       const other = room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
-      return other ? `${other.firstName} ${other.lastName}`.trim() : t("chat.personalChatLabel");
+      return other ? other.nickname?.trim() || `${other.firstName} ${other.lastName}`.trim() : t("chat.personalChatLabel");
     }
     return t("chat.unnamedGroup");
   }
@@ -927,7 +930,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       if (data.roomId !== selectedId) return;
       setMessages((current) => current.map((item) => {
         if (item.id !== data.messageId) return item;
-        const reactions = [...(item.reactions || [])];
+        let reactions = (item.reactions || []).map((reaction) => ({ ...reaction, userIds: [...reaction.userIds] }));
+        if (data.action === "added") {
+          reactions = reactions.map((reaction) => ({ ...reaction, userIds: reaction.userIds.filter((id) => id !== data.userId) }))
+            .filter((reaction) => reaction.userIds.length > 0);
+        }
         const index = reactions.findIndex((reaction) => reaction.emoji === data.emoji);
         const userIds = index >= 0 ? reactions[index].userIds : [];
         const nextIds = data.action === "added" ? [...new Set([...userIds, data.userId])] : userIds.filter((id) => id !== data.userId);
@@ -2466,7 +2473,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span>
                             </button>}
                             {!mine && !grouped &&
-                              <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
+                              <strong>{sender ? <DisplayName firstName={sender.firstName} lastName={sender.lastName} nickname={sender.nickname} nameEmoji={sender.nameEmoji} /> : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
                               <AnimatedEmoji className="message-custom-emoji" id={telegramEmojiId(message.content)} /> :
                               <p>{renderMessageContent(message.content)}</p>)}
@@ -2518,8 +2525,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                     onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)}
                                     aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}>
                               <MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu"
-                                                               onMouseLeave={() => setActiveMenu(null)}>
+                            {activeMenu === message.id && createPortal(<>
+                              <button type="button" className="message-menu-backdrop"
+                                      onClick={() => setActiveMenu(null)} aria-label="Xabar amallarini yopish" />
+                              <div className="message-context-menu" role="menu">
                               <div className="reaction-strip">{quickEmojis.map((emoji) => <button
                                 key={emoji} aria-label="Reaksiya qoldirish" onClick={() => {
                                   void reactToMessage(message, emoji);
@@ -2547,7 +2556,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <button disabled><Pin size={16} />{t("chat.pinAction")}
                                 <small>{t("chat.comingSoon")}</small></button>
                               {mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2
-                                size={16} />{t("chat.deleteAction")}</button>}</div>}
+                                size={16} />{t("chat.deleteAction")}</button>}</div>
+                            </>, document.body)}
                           </div>
                         </div>
                       </div>
@@ -2775,7 +2785,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       onClick={() => navigate(`/profile/${member.username || member.publicId}`)}
                       aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar
                 firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
-                size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot
+                size="sm" /><span><strong><DisplayName firstName={member.firstName} lastName={member.lastName} nickname={member.nickname} nameEmoji={member.nameEmoji} /></strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot
                 userId={member.id} /></button>
             </div>)}
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => {

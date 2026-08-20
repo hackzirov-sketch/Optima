@@ -47,6 +47,14 @@ export const RedisKeys = {
   analytics: (scope: string, id: string) => `upz:analytics:${scope}:${id}`,
   /** Sorted set of userIds waiting for host approval, score = requestedAt epoch ms — fast count/order path for the meeting Waiting Room, mirrors meeting_join_requests (Postgres stays the source of truth). */
   meetingWaiting: (meetingId: string) => `upz:meeting_waiting:${meetingId}`,
+  /**
+   * Set of userIds with a hand currently raised. Purely ephemeral
+   * (session-scoped, like reactions) — this is a visibility signal, not a
+   * permission grant, so there is no Postgres table behind it and nothing
+   * to review/approve; see MeetingsService.setHandRaised.
+   */
+  meetingRaisedHands: (meetingId: string) =>
+    `upz:meeting_hands:${meetingId}`,
 
   // ── Email verification ───────────────────────────────────────────────────────
   // Keyed by a long, unguessable, globally-unique token — NOT by the 6-digit code.

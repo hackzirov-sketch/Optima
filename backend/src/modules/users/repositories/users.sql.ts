@@ -1,7 +1,7 @@
 export const USER_COLUMNS_SQL = `
-  id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, email,
+  id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, nickname, email,
   phone_number AS "phoneNumber",
-  avatar_url AS "avatarUrl", background_url AS "backgroundUrl", language, timezone, theme, occupation,
+  avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", background_url AS "backgroundUrl", language, timezone, theme, occupation,
   account_visibility AS "accountVisibility",
   is_active AS "isActive", is_verified AS "isVerified", providers,
   needs_password_setup AS "needsPasswordSetup", last_seen AS "lastSeen",
@@ -13,7 +13,7 @@ export const USER_AUTH_COLUMNS_SQL = `
   id, public_id::text AS "publicId", email, password_hash AS "passwordHash", is_verified AS "isVerified",
   is_active AS "isActive", deleted_at AS "deletedAt", providers,
   needs_password_setup AS "needsPasswordSetup", first_name AS "firstName",
-  last_name AS "lastName", username, avatar_url AS "avatarUrl"
+  last_name AS "lastName", username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji"
 `;
 
 /**

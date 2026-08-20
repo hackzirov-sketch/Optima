@@ -40,6 +40,8 @@ import { MeetingAccessService } from './services/meeting-access.service';
 import { MeetingRecordingService } from './services/meeting-recording.service';
 import { MeetingJoinRequestService } from './services/meeting-join-request.service';
 import { MeetingFilesService } from './services/meeting-files.service';
+import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
 
 export {
   MEETING_RECORDING_QUEUE,
@@ -78,6 +80,7 @@ export class MeetingsService {
     private readonly reminderScheduler: ReminderSchedulerService,
     @InjectQueue(MEETING_LIFECYCLE_QUEUE)
     private readonly lifecycleQueue: Queue,
+    private readonly redisService: RedisService,
   ) {}
 
   async listForWorkspace(workspaceId: string, userId: string) {
@@ -735,6 +738,36 @@ export class MeetingsService {
         message: 'Only the host or a co-host can perform this action',
       });
     }
+  }
+
+  // ── Raise hand ("qo'l ko'tarish") ─────────────────────────────────────────
+  // Ephemeral, session-scoped, like reactions — a visibility cue for the
+  // host, not a permission grant, so there's no review/approve step and no
+  // Postgres table. The gateway is what makes it real-time; this just owns
+  // the authoritative "who currently has a hand up" set so a host who
+  // refreshes mid-call (see leave()/scheduleMeetingLeaveGrace above) doesn't
+  // lose it.
+
+  /** Idempotent: raising an already-raised hand or lowering an unraised one is a no-op. */
+  async setHandRaised(
+    meetingId: string,
+    userId: string,
+    raised: boolean,
+  ): Promise<void> {
+    const client = this.redisService.getClient();
+    if (!client) return;
+    const key = RedisKeys.meetingRaisedHands(meetingId);
+    if (raised) await client.sadd(key, userId);
+    else await client.srem(key, userId);
+  }
+
+  /** Host (or a reconnecting/late-joining client): who currently has a hand up. */
+  async listRaisedHands(meetingId: string): Promise<string[]> {
+    return (
+      (await this.redisService
+        .getClient()
+        ?.smembers(RedisKeys.meetingRaisedHands(meetingId))) ?? []
+    );
   }
 
   async leave(meetingId: string, userId: string) {

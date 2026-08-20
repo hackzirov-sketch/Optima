@@ -2,7 +2,7 @@
 
 Workspace/jamoaviy hamkorlik platformasi: chat, video-meeting, task/project boshqaruvi (Kanban), GitHub integratsiyasi va bildirishnomalarni birlashtiradi. To'liq arxitektura tavsifi uchun [ARCHITECTURE.md](ARCHITECTURE.md)ga, spec vs joriy holat taqqoslash va roadmap uchun [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)ga qarang.
 
-## Tarkib
+### Tarkib
 
 ```
 UPZ/

@@ -65,6 +65,7 @@ describe('MeetingsService.join — a returning participant is re-vetted', () => 
       {} as never, // members
       {} as never, // reminders
       {} as never, // lifecycle queue
+      {} as never, // redis
     );
     // join() ends by re-reading the meeting for the caller; not under test.
     jest.spyOn(service, 'getOne').mockResolvedValue({ id: MEETING } as never);

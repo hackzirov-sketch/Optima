@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
 import { locales, localeMeta, useI18n, type Locale } from "../lib/i18n/i18n";
 import { setMyPresenceStatus, type PresenceStatus } from "../lib/presence";
-import { Avatar, Logo } from "./ui";
+import { Avatar, DisplayName, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
 import { NotificationsMenu } from "./NotificationsMenu";
 
@@ -116,7 +116,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} />
               <i className={`status-dot status-dot-${myStatus}`} aria-hidden="true" />
             </span>
-            <span><strong>{user?.firstName} {user?.lastName}</strong><small>@{user?.username}</small></span>
+            <span><strong><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} nameEmoji={user?.nameEmoji} /></strong><small>@{user?.username}</small></span>
           </Link>
           <div className="status-picker">
             <button className="icon-button" onClick={() => setStatusMenuOpen((value) => !value)} aria-label={t("shell.statusPicker")} title={t(`presence.${myStatus === "dnd" ? "dnd" : myStatus}`)} aria-expanded={statusMenuOpen}>

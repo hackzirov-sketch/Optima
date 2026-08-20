@@ -6,6 +6,8 @@ export interface PublicUserDto {
   firstName: string;
   lastName: string;
   username: string;
+  nickname: string | null;
   avatarUrl: string | null;
+  nameEmoji: string | null;
   lastSeen: Date | null;
 }

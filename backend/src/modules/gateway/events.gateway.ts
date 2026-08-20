@@ -11,6 +11,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket, DefaultEventsMap } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -156,6 +157,22 @@ export interface DirectCallDto {
   targetUserId: string;
   kind: 'audio' | 'video';
 }
+export interface MeetingReactionDto {
+  meetingId: string;
+  /** A single emoji character/sequence — validated below, never trusted raw. */
+  emoji: string;
+}
+export interface MeetingHandDto {
+  meetingId: string;
+  raised: boolean;
+}
+
+// Emoji reactions are ephemeral fire-and-forget events — capped to a small
+// allow-list (matching the picker in MeetingRoomPage.tsx) so the payload can
+// never carry arbitrary text through what looks like an emoji field.
+const ALLOWED_MEETING_REACTIONS = new Set([
+  '👍', '❤️', '🎉', '👏', '😂', '😮',
+]);
 
 // A socket drop (network blip, tab refresh) shouldn't immediately count as
 // "left the meeting" — give it a window to reconnect and rejoin before the
@@ -1038,6 +1055,19 @@ export class EventsGateway
       })),
     });
 
+    // Reconnect/late-join snapshot of raised hands — without this, a host
+    // who refreshes mid-call would lose the raised-hand list even though
+    // the state itself is still live in Redis.
+    const raisedHandUserIds = await this.meetingsService.listRaisedHands(
+      meetingId,
+    );
+    if (raisedHandUserIds.length) {
+      client.emit('meeting:hands-snapshot', {
+        meetingId,
+        userIds: raisedHandUserIds,
+      });
+    }
+
     // Notify everyone else that this user joined
     client.to(`meeting:${meetingId}`).emit('meeting:user-joined', {
       meetingId,
@@ -1067,6 +1097,66 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) return;
     await this.leaveMeeting(client, userId, data.meetingId);
+  }
+
+  // ─── Meeting: reactions (emoji) ───────────────────────
+  // Fully ephemeral — broadcast-only, nothing written to Postgres. Payload
+  // shape (`{id, userId, emoji}`) matches what MeetingRoomPage.tsx's
+  // onReaction already expects — the frontend had this wired up with no
+  // server-side handler behind it.
+  @SubscribeMessage('meeting:reaction')
+  handleMeetingReaction(
+    @MessageBody() data: MeetingReactionDto,
+    @ConnectedSocket() client: AppSocket,
+  ) {
+    const userId = client.data?.userId;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`) ||
+      !ALLOWED_MEETING_REACTIONS.has(data.emoji)
+    )
+      return;
+
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:reaction', {
+      id: randomUUID(),
+      userId,
+      emoji: data.emoji,
+    });
+  }
+
+  // ─── Meeting: raise/lower hand ─────────────────────────
+  // Also ephemeral and broadcast-only: this is Meet/Zoom-style "hand raised"
+  // — a visibility signal for the host, not a mic unlock. Actual mute state
+  // still goes through `meeting:toggle` under the participant's own control;
+  // the server here only relays who currently has a hand up.
+  //
+  // Cached in Redis (not just broadcast) so a host who refreshes mid-call —
+  // the exact scenario this whole pass was about — doesn't lose the list of
+  // raised hands; see the snapshot sent from handleMeetingJoin.
+  @SubscribeMessage('meeting:hand')
+  async handleMeetingHand(
+    @MessageBody() data: MeetingHandDto,
+    @ConnectedSocket() client: AppSocket,
+  ) {
+    const userId = client.data?.userId;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
+
+    await this.meetingsService.setHandRaised(
+      data.meetingId,
+      userId,
+      Boolean(data.raised),
+    );
+
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:hand', {
+      userId,
+      raised: Boolean(data.raised),
+    });
   }
 
   // ─── Meeting: WebRTC offer ────────────────────────────
@@ -1461,6 +1551,11 @@ export class EventsGateway
       // Swallow errors: the participant row may not exist if this socket
       // never completed a validated join (e.g. it disconnected mid-join).
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
+      // A departed participant shouldn't linger in the raised-hands list —
+      // best-effort clear, mirrors the resilience of the leave() call above.
+      await this.meetingsService
+        .setHandRaised(meetingId, userId, false)
+        .catch(() => {});
       client
         .to(`meeting:${meetingId}`)
         .emit('meeting:user-left', { meetingId, userId });

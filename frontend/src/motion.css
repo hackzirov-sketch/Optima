@@ -1,0 +1,298 @@
+/* OPTIMA motion system: calm continuity for an operational interface. */
+:root {
+  --motion-instant: 110ms;
+  --motion-feedback: 160ms;
+  --motion-layout: 260ms;
+  --motion-overlay: 340ms;
+  --motion-enter: cubic-bezier(.16, 1, .3, 1);
+  --motion-exit: cubic-bezier(.4, 0, 1, 1);
+  --motion-smooth: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* Navigation continuity */
+.route-transition {
+  animation: optima-surface-reveal var(--motion-layout) var(--motion-enter) both;
+  transform-origin: 50% 0;
+}
+.route-transition .page { animation: none; }
+.chat-page { animation: optima-surface-reveal var(--motion-layout) var(--motion-enter) both; }
+.topbar { animation: optima-topbar-in var(--motion-overlay) var(--motion-enter) both; }
+.desktop-dock { animation: optima-dock-in 420ms var(--motion-enter) both; }
+.main-nav a svg,
+.desktop-dock a svg,
+.mobile-nav a svg { transition: transform var(--motion-feedback) var(--motion-enter); }
+.main-nav a.active svg { transform: scale(1.06); }
+.mobile-nav a.active svg { animation: optima-nav-select 300ms var(--motion-enter); }
+.dock-indicator { transition-duration: var(--motion-overlay), var(--motion-feedback); transition-timing-function: var(--motion-enter); }
+
+/* Menus and overlays open from their physical anchor. */
+.workspace-menu,
+.status-menu,
+.language-menu,
+.header-more-menu,
+.room-context-menu,
+.message-context-menu,
+.emoji-picker,
+.meeting-reaction-menu {
+  transform-origin: var(--motion-origin, 50% 0);
+  animation: optima-menu-reveal var(--motion-layout) var(--motion-enter) both;
+  will-change: transform, opacity;
+}
+.status-menu { --motion-origin: 16px 100%; }
+.language-menu { --motion-origin: calc(100% - 20px) 0; }
+.message-context-menu,
+.room-context-menu { --motion-origin: 90% 0; }
+.message-context-menu {
+  z-index: 9999 !important;
+  max-height: min(520px, calc(100dvh - 104px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.message-menu-backdrop {
+  position: fixed;
+  z-index: 9998;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+.modal-layer,
+.confirm-layer,
+.direct-call-overlay,
+.media-viewer,
+.book-detail-backdrop { animation: optima-backdrop-in var(--motion-feedback) ease-out both; }
+.modal,
+.confirm-dialog { animation: optima-dialog-in var(--motion-overlay) var(--motion-enter) both; }
+.chat-details-hero,
+.chat-details-actions,
+.chat-details-tabs,
+.chat-details-content { animation: optima-content-reveal var(--motion-layout) var(--motion-enter) both; }
+.chat-details-actions { animation-delay: 35ms; }
+.chat-details-tabs { animation-delay: 55ms; }
+.chat-details-content { animation-delay: 75ms; }
+.book-detail-backdrop aside,
+.meeting-side-panel { animation: optima-panel-in var(--motion-overlay) var(--motion-enter) both; }
+
+/* Lists reveal as lists, capped to a short total delay. */
+.metric-grid > *,
+.meeting-card-grid > *,
+.book-grid > *,
+.education-video-grid > *,
+.education-teachers > *,
+.list-stack > *,
+.session-list > *,
+.participant-list > * {
+  animation: optima-record-in var(--motion-layout) var(--motion-enter) both;
+}
+.metric-grid > :nth-child(2), .meeting-card-grid > :nth-child(2), .book-grid > :nth-child(2), .education-video-grid > :nth-child(2), .education-teachers > :nth-child(2), .list-stack > :nth-child(2), .session-list > :nth-child(2), .participant-list > :nth-child(2) { animation-delay: 24ms; }
+.metric-grid > :nth-child(3), .meeting-card-grid > :nth-child(3), .book-grid > :nth-child(3), .education-video-grid > :nth-child(3), .education-teachers > :nth-child(3), .list-stack > :nth-child(3), .session-list > :nth-child(3), .participant-list > :nth-child(3) { animation-delay: 48ms; }
+.metric-grid > :nth-child(4), .meeting-card-grid > :nth-child(4), .book-grid > :nth-child(4), .education-video-grid > :nth-child(4), .education-teachers > :nth-child(4), .list-stack > :nth-child(4), .session-list > :nth-child(4), .participant-list > :nth-child(4) { animation-delay: 72ms; }
+.metric-grid > :nth-child(n+5), .meeting-card-grid > :nth-child(n+5), .book-grid > :nth-child(n+5), .education-video-grid > :nth-child(n+5), .education-teachers > :nth-child(n+5), .list-stack > :nth-child(n+5), .session-list > :nth-child(n+5), .participant-list > :nth-child(n+5) { animation-delay: 90ms; }
+
+/* Interaction feedback. No layout-driving property is animated. */
+.metric-card,
+.meeting-card,
+.book-card,
+.education-video-card,
+.education-teachers article,
+.panel,
+.dashboard-list-row,
+.room-item,
+.detail-member,
+.shared-item,
+.session-row,
+.video-tile,
+.waiting-tile {
+  transition: transform var(--motion-feedback) var(--motion-enter),
+              border-color var(--motion-feedback) ease,
+              background-color var(--motion-feedback) ease,
+              box-shadow var(--motion-layout) var(--motion-enter);
+}
+.button,
+.icon-button,
+.meeting-controls button,
+.meeting-header-actions button,
+.chat-catalog button,
+.chat-details-actions button,
+.settings-tabs button {
+  transition-duration: var(--motion-feedback);
+  transition-timing-function: var(--motion-enter);
+}
+.button:active:not(:disabled),
+.icon-button:active:not(:disabled),
+.meeting-controls button:active:not(:disabled),
+.chat-catalog button:active:not(:disabled) { transform: scale(.965); transition-duration: var(--motion-instant); }
+
+@media (hover: hover) and (pointer: fine) {
+  .meeting-card:hover,
+  .book-card:hover,
+  .education-video-card:hover,
+  .education-teachers article:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .metric-card:hover { transform: translateY(-1px); border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+  .book-cover img,
+  .education-thumbnail img { transition: transform 420ms var(--motion-enter), filter var(--motion-layout) ease; }
+  .book-card:hover .book-cover img,
+  .education-video-card:hover .education-thumbnail img { transform: scale(1.035); }
+  .detail-member:hover .avatar,
+  .room-item:hover .avatar,
+  .room-item:hover .room-avatar { transform: scale(1.035); }
+}
+
+/* Chat motion follows message direction and keeps the composer stable. */
+.room-list-transition { animation: optima-list-swap var(--motion-layout) var(--motion-enter) both; }
+.message { animation: optima-message-in var(--motion-layout) var(--motion-enter) both; }
+.message-mine { --message-from: 9px; }
+.message:not(.message-mine) { --message-from: -9px; }
+.message-bubble { animation: none; }
+.message-reactions button { animation: optima-reaction-in 220ms var(--motion-enter) both; }
+.typing-bubble { animation: optima-content-reveal var(--motion-feedback) var(--motion-enter) both; }
+.composer-mode,
+.composer-staged,
+.composer-ai-assist { transform-origin: 50% 100%; animation: optima-composer-context var(--motion-layout) var(--motion-enter) both; }
+.scroll-bottom { animation: optima-float-control var(--motion-layout) var(--motion-enter) both; }
+.message-menu-trigger { transition-duration: var(--motion-feedback); transition-timing-function: var(--motion-enter); }
+
+/* Meeting motion explains media and panel state without disturbing the grid. */
+.meeting-room-header { animation: optima-chrome-in var(--motion-overlay) var(--motion-enter) both; }
+.meeting-controls { animation: optima-controls-in var(--motion-overlay) var(--motion-enter) both; }
+.video-tile,
+.waiting-tile { animation: optima-video-tile-in var(--motion-overlay) var(--motion-enter) both; }
+.video-tile.speaking { position: relative; animation: optima-video-tile-in var(--motion-overlay) var(--motion-enter) both; }
+.video-tile.speaking::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 2px solid rgba(186,198,234,.72);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: optima-speaking 1.8s ease-in-out infinite;
+}
+.meeting-controls button.off svg { transform: scale(.9); }
+.meeting-controls button.active svg { animation: optima-control-confirm 240ms var(--motion-enter); }
+.meeting-floating-widget { animation: optima-floating-call-in var(--motion-overlay) var(--motion-enter) both; }
+.meeting-reaction-menu button { animation: optima-reaction-in 220ms var(--motion-enter) both; }
+.meeting-reaction-menu button:nth-child(2) { animation-delay: 18ms; }
+.meeting-reaction-menu button:nth-child(3) { animation-delay: 36ms; }
+.meeting-reaction-menu button:nth-child(4) { animation-delay: 54ms; }
+.meeting-reaction-menu button:nth-child(n+5) { animation-delay: 70ms; }
+
+/* Keep long feeds cheap to paint while preserving intrinsic dimensions. */
+.book-card,
+.education-video-card,
+.dashboard-list-row,
+.detail-member,
+.shared-item { content-visibility: auto; contain-intrinsic-size: auto 84px; }
+.book-card { contain-intrinsic-size: auto 330px; }
+.education-video-card { contain-intrinsic-size: auto 280px; }
+
+@keyframes optima-surface-reveal {
+  from { opacity: .82; clip-path: inset(0 0 8px 0 round 10px); }
+  to { opacity: 1; clip-path: inset(0 round 0); }
+}
+@keyframes optima-topbar-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.992); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-dock-in {
+  from { opacity: 0; transform: translate(-50%, 12px) scale(.97); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes optima-nav-select {
+  0% { transform: translateY(2px) scale(.88); }
+  100% { transform: none; }
+}
+@keyframes optima-menu-reveal {
+  from { opacity: 0; transform: translateY(-5px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes optima-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(.975); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-panel-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-content-reveal {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-record-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-list-swap {
+  from { opacity: .35; transform: translateX(5px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-message-in {
+  from { opacity: 0; transform: translateX(var(--message-from, -9px)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-reaction-in {
+  from { opacity: 0; transform: scale(.74); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-composer-context {
+  from { opacity: 0; transform: translateY(7px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-float-control {
+  from { opacity: 0; transform: translateY(7px) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-chrome-in {
+  from { opacity: 0; transform: translateY(-7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-controls-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-video-tile-in {
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-speaking {
+  0%, 100% { opacity: .42; }
+  50% { opacity: 1; }
+}
+@keyframes optima-control-confirm {
+  0% { transform: scale(.82); }
+  100% { transform: none; }
+}
+@keyframes optima-floating-call-in {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 820px) {
+  :root { --motion-layout: 220ms; --motion-overlay: 280ms; }
+  .mobile-nav { animation: optima-mobile-dock-in var(--motion-overlay) var(--motion-enter) both; }
+  .sidebar-open { animation: optima-mobile-panel-in var(--motion-overlay) var(--motion-enter) both; }
+  .sidebar-scrim { animation: optima-backdrop-in var(--motion-feedback) ease-out both; }
+  .message { animation-duration: var(--motion-feedback); }
+}
+@keyframes optima-mobile-dock-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes optima-mobile-panel-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+  .video-tile.speaking::after { animation: none !important; opacity: .72; }
+}
