@@ -705,9 +705,20 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
     const onUserJoined = ({ userId: joinedUserId, user: joinedUser }: { userId: string; user?: MeetingUser | null }) => {
       setRoster((current) => ({ ...current, [joinedUserId]: joinedUser ?? current[joinedUserId] ?? null }));
+      // A `user-joined` event always means a brand-new socket/session for
+      // this user — either a genuinely new participant, or someone who
+      // refreshed/reconnected. Either way, any RTCPeerConnection we already
+      // hold for them belongs to a session that's gone. Because a quick
+      // refresh reconnects inside the server's grace window, `user-left`
+      // never fires for it — so without this, createPeer's "if already
+      // exists, reuse it" kept wiring a dead connection back up forever.
+      // That was the actual cause of the permanent frozen-camera/stuck-on-
+      // Connecting bug: neither side ever renegotiated because each thought
+      // a (dead) peer connection already existed.
+      if (peers.current.has(joinedUserId)) closePeer(joinedUserId);
       void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
-        if (user?.id && !isPolite(joinedUserId) && !peers.current.has(joinedUserId)) void negotiate(joinedUserId);
+        if (user?.id && !isPolite(joinedUserId)) void negotiate(joinedUserId);
       }, 300);
     };
     /**
