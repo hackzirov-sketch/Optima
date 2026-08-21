@@ -47,7 +47,7 @@ export function DashboardPage() {
 
   useEffect(() => { api.education.dashboard().then(setEducation).catch(() => undefined); }, []);
 
-  const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
+  const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live" || meeting.status === "inactive").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
   const unread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
 
   async function removeMeeting(id: string) {

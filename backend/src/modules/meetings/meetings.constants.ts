@@ -44,3 +44,13 @@ export const MEETING_LIFECYCLE_QUEUE = 'meeting-lifecycle';
 // remaining participant shouldn't tear the meeting down. Re-checked at fire
 // time by MeetingLifecycleProcessor, not just at schedule time.
 export const MEETING_AUTO_END_GRACE_SECONDS = 20;
+
+// How long a room may sit empty (INACTIVE, link still valid, next join
+// reactivates it) before the retention sweep finally marks it ENDED for
+// good. Google Meet doesn't keep an abandoned link alive forever either —
+// this is the same idea: metadata can sit around cheaply, but nothing here
+// keeps a live process, socket, or media resource running for it.
+export const MEETING_INACTIVE_RETENTION_DAYS = 30;
+// How often the sweep runs. Cheap indexed query (see migration
+// 015_meeting_inactive_lifecycle.sql), so hourly is plenty.
+export const MEETING_RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;

@@ -32,6 +32,7 @@ import {
 import {
   MEETING_LIFECYCLE_QUEUE,
   MEETING_AUTO_END_GRACE_SECONDS,
+  MEETING_INACTIVE_RETENTION_DAYS,
   MESH_MAX_PARTICIPANTS,
   effectiveCapacity,
 } from './meetings.constants';
@@ -456,6 +457,10 @@ export class MeetingsService {
         `UPDATE meeting_participants SET joined_at = now() WHERE id = $1`,
         [openRows[0].id],
       );
+      await this.dataSource.query(
+        `UPDATE meetings SET last_activity_at = now() WHERE id = $1`,
+        [meetingId],
+      );
       return this.getOne(meetingId, userId);
     }
 
@@ -488,11 +493,21 @@ export class MeetingsService {
       });
     }
 
-    // Auto-start meeting when first non-host joins
-    if (meeting.status === MeetingStatus.SCHEDULED) {
+    // Auto-start meeting when first non-host joins; also reactivates an
+    // abandoned-but-not-ended room ("old link should still work" — see
+    // migration 015 and MeetingsService.sweepExpiredInactiveMeetings).
+    if (
+      meeting.status === MeetingStatus.SCHEDULED ||
+      meeting.status === MeetingStatus.INACTIVE
+    ) {
       await this.dataSource.query(
-        `UPDATE meetings SET status = $2::meeting_status_enum WHERE id = $1`,
+        `UPDATE meetings SET status = $2::meeting_status_enum, last_activity_at = now() WHERE id = $1`,
         [meetingId, MeetingStatus.LIVE],
+      );
+    } else {
+      await this.dataSource.query(
+        `UPDATE meetings SET last_activity_at = now() WHERE id = $1`,
+        [meetingId],
       );
     }
 
@@ -855,7 +870,7 @@ export class MeetingsService {
     );
     if (Number(activeCountRows[0]?.count ?? 0) > 0) return null;
 
-    return this.finishMeeting(meetingId);
+    return this.deactivateMeeting(meetingId);
   }
 
   /** Host-only: end the meeting for everyone right now ("End meeting" popup choice). */
@@ -872,18 +887,81 @@ export class MeetingsService {
   }
 
   /**
+   * Empty-room transition (Google Meet-style): LIVE → INACTIVE, not ENDED.
+   * The link/code stays valid — join() reactivates it straight back to LIVE
+   * (see the "Auto-start meeting" block there). Nothing is left running for
+   * an INACTIVE room: no socket, no media session, no TURN allocation — it's
+   * pure metadata sitting in Postgres until either someone rejoins or
+   * sweepExpiredInactiveMeetings() finally retires it. That split (durable
+   * cheap metadata vs. torn-down-immediately runtime resources) is the same
+   * one finishMeeting() draws for a fully ENDED meeting; this is just the
+   * non-final version of it.
+   */
+  private async deactivateMeeting(meetingId: string) {
+    const rows = await this.dataSource.query(
+      `UPDATE meetings SET status = $2::meeting_status_enum, last_activity_at = now()
+         WHERE id = $1 AND status = $3::meeting_status_enum
+         RETURNING ${MEETING_COLUMNS_SQL}`,
+      [meetingId, MeetingStatus.INACTIVE, MeetingStatus.LIVE],
+    );
+    const meeting = rows[0];
+    if (!meeting) return null; // already changed under us — no-op
+
+    await this.dataSource.query(
+      `UPDATE meeting_participants SET left_at = now() WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+
+    await this.recordingService
+      .stopRecording(meetingId, null, { autoStopped: true })
+      .catch(() => undefined);
+
+    const job = await this.lifecycleQueue.getJob(`auto-end_${meetingId}`);
+    await job?.remove().catch(() => undefined);
+
+    return meeting;
+  }
+
+  /**
+   * Retention sweep (see MeetingRetentionSweepService for the timer that
+   * calls this): an INACTIVE room older than MEETING_INACTIVE_RETENTION_DAYS
+   * finally becomes ENDED — the link stops working for good. Returns how
+   * many rows were swept, purely for logging.
+   */
+  async sweepExpiredInactiveMeetings(): Promise<number> {
+    const rows = await this.dataSource.query<{ id: string }>(
+      `UPDATE meetings SET status = $1::meeting_status_enum, end_time = now()
+         WHERE status = $2::meeting_status_enum
+           AND last_activity_at < now() - ($3 || ' days')::interval
+         RETURNING id`,
+      [
+        MeetingStatus.ENDED,
+        MeetingStatus.INACTIVE,
+        MEETING_INACTIVE_RETENTION_DAYS,
+      ],
+    );
+    return rows.length;
+  }
+
+  /**
    * Shared terminal transition, used by both the explicit host "End meeting"
-   * action and the automatic empty-room timeout. Marks the meeting ENDED
-   * (history is never deleted — only ever transitions to ENDED/CANCELLED),
-   * force-closes any still-active participant rows, auto-stops an in-progress
-   * recording, and cancels any pending auto-end job so it doesn't fire twice.
+   * action and the retention sweep. Marks the meeting ENDED (history is
+   * never deleted — only ever transitions to ENDED/CANCELLED), force-closes
+   * any still-active participant rows, auto-stops an in-progress recording,
+   * and cancels any pending auto-end job so it doesn't fire twice. Allowed
+   * from LIVE, INACTIVE or SCHEDULED — a host can kill an abandoned link
+   * just as validly as a live call.
    */
   private async finishMeeting(meetingId: string) {
     const rows = await this.dataSource.query(
       `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
-         WHERE id = $1 AND status = $3::meeting_status_enum
+         WHERE id = $1 AND status = ANY($3::meeting_status_enum[])
          RETURNING ${MEETING_COLUMNS_SQL}`,
-      [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
+      [
+        meetingId,
+        MeetingStatus.ENDED,
+        [MeetingStatus.LIVE, MeetingStatus.INACTIVE, MeetingStatus.SCHEDULED],
+      ],
     );
     const meeting = rows[0];
     if (!meeting) return null; // already ended/cancelled — no-op

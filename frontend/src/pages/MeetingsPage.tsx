@@ -52,7 +52,7 @@ export function MeetingsPage() {
   }
 
   function statusLabel(status: Meeting["status"]) {
-    return ({ scheduled: t("meetings.statusScheduled"), live: t("meetings.statusLive"), ended: t("meetings.statusEnded"), cancelled: t("meetings.statusCancelled") })[status];
+    return ({ scheduled: t("meetings.statusScheduled"), live: t("meetings.statusLive"), inactive: t("meetings.statusInactive"), ended: t("meetings.statusEnded"), cancelled: t("meetings.statusCancelled") })[status];
   }
 
   useEffect(() => {
@@ -92,7 +92,7 @@ export function MeetingsPage() {
 
   useEffect(() => { void load(); }, [workspace?.id]);
 
-  const active = useMemo(() => meetings.filter((meeting) => meeting.status === "live" || meeting.status === "scheduled").sort((a, b) => {
+  const active = useMemo(() => meetings.filter((meeting) => meeting.status === "live" || meeting.status === "scheduled" || meeting.status === "inactive").sort((a, b) => {
     if (a.status === "live" && b.status !== "live") return -1;
     if (b.status === "live" && a.status !== "live") return 1;
     return +new Date(a.startTime) - +new Date(b.startTime);

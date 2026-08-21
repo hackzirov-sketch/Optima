@@ -18,6 +18,7 @@ import { MeetingJoinRequestService } from './services/meeting-join-request.servi
 import { MeetingFilesService } from './services/meeting-files.service';
 import { MeetingRecordingProcessor } from './processors/meeting-recording.processor';
 import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.processor';
+import { MeetingRetentionSweepService } from './services/meeting-retention-sweep.service';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.proces
     MeetingFilesService,
     MeetingRecordingProcessor,
     MeetingLifecycleProcessor,
+    MeetingRetentionSweepService,
   ],
   exports: [MeetingsService],
 })

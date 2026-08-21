@@ -314,7 +314,7 @@ export interface Meeting {
   title: string;
   description?: string | null;
   code: string;
-  status: "scheduled" | "live" | "ended" | "cancelled";
+  status: "scheduled" | "live" | "inactive" | "ended" | "cancelled";
   scope: MeetingVisibility;
   joinPolicy: MeetingJoinPolicyValue;
   locked: boolean;

@@ -673,6 +673,7 @@ label small, .field-hint { color: var(--muted); font-size: 12px; font-weight: 45
 .meeting-status { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: #a6aaa3; }
 .status-scheduled { background: #c18934; }
 .status-live { background: #3d9369; }
+.status-inactive { background: #7b8794; }
 .status-ended { background: #818680; }
 .status-cancelled { background: #b65b54; }
 .row-main { flex: 1; min-width: 0; display: grid; gap: 5px; }
@@ -1164,6 +1165,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .status-pill { min-height: 24px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; background: var(--surface-muted); color: var(--text-soft); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .status-pill.status-live { background: var(--accent-soft); color: var(--accent-ink); }
 .status-pill.status-scheduled { background: var(--warning-soft); color: #77501a; }
+.status-pill.status-inactive { background: var(--surface-muted); color: var(--muted); }
 .meeting-card-body { margin: 25px 0 20px; }
 .meeting-card-body h2 { margin-bottom: 8px; overflow-wrap: anywhere; font-size: 17px; }
 .meeting-card-body p { height: 38px; margin: 0; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -1556,6 +1558,12 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .meeting-reaction-wrap { position: relative; display: inline-flex; }
 .meeting-reaction-menu { position: absolute; z-index: 20; left: 50%; bottom: 58px; padding: 7px; display: flex; gap: 3px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: rgba(28,32,30,.94); box-shadow: 0 16px 38px rgba(0,0,0,.3); transform: translateX(-50%); animation: premium-menu-in 180ms var(--easing-standard); }
 .meeting-reaction-menu button { width: 38px; height: 38px; background: transparent; font-size: 1.25rem; }
+.meeting-more-wrap { position: relative; display: inline-flex; }
+.meeting-more-menu { position: absolute; z-index: 20; right: 0; bottom: 52px; padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 190px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(28,32,30,.96); box-shadow: 0 16px 38px rgba(0,0,0,.3); animation: premium-menu-in 180ms var(--easing-standard); }
+.meeting-more-menu button { width: 100%; height: 38px; padding: 0 10px; display: flex; align-items: center; gap: 9px; justify-content: flex-start; border-radius: 8px; background: transparent; color: #fff; font-size: 13px; font-weight: 600; }
+.meeting-more-menu button:hover { background: rgba(255,255,255,.08); }
+.meeting-more-menu button.danger { color: #ff8a80; }
+.meeting-more-menu button.danger:hover { background: rgba(255,90,80,.14); }
 .meeting-reaction-layer { position: fixed; z-index: 18; right: 6vw; bottom: 94px; display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
 .meeting-reaction-layer span { font-size: 2.5rem; filter: drop-shadow(0 8px 14px rgba(0,0,0,.28)); animation: meeting-reaction-float 3.2s var(--easing-standard) forwards; }
 @keyframes hand-rise { from { opacity: 0; transform: translateY(8px) scale(.75); } to { opacity: 1; transform: none; } }

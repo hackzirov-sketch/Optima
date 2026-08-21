@@ -40,4 +40,7 @@ export interface Meeting {
   createdAt: Date;
 
   updatedAt: Date;
+
+  /** Bumped on join/reactivate — drives the INACTIVE retention sweep, not user-facing. */
+  lastActivityAt: Date;
 }
