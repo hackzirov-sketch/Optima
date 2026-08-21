@@ -1,20 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 
-import configs from './config';
+import configs, { LoggerConfigModule } from './config';
 import { validate } from './config/env';
 
 import { RedisModule } from './redis/redis.module';
 import { CommonModule } from './common/common.module';
-import { DatabaseModule } from './database/database.module';
-
-// Feature Modules
+import { DatabaseModule } from './database/database.module'; // Feature Modules
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { GithubModule } from './modules/github/github.module';
@@ -33,9 +31,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { EarningsModule } from './modules/earnings/earnings.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { LibraryModule } from './modules/library/library.module';
-import { EducationModule } from './modules/education/education.module';
-
-// Guards
+import { EducationModule } from './modules/education/education.module'; // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 
@@ -88,6 +84,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     EventEmitterModule.forRoot({ wildcard: true }),
 
     RedisModule,
+
     CommonModule,
 
     // ── Feature Modules ────────────────────────────
@@ -110,6 +107,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     NotesModule,
     LibraryModule,
     EducationModule,
+    LoggerConfigModule,
   ],
   providers: [
     // Runs before JwtAuthGuard: a forged cross-site request should be turned

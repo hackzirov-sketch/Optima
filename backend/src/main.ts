@@ -1,28 +1,19 @@
 import 'dotenv/config';
-import { setDefaultResultOrder } from 'dns';
-setDefaultResultOrder('ipv4first'); // Render has no IPv6 outbound — force IPv4 for all DNS
+import { setDefaultResultOrder } from 'node:dns';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Logger as PinoLogger } from 'nestjs-pino';
 
+import { AppModule } from './app.module';
 import { setupApp } from './bootstrap/app.bootstrap';
 import { setupSwagger } from './bootstrap/swagger.bootstrap';
 import { setupRedisAndWebSockets } from './bootstrap/redis.bootstrap';
 import { setupValidation } from './bootstrap/validation.bootstrap';
 
-/**
- * Node aborts the process on an unhandled rejection by default. Plenty of
- * side-effect work here is deliberately fire-and-forget (presence broadcasts,
- * notification fan-out, cache writes) and any one of those rejecting — a Redis
- * blip is enough — would otherwise take the whole API down with it. Log and
- * keep serving instead; a background write failing is not a reason to drop
- * every in-flight request.
- *
- * uncaughtException is treated as fatal on purpose: process state is unknown
- * after one, so the honest response is to let the orchestrator restart us.
- */
+setDefaultResultOrder('ipv4first');
+
 function installProcessGuards(logger: Logger): void {
   process.on('unhandledRejection', (reason) => {
     logger.error(
@@ -32,34 +23,55 @@ function installProcessGuards(logger: Logger): void {
   });
 
   process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception — shutting down', err.stack);
+    logger.error(
+      'Uncaught exception - shutting down',
+      err instanceof Error ? err.stack : String(err),
+    );
+
     process.exit(1);
   });
 }
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  installProcessGuards(logger);
+  const bootstrapLogger = new Logger('Bootstrap');
+
+  installProcessGuards(bootstrapLogger);
+
   const isProd = process.env.NODE_ENV === 'production';
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
-    logger: isProd
-      ? ['log', 'error', 'warn']
-      : ['log', 'error', 'warn', 'debug', 'verbose'],
+
+    /**
+     * Disable Nest's default logger.
+     *
+     * We use nestjs-pino instead.
+     */
+    logger: false,
   });
+
+  /**
+   * Get Pino logger registered by LoggerConfigModule.
+   */
+  const pinoLogger = app.get(PinoLogger);
+
+  /**
+   * Replace Nest's default logger with Pino.
+   */
+  app.useLogger(pinoLogger);
 
   const config = app.get(ConfigService);
 
   setupApp(app, config);
+
   setupRedisAndWebSockets(app, config);
+
   setupValidation(app, config);
+
   if (!isProd) {
     setupSwagger(app, config);
   }
 
-  // Without this, SIGTERM kills the process outright and no OnModuleDestroy
-  // ever runs — the pg pool and Redis connections are never closed, so every
-  // deploy leaves the database holding connections it has to time out itself.
   app.enableShutdownHooks();
 
   const port = config.get<number>('app.port') || 3000;
@@ -67,14 +79,24 @@ async function bootstrap() {
 
   await app.listen(port);
 
-  logger.log(`🚀 UPZ API running on: http://localhost:${port}/${prefix}`);
-  logger.log(`📖 Swagger docs: http://localhost:${port}/${prefix}/docs`);
+  bootstrapLogger.log(
+    `🚀 UPZ API running on: http://localhost:${port}/${prefix}`,
+  );
+
+  if (!isProd) {
+    bootstrapLogger.log(
+      `📖 Swagger docs: http://localhost:${port}/${prefix}/docs`,
+    );
+  }
 }
 
 bootstrap().catch((err) => {
-  new Logger('Bootstrap').error(
+  const logger = new Logger('Bootstrap');
+
+  logger.error(
     'Failed to start application',
     err instanceof Error ? err.stack : String(err),
   );
+
   process.exit(1);
 });
