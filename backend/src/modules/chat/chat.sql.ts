@@ -1,5 +1,5 @@
 export const CHAT_ROOM_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", group_id AS "groupId", project_id AS "projectId",
+  id, group_id AS "groupId", group_id AS "groupId", project_id AS "projectId",
   type, scope, name, avatar_url AS "avatarUrl", description, is_archived AS "isArchived",
   is_read_only AS "isReadOnly", is_public AS "isPublic", invite_code AS "inviteCode",
   last_message_id AS "lastMessageId", last_message_at AS "lastMessageAt",
@@ -13,7 +13,7 @@ export const CHAT_ROOM_COLUMNS_SQL = `
 
 /** Same columns as CHAT_ROOM_COLUMNS_SQL, prefixed with `r.` for use in JOIN queries aliased as `r`. */
 export const CHAT_ROOM_COLUMNS_SQL_R = `
-  r.id, r.workspace_id AS "workspaceId", r.group_id AS "groupId", r.project_id AS "projectId",
+  r.id, r.group_id AS "groupId", r.group_id AS "groupId", r.project_id AS "projectId",
   r.type, r.scope, r.name, r.avatar_url AS "avatarUrl", r.description, r.is_archived AS "isArchived",
   r.is_read_only AS "isReadOnly", r.is_public AS "isPublic", r.invite_code AS "inviteCode",
   r.last_message_id AS "lastMessageId", r.last_message_at AS "lastMessageAt",

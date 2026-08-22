@@ -2,7 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { MembersService } from './members.service';
 import { PermissionService } from '../../../common/services/permission.service';
 import { RedisKeys } from '../../../redis/redis.keys';
-import { WorkspaceRole } from '../../../common/enums';
+import { MemberRole } from '../../../common/enums';
 
 /** In-memory stand-in for RedisService's JSON cache. */
 function fakeRedis() {
@@ -30,9 +30,9 @@ describe('MembersService — membership cache', () => {
   let redis: ReturnType<typeof fakeRedis>;
   let service: MembersService;
 
-  const memberRow = (role = WorkspaceRole.JUNIOR, userId = USER) => ({
+  const memberRow = (role = MemberRole.JUNIOR, userId = USER) => ({
     id: 'm-1',
-    workspaceId: WS,
+    groupId: WS,
     userId,
     role,
   });
@@ -73,7 +73,7 @@ describe('MembersService — membership cache', () => {
     expect(redis.store.size).toBe(0);
   });
 
-  it('keys the cache per workspace and per user', async () => {
+  it('keys the cache per group and per user', async () => {
     dataSource.query.mockResolvedValue([memberRow()]);
 
     await service.assertMember(WS, USER);
@@ -90,8 +90,8 @@ describe('MembersService — membership cache', () => {
 
     // Requester is an admin; target is a junior, so the rank check passes.
     dataSource.query
-      .mockResolvedValueOnce([{ id: WS, ownerId: 'someone-else' }]) // workspace
-      .mockResolvedValueOnce([memberRow(WorkspaceRole.ADMIN, ADMIN)]) // requester
+      .mockResolvedValueOnce([{ id: WS, ownerId: 'someone-else' }]) // group
+      .mockResolvedValueOnce([memberRow(MemberRole.ADMIN, ADMIN)]) // requester
       .mockResolvedValueOnce([memberRow()]) // target
       .mockResolvedValueOnce([]); // delete
     await service.remove(WS, USER, ADMIN);
@@ -99,7 +99,7 @@ describe('MembersService — membership cache', () => {
     // This is the bug the shared cache exists to prevent: a removed member
     // kept full access until the entry aged out.
     expect(
-      redis.store.get(RedisKeys.workspaceMember(WS, USER)),
+      redis.store.get(RedisKeys.groupMember(WS, USER)),
     ).toBeUndefined();
   });
 
@@ -108,14 +108,14 @@ describe('MembersService — membership cache', () => {
     await service.assertMember(WS, USER);
 
     dataSource.query
-      .mockResolvedValueOnce([{ id: WS, ownerId: 'someone-else' }]) // workspace
-      .mockResolvedValueOnce([memberRow(WorkspaceRole.OWNER, ADMIN)]) // requester
-      .mockResolvedValueOnce([memberRow(WorkspaceRole.JUNIOR)]) // target
-      .mockResolvedValueOnce([memberRow(WorkspaceRole.LEAD)]); // update
-    await service.updateRole(WS, USER, { role: WorkspaceRole.LEAD }, ADMIN);
+      .mockResolvedValueOnce([{ id: WS, ownerId: 'someone-else' }]) // group
+      .mockResolvedValueOnce([memberRow(MemberRole.OWNER, ADMIN)]) // requester
+      .mockResolvedValueOnce([memberRow(MemberRole.JUNIOR)]) // target
+      .mockResolvedValueOnce([memberRow(MemberRole.LEAD)]); // update
+    await service.updateRole(WS, USER, { role: MemberRole.LEAD }, ADMIN);
 
     expect(
-      redis.store.get(RedisKeys.workspaceMember(WS, USER)),
+      redis.store.get(RedisKeys.groupMember(WS, USER)),
     ).toBeUndefined();
   });
 

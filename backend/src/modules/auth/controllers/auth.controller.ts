@@ -333,10 +333,10 @@ export class AuthController {
   async refresh(
     @Req() req,
     @CurrentUser('refreshToken') refreshToken: string,
-    @CurrentUser('workspaceId') workspaceId: string | undefined,
+    @CurrentUser('groupId') groupId: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.tokenService.refresh(refreshToken, workspaceId);
+    const result = await this.tokenService.refresh(refreshToken, groupId);
     await req.clearRateLimit?.();
     return this.respondWithTokens(res, result);
   }
@@ -359,14 +359,14 @@ export class AuthController {
   @Get('session')
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Get the workspace this session is scoped to',
+    summary: 'Get the group this session is scoped to',
     description:
       'The access token is an httpOnly cookie, unreadable by frontend JS, so it has no way to decode ' +
-      'the `workspaceId` claim itself (e.g. on a plain page reload with no in-memory state left). This ' +
+      'the `groupId` claim itself (e.g. on a plain page reload with no in-memory state left). This ' +
       'is the one round trip that hands it back.',
   })
-  getSession(@CurrentUser('workspaceId') workspaceId: string | undefined) {
-    return { workspaceId: workspaceId ?? null };
+  getSession(@CurrentUser('groupId') groupId: string | undefined) {
+    return { groupId: groupId ?? null };
   }
 
   @Get('sessions')

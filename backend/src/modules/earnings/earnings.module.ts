@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { GroupsModule } from '../groups/groups.module';
 import { EarningsService } from './earnings.service';
 import { EarningsController } from './earnings.controller';
 
 @Module({
-  imports: [WorkspacesModule],
+  imports: [GroupsModule],
   controllers: [EarningsController],
   providers: [EarningsService],
   exports: [EarningsService],

@@ -2,8 +2,8 @@ import { MeetingsRepository } from './repositories/meetings.repository';
 
 /**
  * Participants used to come back as bare ids. The client resolved names
- * against the viewer's *workspace* member list, so a guest, a standalone
- * meeting with no workspace, or simply someone from another organisation
+ * against the viewer's *group* member list, so a guest, a standalone
+ * meeting with no group, or simply someone from another organisation
  * rendered as the generic "Qatnashchi" fallback with a placeholder avatar.
  * Being in the meeting is the relationship that matters here.
  */

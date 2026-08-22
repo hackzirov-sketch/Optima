@@ -1,6 +1,6 @@
 import { UserTheme, UserLanguage } from '../../common/enums';
-import { Workspace } from './workspace.entity';
-import { WorkspaceMember } from './workspace-member.entity';
+import { Group } from './group.entity';
+import { GroupMember } from './group-member.entity';
 import { UserSettings } from './user-settings.entity';
 
 export interface User {
@@ -61,9 +61,9 @@ export interface User {
   deletedBy: string | null;
 
   // Relations
-  ownedWorkspaces: Workspace[];
+  ownedGroups: Group[];
 
-  workspaceMemberships: WorkspaceMember[];
+  groupMemberships: GroupMember[];
 
   settings: UserSettings;
 }

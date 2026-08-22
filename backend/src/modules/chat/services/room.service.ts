@@ -14,7 +14,7 @@ import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
 import { ChatMemberService } from './member.service';
-import { MembersService } from '../../workspaces/services/members.service';
+import { MembersService } from '../../groups/services/members.service';
 import { CreateChatRoomDto } from '../dto/create-chat-room.dto';
 import { CHAT_ROOM_COLUMNS_SQL, CHAT_ROOM_COLUMNS_SQL_R } from '../chat.sql';
 import { buildUpdateSet } from '../../../common/utils/sql.util';
@@ -47,7 +47,6 @@ export interface MemberProfile {
 
 export interface ChatRoomDto {
   id: string;
-  workspaceId: string | null;
   type: ChatRoomType;
   name: string | null;
   avatarUrl: string | null;
@@ -174,7 +173,6 @@ export class ChatRoomService {
 
     return {
       id: room.id,
-      workspaceId: room.workspaceId,
       type: room.type,
       name: room.name ?? null,
       avatarUrl: room.avatarUrl ?? null,
@@ -220,26 +218,26 @@ export class ChatRoomService {
   }
 
   /**
-   * Every room the caller belongs to, workspace or not — the JWT is the only
+   * Every room the caller belongs to, group or not — the JWT is the only
    * authorisation needed, since membership in chat_members is itself the
-   * permission. This is the primary listing; the workspace-scoped variant
+   * permission. This is the primary listing; the group-scoped variant
    * below is a filtered view of the same data.
    */
   async listUserRooms(userId: string) {
     return this.queryRooms(userId, null);
   }
 
-  async listRooms(workspaceId: string, userId: string) {
-    await this.wsMembersService.assertMember(workspaceId, userId);
-    return this.queryRooms(userId, workspaceId);
+  async listRooms(groupId: string, userId: string) {
+    await this.wsMembersService.assertMember(groupId, userId);
+    return this.queryRooms(userId, groupId);
   }
 
   /**
-   * @param workspaceId when set, restricts to that workspace's rooms — except
-   *   direct/group/channel rooms, which are user-owned and carry no workspace,
+   * @param groupId when set, restricts to that group's rooms — except
+   *   direct/group/channel rooms, which are user-owned and carry no group,
    *   so filtering them out would hide the user's own conversations.
    */
-  private async queryRooms(userId: string, workspaceId: string | null) {
+  private async queryRooms(userId: string, groupId: string | null) {
     const myRooms = await this.dataSource.query<
       ChatRoom & {
         myLastReadSeq: number;
@@ -248,17 +246,17 @@ export class ChatRoomService {
         myIsMuted: boolean;
       }
     >(
-      // $1 NULL = no workspace filter at all. When a workspace *is* given, the
+      // $1 NULL = no group filter at all. When a group *is* given, the
       // user-owned kinds still come through: a DM, group or channel belongs to
-      // its members, not to an organisation, so filtering them by workspace
+      // its members, not to an organisation, so filtering them by group
       // hid conversations from whichever side didn't share the creator's one.
       `SELECT ${CHAT_ROOM_COLUMNS_SQL_R}, cm.last_read_seq AS "myLastReadSeq", cm.status AS "myStatus",
               cm.role AS "myRole", cm.is_muted AS "myIsMuted"
        FROM chat_rooms r
        JOIN chat_members cm ON cm.room_id = r.id AND cm.user_id = $2 AND cm.left_at IS NULL
-       WHERE ($1::uuid IS NULL OR r.workspace_id = $1 OR r.type = ANY($3::chat_rooms_type_enum[]))`,
+       WHERE ($1::uuid IS NULL OR r.group_id = $1 OR r.type = ANY($3::chat_rooms_type_enum[]))`,
       [
-        workspaceId,
+        groupId,
         userId,
         [ChatRoomType.DIRECT, ChatRoomType.GROUP, ChatRoomType.CHANNEL],
       ],
@@ -270,7 +268,7 @@ export class ChatRoomService {
 
     // The user profile is joined in here on purpose: a DM's title, avatar and
     // /u/<username> route all come from the peer, who is frequently *not* a
-    // member of the caller's workspace, so the workspace member list can't
+    // member of the caller's group, so the group member list can't
     // supply them.
     const allMembers = await this.dataSource.query<{
       roomId: string;
@@ -337,7 +335,6 @@ export class ChatRoomService {
 
       return {
         id: room.id,
-        workspaceId: room.workspaceId,
         type: room.type,
         name: room.name ?? null,
         avatarUrl: room.avatarUrl ?? null,
@@ -390,12 +387,12 @@ export class ChatRoomService {
    * Global discovery for the sidebar search box: public channels and groups
    * the caller has *not* joined yet.
    *
-   * `listPublicRooms` below only ever looked inside one workspace, so a
-   * channel opened from chat — which carries no workspace at all — could not
+   * `listPublicRooms` below only ever looked inside one group, so a
+   * channel opened from chat — which carries no group at all — could not
    * be found by anyone who wasn't already a member. Visibility here is
    * `scope = 'public'` plus one of:
-   *   - no workspace: user-owned channels/groups, public to the whole platform;
-   *   - a workspace the caller belongs to: keeps a workspace's internal rooms
+   *   - no group: user-owned channels/groups, public to the whole platform;
+   *   - a group the caller belongs to: keeps a group's internal rooms
    *     from leaking to outsiders, which is what "public" means inside one.
    *
    * An all-numeric query also matches `public_id` exactly, so the 6-digit id
@@ -430,9 +427,9 @@ export class ChatRoomService {
          AND r.is_archived = false
          AND r.type = ANY($1::chat_rooms_type_enum[])
          AND (
-           r.workspace_id IS NULL
-           OR r.workspace_id IN (
-             SELECT workspace_id FROM workspace_members WHERE user_id = $2
+           r.group_id IS NULL
+           OR r.group_id IN (
+             SELECT group_id FROM group_members WHERE user_id = $2
            )
          )
          AND (
@@ -457,8 +454,8 @@ export class ChatRoomService {
     );
   }
 
-  async listPublicRooms(workspaceId: string, userId: string) {
-    await this.wsMembersService.assertMember(workspaceId, userId);
+  async listPublicRooms(groupId: string, userId: string) {
+    await this.wsMembersService.assertMember(groupId, userId);
 
     const memberRoomIds: string[] = (
       await this.dataSource.query(
@@ -469,8 +466,8 @@ export class ChatRoomService {
 
     const publicRooms = await this.dataSource.query<ChatRoom>(
       `SELECT ${CHAT_ROOM_COLUMNS_SQL} FROM chat_rooms
-       WHERE workspace_id = $1 AND scope = 'public' AND is_archived = false`,
-      [workspaceId],
+       WHERE group_id = $1 AND scope = 'public' AND is_archived = false`,
+      [groupId],
     );
 
     const nonMemberRooms = publicRooms.filter(
@@ -478,7 +475,6 @@ export class ChatRoomService {
     );
     return nonMemberRooms.map((r) => ({
       id: r.id,
-      workspaceId: r.workspaceId,
       type: r.type,
       name: r.name ?? null,
       avatarUrl: r.avatarUrl ?? null,
@@ -540,13 +536,13 @@ export class ChatRoomService {
         message: 'Room is not public',
       });
 
-    // "Public" inside a workspace means public *to that workspace* — which is
+    // "Public" inside a group means public *to that group* — which is
     // exactly how discoverRooms and listPublicRooms present it. This endpoint
     // took only a roomId and skipped the check, so the one door that actually
-    // admits people was the one that didn't ask. Workspace-less channels and
+    // admits people was the one that didn't ask. Group-less channels and
     // groups are public to the whole platform and stay that way.
-    if (room.workspaceId) {
-      await this.wsMembersService.assertMember(room.workspaceId, userId);
+    if (room.groupId) {
+      await this.wsMembersService.assertMember(room.groupId, userId);
     }
 
     await this.assertNotBanned(roomId, userId);
@@ -665,10 +661,10 @@ export class ChatRoomService {
         code: ErrorCode.VALIDATION_ERROR,
         message: `scope must be one of: ${Object.values(RoomScope).join(', ')}`,
       });
-    if (dto.scope === RoomScope.WORKSPACE_ONLY && !room.workspaceId)
+    if (dto.scope === RoomScope.GROUP_ONLY && !room.groupId)
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'This room has no workspace, so it cannot be workspace-only',
+        message: 'This room has no group, so it cannot be group-only',
       });
     if (
       dto.name !== undefined &&
@@ -862,44 +858,44 @@ export class ChatRoomService {
   /**
    * Creates a direct/group/channel room.
    *
-   * Workspace is optional by design: a user opens a group or channel straight
-   * from chat, authorised by their JWT alone (see the workspace-less
-   * `POST /chat/rooms` route). `workspaceId` is only an association for rooms
+   * Group is optional by design: a user opens a group or channel straight
+   * from chat, authorised by their JWT alone (see the group-less
+   * `POST /chat/rooms` route). `groupId` is only an association for rooms
    * that genuinely belong to one, and is verified when present. DMs never
-   * carry a workspace at all — a conversation belongs to the two people in it,
-   * not to an organisation, and scoping them by workspace is what previously
-   * hid a DM from whichever side didn't share the creator's workspace.
+   * carry a group at all — a conversation belongs to the two people in it,
+   * not to an organisation, and scoping them by group is what previously
+   * hid a DM from whichever side didn't share the creator's group.
    *
    * The whole write runs in one transaction: room, members and notification
    * land together or not at all. Without it a failure between the inserts left
    * a memberless room stranded in chat_rooms.
    */
   async createRoom(
-    workspaceId: string | null,
+    groupId: string | null,
     userId: string,
     dto: CreateChatRoomDto,
   ) {
     const isDirect = dto.type === ChatRoomType.DIRECT;
-    // A DM is never workspace-scoped; the unique dm_key spans the whole table.
-    const effectiveWorkspaceId = isDirect ? null : workspaceId;
+    // A DM is never group-scoped; the unique dm_key spans the whole table.
+    const effectiveGroupId = isDirect ? null : groupId;
     const scope =
       dto.scope ??
-      (effectiveWorkspaceId ? RoomScope.WORKSPACE_ONLY : RoomScope.PRIVATE);
+      (effectiveGroupId ? RoomScope.GROUP_ONLY : RoomScope.PRIVATE);
 
-    if (scope === RoomScope.WORKSPACE_ONLY && !effectiveWorkspaceId) {
+    if (scope === RoomScope.GROUP_ONLY && !effectiveGroupId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'workspace_only rooms require a workspace',
+        message: 'group_only rooms require a group',
       });
     }
-    if ((dto.groupId || dto.projectId) && !effectiveWorkspaceId) {
+    if ((dto.groupId || dto.projectId) && !effectiveGroupId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'Group/project rooms require a workspace',
+        message: 'Group/project rooms require a group',
       });
     }
-    if (effectiveWorkspaceId) {
-      await this.wsMembersService.assertMember(effectiveWorkspaceId, userId);
+    if (effectiveGroupId) {
+      await this.wsMembersService.assertMember(effectiveGroupId, userId);
     }
     if (
       !isDirect &&
@@ -940,9 +936,9 @@ export class ChatRoomService {
           code: ErrorCode.DM_WITH_SELF,
           message: 'Cannot create a DM with yourself',
         });
-      // Removed assertMember to allow cross-workspace DMs
+      // Removed assertMember to allow cross-group DMs
 
-      // A DM is unique per *pair of people*, never per workspace. Looked up by
+      // A DM is unique per *pair of people*, never per group. Looked up by
       // the same canonical dm_key the unique index is built on, so this check
       // and the constraint can never disagree.
       const existingRows = await this.dataSource.query<ChatRoom>(
@@ -970,26 +966,15 @@ export class ChatRoomService {
       }
     }
 
-    if (dto.groupId) {
-      const g = await this.dataSource.query(
-        `SELECT id FROM groups WHERE id = $1 AND workspace_id = $2`,
-        [dto.groupId, effectiveWorkspaceId],
-      );
-      if (!g[0])
-        throw new BadRequestException({
-          code: ErrorCode.GROUP_NOT_FOUND,
-          message: 'Group not in this workspace',
-        });
-    }
     if (dto.projectId) {
       const p = await this.dataSource.query(
-        `SELECT id FROM projects WHERE id = $1 AND workspace_id = $2`,
-        [dto.projectId, effectiveWorkspaceId],
+        `SELECT id FROM projects WHERE id = $1 AND group_id = $2`,
+        [dto.projectId, effectiveGroupId],
       );
       if (!p[0])
         throw new BadRequestException({
           code: ErrorCode.PROJECT_NOT_FOUND,
-          message: 'Project not in this workspace',
+          message: 'Project not in this group',
         });
     }
 
@@ -1021,16 +1006,15 @@ export class ChatRoomService {
     try {
       saved = await this.dataSource.withTransaction(async (query) => {
         const savedRows = await query<ChatRoom>(
-          `INSERT INTO chat_rooms (workspace_id, type, scope, name, description, group_id, project_id, created_by, posting_mode)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `INSERT INTO chat_rooms (group_id, type, scope, name, description, project_id, created_by, posting_mode)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING ${CHAT_ROOM_COLUMNS_SQL}`,
           [
-            effectiveWorkspaceId,
+            effectiveGroupId,
             derivedType,
             scope,
             dto.name?.trim() ?? null,
             dto.description?.trim() ?? null,
-            dto.groupId ?? null,
             dto.projectId ?? null,
             userId,
             // Channels broadcast: only admins post unless explicitly opened up.
@@ -1198,7 +1182,7 @@ export class ChatRoomService {
     // Destructive and irreversible — the row cascades every message with it,
     // so the audit entry is the only record that the room ever existed.
     await this.audit.log({
-      workspaceId: room.workspaceId,
+      groupId: room.groupId,
       actorId: userId,
       action: 'chat_room.deleted',
       entityType: 'chat_room',
@@ -1241,7 +1225,7 @@ export class ChatRoomService {
       room.id,
     ]);
     await this.audit.log({
-      workspaceId: room.workspaceId,
+      groupId: room.groupId,
       actorId: userId,
       action: 'chat_room.deleted',
       entityType: 'chat_room',

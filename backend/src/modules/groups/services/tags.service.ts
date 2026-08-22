@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { Tag } from '../../../database/entities/tag.entity';
-import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
+import { GroupMember } from '../../../database/entities/group-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { PermissionService } from '../../../common/services/permission.service';
 import {
   TAG_COLUMNS_SQL,
-  WORKSPACE_MEMBER_COLUMNS_SQL,
-} from '../repositories/workspaces.sql';
+  GROUP_MEMBER_COLUMNS_SQL,
+} from '../repositories/groups.sql';
 import { buildUpdateSet } from '../../../common/utils/sql.util';
 import { CreateTagDto } from '../schemas/create-tag.schema';
 import { UpdateTagDto } from '../schemas/update-tag.schema';
@@ -25,72 +25,72 @@ export class TagsService {
   ) {}
 
   private async assertMember(
-    workspaceId: string,
+    groupId: string,
     userId: string,
-  ): Promise<WorkspaceMember> {
-    const rows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
+  ): Promise<GroupMember> {
+    const rows = await this.dataSource.query<GroupMember>(
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
     );
     if (!rows[0])
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
     return rows[0];
   }
 
-  private async assertAdminOrOwner(workspaceId: string, userId: string) {
-    const m = await this.assertMember(workspaceId, userId);
+  private async assertAdminOrOwner(groupId: string, userId: string) {
+    const m = await this.assertMember(groupId, userId);
     this.permission.assertCanManageProject(m); // LEAD+
     return m;
   }
 
-  async listByWorkspace(workspaceId: string, userId: string): Promise<Tag[]> {
-    await this.assertMember(workspaceId, userId);
+  async listByGroup(groupId: string, userId: string): Promise<Tag[]> {
+    await this.assertMember(groupId, userId);
     return this.dataSource.query(
-      `SELECT ${TAG_COLUMNS_SQL} FROM tags WHERE workspace_id = $1 ORDER BY name ASC`,
-      [workspaceId],
+      `SELECT ${TAG_COLUMNS_SQL} FROM tags WHERE group_id = $1 ORDER BY name ASC`,
+      [groupId],
     );
   }
 
   async create(
-    workspaceId: string,
+    groupId: string,
     userId: string,
     dto: CreateTagDto,
   ): Promise<Tag> {
-    await this.assertAdminOrOwner(workspaceId, userId);
+    await this.assertAdminOrOwner(groupId, userId);
 
     const existing = await this.dataSource.query(
-      `SELECT id FROM tags WHERE workspace_id = $1 AND name = $2`,
-      [workspaceId, dto.name],
+      `SELECT id FROM tags WHERE group_id = $1 AND name = $2`,
+      [groupId, dto.name],
     );
     if (existing[0])
       throw new ConflictException({
         code: ErrorCode.TAG_ALREADY_EXISTS,
-        message: 'Tag with this name already exists in workspace',
+        message: 'Tag with this name already exists in group',
       });
 
     const rows = await this.dataSource.query<Tag>(
-      `INSERT INTO tags (workspace_id, name, color, created_by)
+      `INSERT INTO tags (group_id, name, color, created_by)
        VALUES ($1, $2, $3, $4)
        RETURNING ${TAG_COLUMNS_SQL}`,
-      [workspaceId, dto.name, dto.color ?? '#6B7280', userId],
+      [groupId, dto.name, dto.color ?? '#6B7280', userId],
     );
     return rows[0];
   }
 
   async update(
-    workspaceId: string,
+    groupId: string,
     tagId: string,
     userId: string,
     dto: UpdateTagDto,
   ): Promise<Tag> {
-    await this.assertAdminOrOwner(workspaceId, userId);
+    await this.assertAdminOrOwner(groupId, userId);
 
     const rows = await this.dataSource.query<Tag>(
-      `SELECT ${TAG_COLUMNS_SQL} FROM tags WHERE id = $1 AND workspace_id = $2`,
-      [tagId, workspaceId],
+      `SELECT ${TAG_COLUMNS_SQL} FROM tags WHERE id = $1 AND group_id = $2`,
+      [tagId, groupId],
     );
     const tag = rows[0];
     if (!tag)
@@ -101,13 +101,13 @@ export class TagsService {
 
     if (dto.name && dto.name !== tag.name) {
       const existing = await this.dataSource.query(
-        `SELECT id FROM tags WHERE workspace_id = $1 AND name = $2`,
-        [workspaceId, dto.name],
+        `SELECT id FROM tags WHERE group_id = $1 AND name = $2`,
+        [groupId, dto.name],
       );
       if (existing[0])
         throw new ConflictException({
           code: ErrorCode.TAG_ALREADY_EXISTS,
-          message: 'Tag with this name already exists in workspace',
+          message: 'Tag with this name already exists in group',
         });
     }
 
@@ -124,15 +124,15 @@ export class TagsService {
   }
 
   async remove(
-    workspaceId: string,
+    groupId: string,
     tagId: string,
     userId: string,
   ): Promise<void> {
-    await this.assertAdminOrOwner(workspaceId, userId);
+    await this.assertAdminOrOwner(groupId, userId);
 
     const rows = await this.dataSource.query(
-      `SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`,
-      [tagId, workspaceId],
+      `SELECT id FROM tags WHERE id = $1 AND group_id = $2`,
+      [tagId, groupId],
     );
     if (!rows[0])
       throw new NotFoundException({

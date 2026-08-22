@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
@@ -26,10 +26,10 @@ import { MeetingRetentionSweepService } from './services/meeting-retention-sweep
       { name: MEETING_RECORDING_QUEUE },
       { name: MEETING_LIFECYCLE_QUEUE },
     ),
-    forwardRef(() => WorkspacesModule),
+    forwardRef(() => GroupsModule),
     ModerationModule,
     StorageModule,
-    // WorkspacesModule -> NotificationsModule -> GatewayModule -> MeetingsModule
+    // GroupsModule -> NotificationsModule -> GatewayModule -> MeetingsModule
     // -> NotificationsModule closes a cycle; forwardRef required here too.
     forwardRef(() => NotificationsModule),
     // MeetingsController now injects EventsGateway directly (to broadcast

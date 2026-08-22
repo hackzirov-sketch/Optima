@@ -19,50 +19,50 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Earnings')
 @ApiBearerAuth('access-token')
-@Controller('workspaces/:workspaceId/earnings')
+@Controller('groups/:groupId/earnings')
 export class EarningsController {
   constructor(private readonly earningsService: EarningsService) {}
 
   @Get('summary')
-  @ApiOperation({ summary: 'Get earnings summary for workspace' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiOperation({ summary: 'Get earnings summary for group' })
+  @ApiParam({ name: 'groupId' })
   summary(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.earningsService.getSummary(workspaceId, userId);
+    return this.earningsService.getSummary(groupId, userId);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List earnings for workspace' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiOperation({ summary: 'List earnings for group' })
+  @ApiParam({ name: 'groupId' })
   list(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.earningsService.list(workspaceId, userId);
+    return this.earningsService.list(groupId, userId);
   }
 
   @Post()
   @ApiOperation({ summary: 'Add an earning record' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'groupId' })
   create(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateEarningDto,
   ) {
-    return this.earningsService.create(workspaceId, userId, dto);
+    return this.earningsService.create(groupId, userId, dto);
   }
 
   @Delete(':earningId')
   @ApiOperation({ summary: 'Delete an earning record' })
-  @ApiParam({ name: 'workspaceId' })
+  @ApiParam({ name: 'groupId' })
   @ApiParam({ name: 'earningId' })
   remove(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('earningId', ParseUUIDPipe) earningId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.earningsService.remove(workspaceId, userId, earningId);
+    return this.earningsService.remove(groupId, userId, earningId);
   }
 }

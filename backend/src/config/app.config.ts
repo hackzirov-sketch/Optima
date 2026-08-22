@@ -15,7 +15,7 @@ function resolveBcryptRounds(): number {
 /**
  * Comma-separated user IDs allowed to administer platform-wide content
  * (currently the education catalogue). There is no global admin role on the
- * user model — workspace roles are scoped to a workspace and don't express
+ * user model — group roles are scoped to a group and don't express
  * "staff" — so this stays configuration rather than data until one exists.
  * Empty by default: an unset variable grants nobody anything.
  */

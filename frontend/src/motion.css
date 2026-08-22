@@ -26,7 +26,7 @@
 .dock-indicator { transition-duration: var(--motion-overlay), var(--motion-feedback); transition-timing-function: var(--motion-enter); }
 
 /* Menus and overlays open from their physical anchor. */
-.workspace-menu,
+.group-menu,
 .status-menu,
 .language-menu,
 .header-more-menu,

@@ -37,7 +37,7 @@ export interface AuthResult {
   requiresPasswordSetup?: boolean;
 }
 
-export interface Workspace {
+export interface Group {
   id: string;
   ownerId: string;
   name: string;
@@ -49,10 +49,10 @@ export interface Workspace {
   createdAt?: string;
 }
 
-export interface WorkspaceMember {
+export interface GroupMember {
   id: string;
   userId: string;
-  workspaceId: string;
+  groupId: string;
   role: string;
   joinedAt?: string;
   user?: User;
@@ -65,9 +65,9 @@ export interface WorkspaceMember {
 
 export interface ChatRoom {
   id: string;
-  workspaceId: string | null;
-  type: "workspace" | "project" | "group" | "direct" | "public" | "private" | "channel";
-  scope: "workspace_only" | "private" | "public";
+  groupId: string | null;
+  type: "group" | "project" | "group" | "direct" | "public" | "private" | "channel";
+  scope: "group_only" | "private" | "public";
   name?: string | null;
   description?: string | null;
   avatarUrl?: string | null;
@@ -103,12 +103,12 @@ export interface ChatRoom {
 
 /**
  * A row from the platform's single audit trail (`audit_logs`). The same shape
- * backs a workspace's activity feed and a room's change history — they are one
+ * backs a group's activity feed and a room's change history — they are one
  * query with a different filter.
  */
 export interface AuditEntry {
   id: string;
-  workspaceId: string | null;
+  groupId: string | null;
   actorId: string | null;
   action: string;
   entityType: string | null;
@@ -224,7 +224,7 @@ export interface GlobalSearchResult {
   users: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>;
   chats: Array<{ id: string; name?: string | null; type: string }>;
   projects: Array<{ id: string; name: string }>;
-  workspaces: Array<{ id: string; name: string; slug: string }>;
+  groups: Array<{ id: string; name: string; slug: string }>;
   meetings: Array<{ id: string; title: string }>;
 }
 
@@ -275,11 +275,11 @@ export interface MeetingParticipant {
   isMuted: boolean;
   cameraEnabled: boolean;
   screenSharing: boolean;
-  /** Joined server-side; the workspace member list can't supply guests. */
+  /** Joined server-side; the group member list can't supply guests. */
   user?: MeetingUser | null;
 }
 
-export type MeetingVisibility = "workspace_only" | "private" | "public" | "invite_only";
+export type MeetingVisibility = "group_only" | "private" | "public" | "invite_only";
 export type MeetingJoinPolicyValue = "auto" | "request_approval";
 export type MeetingJoinRequestStatusValue = "pending" | "approved" | "rejected" | "cancelled";
 
@@ -292,7 +292,7 @@ export interface MeetingAccess {
   /** True if requesting to join makes sense right now (not already pending). */
   canRequest: boolean;
   requestStatus: MeetingJoinRequestStatusValue | null;
-  deniedReason?: "workspace_only" | "invite_only" | "locked";
+  deniedReason?: "group_only" | "invite_only" | "locked";
 }
 
 export interface MeetingJoinRequest {
@@ -308,7 +308,7 @@ export interface MeetingJoinRequest {
 
 export interface Meeting {
   id: string;
-  workspaceId?: string | null;
+  groupId?: string | null;
   hostId: string;
   host?: Pick<User, "id" | "firstName" | "lastName" | "avatarUrl"> | null;
   title: string;
@@ -376,7 +376,7 @@ export interface NotificationItem {
 /** A note taken during a meeting. Readable by anyone who was in that call. */
 export interface Note {
   id: string;
-  workspaceId: string | null;
+  groupId: string | null;
   projectId: string | null;
   taskId: string | null;
   meetingId: string | null;

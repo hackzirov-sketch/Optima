@@ -114,14 +114,14 @@ export class UsersService {
            w.visibility AS "visibility", w.max_members AS "maxMembers",
            w.max_projects AS "maxProjects", w.created_at AS "createdAt",
            w.updated_at AS "updatedAt"
-         FROM workspace_members wm
-         JOIN workspaces w ON w.id = wm.workspace_id
+         FROM group_members wm
+         JOIN groups w ON w.id = wm.group_id
          WHERE wm.user_id = $1 AND w.deleted_at IS NULL`,
         [id],
       ),
     ]);
 
-    return { ...user, settings: settings[0] ?? null, workspaces: memberships };
+    return { ...user, settings: settings[0] ?? null, groups: memberships };
   }
 
   /** Bulk last_seen lookup — the durable "history" half of presence (see ChatPresenceService for the live half). */

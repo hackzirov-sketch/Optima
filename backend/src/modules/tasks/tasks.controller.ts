@@ -65,18 +65,18 @@ export class TasksController {
     return this.tasksService.findAll(projectId, userId, filters);
   }
 
-  @Get('workspaces/:workspaceId/tasks')
+  @Get('groups/:groupId/tasks')
   @ApiOperation({
     summary:
-      'List all tasks in a workspace (single request, avoids N+1 per project)',
+      'List all tasks in a group (single request, avoids N+1 per project)',
   })
-  @ApiParam({ name: 'workspaceId', description: 'Workspace UUID' })
-  findAllByWorkspace(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  @ApiParam({ name: 'groupId', description: 'Group UUID' })
+  findAllByGroup(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
     @Query() filters: FilterTasksDto,
   ) {
-    return this.tasksService.findAllByWorkspace(workspaceId, userId, filters);
+    return this.tasksService.findAllByGroup(groupId, userId, filters);
   }
 
   @Get('tasks/:taskId')

@@ -24,14 +24,14 @@ import { StorageService, UploadFolder } from './storage.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-const ALLOWED_FOLDERS: UploadFolder[] = ['avatars', 'attachments', 'workspace'];
+const ALLOWED_FOLDERS: UploadFolder[] = ['avatars', 'attachments', 'group'];
 
 // ─── Request DTOs ──────────────────────────────────────────────────────────
 
 class SignUploadDto {
   @ApiProperty({
     description: 'Upload destination folder',
-    enum: ['avatars', 'attachments', 'workspace'],
+    enum: ['avatars', 'attachments', 'group'],
     example: 'avatars',
   })
   @IsString()
@@ -154,7 +154,7 @@ without exposing the API secret on the client.
 | folder      | max size | allowed types            |
 |-------------|----------|--------------------------|
 | avatars     | 5 MB     | image/jpeg, png, webp, gif |
-| workspace   | 5 MB     | image/jpeg, png, webp    |
+| group   | 5 MB     | image/jpeg, png, webp    |
 | attachments | 20 MB    | any                      |
     `.trim(),
   })

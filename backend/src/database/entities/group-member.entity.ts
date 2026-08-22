@@ -1,4 +1,4 @@
-import { WorkspaceRole } from '../../common/enums';
+import { MemberRole } from '../../common/enums';
 import { Group } from './group.entity';
 import { User } from './user.entity';
 
@@ -13,7 +13,7 @@ export interface GroupMember {
 
   user: User;
 
-  role: WorkspaceRole;
+  role: MemberRole;
 
   joinedAt: Date;
 

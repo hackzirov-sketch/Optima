@@ -1,5 +1,5 @@
 export const TASK_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", project_id AS "projectId", group_id AS "groupId",
+  id, group_id AS "groupId", project_id AS "projectId", group_id AS "groupId",
   column_id AS "columnId", parent_task_id AS "parentTaskId", task_number AS "taskNumber",
   creator_id AS "creatorId", assignee_id AS "assigneeId", reviewer_id AS "reviewerId",
   title, description, type, priority, status, story_points AS "storyPoints",

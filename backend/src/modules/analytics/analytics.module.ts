@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { GroupsModule } from '../groups/groups.module';
 
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
 import { DailyStatsService } from './daily-stats.service';
 
 @Module({
-  imports: [WorkspacesModule],
+  imports: [GroupsModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService, DailyStatsService],
   exports: [AnalyticsService, DailyStatsService],

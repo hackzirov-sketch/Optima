@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
-import { WorkspaceInvitation } from '../../../database/entities/workspace-invitation.entity';
+import { GroupInvitation } from '../../../database/entities/group-invitation.entity';
 import { InviteMemberDto } from '../schemas/invite-member.schema';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { MailService } from '../../mail/mail.service';
@@ -17,9 +17,9 @@ import { PermissionService } from '../../../common/services/permission.service';
 import { MembersService } from './members.service';
 import * as crypto from 'crypto';
 import {
-  WORKSPACE_INVITATION_COLUMNS_SQL,
-  WORKSPACE_MEMBER_COLUMNS_SQL,
-} from '../repositories/workspaces.sql';
+  GROUP_INVITATION_COLUMNS_SQL,
+  GROUP_MEMBER_COLUMNS_SQL,
+} from '../repositories/groups.sql';
 
 @Injectable()
 export class InvitationsService {
@@ -34,32 +34,32 @@ export class InvitationsService {
   ) {}
 
   async create(
-    workspaceId: string,
+    groupId: string,
     inviterId: string,
     dto: InviteMemberDto,
-  ): Promise<WorkspaceInvitation> {
-    const workspaceRows = await this.dataSource.query<{
+  ): Promise<GroupInvitation> {
+    const groupRows = await this.dataSource.query<{
       id: string;
       name: string;
-    }>(`SELECT id, name FROM workspaces WHERE id = $1`, [workspaceId]);
-    const workspace = workspaceRows[0];
-    if (!workspace)
+    }>(`SELECT id, name FROM groups WHERE id = $1`, [groupId]);
+    const group = groupRows[0];
+    if (!group)
       throw new NotFoundException({
-        code: ErrorCode.WORKSPACE_NOT_FOUND,
-        message: 'Workspace not found',
+        code: ErrorCode.GROUP_NOT_FOUND,
+        message: 'Group not found',
       });
 
     const inviterRows = await this.dataSource.query(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, inviterId],
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, inviterId],
     );
     const inviter = inviterRows[0];
     if (!inviter)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
-    this.permission.assertCanManageWorkspace(inviter);
+    this.permission.assertCanManageGroup(inviter);
 
     const existingUserRows = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM users WHERE email = $1`,
@@ -68,21 +68,21 @@ export class InvitationsService {
     const existingUser = existingUserRows[0] ?? null;
     if (existingUser) {
       const alreadyMemberRows = await this.dataSource.query(
-        `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-        [workspaceId, existingUser.id],
+        `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [groupId, existingUser.id],
       );
       if (alreadyMemberRows[0]) {
         throw new ConflictException({
           code: ErrorCode.ALREADY_MEMBER,
-          message: 'User is already a member of this workspace',
+          message: 'User is already a member of this group',
         });
       }
     }
 
-    const existingInviteRows = await this.dataSource.query<WorkspaceInvitation>(
-      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
-       WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND declined_at IS NULL`,
-      [workspaceId, dto.email],
+    const existingInviteRows = await this.dataSource.query<GroupInvitation>(
+      `SELECT ${GROUP_INVITATION_COLUMNS_SQL} FROM group_invitations
+       WHERE group_id = $1 AND email = $2 AND accepted_at IS NULL AND declined_at IS NULL`,
+      [groupId, dto.email],
     );
     const existingInvite = existingInviteRows[0];
 
@@ -95,11 +95,11 @@ export class InvitationsService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 5); // 5 days
 
-    const savedRows = await this.dataSource.query<WorkspaceInvitation>(
-      `INSERT INTO workspace_invitations (workspace_id, invited_by, email, role, token, expires_at)
+    const savedRows = await this.dataSource.query<GroupInvitation>(
+      `INSERT INTO group_invitations (group_id, invited_by, email, role, token, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING ${WORKSPACE_INVITATION_COLUMNS_SQL}`,
-      [workspaceId, inviterId, dto.email, dto.role, token, expiresAt],
+       RETURNING ${GROUP_INVITATION_COLUMNS_SQL}`,
+      [groupId, inviterId, dto.email, dto.role, token, expiresAt],
     );
     const saved = savedRows[0];
 
@@ -108,18 +108,18 @@ export class InvitationsService {
     // (and the client) for up to ~90s whenever the SMTP host was slow or
     // unreachable. The invite is already persisted — email delivery is a
     // side effect, not something the caller should wait on.
-    void this.mailService.sendInvitationEmail(dto.email, token, workspace.name);
+    void this.mailService.sendInvitationEmail(dto.email, token, group.name);
 
     // Real-time notification to invited user (if they have an account)
     if (existingUser) {
       await this.notificationsService.create({
         userId: existingUser.id,
         actorId: inviterId,
-        type: NotificationType.WORKSPACE_INVITE,
-        title: `You've been invited to "${workspace.name}"`,
-        message: `Accept the invitation to join the workspace.`,
-        entityType: 'workspace',
-        entityId: workspaceId,
+        type: NotificationType.GROUP_INVITE,
+        title: `You've been invited to "${group.name}"`,
+        message: `Accept the invitation to join the group.`,
+        entityType: 'group',
+        entityId: groupId,
         actionUrl: `/auth/accept-invite?token=${token}`,
       });
     }
@@ -127,37 +127,37 @@ export class InvitationsService {
     return saved;
   }
 
-  async findAllForWorkspace(
-    workspaceId: string,
+  async findAllForGroup(
+    groupId: string,
     requesterId: string,
-  ): Promise<WorkspaceInvitation[]> {
+  ): Promise<GroupInvitation[]> {
     const requesterRows = await this.dataSource.query(
-      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, requesterId],
+      `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
     );
     if (!requesterRows[0]) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'You are not a member of this workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'You are not a member of this group',
       });
     }
     return this.dataSource.query(
-      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations
-       WHERE workspace_id = $1 ORDER BY created_at DESC`,
-      [workspaceId],
+      `SELECT ${GROUP_INVITATION_COLUMNS_SQL} FROM group_invitations
+       WHERE group_id = $1 ORDER BY created_at DESC`,
+      [groupId],
     );
   }
 
   async accept(token: string, userId: string): Promise<any> {
     const invitationRows = await this.dataSource.query<
-      WorkspaceInvitation & { workspaceName: string }
+      GroupInvitation & { groupName: string }
     >(
-      `SELECT i.id, i.workspace_id AS "workspaceId", i.email, i.role,
+      `SELECT i.id, i.group_id AS "groupId", i.email, i.role,
               i.invited_by AS "invitedById", i.token, i.expires_at AS "expiresAt",
               i.accepted_at AS "acceptedAt", i.declined_at AS "declinedAt",
-              i.created_at AS "createdAt", w.name AS "workspaceName"
-       FROM workspace_invitations i
-       JOIN workspaces w ON w.id = i.workspace_id
+              i.created_at AS "createdAt", w.name AS "groupName"
+       FROM group_invitations i
+       JOIN groups w ON w.id = i.group_id
        WHERE i.token = $1`,
       [token],
     );
@@ -202,8 +202,8 @@ export class InvitationsService {
     }
 
     const alreadyMemberRows = await this.dataSource.query(
-      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [invitation.workspaceId, userId],
+      `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [invitation.groupId, userId],
     );
     if (alreadyMemberRows[0]) {
       throw new ConflictException({
@@ -216,24 +216,24 @@ export class InvitationsService {
       const savedMember = await this.dataSource.withTransaction(
         async (query) => {
           await query(
-            `UPDATE workspace_invitations SET accepted_at = now() WHERE id = $1`,
+            `UPDATE group_invitations SET accepted_at = now() WHERE id = $1`,
             [invitation.id],
           );
 
           const savedMemberRows: any[] = await query(
-            `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)
-           RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
-            [invitation.workspaceId, userId, invitation.role],
+            `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, $3)
+           RETURNING ${GROUP_MEMBER_COLUMNS_SQL}`,
+            [invitation.groupId, userId, invitation.role],
           );
           const savedMember = savedMemberRows[0];
 
-          // Auto-join all workspace-wide public channels (e.g. #general). A room
-          // no longer has a `type`; "workspace-wide" is: belongs to this
-          // workspace, not scoped to a specific group/project, and public.
+          // Auto-join all group-wide public channels (e.g. #general). A room
+          // no longer has a `type`; "group-wide" is: belongs to this
+          // group, not scoped to a specific group/project, and public.
           const wsRooms: Array<{ id: string }> = await query(
             `SELECT id FROM chat_rooms
-           WHERE workspace_id = $1 AND group_id IS NULL AND project_id IS NULL AND is_public = true`,
-            [invitation.workspaceId],
+           WHERE group_id = $1 AND group_id IS NULL AND project_id IS NULL AND is_public = true`,
+            [invitation.groupId],
           );
           for (const room of wsRooms) {
             await query(
@@ -251,8 +251,8 @@ export class InvitationsService {
 
       // The invitee may have had a cached "not a member" outcome from a
       // previous attempt; more importantly, they are about to make their first
-      // authenticated requests against this workspace.
-      await this.members.invalidateMember(invitation.workspaceId, userId);
+      // authenticated requests against this group.
+      await this.members.invalidateMember(invitation.groupId, userId);
 
       // Notify the inviter that the invitation was accepted
       if (invitation.invitedById && invitation.invitedById !== userId) {
@@ -261,11 +261,11 @@ export class InvitationsService {
         await this.notificationsService.create({
           userId: invitation.invitedById,
           actorId: userId,
-          type: NotificationType.WORKSPACE_INVITE,
+          type: NotificationType.GROUP_INVITE,
           title: `${userName} accepted your invitation`,
-          message: `They joined "${invitation.workspaceName}".`,
-          entityType: 'workspace',
-          entityId: invitation.workspaceId,
+          message: `They joined "${invitation.groupName}".`,
+          entityType: 'group',
+          entityId: invitation.groupId,
           actionUrl: `/app/teams`,
         });
       }
@@ -281,8 +281,8 @@ export class InvitationsService {
   }
 
   async decline(token: string, userId: string): Promise<void> {
-    const invitationRows = await this.dataSource.query<WorkspaceInvitation>(
-      `SELECT ${WORKSPACE_INVITATION_COLUMNS_SQL} FROM workspace_invitations WHERE token = $1`,
+    const invitationRows = await this.dataSource.query<GroupInvitation>(
+      `SELECT ${GROUP_INVITATION_COLUMNS_SQL} FROM group_invitations WHERE token = $1`,
       [token],
     );
     const invitation = invitationRows[0];
@@ -306,31 +306,31 @@ export class InvitationsService {
     }
 
     await this.dataSource.query(
-      `UPDATE workspace_invitations SET declined_at = now() WHERE id = $1`,
+      `UPDATE group_invitations SET declined_at = now() WHERE id = $1`,
       [invitation.id],
     );
   }
 
   async remove(
-    workspaceId: string,
+    groupId: string,
     id: string,
     requesterId: string,
   ): Promise<void> {
     const inviterRows = await this.dataSource.query(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, requesterId],
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
     );
     const inviter = inviterRows[0];
     if (!inviter)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
-    this.permission.assertCanManageWorkspace(inviter);
+    this.permission.assertCanManageGroup(inviter);
 
     const invitationRows = await this.dataSource.query(
-      `SELECT id FROM workspace_invitations WHERE id = $1 AND workspace_id = $2`,
-      [id, workspaceId],
+      `SELECT id FROM group_invitations WHERE id = $1 AND group_id = $2`,
+      [id, groupId],
     );
     if (!invitationRows[0])
       throw new NotFoundException({
@@ -339,7 +339,7 @@ export class InvitationsService {
       });
 
     await this.dataSource.query(
-      `DELETE FROM workspace_invitations WHERE id = $1`,
+      `DELETE FROM group_invitations WHERE id = $1`,
       [id],
     );
   }

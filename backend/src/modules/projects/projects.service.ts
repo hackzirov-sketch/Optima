@@ -7,12 +7,12 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { Project } from '../../database/entities/project.entity';
 import { ProjectColumn } from '../../database/entities/project-column.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { GroupMember } from '../../database/entities/group-member.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateColumnDto } from './dto/create-column.dto';
 import { UpdateColumnDto } from './dto/update-column.dto';
-import { WorkspaceRole, TaskStatus } from '../../common/enums';
+import { MemberRole, TaskStatus } from '../../common/enums';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
@@ -42,15 +42,15 @@ export class ProjectsService {
     return rows[0] ?? null;
   }
 
-  private async getWorkspaceMember(
-    workspaceId: string,
+  private async getGroupMember(
+    groupId: string,
     userId: string,
-  ): Promise<WorkspaceMember | null> {
-    const rows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role,
+  ): Promise<GroupMember | null> {
+    const rows = await this.dataSource.query<GroupMember>(
+      `SELECT id, group_id AS "groupId", user_id AS "userId", role,
               joined_at AS "joinedAt", created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
+       FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
     );
     return rows[0] ?? null;
   }
@@ -69,12 +69,12 @@ export class ProjectsService {
       });
     }
 
-    const wsMember = await this.getWorkspaceMember(project.workspaceId, userId);
+    const wsMember = await this.getGroupMember(project.groupId, userId);
 
     if (!wsMember) {
       throw new ForbiddenException({
-        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
-        message: 'You do not have access to this workspace',
+        code: ErrorCode.GROUP_ACCESS_DENIED,
+        message: 'You do not have access to this group',
       });
     }
 
@@ -84,7 +84,7 @@ export class ProjectsService {
 
     const isAdminOrOwner = this.permission.isAtLeast(
       wsMember,
-      WorkspaceRole.ADMIN,
+      MemberRole.ADMIN,
     );
 
     if (project.groupId && !isAdminOrOwner) {
@@ -113,17 +113,17 @@ export class ProjectsService {
       );
     }
 
-    const wsMember = await this.getWorkspaceMember(dto.workspaceId, userId);
+    const wsMember = await this.getGroupMember(dto.groupId, userId);
 
     if (!wsMember) {
       throw new ForbiddenException({
-        code: ErrorCode.WORKSPACE_ACCESS_DENIED,
-        message: 'You do not have access to this workspace',
+        code: ErrorCode.GROUP_ACCESS_DENIED,
+        message: 'You do not have access to this group',
       });
     }
 
     if (dto.groupId) {
-      if (!this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN)) {
+      if (!this.permission.isAtLeast(wsMember, MemberRole.ADMIN)) {
         const groupMemberRows = await this.dataSource.query(
           `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
           [dto.groupId, userId],
@@ -147,14 +147,14 @@ export class ProjectsService {
         Date.now().toString(36);
 
     const existingProject = await this.dataSource.query(
-      `SELECT id FROM projects WHERE workspace_id = $1 AND slug = $2`,
-      [dto.workspaceId, slug],
+      `SELECT id FROM projects WHERE group_id = $1 AND slug = $2`,
+      [dto.groupId, slug],
     );
 
     if (existingProject[0]) {
       throw new ConflictException({
         code: ErrorCode.PROJECT_SLUG_TAKEN,
-        message: 'Project with this slug already exists in the workspace',
+        message: 'Project with this slug already exists in the group',
       });
     }
 
@@ -162,16 +162,15 @@ export class ProjectsService {
       async (query) => {
         const savedRows: Project[] = await query(
           `INSERT INTO projects
-           (workspace_id, group_id, name, slug, description,
+           (group_id, name, slug, description,
             status, priority, start_date, deadline, created_by)
-         VALUES ($1, $2, $3, $4, $5,
-                 COALESCE($6, 'planning')::projects_status_enum,
-                 COALESCE($7, 'medium')::projects_priority_enum,
-                 $8, $9, $10)
+         VALUES ($1, $2, $3, $4,
+                 COALESCE($5, 'planning')::projects_status_enum,
+                 COALESCE($6, 'medium')::projects_priority_enum,
+                 $7, $8, $9)
          RETURNING ${PROJECT_COLUMNS_SQL}`,
           [
-            dto.workspaceId,
-            dto.groupId ?? null,
+            dto.groupId,
             dto.name,
             slug,
             dto.description ?? null,
@@ -232,33 +231,33 @@ export class ProjectsService {
     return this.findById(savedProject.id, userId);
   }
 
-  async findAllInWorkspace(
-    workspaceId: string,
+  async findAllInGroup(
+    groupId: string,
     userId: string,
   ): Promise<Project[]> {
-    const wsMember = await this.getWorkspaceMember(workspaceId, userId);
+    const wsMember = await this.getGroupMember(groupId, userId);
 
     if (!wsMember)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a member of this workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a member of this group',
       });
 
     // Non-admins only see projects with no group, or group projects they belong to
-    if (!this.permission.isAtLeast(wsMember, WorkspaceRole.ADMIN)) {
+    if (!this.permission.isAtLeast(wsMember, MemberRole.ADMIN)) {
       return this.dataSource.query(
         `SELECT ${PROJECT_COLUMNS_SQL_P}
          FROM projects p
          LEFT JOIN group_members gm ON gm.group_id = p.group_id AND gm.user_id = $2
-         WHERE p.workspace_id = $1 AND p.deleted_at IS NULL
+         WHERE p.group_id = $1 AND p.deleted_at IS NULL
            AND (p.group_id IS NULL OR gm.id IS NOT NULL)`,
-        [workspaceId, userId],
+        [groupId, userId],
       );
     }
 
     return this.dataSource.query(
-      `SELECT ${PROJECT_COLUMNS_SQL} FROM projects WHERE workspace_id = $1 AND deleted_at IS NULL`,
-      [workspaceId],
+      `SELECT ${PROJECT_COLUMNS_SQL} FROM projects WHERE group_id = $1 AND deleted_at IS NULL`,
+      [groupId],
     );
   }
 
@@ -292,13 +291,13 @@ export class ProjectsService {
 
     if (dto.slug && dto.slug !== project.slug) {
       const existingProject = await this.dataSource.query(
-        `SELECT id FROM projects WHERE workspace_id = $1 AND slug = $2`,
-        [project.workspaceId, dto.slug],
+        `SELECT id FROM projects WHERE group_id = $1 AND slug = $2`,
+        [project.groupId, dto.slug],
       );
       if (existingProject[0]) {
         throw new ConflictException({
           code: ErrorCode.PROJECT_SLUG_TAKEN,
-          message: 'Project with this slug already exists in the workspace',
+          message: 'Project with this slug already exists in the group',
         });
       }
     }
@@ -324,7 +323,7 @@ export class ProjectsService {
       [id, userId],
     );
     await this.audit.log({
-      workspaceId: project.workspaceId,
+      groupId: project.groupId,
       actorId: userId,
       action: 'project.deleted',
       entityType: 'project',

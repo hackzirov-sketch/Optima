@@ -95,7 +95,7 @@ const NOTIFICATION_ROUTING: Record<
     category: NotificationCategory.TASK,
     priority: NotificationPriority.HIGH,
   },
-  [NotificationType.WORKSPACE_INVITE]: {
+  [NotificationType.GROUP_INVITE]: {
     category: NotificationCategory.SYSTEM,
     priority: NotificationPriority.HIGH,
   },

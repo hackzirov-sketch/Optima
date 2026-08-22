@@ -5,26 +5,26 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
-import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
+import { GroupMember } from '../../../database/entities/group-member.entity';
 import { UpdateMemberRoleDto } from '../schemas/update-member-role.schema';
-import { WorkspaceRole } from '../../../common/enums';
+import { MemberRole } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { PermissionService } from '../../../common/services/permission.service';
 import { AuditService } from '../../../common/services/audit.service';
 import { ROLE_LEVEL } from '../../../common/constants/role-levels';
-import { WORKSPACE_MEMBER_COLUMNS_SQL } from '../repositories/workspaces.sql';
+import { GROUP_MEMBER_COLUMNS_SQL } from '../repositories/groups.sql';
 import { RedisService } from '../../../redis/redis.service';
 import { RedisKeys } from '../../../redis/redis.keys';
 
 /**
  * What assertMember caches. Only the fields an authorization decision reads —
- * see RedisKeys.workspaceMember for why it is deliberately narrow.
+ * see RedisKeys.groupMember for why it is deliberately narrow.
  */
-export interface WorkspaceMembership {
+export interface GroupMembership {
   id: string;
-  workspaceId: string;
+  groupId: string;
   userId: string;
-  role: WorkspaceRole;
+  role: MemberRole;
 }
 
 /**
@@ -44,7 +44,7 @@ export class MembersService {
 
   /**
    * The most-called query in the application: 20-odd call sites gate on it,
-   * so nearly every workspace-scoped request paid for it.
+   * so nearly every group-scoped request paid for it.
    *
    * Only positive results are cached. Negative caching would save a query on
    * requests that are about to be rejected anyway — throttling already covers
@@ -52,22 +52,22 @@ export class MembersService {
    * "not a member", which is a support ticket rather than a saved millisecond.
    */
   async assertMember(
-    workspaceId: string,
+    groupId: string,
     userId: string,
-  ): Promise<WorkspaceMembership> {
-    const key = RedisKeys.workspaceMember(workspaceId, userId);
-    const cached = await this.redis.getJson<WorkspaceMembership>(key);
+  ): Promise<GroupMembership> {
+    const key = RedisKeys.groupMember(groupId, userId);
+    const cached = await this.redis.getJson<GroupMembership>(key);
     if (cached) return cached;
 
-    const rows = await this.dataSource.query<WorkspaceMembership>(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
+    const rows = await this.dataSource.query<GroupMembership>(
+      `SELECT id, group_id AS "groupId", user_id AS "userId", role
+       FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
     );
     if (!rows[0]) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
     }
     await this.redis.setJson(key, rows[0], MEMBERSHIP_TTL_SECONDS);
@@ -75,7 +75,7 @@ export class MembersService {
   }
 
   /**
-   * Drops the cached membership for one or more users in a workspace.
+   * Drops the cached membership for one or more users in a group.
    *
    * Must be called by every write that changes who is a member or what role
    * they hold. The cache this clears used to exist only inside TasksService
@@ -84,23 +84,23 @@ export class MembersService {
    * that cache now lives here, next to the writes.
    */
   async invalidateMember(
-    workspaceId: string,
+    groupId: string,
     ...userIds: string[]
   ): Promise<void> {
     await this.redis.drop(
-      ...userIds.map((id) => RedisKeys.workspaceMember(workspaceId, id)),
+      ...userIds.map((id) => RedisKeys.groupMember(groupId, id)),
     );
   }
 
-  async findAll(workspaceId: string, requesterId: string): Promise<any[]> {
-    const requester = await this.dataSource.query<{ role: WorkspaceRole }>(
-      `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, requesterId],
+  async findAll(groupId: string, requesterId: string): Promise<any[]> {
+    const requester = await this.dataSource.query<{ role: MemberRole }>(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
     );
     if (!requester[0]) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'You are not a member of this workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'You are not a member of this group',
       });
     }
     // Email addresses are the one field here that isn't already public on a
@@ -108,22 +108,22 @@ export class MembersService {
     // ordinary member it is a bulk export of the team's addresses. Managers
     // have a reason to see them (that's who administers the roster); everyone
     // else gets the same view they'd get from a profile page.
-    const canSeeEmails = [WorkspaceRole.OWNER, WorkspaceRole.ADMIN].includes(
+    const canSeeEmails = [MemberRole.OWNER, MemberRole.ADMIN].includes(
       requester[0].role,
     );
 
     const rows = await this.dataSource.query<any>(
       `SELECT
-         wm.id AS "id", wm.workspace_id AS "workspaceId", wm.user_id AS "userId",
+         wm.id AS "id", wm.group_id AS "groupId", wm.user_id AS "userId",
          wm.role, wm.joined_at AS "joinedAt", wm.created_at AS "createdAt",
          wm.updated_at AS "updatedAt",
          u.id AS "u_id", u.public_id AS "u_publicId", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
          u.username AS "u_username", u.email AS "u_email", u.avatar_url AS "u_avatarUrl",
          u.last_seen AS "u_lastSeen"
-       FROM workspace_members wm
+       FROM group_members wm
        JOIN users u ON u.id = wm.user_id
-       WHERE wm.workspace_id = $1`,
-      [workspaceId],
+       WHERE wm.group_id = $1`,
+      [groupId],
     );
 
     return rows.map((row) => this.mapWithUser(row, canSeeEmails));
@@ -156,25 +156,25 @@ export class MembersService {
     };
   }
 
-  async findOne(workspaceId: string, userId: string): Promise<any> {
+  async findOne(groupId: string, userId: string): Promise<any> {
     const rows = await this.dataSource.query<any>(
       `SELECT
-         wm.id AS "id", wm.workspace_id AS "workspaceId", wm.user_id AS "userId",
+         wm.id AS "id", wm.group_id AS "groupId", wm.user_id AS "userId",
          wm.role, wm.joined_at AS "joinedAt", wm.created_at AS "createdAt",
          wm.updated_at AS "updatedAt",
          u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName",
          u.username AS "u_username", u.email AS "u_email", u.avatar_url AS "u_avatarUrl",
          u.last_seen AS "u_lastSeen"
-       FROM workspace_members wm
+       FROM group_members wm
        JOIN users u ON u.id = wm.user_id
-       WHERE wm.workspace_id = $1 AND wm.user_id = $2`,
-      [workspaceId, userId],
+       WHERE wm.group_id = $1 AND wm.user_id = $2`,
+      [groupId, userId],
     );
 
     if (!rows[0]) {
       throw new NotFoundException({
         code: ErrorCode.MEMBER_NOT_FOUND,
-        message: 'Member not found in this workspace',
+        message: 'Member not found in this group',
       });
     }
 
@@ -182,51 +182,51 @@ export class MembersService {
   }
 
   async updateRole(
-    workspaceId: string,
+    groupId: string,
     targetUserId: string,
     dto: UpdateMemberRoleDto,
     requesterId: string,
-  ): Promise<WorkspaceMember> {
-    const workspaceRows = await this.dataSource.query<{
+  ): Promise<GroupMember> {
+    const groupRows = await this.dataSource.query<{
       id: string;
       ownerId: string;
-    }>(`SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`, [
-      workspaceId,
+    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [
+      groupId,
     ]);
-    const workspace = workspaceRows[0];
-    if (!workspace)
+    const group = groupRows[0];
+    if (!group)
       throw new NotFoundException({
-        code: ErrorCode.WORKSPACE_NOT_FOUND,
-        message: 'Workspace not found',
+        code: ErrorCode.GROUP_NOT_FOUND,
+        message: 'Group not found',
       });
 
-    const requesterRows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, requesterId],
+    const requesterRows = await this.dataSource.query<GroupMember>(
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
     );
     const requester = requesterRows[0];
     if (!requester) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Requester not found in workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Requester not found in group',
       });
     }
 
     // Must be ADMIN or OWNER; ADMIN can only assign ≤ LEAD
     this.permission.assertCanChangeRoleTo(requester, dto.role);
 
-    // Workspace billing owner's role cannot be changed by anyone else
-    if (workspace.ownerId === targetUserId && requesterId !== targetUserId) {
+    // Group billing owner's role cannot be changed by anyone else
+    if (group.ownerId === targetUserId && requesterId !== targetUserId) {
       throw new ConflictException({
         code: ErrorCode.INSUFFICIENT_PERMISSIONS,
-        message: 'Cannot change the role of the workspace owner',
+        message: 'Cannot change the role of the group owner',
       });
     }
 
     // Prevent self-promotion: cannot assign yourself a role higher than your own
     if (
       requesterId === targetUserId &&
-      requester.role !== WorkspaceRole.OWNER
+      requester.role !== MemberRole.OWNER
     ) {
       if (ROLE_LEVEL[dto.role] > ROLE_LEVEL[requester.role]) {
         throw new ForbiddenException({
@@ -236,15 +236,15 @@ export class MembersService {
       }
     }
 
-    const memberRows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, targetUserId],
+    const memberRows = await this.dataSource.query<GroupMember>(
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, targetUserId],
     );
     const member = memberRows[0];
     if (!member) {
       throw new NotFoundException({
         code: ErrorCode.MEMBER_NOT_FOUND,
-        message: 'Member not found in this workspace',
+        message: 'Member not found in this group',
       });
     }
     // assertCanChangeRoleTo above only vetted the role being granted. This is
@@ -252,21 +252,21 @@ export class MembersService {
     this.permission.assertOutranksTarget(requester, member);
     const oldRole = member.role;
 
-    const savedRows: WorkspaceMember[] = await this.dataSource.query(
-      `UPDATE workspace_members SET role = $2 WHERE workspace_id = $1 AND user_id = $3
-         RETURNING ${WORKSPACE_MEMBER_COLUMNS_SQL}`,
-      [workspaceId, dto.role, targetUserId],
+    const savedRows: GroupMember[] = await this.dataSource.query(
+      `UPDATE group_members SET role = $2 WHERE group_id = $1 AND user_id = $3
+         RETURNING ${GROUP_MEMBER_COLUMNS_SQL}`,
+      [groupId, dto.role, targetUserId],
     );
     const saved = savedRows[0];
     // Before the audit write, and awaited: until this lands, every guard in
     // the app still sees the old role.
-    await this.invalidateMember(workspaceId, targetUserId);
+    await this.invalidateMember(groupId, targetUserId);
 
     await this.audit.log({
-      workspaceId,
+      groupId,
       actorId: requesterId,
       action: 'member.role_changed',
-      entityType: 'workspace_member',
+      entityType: 'group_member',
       entityId: targetUserId,
       oldValue: { role: oldRole },
       newValue: { role: dto.role },
@@ -275,74 +275,74 @@ export class MembersService {
   }
 
   async remove(
-    workspaceId: string,
+    groupId: string,
     targetUserId: string,
     requesterId: string,
   ): Promise<void> {
-    const workspaceRows = await this.dataSource.query<{
+    const groupRows = await this.dataSource.query<{
       id: string;
       ownerId: string;
-    }>(`SELECT id, owner_id AS "ownerId" FROM workspaces WHERE id = $1`, [
-      workspaceId,
+    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [
+      groupId,
     ]);
-    const workspace = workspaceRows[0];
-    if (!workspace)
+    const group = groupRows[0];
+    if (!group)
       throw new NotFoundException({
-        code: ErrorCode.WORKSPACE_NOT_FOUND,
-        message: 'Workspace not found',
+        code: ErrorCode.GROUP_NOT_FOUND,
+        message: 'Group not found',
       });
 
-    const requesterRows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, requesterId],
+    const requesterRows = await this.dataSource.query<GroupMember>(
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
     );
     const requester = requesterRows[0];
     if (!requester) {
       throw new NotFoundException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Requester not found in workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Requester not found in group',
       });
     }
 
     // User can remove themselves (leave); otherwise must be ADMIN or OWNER
     if (requesterId !== targetUserId) {
-      this.permission.assertCanManageWorkspace(requester);
+      this.permission.assertCanManageGroup(requester);
     }
 
-    if (workspace.ownerId === targetUserId) {
+    if (group.ownerId === targetUserId) {
       throw new ConflictException({
         code: ErrorCode.CANNOT_REMOVE_OWNER,
-        message: 'The workspace owner cannot be removed',
+        message: 'The group owner cannot be removed',
       });
     }
 
-    const memberRows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT ${WORKSPACE_MEMBER_COLUMNS_SQL} FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, targetUserId],
+    const memberRows = await this.dataSource.query<GroupMember>(
+      `SELECT ${GROUP_MEMBER_COLUMNS_SQL} FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, targetUserId],
     );
     const member = memberRows[0];
     if (!member) {
       throw new NotFoundException({
         code: ErrorCode.MEMBER_NOT_FOUND,
-        message: 'Member not found in this workspace',
+        message: 'Member not found in this group',
       });
     }
-    // Same rule as updateRole: managing the workspace does not include
+    // Same rule as updateRole: managing the group does not include
     // removing the people who manage it alongside you. Self-removal (leaving)
     // is exempt — assertOutranksTarget returns early when the ids match.
     this.permission.assertOutranksTarget(requester, member);
 
     await this.dataSource.query(
-      `DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, targetUserId],
+      `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, targetUserId],
     );
-    await this.invalidateMember(workspaceId, targetUserId);
+    await this.invalidateMember(groupId, targetUserId);
 
     await this.audit.log({
-      workspaceId,
+      groupId,
       actorId: requesterId,
       action: requesterId === targetUserId ? 'member.left' : 'member.removed',
-      entityType: 'workspace_member',
+      entityType: 'group_member',
       entityId: targetUserId,
       oldValue: { role: member.role },
     });

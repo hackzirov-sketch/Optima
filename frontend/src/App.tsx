@@ -11,17 +11,17 @@ import { MeetingRoomPage } from "./pages/MeetingRoomPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
-import { WorkspaceSetupPage } from "./pages/WorkspaceSetupPage";
+import { GroupSetupPage } from "./pages/GroupSetupPage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
 
 function LoadingScreen() {
-  return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Workspace yuklanmoqda</span></div>;
+  return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Group yuklanmoqda</span></div>;
 }
 
 export function App() {
-  const { ready, user, workspace } = useAuth();
+  const { ready, user, group } = useAuth();
   const [location] = useLocation();
   useEffect(() => {
     document.documentElement.dataset.theme = user
@@ -41,10 +41,10 @@ export function App() {
 
   if (location === "/auth/accept-invite") {
     const token = new URLSearchParams(window.location.search).get("token");
-    if (token) return <InvitePage kind="workspace" token={token} />;
+    if (token) return <InvitePage kind="group" token={token} />;
   }
 
-  if (!workspace) return <WorkspaceSetupPage />;
+  if (!group) return <GroupSetupPage />;
 
   const isEducation = location === "/education" || location.startsWith("/education/");
   // Chat route redesign: /u/:id (DM), /g/:slug-or-publicId (group), /ch/:slug-or-publicId

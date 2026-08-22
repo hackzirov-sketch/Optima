@@ -1,21 +1,21 @@
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 import { Project } from './project.entity';
 import { Task } from './task.entity';
 import { User } from './user.entity';
 
 /**
  * A note can be scoped as broadly or narrowly as needed:
- *  - workspace_id + project_id + task_id all set  -> a note on one task
- *  - workspace_id + project_id set, task_id null   -> a note on a project
- *  - only workspace_id set                          -> a workspace-wide note
+ *  - group_id + project_id + task_id all set  -> a note on one task
+ *  - group_id + project_id set, task_id null   -> a note on a project
+ *  - only group_id set                          -> a group-wide note
  *  - all three null                                 -> a fully global/personal note
  */
 export interface Note {
   id: string;
 
-  workspaceId: string | null;
+  groupId: string | null;
 
-  workspace: Workspace | null;
+  group: Group | null;
 
   projectId: string | null;
 

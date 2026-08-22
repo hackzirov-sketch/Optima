@@ -45,8 +45,8 @@ export class MeetingsRepository {
    *
    * The profile is joined in here rather than left to the client, because the
    * client had no way to find it: it was resolving names against the *
-   * workspace* member list, so anyone in a standalone meeting — or any guest
-   * who doesn't share a workspace with the viewer — rendered as the generic
+   * group* member list, so anyone in a standalone meeting — or any guest
+   * who doesn't share a group with the viewer — rendered as the generic
    * "Qatnashchi" fallback with a matching placeholder avatar. Being in the
    * meeting is the relationship that matters here, not sharing an
    * organisation.
@@ -116,7 +116,7 @@ export class MeetingsRepository {
   enrichMeeting(meeting: any, participants: any[], access?: MeetingAccess) {
     return {
       id: meeting.id,
-      workspaceId: meeting.workspaceId,
+      groupId: meeting.groupId,
       hostId: meeting.hostId,
       host: meeting.host ?? null,
       title: meeting.title,

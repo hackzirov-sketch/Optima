@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { TaskPush } from '../../database/entities/task-push.entity';
 import { PushReviewComment } from '../../database/entities/push-review-comment.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { GroupMember } from '../../database/entities/group-member.entity';
 
 import { StorageService } from '../storage/storage.service';
 import { SubmitPushDto } from './dto/submit-push.dto';
@@ -18,7 +18,7 @@ import { AddReviewCommentDto } from './dto/add-review-comment.dto';
 import { UpdatePushCommentDto } from './dto/update-push-comment.dto';
 import { ListPushesQueryDto } from './dto/list-pushes-query.dto';
 import { LinkAndPromotePushDto } from './dto/link-and-promote-push.dto';
-import { PushStatus, PushType, WorkspaceRole } from '../../common/enums';
+import { PushStatus, PushType, MemberRole } from '../../common/enums';
 import { ROLE_LEVEL } from '../../common/constants/role-levels';
 import { isActiveEntity } from '../../common/utils/soft-delete';
 import { ErrorCode } from '../../common/enums/error-code.enum';
@@ -48,28 +48,28 @@ export class PushesService {
   ) {}
 
   private async assertMember(
-    workspaceId: string,
+    groupId: string,
     userId: string,
-  ): Promise<WorkspaceMember> {
-    const rows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
+  ): Promise<GroupMember> {
+    const rows = await this.dataSource.query<GroupMember>(
+      `SELECT id, group_id AS "groupId", user_id AS "userId", role
+       FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
     );
     const m = rows[0];
     if (!m)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'You are not a member of this workspace',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'You are not a member of this group',
       });
     return m;
   }
 
-  private assertReviewer(member: WorkspaceMember) {
+  private assertReviewer(member: GroupMember) {
     this.permission.assertCanReviewPush(member);
   }
 
-  private assertApprover(member: WorkspaceMember) {
+  private assertApprover(member: GroupMember) {
     this.permission.assertCanApprovePush(member);
   }
 
@@ -89,7 +89,7 @@ export class PushesService {
 
   private async getTask(taskId: string) {
     const rows = await this.dataSource.query(
-      `SELECT id, workspace_id AS "workspaceId", project_id AS "projectId" FROM tasks WHERE id = $1`,
+      `SELECT id, group_id AS "groupId", project_id AS "projectId" FROM tasks WHERE id = $1`,
       [taskId],
     );
     return rows[0] ?? null;
@@ -102,7 +102,7 @@ export class PushesService {
         code: ErrorCode.TASK_NOT_FOUND,
         message: 'Task not found',
       });
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
   }
 
   private artifactTtlDays(): number {
@@ -125,19 +125,19 @@ export class PushesService {
    *     → draft
    */
   private async resolvePushType(
-    workspaceId: string,
-    submitter: WorkspaceMember,
+    groupId: string,
+    submitter: GroupMember,
     repo: { id: string } | null,
   ): Promise<PushType> {
     if (!repo) return PushType.DRAFT;
 
     const installationRows = await this.dataSource.query(
-      `SELECT id FROM workspace_github_installations WHERE workspace_id = $1`,
-      [workspaceId],
+      `SELECT id FROM group_github_installations WHERE group_id = $1`,
+      [groupId],
     );
     if (!installationRows[0]) return PushType.UPZ_REVIEW;
 
-    return ROLE_LEVEL[submitter.role] >= ROLE_LEVEL[WorkspaceRole.SENIOR]
+    return ROLE_LEVEL[submitter.role] >= ROLE_LEVEL[MemberRole.SENIOR]
       ? PushType.GITHUB_DIRECT
       : PushType.UPZ_REVIEW;
   }
@@ -197,24 +197,24 @@ export class PushesService {
         message: 'Task not found',
       });
 
-    const member = await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.groupId, userId);
 
     let repo: { id: string } | null = null;
     if (dto.repositoryId) {
       const repoRows = await this.dataSource.query(
-        `SELECT id, workspace_id AS "workspaceId" FROM repositories WHERE id = $1`,
+        `SELECT id, group_id AS "groupId" FROM repositories WHERE id = $1`,
         [dto.repositoryId],
       );
       repo = repoRows[0] ?? null;
-      if (!repo || (repo as any).workspaceId !== task.workspaceId) {
+      if (!repo || (repo as any).groupId !== task.groupId) {
         throw new BadRequestException({
           code: ErrorCode.REPO_NOT_FOUND,
-          message: 'Repository does not belong to this task workspace',
+          message: 'Repository does not belong to this task group',
         });
       }
     }
 
-    const pushType = await this.resolvePushType(task.workspaceId, member, repo);
+    const pushType = await this.resolvePushType(task.groupId, member, repo);
 
     const savedRows = await this.dataSource.query<TaskPush>(
       `INSERT INTO task_pushes
@@ -255,7 +255,7 @@ export class PushesService {
       await this.dailyStats.increment(
         userId,
         task.projectId,
-        task.workspaceId,
+        task.groupId,
         {
           pushesSubmitted: 1,
         },
@@ -299,7 +299,7 @@ export class PushesService {
    * generatsiya talab qilingani uchun avtomatlashtirish xavfli)."
    *
    * Only callable on DRAFT pushes, only by a lead/admin/owner of the
-   * workspace. Re-resolves push_type using the original submitter's role —
+   * group. Re-resolves push_type using the original submitter's role —
    * never blindly promotes to github_direct.
    */
   async linkAndPromote(
@@ -315,7 +315,7 @@ export class PushesService {
         message: 'Task not found',
       });
 
-    const requester = await this.assertMember(task.workspaceId, requesterId);
+    const requester = await this.assertMember(task.groupId, requesterId);
     this.assertApprover(requester); // lead, admin, or owner
 
     if (push.type !== PushType.DRAFT) {
@@ -326,25 +326,25 @@ export class PushesService {
     }
 
     const repoRows = await this.dataSource.query(
-      `SELECT id, workspace_id AS "workspaceId", full_name AS "fullName" FROM repositories WHERE id = $1`,
+      `SELECT id, group_id AS "groupId", full_name AS "fullName" FROM repositories WHERE id = $1`,
       [dto.repositoryId],
     );
     const repo = repoRows[0];
-    if (!repo || repo.workspaceId !== task.workspaceId) {
+    if (!repo || repo.groupId !== task.groupId) {
       throw new BadRequestException({
         code: ErrorCode.REPO_NOT_FOUND,
-        message: 'Repository does not belong to this task workspace',
+        message: 'Repository does not belong to this task group',
       });
     }
 
     const submitterRows = await this.dataSource.query(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [task.workspaceId, push.userId],
+      `SELECT id, group_id AS "groupId", user_id AS "userId", role
+       FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [task.groupId, push.userId],
     );
     const submitter = submitterRows[0];
     const newType = submitter
-      ? await this.resolvePushType(task.workspaceId, submitter, repo)
+      ? await this.resolvePushType(task.groupId, submitter, repo)
       : PushType.UPZ_REVIEW;
 
     const savedRows: TaskPush[] = await this.dataSource.query(
@@ -396,7 +396,7 @@ export class PushesService {
         code: ErrorCode.TASK_NOT_FOUND,
         message: 'Task not found',
       });
-    const member = await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.groupId, userId);
     this.assertApprover(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
@@ -416,7 +416,7 @@ export class PushesService {
     await this.dailyStats.increment(
       saved.userId,
       task.projectId,
-      task.workspaceId,
+      task.groupId,
       {
         pushesApproved: 1,
         addedLines: saved.addedLines ?? 0,
@@ -447,7 +447,7 @@ export class PushesService {
         code: ErrorCode.TASK_NOT_FOUND,
         message: 'Task not found',
       });
-    const member = await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.groupId, userId);
     this.assertReviewer(member);
 
     if (![PushStatus.PENDING, PushStatus.UPLOADED].includes(push.status)) {
@@ -613,7 +613,7 @@ export class PushesService {
         code: ErrorCode.TASK_NOT_FOUND,
         message: 'Task not found',
       });
-    const member = await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.groupId, userId);
     this.assertReviewer(member);
 
     const rows: PushReviewComment[] = await this.dataSource.query(

@@ -1,21 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AuthResult, User, Workspace } from "../types";
+import type { AuthResult, User, Group } from "../types";
 import { api, ApiError, refreshSession } from "./api";
 import { session } from "./session";
 
 interface AuthContextValue {
   ready: boolean;
   user: User | null;
-  workspaces: Workspace[];
-  workspace: Workspace | null;
+  groups: Group[];
+  group: Group | null;
   login: (email: string, password: string) => Promise<void>;
   completeAuth: (result: AuthResult) => Promise<void>;
   completeOAuth: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User>;
-  refreshWorkspaces: () => Promise<Workspace[]>;
-  selectWorkspace: (workspace: Workspace) => Promise<void>;
-  createWorkspace: (data: { name: string; slug: string; description?: string }) => Promise<Workspace>;
+  refreshWorkspaces: () => Promise<Group[]>;
+  selectWorkspace: (group: Group) => Promise<void>;
+  createWorkspace: (data: { name: string; slug: string; description?: string }) => Promise<Group>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,30 +42,30 @@ function landOnHome() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [groups, setWorkspaces] = useState<Group[]>([]);
+  const [group, setWorkspace] = useState<Group | null>(null);
 
   // Stable, always-current reads for callbacks/effects that must avoid
   // stale-closure state (the access token is an httpOnly cookie now — there's
   // no external store like the old localStorage to read fresh values from).
   const userRef = useRef<User | null>(null);
-  const workspaceRef = useRef<Workspace | null>(null);
+  const groupRef = useRef<Group | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
-  useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
+  useEffect(() => { groupRef.current = group; }, [group]);
 
-  const applyWorkspaces = useCallback(async (items: Workspace[], activeWorkspaceId: string | null) => {
+  const applyWorkspaces = useCallback(async (items: Group[], activeWorkspaceId: string | null) => {
     setWorkspaces(items);
     let next = items.find((item) => item.id === activeWorkspaceId) || null;
     if (!next && items.length) {
-      // No workspace embedded in the session yet (fresh login/verify, or an
+      // No group embedded in the session yet (fresh login/verify, or an
       // old session predating this claim) — default to the first one and
       // have the server embed it, same UX the old localStorage-based
-      // "remember the selected workspace" gave, just server-verified now.
+      // "remember the selected group" gave, just server-verified now.
       next = items[0];
       try {
-        await api.workspaces.select(next.id);
+        await api.groups.select(next.id);
       } catch {
-        // Non-fatal — the UI still shows the workspace even if the reissue
+        // Non-fatal — the UI still shows the group even if the reissue
         // call failed; the next explicit select (or refresh) will retry.
       }
     }
@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshWorkspaces = useCallback(async () => {
-    const items = await api.workspaces.list();
-    return applyWorkspaces(items, workspaceRef.current?.id ?? null);
+    const items = await api.groups.list();
+    return applyWorkspaces(items, groupRef.current?.id ?? null);
   }, [applyWorkspaces]);
 
   const refreshUser = useCallback(async () => {
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const [nextUser, items] = await Promise.all([
         api.users.me(),
-        api.workspaces.list(),
+        api.groups.list(),
       ]);
       setUser(nextUser);
       await applyWorkspaces(items, null);
@@ -172,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Cross-tab signal (see session.ts) — cookies are shared across tabs
-    // automatically, so another tab logging out or switching workspace means
+    // automatically, so another tab logging out or switching group means
     // this tab's in-memory state is stale until it re-checks. This must only
     // ever CLEAR state, never re-fetch (e.g. call bootstrap()) — a genuinely
     // dead session means the re-fetch just 401s again, re-fires this same
@@ -189,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const completeAuth = useCallback(async (result: AuthResult) => {
     // Cookies are already set by the time this resolves (Set-Cookie on the
     // login/verify response) — nothing to store client-side, just adopt the
-    // user and resolve which workspace is active.
+    // user and resolve which group is active.
     session.markActive();
     setUser(result.user);
     setReady(true);
@@ -201,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await api.auth.exchangeOAuthCode(code);
     session.markActive();
     try {
-      const [nextUser, items] = await Promise.all([api.users.me(), api.workspaces.list()]);
+      const [nextUser, items] = await Promise.all([api.users.me(), api.groups.list()]);
       setUser(nextUser);
       await applyWorkspaces(items, null);
       setReady(true);
@@ -228,13 +228,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const selectWorkspace = useCallback(async (item: Workspace) => {
-    await api.workspaces.select(item.id);
+  const selectWorkspace = useCallback(async (item: Group) => {
+    await api.groups.select(item.id);
     setWorkspace(item);
   }, []);
 
   const createWorkspace = useCallback(async (data: { name: string; slug: string; description?: string }) => {
-    const created = await api.workspaces.create(data);
+    const created = await api.groups.create(data);
     const items = await refreshWorkspaces();
     const next = items.find((item) => item.id === created.id) || created;
     await selectWorkspace(next);
@@ -244,8 +244,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     ready,
     user,
-    workspaces,
-    workspace,
+    groups,
+    group,
     login,
     completeAuth,
     completeOAuth,
@@ -254,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshWorkspaces,
     selectWorkspace,
     createWorkspace,
-  }), [ready, user, workspaces, workspace, login, completeAuth, completeOAuth, logout, refreshUser, refreshWorkspaces, selectWorkspace, createWorkspace]);
+  }), [ready, user, groups, group, login, completeAuth, completeOAuth, logout, refreshUser, refreshWorkspaces, selectWorkspace, createWorkspace]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

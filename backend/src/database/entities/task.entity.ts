@@ -1,5 +1,4 @@
 import { TaskType, PriorityLevel, TaskStatus } from '../../common/enums';
-import { Workspace } from './workspace.entity';
 import { Project } from './project.entity';
 import { Group } from './group.entity';
 import { ProjectColumn } from './project-column.entity';
@@ -10,17 +9,13 @@ import { TaskWatcher } from './task-watcher.entity';
 export interface Task {
   id: string;
 
-  workspaceId: string;
-
-  workspace: Workspace;
-
   projectId: string;
 
   project: Project;
 
-  groupId: string | null;
+  groupId: string;
 
-  group: Group | null;
+  group: Group;
 
   columnId: string | null;
 

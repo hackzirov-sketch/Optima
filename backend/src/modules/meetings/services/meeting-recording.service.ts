@@ -155,13 +155,13 @@ export class MeetingRecordingService {
 
   /**
    * Taking part in the meeting is what grants access to its recordings —
-   * not membership of some workspace.
+   * not membership of some group.
    *
-   * This used to call `assertMember(meeting.workspaceId, …)`, which is wrong
-   * in both directions. A standalone meeting (POST /meetings, no workspace)
-   * has `workspaceId = null`, so the lookup matched nothing and *everyone*
+   * This used to call `assertMember(meeting.groupId, …)`, which is wrong
+   * in both directions. A standalone meeting (POST /meetings, no group)
+   * has `groupId = null`, so the lookup matched nothing and *everyone*
    * was refused, the host who made the recording included. And for a
-   * workspace meeting it asked the wrong question: any colleague who never
+   * group meeting it asked the wrong question: any colleague who never
    * joined the call could list its recordings.
    *
    * `left_at` is deliberately not checked — recordings are watched after the

@@ -95,10 +95,10 @@ input:hover, textarea:hover, select:hover { border-color: var(--op-mist-strong);
 .sidebar { padding: 18px 14px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, var(--canvas)); }
 .sidebar-brand { min-height: 50px; padding-inline: 8px; }
 .brand-mark { border-radius: 12px; }
-.workspace-switcher { margin-top: 17px; }
-.workspace-button { min-height: 70px; padding: 10px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--op-shadow-1); }
-.workspace-button:hover { border-color: var(--op-mist-strong); transform: translateY(-1px); }
-.workspace-avatar { border-radius: 13px; background: var(--op-indigo); color: #fff; }
+.group-switcher { margin-top: 17px; }
+.group-button { min-height: 70px; padding: 10px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--op-shadow-1); }
+.group-button:hover { border-color: var(--op-mist-strong); transform: translateY(-1px); }
+.group-avatar { border-radius: 13px; background: var(--op-indigo); color: #fff; }
 .main-nav { gap: 4px; margin-top: 18px; }
 .main-nav a { min-height: 48px; padding: 0 13px; border-radius: 13px; color: var(--text-soft); font-size: 13px; font-weight: 680; }
 .main-nav a:hover { background: var(--accent-soft); color: var(--text); }

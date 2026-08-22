@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     sub: string;
     jti?: string;
     iat?: number;
-    workspaceId?: string;
+    groupId?: string;
   }) {
     // OPTIMIZED: Single pipeline — blacklist + sessionBlock + cachedUser in 1 Redis RTT
     const [blacklisted, sessionBlockCutoff, cachedUser] =
@@ -76,8 +76,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         message: 'Account is inactive or user not found',
       });
     }
-    // Carried on req.user so @CurrentUser('workspaceId') can read the
-    // workspace this token was scoped to via POST /workspaces/:wsId/select.
-    return { ...user, workspaceId: payload.workspaceId };
+    // Carried on req.user so @CurrentUser('groupId') can read the
+    // group this token was scoped to via POST /groups/:groupId/select.
+    return { ...user, groupId: payload.groupId };
   }
 }

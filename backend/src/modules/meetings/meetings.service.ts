@@ -19,7 +19,7 @@ import {
   MeetingParticipantRole,
 } from '../../common/enums/meeting.enum';
 import { RoomScope } from '../../common/enums';
-import { MembersService } from '../workspaces/services/members.service';
+import { MembersService } from '../groups/services/members.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { buildUpdateSet } from '../../common/utils/sql.util';
@@ -84,20 +84,20 @@ export class MeetingsService {
     private readonly redisService: RedisService,
   ) {}
 
-  async listForWorkspace(workspaceId: string, userId: string) {
-    await this.membersService.assertMember(workspaceId, userId);
+  async listForGroup(groupId: string, userId: string) {
+    await this.membersService.assertMember(groupId, userId);
 
     const meetings = await this.dataSource.query<any>(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings
-             WHERE workspace_id = $1
+             WHERE group_id = $1
                AND (host_id = $2 OR EXISTS (
                  SELECT 1 FROM meeting_participants mp
                  WHERE mp.meeting_id = meetings.id AND mp.user_id = $2
                ))
              ORDER BY start_time DESC) m
        LEFT JOIN users u ON u.id = m."hostId"`,
-      [workspaceId, userId],
+      [groupId, userId],
     );
     if (!meetings.length) return [];
 
@@ -161,7 +161,7 @@ export class MeetingsService {
         h_firstName,
         h_lastName,
         h_avatarUrl,
-        workspace_id,
+        group_id,
         host_id,
         meeting_code,
         start_time,
@@ -182,7 +182,7 @@ export class MeetingsService {
       return this.meetingsRepository.enrichMeeting(
         {
           ...meetingRest,
-          workspaceId: workspace_id,
+          groupId: group_id,
           hostId: host_id,
           meetingCode: meeting_code,
           startTime: start_time,
@@ -198,20 +198,20 @@ export class MeetingsService {
   }
 
   async create(
-    workspaceId: string | null,
+    groupId: string | null,
     userId: string,
     dto: CreateMeetingDto,
   ) {
-    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+    const scope = dto.scope ?? RoomScope.GROUP_ONLY;
     const joinPolicy = dto.joinPolicy ?? defaultJoinPolicy(scope);
-    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+    if (scope === RoomScope.GROUP_ONLY && !groupId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'workspace_only meetings require a workspace',
+        message: 'group_only meetings require a group',
       });
     }
-    if (workspaceId) {
-      await this.membersService.assertMember(workspaceId, userId);
+    if (groupId) {
+      await this.membersService.assertMember(groupId, userId);
     }
 
     let code = '';
@@ -241,12 +241,12 @@ export class MeetingsService {
       // COALESCE beside it needs no cast: the `false` literal supplies a type.
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
-           (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
+           (group_id, host_id, title, description, meeting_code, start_time, end_time,
             max_participants, is_recurring, agenda, scope, join_policy)
          VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::int, $13::int), COALESCE($9, false), $10, $11, $12)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
-          workspaceId,
+          groupId,
           userId,
           dto.title,
           dto.description ?? null,

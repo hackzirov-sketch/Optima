@@ -49,13 +49,13 @@ export class ProjectsController {
     return this.projectsService.create(userId, dto);
   }
 
-  @Get('workspace/:workspaceId')
-  @ApiOperation({ summary: 'Get all projects in a workspace' })
-  getWorkspaceProjects(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  @Get('group/:groupId')
+  @ApiOperation({ summary: 'Get all projects in a group' })
+  getGroupProjects(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.projectsService.findAllInWorkspace(workspaceId, userId);
+    return this.projectsService.findAllInGroup(groupId, userId);
   }
 
   @Get(':id')

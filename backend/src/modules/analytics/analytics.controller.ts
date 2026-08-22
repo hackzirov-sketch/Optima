@@ -14,14 +14,14 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  @Get('workspaces/:workspaceId/analytics/overview')
-  @ApiOperation({ summary: 'Workspace analytics overview' })
-  @ApiParam({ name: 'workspaceId' })
-  workspaceOverview(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  @Get('groups/:groupId/analytics/overview')
+  @ApiOperation({ summary: 'Group analytics overview' })
+  @ApiParam({ name: 'groupId' })
+  groupOverview(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.analyticsService.workspaceOverview(workspaceId, userId);
+    return this.analyticsService.groupOverview(groupId, userId);
   }
 
   @Get('projects/:projectId/analytics')

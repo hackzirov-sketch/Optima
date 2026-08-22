@@ -39,7 +39,7 @@ export class FilterTasksDto {
 
   @ApiProperty({
     required: false,
-    description: 'Filter by project UUID (workspace list)',
+    description: 'Filter by project UUID (group list)',
   })
   @IsOptional()
   @IsUUID()

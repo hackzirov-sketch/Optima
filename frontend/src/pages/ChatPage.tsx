@@ -78,7 +78,7 @@ import { getSocket }                                                        from
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
-import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
+import type { ChatMessage, ChatRoom, RoomInvite, User, GroupMember }    from "../types";
 import { clampParticipants } from "../lib/meeting-limits";
 import { CUSTOM_EMOJI_ID_PATTERN, CUSTOM_EMOJI_TOKEN_PATTERN } from "../lib/emojiAssets";
 
@@ -167,7 +167,7 @@ function RoomAvatar({ room, size = "md" }: { room: ChatRoom; size?: "sm" | "md" 
   );
 }
 
-function memberUser(member: WorkspaceMember, t: TranslateFn): User {
+function memberUser(member: GroupMember, t: TranslateFn): User {
   return (member.user || {
     id: member.userId,
     firstName: member.firstName || t("chat.userFallback"),
@@ -206,7 +206,7 @@ function loadAiConversation(userId?: string): AiConversationMessage[] {
 type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: string } | null;
 
 export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
-  const { user, workspace } = useAuth();
+  const { user, group } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -242,7 +242,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     senderFirstName?: string;
     senderLastName?: string
   }>>([]);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
   const [search, setSearch] = useState("");
@@ -313,7 +313,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     avatarUrl: string | null; slug: string | null; publicId: number; memberCount: number;
   } | null>(null);
   const [openingDirect, setOpeningDirect] = useState<string | null>(null);
-  const [workspaceInviteOpen, setWorkspaceInviteOpen] = useState(false);
+  const [groupInviteOpen, setWorkspaceInviteOpen] = useState(false);
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -468,7 +468,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     if (location !== "/chat" || (!selectedRoom && !aiOpen)) return;
-    const anyModalOpen = detailsOpen || roomSettingsOpen || createOpen || workspaceInviteOpen || roomInfoOpen || Boolean(forwardingMessage) || Boolean(mediaPreview);
+    const anyModalOpen = detailsOpen || roomSettingsOpen || createOpen || groupInviteOpen || roomInfoOpen || Boolean(forwardingMessage) || Boolean(mediaPreview);
     if (anyModalOpen) return;
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -484,7 +484,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, createOpen, workspaceInviteOpen, roomInfoOpen, forwardingMessage, mediaPreview]);
+  }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, createOpen, groupInviteOpen, roomInfoOpen, forwardingMessage, mediaPreview]);
 
   useEffect(() => {
     if (!miniResizing) return;
@@ -724,8 +724,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   async function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }) {
-    if (!workspace) return;
-    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.workspaces.members(workspace.id), api.chat.community()]);
+    if (!group) return;
+    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.groups.members(group.id), api.chat.community()]);
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
       ...room!, memberIds: room!.memberIds || [], memberProfiles: room!.memberProfiles || [],
       unreadCount: room!.unreadCount || 0, memberCount: room!.memberCount || 0,
@@ -763,12 +763,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       show(error instanceof Error ? error.message : t("chat.loadRoomsFailed"), "error");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace?.id]);
+  }, [group?.id]);
 
   // Resolves a deep-link route (/u/:id, /g/:slug-or-publicId, /ch/:slug-or-publicId) to
   // its internal room id - the one place a public route ever turns into a UUID.
   useEffect(() => {
-    if (!routeTarget || !workspace) return;
+    if (!routeTarget || !group) return;
     const matchesCurrent = selectedRoom && (routeTarget.type === "direct"
       ? selectedRoom.type === "direct" && (() => {
       const other = selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id);
@@ -780,7 +780,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     let cancelled = false;
     (async () => {
       try {
-        const result = await api.chat.resolveRoute(workspace.id, routeTarget.type, routeTarget.identifier);
+        const result = await api.chat.resolveRoute(group.id, routeTarget.type, routeTarget.identifier);
         if (cancelled) return;
         if ("redirectSlug" in result) {
           navigate(`${routeTarget.type === "channel" ? "/ch" : "/g"}/${result.redirectSlug}`, { replace: true });
@@ -798,7 +798,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
+  }, [routeTarget?.type, routeTarget?.identifier, group?.id]);
 
   useEffect(() => {
     shouldStickToMessageBottom.current = true;
@@ -856,12 +856,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!group) return;
     const socket = getSocket();
     initPresence();
     const onConnect = () => {
       setConnected(true);
-      socket.emit("join_workspace", { workspaceId: workspace.id });
+      socket.emit("join_workspace", { groupId: group.id });
       if (selectedId && selectedRoom?.memberStatus !== "pending") socket.emit("join_room", { roomId: selectedId });
     };
     const onDisconnect = () => setConnected(false);
@@ -1017,7 +1017,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("message_views_updated", onViewsUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
+  }, [group, selectedId, selectedRoom?.memberStatus, user?.id, show]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -1140,7 +1140,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   async function openDirectWith(targetUserId: string) {
-    if (!workspace || openingDirect) return;
+    if (!group || openingDirect) return;
     const existing = rooms.find((room) => room.type === "direct" && room.memberIds.includes(targetUserId));
     if (existing) {
       setSearch("");
@@ -1496,14 +1496,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   async function startCall(kind: "audio" | "video") {
-    if (!workspace || !selectedRoom || startingCall) return;
+    if (!group || !selectedRoom || startingCall) return;
     if (selectedRoom.type !== "direct" || !detailPeer) {
       show(t("chat.directCallOnlyPersonal"), "error");
       return;
     }
     setStartingCall(kind);
     try {
-      const meeting = await api.meetings.create(workspace.id, {
+      const meeting = await api.meetings.create(group.id, {
         title: roomTitle(selectedRoom),
         description: `${roomTitle(selectedRoom)} suhbati`,
         startTime: new Date().toISOString(),
@@ -1636,7 +1636,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function createConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspace) return;
+    if (!group) return;
     setCreating(true);
     const data = new FormData(event.currentTarget);
     try {
@@ -1677,13 +1677,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function inviteToWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspace) return;
+    if (!group) return;
     setInvitingWorkspace(true);
     const data = new FormData(event.currentTarget);
     try {
-      await api.workspaces.invite(workspace.id, String(data.get("email") || "").trim(), String(data.get("role") || "junior"));
+      await api.groups.invite(group.id, String(data.get("email") || "").trim(), String(data.get("role") || "junior"));
       setWorkspaceInviteOpen(false);
-      show(t("chat.workspaceInviteSent"));
+      show(t("chat.groupInviteSent"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("chat.inviteSendFailed"), "error");
     } finally {
@@ -1890,9 +1890,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         description: roomSettingsDescription.trim(),
         avatarUrl: roomSettingsAvatar,
         // Only send scope for rooms that own their visibility. A
-        // workspace_only room's scope is the workspace's business, not this
+        // group_only room's scope is the group's business, not this
         // dialog's, so leaving it out keeps that setting untouched.
-        ...(selectedRoom.scope !== "workspace_only" ? { scope: roomSettingsScope } : {}),
+        ...(selectedRoom.scope !== "group_only" ? { scope: roomSettingsScope } : {}),
         ...(trimmedSlug !== (selectedRoom.slug || "") ? { slug: trimmedSlug || null } : {})
       });
       setRooms((current) => current.map((room) => room.id === updated.id ? { ...room, ...updated } : room));
@@ -2156,7 +2156,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         <header className="chat-sidebar-header">
           <button className="icon-button chat-home-back" onClick={() => navigate("/")}
                   aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
-          <div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div>
+          <div><p className="eyebrow">Group</p><h1>{t("chat.messagesTitle")}</h1></div>
           <button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)}
                   aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} />
           </button>
@@ -2913,7 +2913,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                                                                  onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                                                                  maxLength={60}
                                                                                  placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
-          {selectedRoom?.scope !== "workspace_only" && <fieldset className="create-scope">
+          {selectedRoom?.scope !== "group_only" && <fieldset className="create-scope">
             <legend>{t("chat.visibilityLegend")}</legend>
             <label><input type="radio" name="roomScope" value="public" checked={roomSettingsScope === "public"}
                           onChange={() => setRoomSettingsScope("public")} />
@@ -3023,8 +3023,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         </form>
       </Modal>
 
-      <Modal open={workspaceInviteOpen} onClose={() => setWorkspaceInviteOpen(false)}
-             title={t("chat.workspaceInviteTitle")} description={t("chat.workspaceInviteDesc")}>
+      <Modal open={groupInviteOpen} onClose={() => setWorkspaceInviteOpen(false)}
+             title={t("chat.groupInviteTitle")} description={t("chat.groupInviteDesc")}>
         <form className="modal-form" onSubmit={inviteToWorkspace}>
           <label>{t("auth.emailLabel")}<input name="email" type="email" autoComplete="email"
                                               placeholder="name@company.com" required /></label>
@@ -3035,7 +3035,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <option value="junior">Junior</option>
             <option value="guest">Guest</option>
           </select></label>
-          <p className="field-hint">{t("chat.workspaceInviteHint")}</p>
+          <p className="field-hint">{t("chat.groupInviteHint")}</p>
           <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => {
             setWorkspaceInviteOpen(false);
             setCreateOpen(true);

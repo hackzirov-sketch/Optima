@@ -14,14 +14,14 @@ export class CreateNoteDto {
 
   @ApiPropertyOptional({
     description:
-      'Attach the note to a workspace. Required if projectId/taskId is set.',
+      'Attach the note to a group. Required if projectId/taskId is set.',
   })
   @IsOptional()
   @IsUUID()
-  workspaceId?: string;
+  groupId?: string;
 
   @ApiPropertyOptional({
-    description: 'Attach the note to a project (requires workspaceId)',
+    description: 'Attach the note to a project (requires groupId)',
   })
   @IsOptional()
   @IsUUID()

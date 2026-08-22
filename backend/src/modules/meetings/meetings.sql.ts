@@ -3,7 +3,7 @@ import { MeetingJoinPolicy } from '../../common/enums/meeting.enum';
 import { RoomScope } from '../../common/enums';
 
 export const MEETING_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", host_id AS "hostId", title, description,
+  id, group_id AS "groupId", host_id AS "hostId", title, description,
   meeting_code AS "meetingCode", status, scope, join_policy AS "joinPolicy", locked,
   start_time AS "startTime", end_time AS "endTime",
   max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,

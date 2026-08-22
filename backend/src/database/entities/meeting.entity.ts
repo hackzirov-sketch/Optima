@@ -1,17 +1,17 @@
 import { MeetingStatus } from '../../common/enums/meeting.enum';
 import { RoomScope } from '../../common/enums';
 import { User } from './user.entity';
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 
 export interface Meeting {
   id: string;
 
-  // Nullable: a meeting no longer has to belong to a workspace — like
+  // Nullable: a meeting no longer has to belong to a group — like
   // Google Meet, a standalone meeting can be created and joined by link/code
-  // with no workspace context at all.
-  workspaceId: string | null;
+  // with no group context at all.
+  groupId: string | null;
 
-  workspace: Workspace | null;
+  group: Group | null;
 
   hostId: string;
 

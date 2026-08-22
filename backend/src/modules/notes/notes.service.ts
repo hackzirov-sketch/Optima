@@ -7,7 +7,7 @@ import {
 import { DatabaseService } from '../../database/database.service';
 
 import { ErrorCode } from '../../common/enums/error-code.enum';
-import { MembersService } from '../workspaces/services/members.service';
+import { MembersService } from '../groups/services/members.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { NOTE_COLUMNS_SQL } from './notes.sql';
@@ -15,7 +15,7 @@ import { buildUpdateSet } from '../../common/utils/sql.util';
 
 export interface NoteDto {
   id: string;
-  workspaceId: string | null;
+  groupId: string | null;
   projectId: string | null;
   taskId: string | null;
   meetingId: string | null;
@@ -67,12 +67,12 @@ export class NotesService {
   /**
    * A note is visible to a user if:
    *  - it belongs to a meeting they took part in, or
-   *  - it has no workspace at all (a personal/global note — only its creator can see it), or
-   *  - it belongs to a workspace the user is a member of.
+   *  - it has no group at all (a personal/global note — only its creator can see it), or
+   *  - it belongs to a group the user is a member of.
    */
   private async assertReadable(note: NoteDto, userId: string) {
-    // Checked before the workspace rule, not after: a meeting can belong to a
-    // workspace, and falling through to workspace membership would open the
+    // Checked before the group rule, not after: a meeting can belong to a
+    // group, and falling through to group membership would open the
     // room's notes to everyone in the organisation rather than to the people
     // who were actually in the call.
     if (note.meetingId) {
@@ -84,7 +84,7 @@ export class NotesService {
       }
       return;
     }
-    if (!note.workspaceId) {
+    if (!note.groupId) {
       if (note.creatorId !== userId) {
         throw new ForbiddenException({
           code: ErrorCode.NOTE_FORBIDDEN,
@@ -93,7 +93,7 @@ export class NotesService {
       }
       return;
     }
-    await this.membersService.assertMember(note.workspaceId, userId);
+    await this.membersService.assertMember(note.groupId, userId);
   }
 
   async create(userId: string, dto: CreateNoteDto): Promise<NoteDto> {
@@ -117,25 +117,25 @@ export class NotesService {
         message: 'taskId requires projectId',
       });
     }
-    if ((dto.projectId || dto.taskId) && !dto.workspaceId) {
+    if ((dto.projectId || dto.taskId) && !dto.groupId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'projectId/taskId requires workspaceId',
+        message: 'projectId/taskId requires groupId',
       });
     }
 
-    if (dto.workspaceId) {
-      await this.membersService.assertMember(dto.workspaceId, userId);
+    if (dto.groupId) {
+      await this.membersService.assertMember(dto.groupId, userId);
     }
     if (dto.projectId) {
       const p = await this.dataSource.query(
-        `SELECT id FROM projects WHERE id = $1 AND workspace_id = $2`,
-        [dto.projectId, dto.workspaceId],
+        `SELECT id FROM projects WHERE id = $1 AND group_id = $2`,
+        [dto.projectId, dto.groupId],
       );
       if (!p[0])
         throw new BadRequestException({
           code: ErrorCode.PROJECT_NOT_FOUND,
-          message: 'Project not in this workspace',
+          message: 'Project not in this group',
         });
     }
     if (dto.taskId) {
@@ -151,11 +151,11 @@ export class NotesService {
     }
 
     const rows = await this.dataSource.query<NoteDto>(
-      `INSERT INTO notes (workspace_id, project_id, task_id, meeting_id, creator_id, title, content)
+      `INSERT INTO notes (group_id, project_id, task_id, meeting_id, creator_id, title, content)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${NOTE_COLUMNS_SQL}`,
       [
-        dto.workspaceId ?? null,
+        dto.groupId ?? null,
         dto.projectId ?? null,
         dto.taskId ?? null,
         dto.meetingId ?? null,
@@ -169,13 +169,13 @@ export class NotesService {
 
   /**
    * List notes visible to the user for a given scope. Exactly one of
-   * workspaceId/projectId/taskId should be the "narrowest" filter the
+   * groupId/projectId/taskId should be the "narrowest" filter the
    * caller wants; passing none lists the user's own global notes.
    */
   async list(
     userId: string,
     filter: {
-      workspaceId?: string;
+      groupId?: string;
       projectId?: string;
       taskId?: string;
       meetingId?: string;
@@ -198,17 +198,17 @@ export class NotesService {
 
     if (filter.taskId) {
       const note0 = await this.dataSource.query(
-        `SELECT workspace_id FROM notes WHERE task_id = $1 LIMIT 1`,
+        `SELECT group_id FROM notes WHERE task_id = $1 LIMIT 1`,
         [filter.taskId],
       );
-      // Even with no notes yet, we still need to know the task's workspace to authorize.
+      // Even with no notes yet, we still need to know the task's group to authorize.
       const task = await this.dataSource.query(
-        `SELECT p.workspace_id AS "workspaceId" FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = $1`,
+        `SELECT p.group_id AS "groupId" FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = $1`,
         [filter.taskId],
       );
-      const workspaceId = task[0]?.workspaceId ?? note0[0]?.workspace_id;
-      if (workspaceId)
-        await this.membersService.assertMember(workspaceId, userId);
+      const groupId = task[0]?.groupId ?? note0[0]?.group_id;
+      if (groupId)
+        await this.membersService.assertMember(groupId, userId);
       return this.dataSource.query(
         `SELECT ${NOTE_COLUMNS_SQL} FROM notes WHERE task_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`,
         [filter.taskId],
@@ -217,7 +217,7 @@ export class NotesService {
 
     if (filter.projectId) {
       const project = await this.dataSource.query(
-        `SELECT workspace_id AS "workspaceId" FROM projects WHERE id = $1`,
+        `SELECT group_id AS "groupId" FROM projects WHERE id = $1`,
         [filter.projectId],
       );
       if (!project[0])
@@ -225,27 +225,27 @@ export class NotesService {
           code: ErrorCode.PROJECT_NOT_FOUND,
           message: 'Project not found',
         });
-      await this.membersService.assertMember(project[0].workspaceId, userId);
+      await this.membersService.assertMember(project[0].groupId, userId);
       return this.dataSource.query(
         `SELECT ${NOTE_COLUMNS_SQL} FROM notes WHERE project_id = $1 AND task_id IS NULL AND deleted_at IS NULL ORDER BY created_at DESC`,
         [filter.projectId],
       );
     }
 
-    if (filter.workspaceId) {
-      await this.membersService.assertMember(filter.workspaceId, userId);
+    if (filter.groupId) {
+      await this.membersService.assertMember(filter.groupId, userId);
       return this.dataSource.query(
         `SELECT ${NOTE_COLUMNS_SQL} FROM notes
-         WHERE workspace_id = $1 AND project_id IS NULL AND task_id IS NULL AND deleted_at IS NULL
+         WHERE group_id = $1 AND project_id IS NULL AND task_id IS NULL AND deleted_at IS NULL
          ORDER BY created_at DESC`,
-        [filter.workspaceId],
+        [filter.groupId],
       );
     }
 
     // No scope given -> the user's own fully-global notes.
     return this.dataSource.query(
       `SELECT ${NOTE_COLUMNS_SQL} FROM notes
-       WHERE creator_id = $1 AND workspace_id IS NULL AND meeting_id IS NULL
+       WHERE creator_id = $1 AND group_id IS NULL AND meeting_id IS NULL
          AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [userId],

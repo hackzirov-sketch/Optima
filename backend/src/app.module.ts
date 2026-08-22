@@ -17,7 +17,6 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { GithubModule } from './modules/github/github.module';
 import { StorageModule } from './modules/storage/storage.module';
-import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
@@ -92,7 +91,6 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     UsersModule,
     GithubModule,
     StorageModule,
-    WorkspacesModule,
     GroupsModule,
     ProjectsModule,
     TasksModule,

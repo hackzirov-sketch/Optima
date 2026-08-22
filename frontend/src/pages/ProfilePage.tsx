@@ -25,7 +25,7 @@ const occupationValues = ["developer", "designer", "freelancer", "project_manage
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
 export function ProfilePage() {
-  const { user, workspace, refreshUser, logout } = useAuth();
+  const { user, group, refreshUser, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -199,10 +199,10 @@ export function ProfilePage() {
 
   return (
     <div className="page profile-page">
-      <PageHeader eyebrow={workspace?.name} title={t("profile.pageTitle")} description={t("profile.pageDescription")} />
+      <PageHeader eyebrow={group?.name} title={t("profile.pageTitle")} description={t("profile.pageDescription")} />
       <div className="profile-layout">
         <aside className="profile-summary panel">
-          <div className="profile-cover"><span>{workspace?.name}</span></div>
+          <div className="profile-cover"><span>{group?.name}</span></div>
           <div className="profile-avatar-wrap">
             <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="xl" />
             <span className="presence-badge" />

@@ -9,7 +9,7 @@ export const REFRESH_COOKIE = 'optima_refresh_token';
  * job is letting frontend JS cheaply tell "a session might exist, worth
  * calling /users/me" apart from "definitely logged out, don't bother" without
  * ever being able to read the real tokens. Without this, every fresh/logged-
- * out visitor's first paint fires /users/me + /auth/session + /workspaces +
+ * out visitor's first paint fires /users/me + /auth/session + /groups +
  * an /auth/refresh attempt for nothing, since there's no local token check
  * left once the real tokens are httpOnly.
  */

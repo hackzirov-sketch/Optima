@@ -33,8 +33,8 @@ export const RedisKeys = {
    * MembersService.invalidateMember / ChatMemberService.invalidateRoomMember,
    * which are the only sanctioned way to write these.
    */
-  workspaceMember: (workspaceId: string, userId: string) =>
-    `upz:ws_member:${workspaceId}:${userId}`,
+  groupMember: (groupId: string, userId: string) =>
+    `upz:ws_member:${groupId}:${userId}`,
   roomMember: (roomId: string, userId: string) =>
     `upz:room_member:${roomId}:${userId}`,
   /** Per-room chat settings — read on the send-message hot path. */
@@ -43,7 +43,7 @@ export const RedisKeys = {
   notifUnread: (userId: string) => `upz:notif_unread:${userId}`,
   /** Hash of userId -> epoch ms, flushed to users.last_seen in one bulk UPDATE. */
   lastSeenPending: 'upz:last_seen_pending',
-  /** Pre-aggregated analytics payloads (workspace overview, project rollups). */
+  /** Pre-aggregated analytics payloads (group overview, project rollups). */
   analytics: (scope: string, id: string) => `upz:analytics:${scope}:${id}`,
   /** Sorted set of userIds waiting for host approval, score = requestedAt epoch ms — fast count/order path for the meeting Waiting Room, mirrors meeting_join_requests (Postgres stays the source of truth). */
   meetingWaiting: (meetingId: string) => `upz:meeting_waiting:${meetingId}`,

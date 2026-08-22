@@ -15,8 +15,8 @@ import type {
   RoomRole,
   User,
   UserChatSettings,
-  Workspace,
-  WorkspaceMember,
+  Group,
+  GroupMember,
 } from "../types";
 import { session } from "./session";
 
@@ -244,8 +244,8 @@ export const api = {
       body: "{}",
     }),
     /** The access token is an httpOnly cookie the frontend can't decode — this
-     * is how it learns which workspace the current session is scoped to. */
-    session: () => apiFetch<{ workspaceId: string | null }>("/auth/session"),
+     * is how it learns which group the current session is scoped to. */
+    session: () => apiFetch<{ groupId: string | null }>("/auth/session"),
     sessions: () => apiFetch<Array<{
       id: string;
       deviceName?: string | null;
@@ -283,29 +283,29 @@ export const api = {
       apiFetch<User>("/users/me/settings", { method: "PATCH", body: JSON.stringify(data) }),
   },
   audit: {
-    workspace: (workspaceId: string, params: { action?: string; entityType?: string; limit?: number; offset?: number } = {}) => {
+    group: (groupId: string, params: { action?: string; entityType?: string; limit?: number; offset?: number } = {}) => {
       const query = new URLSearchParams(
         Object.entries(params).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])
       ).toString();
-      return apiFetch<{ items: AuditEntry[]; total: number }>(`/workspaces/${workspaceId}/audit${query ? `?${query}` : ""}`);
+      return apiFetch<{ items: AuditEntry[]; total: number }>(`/groups/${groupId}/audit${query ? `?${query}` : ""}`);
     },
   },
-  workspaces: {
-    list: () => apiFetch<Workspace[]>("/workspaces"),
+  groups: {
+    list: () => apiFetch<Group[]>("/groups"),
     create: (data: { name: string; slug: string; description?: string }) =>
-      apiFetch<Workspace>("/workspaces", { method: "POST", body: JSON.stringify(data) }),
-    members: (workspaceId: string) => apiFetch<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`),
-    /** Reissues the auth cookies scoped to this workspace (embedded as a `workspaceId` JWT claim). */
-    select: (workspaceId: string) =>
-      apiFetch<{ workspaceId: string }>(`/workspaces/${workspaceId}/select`, { method: "POST" }),
-    invite: (workspaceId: string, email: string, role: string) =>
-      apiFetch<{ id: string; email: string; role: string; token: string }>(`/workspaces/${workspaceId}/invitations`, {
+      apiFetch<Group>("/groups", { method: "POST", body: JSON.stringify(data) }),
+    members: (groupId: string) => apiFetch<GroupMember[]>(`/groups/${groupId}/members`),
+    /** Reissues the auth cookies scoped to this group (embedded as a `groupId` JWT claim). */
+    select: (groupId: string) =>
+      apiFetch<{ groupId: string }>(`/groups/${groupId}/select`, { method: "POST" }),
+    invite: (groupId: string, email: string, role: string) =>
+      apiFetch<{ id: string; email: string; role: string; token: string }>(`/groups/${groupId}/invitations`, {
         method: "POST",
         body: JSON.stringify({ email, role }),
       }),
   },
   invitations: {
-    accept: (token: string) => apiFetch<{ workspaceId: string }>(`/invitations/${encodeURIComponent(token)}/accept`, { method: "POST" }),
+    accept: (token: string) => apiFetch<{ groupId: string }>(`/invitations/${encodeURIComponent(token)}/accept`, { method: "POST" }),
   },
   search: {
     global: (query: string) => apiFetch<GlobalSearchResult>(`/search?q=${encodeURIComponent(query)}`),
@@ -321,8 +321,8 @@ export const api = {
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRoomSettings: (roomId: string, data: { name?: string; description?: string; avatarUrl?: string | null; slug?: string | null; scope?: ChatRoom["scope"] }) =>
       apiFetch<ChatRoom>(`/chat/rooms/${roomId}`, { method: "PATCH", body: JSON.stringify(data) }),
-    resolveRoute: (workspaceId: string, type: "direct" | "group" | "channel", identifier: string) =>
-      apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/workspaces/${workspaceId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
+    resolveRoute: (groupId: string, type: "direct" | "group" | "channel", identifier: string) =>
+      apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/groups/${groupId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
     getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),
     getDraft: (roomId: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`),
     saveDraft: (roomId: string, content: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify({ content }) }),
@@ -333,11 +333,11 @@ export const api = {
     presence: (userIds: string[]) => apiFetch<Record<string, { status: string; lastSeenAt: string | null }>>(`/chat/presence?ids=${userIds.map(encodeURIComponent).join(",")}`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
     // Chat membership is its own permission, so both of these are
-    // workspace-less: the JWT identifies the user and that's the whole check.
+    // group-less: the JWT identifies the user and that's the whole check.
     // A DM, group or channel belongs to its members, not to an organisation.
     rooms: () => apiFetch<ChatRoom[]>("/chat/rooms"),
     // Public channels/groups the user hasn't joined. Platform-wide, not
-    // workspace-scoped: a channel opened from chat belongs to no workspace.
+    // group-scoped: a channel opened from chat belongs to no group.
     discover: (query: string) =>
       apiFetch<Array<{
         id: string;
@@ -420,7 +420,7 @@ export const api = {
         topPosts: Array<{ id: string; content: string | null; viewCount: number; createdAt: string }>;
         growth: Array<{ day: string; joined: number }>;
       }>(`/chat/rooms/${roomId}/settings/stats`),
-    // One shared trail: the same audit_logs rows a workspace's activity feed
+    // One shared trail: the same audit_logs rows a group's activity feed
     // reads, filtered to this room.
     channelSettingsAudit: (roomId: string) =>
       apiFetch<AuditEntry[]>(`/chat/rooms/${roomId}/settings/audit`),
@@ -449,9 +449,9 @@ export const api = {
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
-    list: (workspaceId: string) => apiFetch<Meeting[]>(`/workspaces/${workspaceId}/meetings`),
-    create: (workspaceId: string, data: Record<string, unknown>) =>
-      apiFetch<Meeting>(`/workspaces/${workspaceId}/meetings`, {
+    list: (groupId: string) => apiFetch<Meeting[]>(`/groups/${groupId}/meetings`),
+    create: (groupId: string, data: Record<string, unknown>) =>
+      apiFetch<Meeting>(`/groups/${groupId}/meetings`, {
         method: "POST",
         body: JSON.stringify(data),
       }),

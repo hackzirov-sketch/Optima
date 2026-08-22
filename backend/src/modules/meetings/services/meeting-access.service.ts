@@ -17,7 +17,7 @@ export interface MeetingAccess {
   requestStatus: MeetingJoinRequestStatus | null;
   /** Seconds until a declined requester may ask again; 0 when they may now. */
   retryAfterSeconds?: number;
-  deniedReason?: 'workspace_only' | 'invite_only' | 'locked';
+  deniedReason?: 'group_only' | 'invite_only' | 'locked';
 }
 
 /** Mirrors REJECTED_REQUEST_COOLDOWN_SECONDS in MeetingJoinRequestService. */
@@ -36,7 +36,7 @@ export type AccessDecision =
         reviewedAt: Date | string | null;
       } | null;
     }
-  | { kind: 'denied'; reason: 'workspace_only' | 'invite_only' | 'locked' };
+  | { kind: 'denied'; reason: 'group_only' | 'invite_only' | 'locked' };
 
 @Injectable()
 export class MeetingAccessService {
@@ -73,13 +73,13 @@ export class MeetingAccessService {
     // inside stay inside" mental model.
     if (meeting.locked) return { kind: 'denied', reason: 'locked' };
 
-    let isWorkspaceMember = false;
-    if (meeting.workspaceId) {
+    let isGroupMember = false;
+    if (meeting.groupId) {
       const memberRows = await this.dataSource.query(
-        `SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-        [meeting.workspaceId, userId],
+        `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [meeting.groupId, userId],
       );
-      isWorkspaceMember = !!memberRows[0];
+      isGroupMember = !!memberRows[0];
     }
 
     const joinReqRows = await this.dataSource.query(
@@ -91,9 +91,9 @@ export class MeetingAccessService {
       joinRequest?.status === MeetingJoinRequestStatus.APPROVED;
 
     switch (meeting.scope) {
-      case RoomScope.WORKSPACE_ONLY:
-        if (!isWorkspaceMember)
-          return { kind: 'denied', reason: 'workspace_only' };
+      case RoomScope.GROUP_ONLY:
+        if (!isGroupMember)
+          return { kind: 'denied', reason: 'group_only' };
         if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO)
           return { kind: 'auto' };
         return { kind: 'approval', joinRequest };
@@ -115,7 +115,7 @@ export class MeetingAccessService {
         return { kind: 'denied', reason: 'invite_only' };
 
       default:
-        return { kind: 'denied', reason: 'workspace_only' };
+        return { kind: 'denied', reason: 'group_only' };
     }
   }
 
@@ -187,10 +187,10 @@ export class MeetingAccessService {
   }
 
   accessDeniedMessage(
-    reason: 'workspace_only' | 'invite_only' | 'locked',
+    reason: 'group_only' | 'invite_only' | 'locked',
   ): string {
-    if (reason === 'workspace_only')
-      return 'This meeting is available only for workspace members.';
+    if (reason === 'group_only')
+      return 'This meeting is available only for group members.';
     if (reason === 'locked')
       return 'The host has locked this meeting — no new participants can join right now.';
     return "You don't have access to this meeting.";

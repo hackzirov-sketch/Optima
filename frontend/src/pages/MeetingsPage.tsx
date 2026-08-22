@@ -11,10 +11,10 @@ import type { Meeting, MeetingVisibility } from "../types";
 import { MESH_MAX_PARTICIPANTS, clampParticipants } from "../lib/meeting-limits";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
-const VISIBILITY_OPTIONS: MeetingVisibility[] = ["workspace_only", "private", "public", "invite_only"];
+const VISIBILITY_OPTIONS: MeetingVisibility[] = ["group_only", "private", "public", "invite_only"];
 
 export function MeetingsPage() {
-  const { user, workspace } = useAuth();
+  const { user, group } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -26,12 +26,12 @@ export function MeetingsPage() {
   const [saving, setSaving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-  const [visibility, setVisibility] = useState<MeetingVisibility>("workspace_only");
+  const [visibility, setVisibility] = useState<MeetingVisibility>("group_only");
   const [joinPolicy, setJoinPolicy] = useState<"auto" | "request_approval">("auto");
 
   function visibilityLabel(value: MeetingVisibility) {
     return ({
-      workspace_only: t("meetings.visibilityWorkspace"),
+      group_only: t("meetings.visibilityWorkspace"),
       private: t("meetings.visibilityPrivate"),
       public: t("meetings.visibilityPublic"),
       invite_only: t("meetings.visibilityInviteOnly"),
@@ -40,7 +40,7 @@ export function MeetingsPage() {
 
   function visibilityHint(value: MeetingVisibility) {
     return ({
-      workspace_only: t("meetings.visibilityWorkspaceHint"),
+      group_only: t("meetings.visibilityWorkspaceHint"),
       private: t("meetings.visibilityPrivateHint"),
       public: t("meetings.visibilityPublicHint"),
       invite_only: t("meetings.visibilityInviteOnlyHint"),
@@ -79,10 +79,10 @@ export function MeetingsPage() {
   }
 
   async function load() {
-    if (!workspace) return;
+    if (!group) return;
     setLoading(true);
     try {
-      setMeetings(await api.meetings.list(workspace.id));
+      setMeetings(await api.meetings.list(group.id));
     } catch (error) {
       show(error instanceof Error ? error.message : t("meetings.loadFailed"), "error");
     } finally {
@@ -90,7 +90,7 @@ export function MeetingsPage() {
     }
   }
 
-  useEffect(() => { void load(); }, [workspace?.id]);
+  useEffect(() => { void load(); }, [group?.id]);
 
   const active = useMemo(() => meetings.filter((meeting) => meeting.status === "live" || meeting.status === "scheduled" || meeting.status === "inactive").sort((a, b) => {
     if (a.status === "live" && b.status !== "live") return -1;
@@ -101,12 +101,12 @@ export function MeetingsPage() {
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspace) return;
+    if (!group) return;
     setSaving(true);
     const form = new FormData(event.currentTarget);
     const start = new Date(String(form.get("startTime")));
     try {
-      const meeting = await api.meetings.create(workspace.id, {
+      const meeting = await api.meetings.create(group.id, {
         title: String(form.get("title") || "").trim(),
         description: String(form.get("description") || "").trim() || undefined,
         startTime: start.toISOString(),
@@ -115,7 +115,7 @@ export function MeetingsPage() {
         joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
       });
       setCreateOpen(false);
-      setVisibility("workspace_only");
+      setVisibility("group_only");
       setJoinPolicy("auto");
       await load();
       show(t("meetings.meetingCreated"));
@@ -162,7 +162,7 @@ export function MeetingsPage() {
 
   return (
     <div className="page meetings-page">
-      <PageHeader eyebrow={workspace?.name} title={t("meetings.pageTitle")} description={t("meetings.pageDescription")} action={<div className="button-row"><Button variant="secondary" onClick={() => setJoinOpen(true)} icon={<Search size={17} />}>{t("meetings.joinByCode")}</Button><Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button></div>} />
+      <PageHeader eyebrow={group?.name} title={t("meetings.pageTitle")} description={t("meetings.pageDescription")} action={<div className="button-row"><Button variant="secondary" onClick={() => setJoinOpen(true)} icon={<Search size={17} />}>{t("meetings.joinByCode")}</Button><Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button></div>} />
 
       {loading ? <div className="meeting-card-grid">{[1, 2, 3].map((item) => <Skeleton key={item} className="skeleton-card" />)}</div> : active.length === 0 ? (
         <section className="panel meeting-empty-panel"><EmptyState icon={<Video size={28} />} title={t("meetings.emptyTitle")} description={t("meetings.emptyDescription")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button>} /></section>

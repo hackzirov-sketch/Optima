@@ -8,7 +8,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
+import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
@@ -141,7 +141,7 @@ function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, o
  * stops rendering it.
  */
 export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, onDirectClose }: { meetingId?: string; directMode?: boolean; onDirectClose?: () => void }) {
-  const { user, workspace } = useAuth();
+  const { user, group } = useAuth();
   const selfId = user?.id || "__self__";
   const { show } = useToast();
   const { t, locale } = useI18n();
@@ -160,7 +160,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // The lobby camera preview keys off this: see the getUserMedia effect below.
   const isFullMode = directMode || Boolean(routeMatch);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -199,7 +199,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [waitingRequests, setWaitingRequests] = useState<MeetingJoinRequest[]>([]);
   const [waitingBusy, setWaitingBusy] = useState<string | null>(null);
   const [waitingCount, setWaitingCount] = useState<number | null>(null);
-  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("workspace_only");
+  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("group_only");
   const [settingsJoinPolicy, setSettingsJoinPolicy] = useState<MeetingJoinPolicyValue>("auto");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
@@ -332,7 +332,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   useEffect(() => {
     if (!meetingId) return;
-    Promise.all([api.meetings.one(meetingId), workspace ? api.workspaces.members(workspace.id).catch(() => []) : Promise.resolve([])])
+    Promise.all([api.meetings.one(meetingId), group ? api.groups.members(group.id).catch(() => []) : Promise.resolve([])])
       .then(([nextMeeting, nextMembers]) => {
         setMeeting(nextMeeting);
         setMembers(nextMembers);
@@ -350,15 +350,15 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         show(error instanceof Error ? error.message : t("meetingRoom.loadFailed"), "error");
       })
       .finally(() => setLoading(false));
-  }, [meetingId, workspace?.id, show, t]);
+  }, [meetingId, group?.id, show, t]);
 
   /**
    * Identities for everyone on screen.
    *
    * The meeting's own roster comes first: it covers guests, standalone
-   * meetings with no workspace at all, and anyone who simply isn't in the
+   * meetings with no group at all, and anyone who simply isn't in the
    * viewer's organisation — all of whom used to fall through to the generic
-   * "Qatnashchi" label because this map was built purely from the workspace
+   * "Qatnashchi" label because this map was built purely from the group
    * member list. That list is still consulted as a fallback, since it carries
    * the richer profile for colleagues.
    */
@@ -442,7 +442,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   function visibilityLabel(value: MeetingVisibility) {
     return ({
-      workspace_only: t("meetings.visibilityWorkspace"),
+      group_only: t("meetings.visibilityWorkspace"),
       private: t("meetings.visibilityPrivate"),
       public: t("meetings.visibilityPublic"),
       invite_only: t("meetings.visibilityInviteOnly"),
@@ -1405,7 +1405,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       </div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}</div> : sidePanel === "notes" ? <div className="meeting-notes-panel"><form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>{notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}</div> : sidePanel === "settings" ? <div className="meeting-info-panel">
         <label>{t("meetings.visibilityLabel")}
           <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
-            {(["workspace_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+            {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
           </select>
         </label>
         {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (

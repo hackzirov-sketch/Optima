@@ -10,7 +10,7 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post(':token/accept')
-  @ApiOperation({ summary: 'Accept a workspace invitation' })
+  @ApiOperation({ summary: 'Accept a group invitation' })
   acceptInvitation(
     @Param('token') token: string,
     @CurrentUser('id') userId: string,
@@ -19,7 +19,7 @@ export class InvitationsController {
   }
 
   @Post(':token/decline')
-  @ApiOperation({ summary: 'Decline a workspace invitation' })
+  @ApiOperation({ summary: 'Decline a group invitation' })
   declineInvitation(
     @Param('token') token: string,
     @CurrentUser('id') userId: string,

@@ -40,11 +40,11 @@ export class ProjectMembersService {
     return project;
   }
 
-  private async getWorkspaceMember(workspaceId: string, userId: string) {
+  private async getGroupMember(groupId: string, userId: string) {
     const rows = await this.dataSource.query(
-      `SELECT id, workspace_id AS "workspaceId", user_id AS "userId", role
-       FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [workspaceId, userId],
+      `SELECT id, group_id AS "groupId", user_id AS "userId", role
+       FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
     );
     return rows[0] ?? null;
   }
@@ -58,12 +58,12 @@ export class ProjectMembersService {
     // Project creator is always a manager
     if (project.createdById === userId) return project;
 
-    // Or workspace LEAD+ role
-    const wsMember = await this.getWorkspaceMember(project.workspaceId, userId);
+    // Or group LEAD+ role
+    const wsMember = await this.getGroupMember(project.groupId, userId);
     if (!wsMember)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
     this.permission.assertCanManageProject(wsMember);
 
@@ -72,14 +72,14 @@ export class ProjectMembersService {
 
   async listMembers(projectId: string, requesterId: string) {
     const project = await this.getProject(projectId);
-    const wsMember = await this.getWorkspaceMember(
-      project.workspaceId,
+    const wsMember = await this.getGroupMember(
+      project.groupId,
       requesterId,
     );
     if (!wsMember)
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
 
     const rows = await this.dataSource.query<any>(
@@ -123,15 +123,15 @@ export class ProjectMembersService {
   ) {
     const project = await this.assertProjectManager(projectId, inviterId);
 
-    // Target must be workspace member
-    const wsTarget = await this.getWorkspaceMember(
-      project.workspaceId,
+    // Target must be group member
+    const wsTarget = await this.getGroupMember(
+      project.groupId,
       targetUserId,
     );
     if (!wsTarget)
       throw new NotFoundException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Target user is not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Target user is not a group member',
       });
 
     // Check not already a member
