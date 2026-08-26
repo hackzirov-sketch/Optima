@@ -92,8 +92,7 @@ export class MeetingAccessService {
 
     switch (meeting.scope) {
       case RoomScope.GROUP_ONLY:
-        if (!isGroupMember)
-          return { kind: 'denied', reason: 'group_only' };
+        if (!isGroupMember) return { kind: 'denied', reason: 'group_only' };
         if (preApproved || meeting.joinPolicy === MeetingJoinPolicy.AUTO)
           return { kind: 'auto' };
         return { kind: 'approval', joinRequest };
@@ -186,9 +185,7 @@ export class MeetingAccessService {
     }
   }
 
-  accessDeniedMessage(
-    reason: 'group_only' | 'invite_only' | 'locked',
-  ): string {
+  accessDeniedMessage(reason: 'group_only' | 'invite_only' | 'locked'): string {
     if (reason === 'group_only')
       return 'This meeting is available only for group members.';
     if (reason === 'locked')

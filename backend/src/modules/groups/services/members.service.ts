@@ -83,10 +83,7 @@ export class MembersService {
    * against the tasks API for the full five minutes of its TTL — the reason
    * that cache now lives here, next to the writes.
    */
-  async invalidateMember(
-    groupId: string,
-    ...userIds: string[]
-  ): Promise<void> {
+  async invalidateMember(groupId: string, ...userIds: string[]): Promise<void> {
     await this.redis.drop(
       ...userIds.map((id) => RedisKeys.groupMember(groupId, id)),
     );
@@ -190,9 +187,7 @@ export class MembersService {
     const groupRows = await this.dataSource.query<{
       id: string;
       ownerId: string;
-    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [
-      groupId,
-    ]);
+    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [groupId]);
     const group = groupRows[0];
     if (!group)
       throw new NotFoundException({
@@ -224,10 +219,7 @@ export class MembersService {
     }
 
     // Prevent self-promotion: cannot assign yourself a role higher than your own
-    if (
-      requesterId === targetUserId &&
-      requester.role !== MemberRole.OWNER
-    ) {
+    if (requesterId === targetUserId && requester.role !== MemberRole.OWNER) {
       if (ROLE_LEVEL[dto.role] > ROLE_LEVEL[requester.role]) {
         throw new ForbiddenException({
           code: ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -282,9 +274,7 @@ export class MembersService {
     const groupRows = await this.dataSource.query<{
       id: string;
       ownerId: string;
-    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [
-      groupId,
-    ]);
+    }>(`SELECT id, owner_id AS "ownerId" FROM groups WHERE id = $1`, [groupId]);
     const group = groupRows[0];
     if (!group)
       throw new NotFoundException({

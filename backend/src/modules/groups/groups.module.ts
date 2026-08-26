@@ -13,12 +13,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [UsersModule, MailModule, NotificationsModule, AuthModule],
   controllers: [GroupsController, InvitationsController],
-  providers: [
-    GroupsService,
-    MembersService,
-    InvitationsService,
-    TagsService,
-  ],
+  providers: [GroupsService, MembersService, InvitationsService, TagsService],
   exports: [GroupsService, MembersService, TagsService],
 })
 export class GroupsModule {}

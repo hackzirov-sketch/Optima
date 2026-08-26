@@ -207,8 +207,7 @@ export class NotesService {
         [filter.taskId],
       );
       const groupId = task[0]?.groupId ?? note0[0]?.group_id;
-      if (groupId)
-        await this.membersService.assertMember(groupId, userId);
+      if (groupId) await this.membersService.assertMember(groupId, userId);
       return this.dataSource.query(
         `SELECT ${NOTE_COLUMNS_SQL} FROM notes WHERE task_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`,
         [filter.taskId],

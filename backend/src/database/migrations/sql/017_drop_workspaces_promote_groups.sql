@@ -17,8 +17,16 @@
 -- before relying on it in production.
 
 -- 1. Every workspace must have at least one group to donate identity/data to.
-INSERT INTO public.groups (id, name, slug, type, description, avatar_url, created_by, created_at, updated_at)
-SELECT public.uuid_generate_v4(), w.name, w.slug, 'general', w.description, w.avatar_url, w.owner_id, w.created_at, w.updated_at
+--    workspace_id is still NOT NULL on public.groups at this point in the
+--    intended history (it's only dropped in step 15, after every dependent
+--    table has been backfilled) — but this migration must also tolerate a
+--    dev database where the column was already removed by hand, so restore
+--    it defensively (nullable; step 15 drops it again either way) before
+--    relying on it below.
+ALTER TABLE public.groups ADD COLUMN IF NOT EXISTS workspace_id uuid;
+
+INSERT INTO public.groups (id, name, slug, type, description, avatar_url, created_by, workspace_id, created_at, updated_at)
+SELECT public.uuid_generate_v4(), w.name, w.slug, 'general', w.description, w.avatar_url, w.owner_id, w.id, w.created_at, w.updated_at
 FROM public.workspaces w
 WHERE NOT EXISTS (SELECT 1 FROM public.groups g WHERE g.workspace_id = w.id)
   AND w.deleted_at IS NULL;

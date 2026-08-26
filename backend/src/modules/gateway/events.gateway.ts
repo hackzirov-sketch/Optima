@@ -170,9 +170,7 @@ export interface MeetingHandDto {
 // Emoji reactions are ephemeral fire-and-forget events — capped to a small
 // allow-list (matching the picker in MeetingRoomPage.tsx) so the payload can
 // never carry arbitrary text through what looks like an emoji field.
-const ALLOWED_MEETING_REACTIONS = new Set([
-  '👍', '❤️', '🎉', '👏', '😂', '😮',
-]);
+const ALLOWED_MEETING_REACTIONS = new Set(['👍', '❤️', '🎉', '👏', '😂', '😮']);
 
 // A socket drop (network blip, tab refresh) shouldn't immediately count as
 // "left the meeting" — give it a window to reconnect and rejoin before the
@@ -436,9 +434,7 @@ export class EventsGateway
     const peerIds = new Set<string>();
     await Promise.all(
       groupIds.map(async (groupId) => {
-        const sockets = await this.server
-          .in(`group:${groupId}`)
-          .fetchSockets();
+        const sockets = await this.server.in(`group:${groupId}`).fetchSockets();
         for (const s of sockets) {
           if (s.data?.userId && s.data.userId !== user.id)
             peerIds.add(s.data.userId);
@@ -1058,9 +1054,8 @@ export class EventsGateway
     // Reconnect/late-join snapshot of raised hands — without this, a host
     // who refreshes mid-call would lose the raised-hand list even though
     // the state itself is still live in Redis.
-    const raisedHandUserIds = await this.meetingsService.listRaisedHands(
-      meetingId,
-    );
+    const raisedHandUserIds =
+      await this.meetingsService.listRaisedHands(meetingId);
     if (raisedHandUserIds.length) {
       client.emit('meeting:hands-snapshot', {
         meetingId,

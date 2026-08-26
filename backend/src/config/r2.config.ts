@@ -35,6 +35,7 @@ export default registerAs('storage', () => {
       explicitEndpoint ??
       (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : undefined),
     /** R2 ignores the region but requires one; AWS routes by it. */
-    region: value('S3_REGION', 'AWS_REGION') || (accountId ? 'auto' : undefined),
+    region:
+      value('S3_REGION', 'AWS_REGION') || (accountId ? 'auto' : undefined),
   };
 });

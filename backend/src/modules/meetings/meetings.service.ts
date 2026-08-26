@@ -197,11 +197,7 @@ export class MeetingsService {
     });
   }
 
-  async create(
-    groupId: string | null,
-    userId: string,
-    dto: CreateMeetingDto,
-  ) {
+  async create(groupId: string | null, userId: string, dto: CreateMeetingDto) {
     const scope = dto.scope ?? RoomScope.GROUP_ONLY;
     const joinPolicy = dto.joinPolicy ?? defaultJoinPolicy(scope);
     if (scope === RoomScope.GROUP_ONLY && !groupId) {

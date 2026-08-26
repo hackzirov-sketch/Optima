@@ -110,10 +110,7 @@ export class GroupsController {
   // ── Groups ──────────────────────────────────
   @Post()
   @ApiOperation({ summary: 'Create a new group' })
-  createGroup(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateGroupDto,
-  ) {
+  createGroup(@CurrentUser('id') userId: string, @Body() dto: CreateGroupDto) {
     return this.groupsService.create(userId, dto);
   }
 
@@ -176,7 +173,10 @@ export class GroupsController {
   // ── Members ─────────────────────────────────────
   @Get(':groupId/members')
   @ApiOperation({ summary: 'Get group members' })
-  getMembers(@Param('groupId') groupId: string, @CurrentUser('id') userId: string) {
+  getMembers(
+    @Param('groupId') groupId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.membersService.findAll(groupId, userId);
   }
 
@@ -188,7 +188,12 @@ export class GroupsController {
     @CurrentUser('id') requesterId: string,
     @Body() dto: UpdateMemberRoleDto,
   ) {
-    return this.membersService.updateRole(groupId, targetUserId, dto, requesterId);
+    return this.membersService.updateRole(
+      groupId,
+      targetUserId,
+      dto,
+      requesterId,
+    );
   }
 
   @Delete(':groupId/members/:userId')
@@ -240,7 +245,10 @@ export class GroupsController {
 
   @Get(':groupId/tags')
   @ApiOperation({ summary: 'List all tags in group' })
-  listTags(@Param('groupId') groupId: string, @CurrentUser('id') userId: string) {
+  listTags(
+    @Param('groupId') groupId: string,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.tagsService.listByGroup(groupId, userId);
   }
 

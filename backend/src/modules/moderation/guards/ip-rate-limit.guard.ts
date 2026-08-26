@@ -69,8 +69,7 @@ export class IpRateLimitGuard implements CanActivate {
           // Currently blocked
           if (record.blockedUntil && record.blockedUntil > now) {
             const remainingMs = record.blockedUntil.getTime() - now.getTime();
-            if (remainingMs <= maxBlockMs)
-              return Math.ceil(remainingMs / 1000);
+            if (remainingMs <= maxBlockMs) return Math.ceil(remainingMs / 1000);
             // An over-long block from a previous policy: shorten it in place
             // rather than honouring it.
             const clamped = new Date(now.getTime() + maxBlockMs);

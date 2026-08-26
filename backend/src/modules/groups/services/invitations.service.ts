@@ -338,9 +338,8 @@ export class InvitationsService {
         message: 'Invitation not found',
       });
 
-    await this.dataSource.query(
-      `DELETE FROM group_invitations WHERE id = $1`,
-      [id],
-    );
+    await this.dataSource.query(`DELETE FROM group_invitations WHERE id = $1`, [
+      id,
+    ]);
   }
 }

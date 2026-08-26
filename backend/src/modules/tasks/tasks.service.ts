@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
@@ -9,7 +8,6 @@ import { DatabaseService } from '../../database/database.service';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
-import { RedisKeys } from '../../redis/redis.keys';
 
 import { Task } from '../../database/entities/task.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
@@ -833,7 +831,7 @@ export class TasksService {
     const member = await this.assertMember(task.groupId, userId);
 
     if (task.creatorId !== userId) {
-      this.permission.assertCanDeleteTask(member as any);
+      this.permission.assertCanDeleteTask(member);
     }
 
     const { groupId } = task;

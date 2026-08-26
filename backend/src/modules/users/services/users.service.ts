@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { User } from '../../../database/entities/user.entity';
@@ -336,15 +340,23 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
-    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(Boolean) as string[];
+    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(
+      Boolean,
+    ) as string[];
     for (const t of texts) {
       await this.contentFilter.filterText(t, userId, 'profile');
     }
     try {
       await this.update(userId, dto);
     } catch (error) {
-      if ((error as { code?: string })?.code === '23505' && dto.username !== undefined) {
-        throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'Username is already taken' });
+      if (
+        (error as { code?: string })?.code === '23505' &&
+        dto.username !== undefined
+      ) {
+        throw new ConflictException({
+          code: 'USERNAME_TAKEN',
+          message: 'Username is already taken',
+        });
       }
       throw error;
     }

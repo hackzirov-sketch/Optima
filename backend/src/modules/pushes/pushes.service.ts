@@ -252,14 +252,9 @@ export class PushesService {
       );
       saved = updatedRows[0];
 
-      await this.dailyStats.increment(
-        userId,
-        task.projectId,
-        task.groupId,
-        {
-          pushesSubmitted: 1,
-        },
-      );
+      await this.dailyStats.increment(userId, task.projectId, task.groupId, {
+        pushesSubmitted: 1,
+      });
     } catch {
       await this.dataSource.query(
         `UPDATE task_pushes SET status = $2::task_pushes_status_enum WHERE id = $1`,

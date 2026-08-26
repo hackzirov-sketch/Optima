@@ -98,9 +98,7 @@ describe('MembersService — membership cache', () => {
 
     // This is the bug the shared cache exists to prevent: a removed member
     // kept full access until the entry aged out.
-    expect(
-      redis.store.get(RedisKeys.groupMember(WS, USER)),
-    ).toBeUndefined();
+    expect(redis.store.get(RedisKeys.groupMember(WS, USER))).toBeUndefined();
   });
 
   it('stops serving a stale role after a role change', async () => {
@@ -114,9 +112,7 @@ describe('MembersService — membership cache', () => {
       .mockResolvedValueOnce([memberRow(MemberRole.LEAD)]); // update
     await service.updateRole(WS, USER, { role: MemberRole.LEAD }, ADMIN);
 
-    expect(
-      redis.store.get(RedisKeys.groupMember(WS, USER)),
-    ).toBeUndefined();
+    expect(redis.store.get(RedisKeys.groupMember(WS, USER))).toBeUndefined();
   });
 
   it('invalidates several members at once', async () => {

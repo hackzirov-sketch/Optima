@@ -123,11 +123,7 @@ export class TagsService {
     return updatedRows[0];
   }
 
-  async remove(
-    groupId: string,
-    tagId: string,
-    userId: string,
-  ): Promise<void> {
+  async remove(groupId: string, tagId: string, userId: string): Promise<void> {
     await this.assertAdminOrOwner(groupId, userId);
 
     const rows = await this.dataSource.query(

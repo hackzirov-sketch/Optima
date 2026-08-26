@@ -53,8 +53,7 @@ export const RedisKeys = {
    * permission grant, so there is no Postgres table behind it and nothing
    * to review/approve; see MeetingsService.setHandRaised.
    */
-  meetingRaisedHands: (meetingId: string) =>
-    `upz:meeting_hands:${meetingId}`,
+  meetingRaisedHands: (meetingId: string) => `upz:meeting_hands:${meetingId}`,
 
   // ── Email verification ───────────────────────────────────────────────────────
   // Keyed by a long, unguessable, globally-unique token — NOT by the 6-digit code.

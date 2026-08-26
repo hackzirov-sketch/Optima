@@ -60,7 +60,10 @@ export class ChatReactionService {
     }
   }
 
-  private async findReaction(messageId: string, userId: string): Promise<ChatReaction | null> {
+  private async findReaction(
+    messageId: string,
+    userId: string,
+  ): Promise<ChatReaction | null> {
     const rows = await this.dataSource.query<ChatReaction>(
       `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions
        WHERE message_id = $1 AND user_id = $2`,

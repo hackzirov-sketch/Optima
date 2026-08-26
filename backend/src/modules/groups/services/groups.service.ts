@@ -247,10 +247,7 @@ export class GroupsService {
     newOwnerUserId: string,
   ): Promise<Group> {
     await this.findById(groupId);
-    const currentOwnerMember = await this.getMember(
-      groupId,
-      currentOwnerId,
-    );
+    const currentOwnerMember = await this.getMember(groupId, currentOwnerId);
 
     if (currentOwnerMember.role !== MemberRole.OWNER) {
       throw new ForbiddenException({

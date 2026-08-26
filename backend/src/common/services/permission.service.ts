@@ -106,10 +106,7 @@ export class PermissionService {
   //   OWNER (requester) → can assign any non-OWNER role
   //   ADMIN (requester) → can only assign ≤ LEAD (cannot grant ADMIN or OWNER)
   //   Others → cannot change roles at all
-  assertCanChangeRoleTo(
-    requester: RoleBearer,
-    targetRole: MemberRole,
-  ): void {
+  assertCanChangeRoleTo(requester: RoleBearer, targetRole: MemberRole): void {
     if (targetRole === MemberRole.OWNER) {
       throw new ForbiddenException({
         code: ErrorCode.OWNERSHIP_TRANSFER_REQUIRED,

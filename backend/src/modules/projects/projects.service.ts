@@ -231,10 +231,7 @@ export class ProjectsService {
     return this.findById(savedProject.id, userId);
   }
 
-  async findAllInGroup(
-    groupId: string,
-    userId: string,
-  ): Promise<Project[]> {
+  async findAllInGroup(groupId: string, userId: string): Promise<Project[]> {
     const wsMember = await this.getGroupMember(groupId, userId);
 
     if (!wsMember)

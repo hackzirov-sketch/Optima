@@ -25,5 +25,8 @@ export default registerAs('moderation', () => ({
   ipMaxAttempts: parseInt(process.env.IP_RATE_MAX_ATTEMPTS || '40', 10),
   ipWindowSeconds: parseInt(process.env.IP_RATE_WINDOW_SECONDS || '60', 10),
   /** Hard ceiling on any block this guard issues, however it was recorded. */
-  ipMaxBlockSeconds: parseInt(process.env.IP_RATE_MAX_BLOCK_SECONDS || '90', 10),
+  ipMaxBlockSeconds: parseInt(
+    process.env.IP_RATE_MAX_BLOCK_SECONDS || '90',
+    10,
+  ),
 }));

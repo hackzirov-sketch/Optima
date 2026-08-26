@@ -74,11 +74,7 @@ export class MailService {
     }
   }
 
-  async sendInvitationEmail(
-    email: string,
-    token: string,
-    groupName: string,
-  ) {
+  async sendInvitationEmail(email: string, token: string, groupName: string) {
     try {
       if (!this.transporter) {
         this.logger.warn(

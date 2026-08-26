@@ -72,10 +72,7 @@ export class ProjectMembersService {
 
   async listMembers(projectId: string, requesterId: string) {
     const project = await this.getProject(projectId);
-    const wsMember = await this.getGroupMember(
-      project.groupId,
-      requesterId,
-    );
+    const wsMember = await this.getGroupMember(project.groupId, requesterId);
     if (!wsMember)
       throw new ForbiddenException({
         code: ErrorCode.NOT_GROUP_MEMBER,
@@ -124,10 +121,7 @@ export class ProjectMembersService {
     const project = await this.assertProjectManager(projectId, inviterId);
 
     // Target must be group member
-    const wsTarget = await this.getGroupMember(
-      project.groupId,
-      targetUserId,
-    );
+    const wsTarget = await this.getGroupMember(project.groupId, targetUserId);
     if (!wsTarget)
       throw new NotFoundException({
         code: ErrorCode.NOT_GROUP_MEMBER,

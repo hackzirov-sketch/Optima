@@ -49,11 +49,7 @@ export class TokenService {
     return { accessToken, refreshToken, jti };
   }
 
-  async generateTokens(
-    user: User,
-    ctx: TokenContext = {},
-    groupId?: string,
-  ) {
+  async generateTokens(user: User, ctx: TokenContext = {}, groupId?: string) {
     const refreshExpires =
       this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));

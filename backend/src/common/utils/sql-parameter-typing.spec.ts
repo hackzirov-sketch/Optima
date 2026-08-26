@@ -30,8 +30,13 @@ describe('raw SQL — parameter type inference', () => {
     return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) return findSourceFiles(path);
-      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts')) return [];
-      return /\b(COALESCE|GREATEST|LEAST|NULLIF|CASE)\b/i.test(readFileSync(path, 'utf8')) ? [path] : [];
+      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts'))
+        return [];
+      return /\b(COALESCE|GREATEST|LEAST|NULLIF|CASE)\b/i.test(
+        readFileSync(path, 'utf8'),
+      )
+        ? [path]
+        : [];
     });
   }
 
