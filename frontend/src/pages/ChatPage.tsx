@@ -2156,7 +2156,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         <header className="chat-sidebar-header">
           <button className="icon-button chat-home-back" onClick={() => navigate("/")}
                   aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
-          <div><p className="eyebrow">Group</p><h1>{t("chat.messagesTitle")}</h1></div>
+          <div><h1>{t("chat.messagesTitle")}</h1></div>
           <button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)}
                   aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} />
           </button>

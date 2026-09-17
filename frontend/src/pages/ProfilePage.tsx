@@ -37,6 +37,7 @@ export function ProfilePage() {
   const [settingsSection, setSettingsSection] = useState<"profile" | "notifications" | "privacy" | "sessions">("profile");
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [revokingAll, setRevokingAll] = useState(false);
+  const [savingNotification, setSavingNotification] = useState(false);
   const [nameEmoji, setNameEmoji] = useState<string | null>(user?.nameEmoji ?? null);
   const [notifications, setNotifications] = useState({
     notificationsEnabled: user?.notificationsEnabled ?? true,
@@ -158,6 +159,8 @@ export function ProfilePage() {
   }
 
   async function toggleNotification(key: keyof typeof notifications) {
+    if (savingNotification) return;
+    setSavingNotification(true);
     const next = { ...notifications, [key]: !notifications[key] };
     setNotifications(next);
     try {
@@ -166,6 +169,8 @@ export function ProfilePage() {
     } catch (error) {
       setNotifications(notifications);
       show(error instanceof Error ? error.message : t("profile.settingNotSaved"), "error");
+    } finally {
+      setSavingNotification(false);
     }
   }
 
@@ -221,10 +226,10 @@ export function ProfilePage() {
 
         <div className="settings-stack">
           <nav className="settings-tabs" aria-label={t("profile.sectionsAria")}>
-            <button className={settingsSection === "profile" ? "active" : ""} onClick={() => setSettingsSection("profile")}><UserRound size={18} /><span><strong>{t("profile.tabProfile")}</strong><small>{t("profile.tabProfileHint")}</small></span></button>
-            <button className={settingsSection === "notifications" ? "active" : ""} onClick={() => setSettingsSection("notifications")}><BellRing size={18} /><span><strong>{t("profile.tabNotifications")}</strong><small>{t("profile.tabNotificationsHint")}</small></span></button>
-            <button className={settingsSection === "privacy" ? "active" : ""} onClick={() => setSettingsSection("privacy")}><UsersRound size={18} /><span><strong>{t("profile.tabPrivacy")}</strong><small>{t("profile.tabPrivacyHint")}</small></span></button>
-            <button className={settingsSection === "sessions" ? "active" : ""} onClick={() => setSettingsSection("sessions")}><ShieldCheck size={18} /><span><strong>{t("profile.tabSessions")}</strong><small>{t("profile.tabSessionsHint")}</small></span></button>
+            <button aria-pressed={settingsSection === "profile"} className={settingsSection === "profile" ? "active" : ""} onClick={() => setSettingsSection("profile")}><UserRound size={18} /><span><strong>{t("profile.tabProfile")}</strong><small>{t("profile.tabProfileHint")}</small></span></button>
+            <button aria-pressed={settingsSection === "notifications"} className={settingsSection === "notifications" ? "active" : ""} onClick={() => setSettingsSection("notifications")}><BellRing size={18} /><span><strong>{t("profile.tabNotifications")}</strong><small>{t("profile.tabNotificationsHint")}</small></span></button>
+            <button aria-pressed={settingsSection === "privacy"} className={settingsSection === "privacy" ? "active" : ""} onClick={() => setSettingsSection("privacy")}><UsersRound size={18} /><span><strong>{t("profile.tabPrivacy")}</strong><small>{t("profile.tabPrivacyHint")}</small></span></button>
+            <button aria-pressed={settingsSection === "sessions"} className={settingsSection === "sessions" ? "active" : ""} onClick={() => setSettingsSection("sessions")}><ShieldCheck size={18} /><span><strong>{t("profile.tabSessions")}</strong><small>{t("profile.tabSessionsHint")}</small></span></button>
           </nav>
           {settingsSection === "profile" && <section className="panel settings-panel settings-section-enter">
             <header className="settings-header"><span><UserRound size={20} /></span><div><h2>{t("profile.personalInfoTitle")}</h2><p>{t("profile.personalInfoDesc")}</p></div></header>
@@ -263,10 +268,20 @@ export function ProfilePage() {
           {settingsSection === "notifications" && <section className="panel settings-panel settings-section-enter">
             <header className="settings-header"><span><BellRing size={20} /></span><div><h2>{t("profile.notificationsTitle")}</h2><p>{t("profile.notificationsDesc")}</p></div></header>
             <div className="toggle-list">
-              <button onClick={() => void toggleNotification("notificationsEnabled")}><span className="setting-icon"><Bell size={18} /></span><span><strong>{t("profile.allNotifications")}</strong><small>{t("profile.allNotificationsDesc")}</small></span><i className={notifications.notificationsEnabled ? "on" : ""}><b /></i></button>
-              <button onClick={() => void toggleNotification("emailNotifications")}><span className="setting-icon"><Mail size={18} /></span><span><strong>{t("profile.emailNotifications")}</strong><small>{t("profile.emailNotificationsDesc")}</small></span><i className={notifications.emailNotifications ? "on" : ""}><b /></i></button>
-              <button onClick={() => void toggleNotification("pushNotifications")}><span className="setting-icon"><Smartphone size={18} /></span><span><strong>{t("profile.pushNotifications")}</strong><small>{t("profile.pushNotificationsDesc")}</small></span><i className={notifications.pushNotifications ? "on" : ""}><b /></i></button>
-              <button onClick={() => void toggleNotification("notifyMentions")}><span className="setting-icon"><Globe2 size={18} /></span><span><strong>{t("profile.mentions")}</strong><small>{t("profile.mentionsDesc")}</small></span><i className={notifications.notifyMentions ? "on" : ""}><b /></i></button>
+              {([
+                ["notificationsEnabled", Bell, "allNotifications", "allNotificationsDesc"],
+                ["emailNotifications", Mail, "emailNotifications", "emailNotificationsDesc"],
+                ["pushNotifications", Smartphone, "pushNotifications", "pushNotificationsDesc"],
+                ["notifyMentions", Globe2, "mentions", "mentionsDesc"],
+              ] as const).map(([key, Icon, label, description]) => (
+                <button key={key} type="button" role="switch" aria-checked={notifications[key]}
+                  aria-label={t(`profile.${label}`)} aria-describedby={`notification-${key}`}
+                  disabled={savingNotification} onClick={() => void toggleNotification(key)}>
+                  <span className="setting-icon"><Icon size={18} /></span>
+                  <span><strong>{t(`profile.${label}`)}</strong><small id={`notification-${key}`}>{t(`profile.${description}`)}</small></span>
+                  <i className={notifications[key] ? "on" : ""} aria-hidden="true"><b /></i>
+                </button>
+              ))}
             </div>
           </section>}
 
