@@ -1,6 +1,6 @@
 import { Clock3, LayoutGrid, RefreshCw, Search, Smile, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOutsideClose } from "../lib/useOutsideClose";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   emojiPreviewUrl,
   fetchAnimatedEmojiManifest,
@@ -59,8 +59,23 @@ function labelPacks<T extends { name: string }>(items: T[]): T[] {
 }
 
 function readRecent(): string[] {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").slice(0, 32); }
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string").slice(0, 32) : [];
+  }
   catch { return []; }
+}
+
+function navigateTabs(event: KeyboardEvent<HTMLDivElement>) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]"));
+  const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+  if (index < 0) return;
+  event.preventDefault();
+  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[next]?.click();
+  tabs[next]?.focus();
+  tabs[next]?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", className = "" }: {
@@ -76,30 +91,105 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
   const [mode, setMode] = useState<EmojiMode>("all");
   const [topic, setTopic] = useState<EmojiTopic>("all");
   const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState<string[]>([]);
+  const [reload, setReload] = useState(0);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const loadedRef = useRef(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  useOutsideClose(wrapRef, open, () => setOpen(false));
+  useLayoutEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    const trigger = wrapRef.current;
+    if (!panel || !trigger) return;
+    const viewport = window.visualViewport;
+    const place = () => {
+      const width = viewport?.width ?? innerWidth;
+      const height = viewport?.height ?? innerHeight;
+      const left = viewport?.offsetLeft ?? 0;
+      const top = viewport?.offsetTop ?? 0;
+      const rect = trigger.getBoundingClientRect();
+      const panelWidth = Math.min(420, width - 16);
+      const panelHeight = Math.min(560, height - 24);
+      const above = rect.top - panelHeight - 10;
+      panel.style.width = `${panelWidth}px`;
+      panel.style.height = `${panelHeight}px`;
+      panel.style.maxHeight = `${panelHeight}px`;
+      panel.style.left = `${Math.max(left + 8, Math.min(rect.left, left + width - panelWidth - 8))}px`;
+      panel.style.top = `${Math.max(top + 12, Math.min(above >= top + 12 ? above : rect.bottom + 10, top + height - panelHeight - 12))}px`;
+    };
+    place();
+    window.addEventListener("resize", place);
+    viewport?.addEventListener("resize", place);
+    viewport?.addEventListener("scroll", place);
+    return () => {
+      window.removeEventListener("resize", place);
+      viewport?.removeEventListener("resize", place);
+      viewport?.removeEventListener("scroll", place);
+    };
+  }, [open]);
 
   useEffect(() => {
-    if (!open || assets.length || failed) return;
+    if (!open) return;
+    const trigger = wrapRef.current?.querySelector<HTMLButtonElement>(":scope > button");
+    if (window.matchMedia("(pointer: fine)").matches) {
+      panelRef.current?.querySelector<HTMLInputElement>(".telegram-emoji-search input")?.focus({ preventScroll: true });
+    }
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!wrapRef.current?.contains(target) && !panelRef.current?.contains(target)) setOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape, true);
+      trigger?.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || loadedRef.current) return;
+    let cancelled = false;
+    setLoading(true);
+    setFailed(false);
+    setUnavailable([]);
+    const add = (items: EmojiAsset[], animated: boolean) => {
+      if (!cancelled) setAssets(previous => [...previous.filter(item => (item.format !== "png") !== animated), ...items]);
+    };
     Promise.allSettled([
-      fetchEmojiManifest<Array<Pick<EmojiAsset, "id" | "src" | "pack">>>(),
-      fetchAnimatedEmojiManifest<EmojiAsset[]>()
-    ]).then(([staticResult, animatedResult]) => {
-      const staticAssets = staticResult.status === "fulfilled" ? staticResult.value.map((asset) => ({
+      fetchEmojiManifest<Array<Pick<EmojiAsset, "id" | "src" | "pack">>>().then(items => add(items.map((asset) => ({
         ...asset,
-        previewSrc: asset.src || emojiPreviewUrl(asset.id),
+        previewSrc: emojiPreviewUrl(asset.id),
         packName: `${asset.pack}-to‘plam`,
         format: "png" as const
-      })) : [];
-      const animatedAssets = animatedResult.status === "fulfilled" ? animatedResult.value : [];
-      const next = [...staticAssets, ...animatedAssets];
-      if (!next.length) setFailed(true);
-      else setAssets(next);
+      })), false)),
+      fetchAnimatedEmojiManifest<EmojiAsset[]>().then(items => add(items, true))
+    ]).then(results => {
+      if (cancelled) return;
+      loadedRef.current = true;
+      setLoading(false);
+      setUnavailable(results.flatMap((result, index) => result.status === "rejected" ? [index === 0 ? "Statik" : "Animatsion"] : []));
+      setFailed(results.every(result => result.status === "rejected"));
     });
-  }, [open, assets.length, failed]);
+    return () => { cancelled = true; };
+  }, [open, reload]);
+
+  function retry() {
+    loadedRef.current = false;
+    setReload(value => value + 1);
+  }
 
   const packAssets = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -115,10 +205,11 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
   }, [assets, mode, pack, query, recent, topic]);
   const batchSize = mode === "animated" ? 36 : BATCH_SIZE;
   const visible = packAssets.slice(0, shown);
+  const focusedVisible = visible.some(asset => asset.id === focusedId);
   const packs = useMemo(() => labelPacks(Array.from(new Map(assets.map((asset) => [assetPackKey(asset), {
     key: assetPackKey(asset),
     name: asset.packName,
-    preview: asset.previewSrc || emojiPreviewUrl(asset.id)
+    id: asset.id
   }])).values())), [assets]);
   const visiblePacks = useMemo(() => packs.filter((item) => {
     const sample = assets.find((asset) => assetPackKey(asset) === item.key);
@@ -178,8 +269,8 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
               aria-expanded={open} aria-haspopup="dialog">
         <Smile size={20} />
       </button>
-      {open && (
-        <div className="emoji-picker telegram-emoji-picker" role="dialog" aria-label="Telegram emojilari">
+      {open && createPortal(
+        <div ref={panelRef} className="emoji-picker telegram-emoji-picker emoji-picker-floating" role="dialog" aria-label="Telegram emojilari">
           <div className="telegram-emoji-head">
             <span><strong>{query ? "Qidiruv natijalari" : pack === "all" ? "Barcha emojilar" : pack === "recent" ? "So‘nggi ishlatilganlar" : activePack?.name || "Custom emojilar"}</strong>
               <small>{assets.length ? `${packAssets.length} ta · jami ${assets.length}` : "Telegram to‘plami"}</small></span>
@@ -191,40 +282,56 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
                    placeholder="Emoji yoki to‘plamni qidirish" aria-label="Emojilarni qidirish" />
             {query && <button type="button" onClick={() => setQuery("")} aria-label="Qidiruvni tozalash"><X size={14} /></button>}
           </label>
-          <div className="telegram-emoji-modes" role="tablist" aria-label="Emoji turi">
+          <div className="telegram-emoji-modes" role="tablist" aria-label="Emoji turi" onKeyDown={navigateTabs}>
             {(["all", "static", "animated"] as const).map((item) => <button key={item} type="button" role="tab"
-              aria-selected={mode === item} className={mode === item ? "active" : ""} onClick={() => selectMode(item)}>
+              tabIndex={mode === item ? 0 : -1} aria-selected={mode === item} className={mode === item ? "active" : ""} onClick={() => selectMode(item)}>
               {item === "all" ? "Barchasi" : item === "static" ? "Static" : "Animated"}
             </button>)}
           </div>
-          <div className="telegram-emoji-topics" role="tablist" aria-label="Emoji mavzulari">
+          <div className="telegram-emoji-topics" role="tablist" aria-label="Emoji mavzulari" onKeyDown={navigateTabs}>
             {TOPICS.map((item) => <button key={item.id} type="button" role="tab"
-              aria-selected={topic === item.id} className={topic === item.id ? "active" : ""}
+              tabIndex={topic === item.id ? 0 : -1} aria-selected={topic === item.id} className={topic === item.id ? "active" : ""}
               onClick={() => selectTopic(item.id)}>{item.label}</button>)}
           </div>
-          <div className="telegram-emoji-packs" role="tablist" aria-label="Emoji to‘plamlari">
-            <button type="button" role="tab" aria-selected={pack === "all"} className={pack === "all" ? "active" : ""}
+          <div className="telegram-emoji-packs" role="tablist" aria-label="Emoji to‘plamlari" onKeyDown={navigateTabs}>
+            <button type="button" role="tab" tabIndex={pack === "all" ? 0 : -1} aria-selected={pack === "all"} className={pack === "all" ? "active" : ""}
                     onClick={() => selectPack("all")} title="Barcha emojilar"><LayoutGrid size={17} /><span>Barchasi</span></button>
-            <button type="button" role="tab" aria-selected={pack === "recent"} className={pack === "recent" ? "active" : ""}
+            <button type="button" role="tab" tabIndex={pack === "recent" ? 0 : -1} aria-selected={pack === "recent"} className={pack === "recent" ? "active" : ""}
                     onClick={() => selectPack("recent")} title="So‘nggi ishlatilganlar"><Clock3 size={17} /><span>So‘nggi</span></button>
             {visiblePacks.map((item) => (
-              <button key={item.key} type="button" role="tab" aria-selected={pack === item.key}
+              <button key={item.key} type="button" role="tab" tabIndex={pack === item.key ? 0 : -1} aria-selected={pack === item.key}
                       className={pack === item.key ? "active" : ""} onClick={() => selectPack(item.key)}
                       title={item.name} aria-label={item.name}>
-                <img src={item.preview} alt="" loading="lazy" decoding="async" />
+                <AnimatedEmoji key={`${item.id}-${reload}`} id={item.id} className="emoji-pack-preview" animate={false} />
                 <span>{item.name}</span>
               </button>
             ))}
           </div>
-          <div className="telegram-emoji-grid" ref={gridRef}>
-            {!assets.length && !failed && Array.from({ length: 32 }, (_, index) => <i className="emoji-skeleton" key={index} />)}
-            {failed && <span className="telegram-emoji-state"><strong>Emojilar yuklanmadi</strong><button type="button" onClick={() => setFailed(false)}><RefreshCw size={15} /> Qayta urinish</button></span>}
-            {assets.length > 0 && packAssets.length === 0 && <span className="telegram-emoji-state"><Clock3 size={22} /><strong>Hali emoji tanlanmagan</strong><small>Tanlangan emojilar shu yerda saqlanadi.</small></span>}
-            {visible.map((asset) => (
+          <div className="emoji-catalog-status" role="status">
+            {unavailable.length > 0 && !failed && <><span>{unavailable.join(", ")} to‘plamlar yuklanmadi</span><button type="button" onClick={retry} disabled={loading} aria-label="To‘plamlarni qayta yuklash" title="Qayta yuklash"><RefreshCw size={16} /></button></>}
+            {loading && assets.length > 0 && <span>Qolgan to‘plamlar yuklanmoqda...</span>}
+          </div>
+          <div className="telegram-emoji-grid" ref={gridRef} aria-busy={loading} onKeyDown={event => {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+            const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(":scope > button"));
+            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            if (current < 0) return;
+            event.preventDefault();
+            const columns = getComputedStyle(event.currentTarget).gridTemplateColumns.split(" ").length;
+            const delta = event.key === "ArrowUp" ? -columns : event.key === "ArrowDown" ? columns : event.key === "ArrowLeft" ? -1 : 1;
+            const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : Math.max(0, Math.min(current + delta, buttons.length - 1));
+            buttons[next]?.focus();
+          }}>
+            {!assets.length && loading && Array.from({ length: 32 }, (_, index) => <i className="emoji-skeleton" key={index} />)}
+            {failed && <span className="telegram-emoji-state"><strong>Emojilar yuklanmadi</strong><button type="button" onClick={retry}><RefreshCw size={15} /> Qayta urinish</button></span>}
+            {!loading && !failed && packAssets.length === 0 && <span className="telegram-emoji-state"><Search size={22} /><strong>{query ? "Emoji topilmadi" : pack === "recent" ? "Hali emoji tanlanmagan" : "Bu bo‘limda emoji yo‘q"}</strong><small>{query ? "Boshqa nom bilan qidiring." : pack === "recent" ? "Tanlangan emojilar shu yerda saqlanadi." : "Boshqa to‘plamni tanlang yoki qayta yuklang."}</small></span>}
+            {visible.map((asset, index) => (
               <button key={asset.id} type="button" onClick={() => pick(asset.id)}
-                      aria-label="Custom emojini matnga qo‘shish">
-                {asset.format === "lottie" ? <AnimatedEmoji id={asset.id} label="" /> :
-                  <img src={asset.previewSrc || emojiPreviewUrl(asset.id)} alt="" loading="lazy" decoding="async" />}
+                      title={`${asset.packName} · ${asset.id}`} aria-label={`${asset.packName}: ${asset.id}`}
+                      onPointerEnter={() => setPreviewId(asset.id)} onPointerLeave={() => setPreviewId(null)}
+                      tabIndex={asset.id === focusedId || (!focusedVisible && index === 0) ? 0 : -1}
+                      onFocus={() => { setPreviewId(asset.id); setFocusedId(asset.id); }} onBlur={() => setPreviewId(null)}>
+                <AnimatedEmoji key={`${asset.id}-${reload}`} id={asset.id} animate={previewId === asset.id} />
               </button>
             ))}
             {shown < packAssets.length && (
@@ -233,7 +340,7 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
               </div>
             )}
           </div>
-        </div>
+        </div>, document.body
       )}
     </span>
   );

@@ -7,7 +7,11 @@ export function useOutsideClose(ref: { current: HTMLElement | null }, active: bo
       if (ref.current && !ref.current.contains(event.target as Node)) onClose();
     }
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onClose();
+      }
     }
     document.addEventListener("mousedown", handlePointer, true);
     document.addEventListener("touchstart", handlePointer, true);

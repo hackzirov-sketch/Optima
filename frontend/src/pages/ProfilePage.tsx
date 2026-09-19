@@ -222,16 +222,16 @@ export function ProfilePage() {
           <span className="role-badge">{user?.occupation ? t(`common.occupations.${user.occupation}`) : t("profile.teamMember")}</span>
           <dl className="profile-meta"><div><Mail size={16} /><span><small>{t("profile.email")}</small><strong>{user?.email}</strong></span></div><div><MapPin size={16} /><span><small>{t("profile.timezone")}</small><strong>{user?.timezone || "Asia/Tashkent"}</strong></span></div><div><ShieldCheck size={16} /><span><small>{t("profile.account")}</small><strong>{t("profile.verified")}</strong></span></div></dl>
           <Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>{t("profile.logoutButton")}</Button>
-        </aside>
-
-        <div className="settings-stack">
           <nav className="settings-tabs" aria-label={t("profile.sectionsAria")}>
             <button aria-pressed={settingsSection === "profile"} className={settingsSection === "profile" ? "active" : ""} onClick={() => setSettingsSection("profile")}><UserRound size={18} /><span><strong>{t("profile.tabProfile")}</strong><small>{t("profile.tabProfileHint")}</small></span></button>
             <button aria-pressed={settingsSection === "notifications"} className={settingsSection === "notifications" ? "active" : ""} onClick={() => setSettingsSection("notifications")}><BellRing size={18} /><span><strong>{t("profile.tabNotifications")}</strong><small>{t("profile.tabNotificationsHint")}</small></span></button>
             <button aria-pressed={settingsSection === "privacy"} className={settingsSection === "privacy" ? "active" : ""} onClick={() => setSettingsSection("privacy")}><UsersRound size={18} /><span><strong>{t("profile.tabPrivacy")}</strong><small>{t("profile.tabPrivacyHint")}</small></span></button>
             <button aria-pressed={settingsSection === "sessions"} className={settingsSection === "sessions" ? "active" : ""} onClick={() => setSettingsSection("sessions")}><ShieldCheck size={18} /><span><strong>{t("profile.tabSessions")}</strong><small>{t("profile.tabSessionsHint")}</small></span></button>
           </nav>
-          {settingsSection === "profile" && <section className="panel settings-panel settings-section-enter">
+        </aside>
+
+        <div className="settings-stack">
+          <section hidden={settingsSection !== "profile"} className="panel settings-panel settings-section-enter">
             <header className="settings-header"><span><UserRound size={20} /></span><div><h2>{t("profile.personalInfoTitle")}</h2><p>{t("profile.personalInfoDesc")}</p></div></header>
             <form className="settings-form" onSubmit={saveProfile}>
               <div className="form-grid-2"><label>{t("profile.firstNameLabel")}<input name="firstName" defaultValue={user?.firstName} maxLength={50} required /></label><label>{t("profile.lastNameLabel")}<input name="lastName" defaultValue={user?.lastName} maxLength={50} required /></label></div>
@@ -247,9 +247,9 @@ export function ProfilePage() {
               <div className="form-grid-2"><label>{t("profile.languageLabel")}<select name="language" defaultValue={user?.language || "uz"}><option value="uz">O‘zbekcha</option><option value="ru">Русский</option><option value="en">English</option></select></label><label>{t("profile.timezoneLabel")}<select name="timezone" defaultValue={user?.timezone || "Asia/Tashkent"}><option value="Asia/Tashkent">Tashkent (UTC+5)</option><option value="Asia/Almaty">Almaty (UTC+5)</option><option value="Europe/Moscow">Moscow (UTC+3)</option><option value="UTC">UTC</option></select></label></div>
               <div className="settings-actions"><Button type="submit" loading={saving} icon={<Save size={17} />}>{t("profile.saveChanges")}</Button></div>
             </form>
-          </section>}
+          </section>
 
-          {settingsSection === "profile" && <section className="panel settings-panel settings-section-enter">
+          <section hidden={settingsSection !== "profile"} className="panel settings-panel settings-section-enter">
             <header className="settings-header"><span><ImageIcon size={20} /></span><div><h2>{t("profile.chatBackgroundTitle")}</h2><p>{t("profile.chatBackgroundDesc")}</p></div></header>
             <div className="chat-background-picker">
               <div className="chat-background-preview" style={user?.backgroundUrl ? { backgroundImage: `url(${user.backgroundUrl})` } : undefined}>
@@ -263,7 +263,7 @@ export function ProfilePage() {
                 {user?.backgroundUrl && <Button variant="secondary" disabled={uploadingBackground} onClick={() => void removeBackground()} icon={<Trash2 size={16} />}>{t("profile.removeBackground")}</Button>}
               </div>
             </div>
-          </section>}
+          </section>
 
           {settingsSection === "notifications" && <section className="panel settings-panel settings-section-enter">
             <header className="settings-header"><span><BellRing size={20} /></span><div><h2>{t("profile.notificationsTitle")}</h2><p>{t("profile.notificationsDesc")}</p></div></header>

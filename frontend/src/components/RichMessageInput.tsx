@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { CUSTOM_EMOJI_TOKEN_PATTERN, emojiPreviewUrl } from "../lib/emojiAssets";
+import { CUSTOM_EMOJI_TOKEN_PATTERN, emojiImageSources, fallbackEmojiImage } from "../lib/emojiAssets";
 
 const TOKEN_PATTERN = new RegExp(CUSTOM_EMOJI_TOKEN_PATTERN.source, "g");
 
@@ -47,7 +47,8 @@ function renderValue(root: HTMLElement, value: string) {
   for (const match of value.matchAll(TOKEN_PATTERN)) {
     if (match.index > cursor) root.append(document.createTextNode(value.slice(cursor, match.index)));
     const image = document.createElement("img");
-    image.src = emojiPreviewUrl(match[1]);
+    image.src = emojiImageSources(match[1])[0];
+    image.onerror = () => fallbackEmojiImage(image, match[1]);
     image.alt = "emoji";
     image.dataset.emojiId = match[1];
     image.className = "composer-inline-emoji";
@@ -85,7 +86,8 @@ export const RichMessageInput = forwardRef<RichMessageInputHandle, RichMessageIn
       const range = lastRange.current?.cloneRange() || document.createRange();
       if (!lastRange.current) range.selectNodeContents(editor), range.collapse(false);
       const image = document.createElement("img");
-      image.src = emojiPreviewUrl(id);
+      image.src = emojiImageSources(id)[0];
+      image.onerror = () => fallbackEmojiImage(image, id);
       image.alt = "emoji";
       image.dataset.emojiId = id;
       image.className = "composer-inline-emoji";

@@ -60,7 +60,7 @@ import {
   useRef,
   useState
 }                                                                           from "react";
-import { createPortal }                                                     from "react-dom";
+import { MessageActionMenu } from "../components/MessageActionMenu";
 import { useLocation }                                                      from "wouter";
 import { Avatar, Button, DisplayName, EmptyState, Modal }                   from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
@@ -276,6 +276,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const menuAnchor = useRef<HTMLElement | null>(null);
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
@@ -2454,6 +2455,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           onPointerCancel={(event) => finishPointerReply(event, message)}
                           onContextMenu={(event) => {
                             event.preventDefault();
+                            menuAnchor.current = event.currentTarget.querySelector<HTMLElement>(".message-menu-trigger") || event.currentTarget;
                             setActiveMenu(message.id);
                           }}
                         >
@@ -2522,42 +2524,46 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <button className="discuss-button" onClick={() => void openDiscussion(message.id)}>
                                 <MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
                             <button className="message-menu-trigger"
-                                    onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)}
+                                    onClick={(event) => {
+                                      menuAnchor.current = event.currentTarget;
+                                      setActiveMenu((value) => value === message.id ? null : message.id);
+                                    }}
+                                    title={t("chat.messageActionsAria")} aria-haspopup="menu"
                                     aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}>
                               <MoreVertical size={16} /></button>
-                            {activeMenu === message.id && createPortal(<>
-                              <button type="button" className="message-menu-backdrop"
-                                      onClick={() => setActiveMenu(null)} aria-label="Xabar amallarini yopish" />
-                              <div className="message-context-menu" role="menu">
+                            {activeMenu === message.id && <MessageActionMenu anchor={menuAnchor.current}
+                              label={t("chat.messageActionsAria")} onClose={() => setActiveMenu(null)}>
                               <div className="reaction-strip">{quickEmojis.map((emoji) => <button
-                                key={emoji} aria-label="Reaksiya qoldirish" onClick={() => {
+                                key={emoji} role="menuitem" aria-label={`Reaksiya: ${emoji}`} onClick={() => {
                                   void reactToMessage(message, emoji);
                                   setActiveMenu(null);
                                 }}>{renderReaction(emoji)}</button>)}</div>
-                              <button onClick={() => {
+                              <button role="menuitem" onClick={() => {
                                 setReplyingTo(message);
                                 setEditing(null);
                                 setActiveMenu(null);
+                                window.requestAnimationFrame(() => richMessageInput.current?.focus());
                               }}><Reply size={16} />{t("chat.replyAction")}</button>
-                              <button onClick={() => {
+                              <button role="menuitem" onClick={() => {
                                 setForwardingMessage(message);
                                 setActiveMenu(null);
                               }}><Send size={16} />{t("chat.forwardAction")}</button>
-                              <button onClick={() => {
+                              <button role="menuitem" onClick={() => {
                                 void navigator.clipboard.writeText(message.content);
                                 setActiveMenu(null);
                               }}><Copy size={16} />{t("chat.copyAction")}</button>
-                              {mine && <button onClick={() => {
+                              {mine && <button role="menuitem" onClick={() => {
                                 setEditing(message);
                                 setReplyingTo(null);
                                 setDraft(message.content);
                                 setActiveMenu(null);
+                                window.requestAnimationFrame(() => richMessageInput.current?.focus());
                               }}><Pencil size={16} />{t("chat.editAction")}</button>}
-                              <button disabled><Pin size={16} />{t("chat.pinAction")}
+                              <button role="menuitem" disabled><Pin size={16} />{t("chat.pinAction")}
                                 <small>{t("chat.comingSoon")}</small></button>
-                              {mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2
-                                size={16} />{t("chat.deleteAction")}</button>}</div>
-                            </>, document.body)}
+                              {mine && <button role="menuitem" className="danger" onClick={() => void deleteMessage(message)}><Trash2
+                                size={16} />{t("chat.deleteAction")}</button>}
+                            </MessageActionMenu>}
                           </div>
                         </div>
                       </div>

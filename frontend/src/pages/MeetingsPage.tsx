@@ -96,8 +96,8 @@ export function MeetingsPage() {
     if (a.status === "live" && b.status !== "live") return -1;
     if (b.status === "live" && a.status !== "live") return 1;
     return +new Date(a.startTime) - +new Date(b.startTime);
-  }).slice(0, 4), [meetings]);
-  const history = useMemo(() => meetings.filter((meeting) => meeting.status === "ended" || meeting.status === "cancelled").slice(0, 6), [meetings]);
+  }), [meetings]);
+  const history = useMemo(() => meetings.filter((meeting) => meeting.status === "ended" || meeting.status === "cancelled"), [meetings]);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -185,7 +185,7 @@ export function MeetingsPage() {
         <form className="modal-form" onSubmit={create}>
           <label>{t("meetings.meetingNameLabel")}<input name="title" placeholder={t("meetings.meetingNamePlaceholder")} maxLength={200} autoFocus required /></label>
           <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={3} /></label>
-          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={defaultStart.toISOString().slice(0, 16)} required /></label>
+          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={new Date(defaultStart.getTime() - defaultStart.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)} required /></label>
           <p className="field-hint"><Clock3 size={15} /> {t("meetings.durationHint")}</p>
           <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={MESH_MAX_PARTICIPANTS} defaultValue={MESH_MAX_PARTICIPANTS} /></label>
           <label>{t("meetings.visibilityLabel")}

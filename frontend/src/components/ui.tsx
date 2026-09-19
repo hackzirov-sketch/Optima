@@ -53,7 +53,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ loading, variant = "primary", icon, children, className = "", disabled, ...props }: ButtonProps) {
   return (
-    <button className={`button button-${variant} ${className}`} disabled={disabled || loading} {...props}>
+    <button className={`button button-${variant} ${className}`} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
       {loading ? <LoaderCircle className="spin" size={17} /> : icon}
       {children}
     </button>
