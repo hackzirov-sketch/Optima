@@ -503,6 +503,16 @@ input:hover, textarea:hover, select:hover { border-color: var(--op-mist-strong);
   :root[data-theme="dark"] .mobile-nav a.active svg { color: #aebde9; }
   .app-main { height: 100dvh; padding: 14px 14px calc(112px + env(safe-area-inset-bottom)); overflow-x: hidden; }
   .topbar { min-height: 58px; padding-inline: 13px; }
+  .topbar { width: calc(100% - 24px); height: 64px; padding-inline: 8px; gap: 4px; }
+  .topbar > .mobile-only { flex: 0 0 44px; width: 44px; height: 44px; }
+  .topbar .topbar-context { min-width: 0; margin: 0 4px; }
+  .topbar .topbar-context strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 14px/1.4 var(--font-body); }
+  .topbar .topbar-actions { flex: 0 0 auto; align-items: center; gap: 2px; }
+  .topbar .topbar-actions .theme-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .topbar .topbar-actions .language-switcher { display: block; }
+  .topbar .topbar-actions .icon-button { flex: 0 0 44px; min-width: 44px; width: 44px; height: 44px; padding: 0; }
+  .topbar .language-code { display: none; }
+  .topbar .language-menu { right: 0; max-width: calc(100vw - 32px); }
   .topbar-context small { display: none; }
   .page-header { align-items: flex-start; margin-bottom: 18px; }
   .page-header h1 { font-size: 29px; }
