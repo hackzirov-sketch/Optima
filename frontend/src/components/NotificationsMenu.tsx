@@ -110,7 +110,7 @@ export function NotificationsMenu() {
         <div className="notifications-menu" role="menu">
           <header>
             <strong>{t("shell.notifications")}</strong>
-            {unread > 0 && <button onClick={() => void markAllRead()}><CheckCheck size={15} />{t("shell.markAllRead")}</button>}
+            {unread > 0 && <button className="notification-read-all" aria-label={t("shell.markAllRead")} title={t("shell.markAllRead")} onClick={() => void markAllRead()}><CheckCheck size={19} /></button>}
           </header>
           {loading && items.length === 0 ? (
             <div className="notifications-empty"><LoaderCircle className="spin" size={20} /></div>

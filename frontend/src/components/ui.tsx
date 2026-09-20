@@ -71,7 +71,7 @@ export function EmptyState({ icon, title, description, action }: { icon: ReactNo
   );
 }
 
-export function Modal({ open, title, description, onClose, children, width = "sm" }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; width?: "sm" | "md" | "lg" }) {
+export function Modal({ open, title, description, onClose, children, width = "sm", className = "" }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; width?: "sm" | "md" | "lg"; className?: string }) {
   const { t } = useI18n();
   const modalRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
@@ -108,7 +108,7 @@ export function Modal({ open, title, description, onClose, children, width = "sm
   if (!open) return null;
   return (
     <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section ref={modalRef} className={`modal modal-${width}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
+        <section ref={modalRef} className={`modal modal-${width} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="modal-header">
           <div>
             <h2 id={titleId}>{title}</h2>

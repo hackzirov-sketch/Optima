@@ -8,6 +8,7 @@ import { ConfirmProvider } from "./components/ConfirmDialog";
 import "./styles.css";
 import "./premium.css";
 import "./motion.css";
+import "./feedback-polish.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

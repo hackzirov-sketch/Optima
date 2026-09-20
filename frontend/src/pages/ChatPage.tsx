@@ -2492,8 +2492,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                   <video className="message-video" key={attachment.id || attachment.url} controls
                                          preload="metadata" src={attachment.url} /> :
                                   <a className="file-attachment" key={attachment.id || attachment.url}
-                                     href={attachment.url} download><span><FileText
-                                    size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download
+                                     href={attachment.url} download={attachment.fileName}><span className="file-type-icon"><FileText
+                                    size={24} /><small>{attachment.fileName.split(".").pop()?.slice(0, 5).toUpperCase()}</small></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download
                                     size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 &&
                               <div className="message-reactions">{message.reactions.map((reaction) => <button
@@ -2724,7 +2724,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)}
              title={selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")}
              description={selectedRoom?.type === "direct" ? t("chat.userInfoDesc") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom?.memberCount || 0 }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}
-             width="lg">
+             width="md" className="chat-info-drawer">
         <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
           <section className="chat-details-hero">
             {detailPeer ?
@@ -2771,7 +2771,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           </section>}
           <nav
             className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) =>
-            <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({
+            <button key={tab} aria-pressed={detailsTab === tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({
               members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"),
               media: t("chat.mediaTab"),
               files: t("chat.filesTab"),
@@ -2779,7 +2779,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               music: t("chat.musicTab"),
               voice: t("chat.voiceTab")
             })[tab]}</button>)}</nav>
-          <div className="chat-details-content">
+          <div className={`chat-details-content shared-${detailsTab}`}>
             {detailsTab === "members" &&
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch}
                                                                                   onChange={(event) => setDetailMemberSearch(event.target.value)}
@@ -2797,6 +2797,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => {
               const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url);
               const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href;
+              if (href && (detailsTab === "voice" || detailsTab === "music")) {
+                return <AudioMessage key={item.id || item.messageId} src={href} fileName={item.fileName || t("chat.mediaMessageFallback")} voice={detailsTab === "voice"} />;
+              }
               return <button className="shared-item" key={item.id || item.messageId}
                              onClick={() => image ? setMediaPreview({
                                url: href,
@@ -2954,7 +2957,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       </Modal>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")}
-             description={t("chat.newConversationModalDesc")}>
+             description={t("chat.newConversationModalDesc")} className="conversation-create" width="md">
         <form className="modal-form" onSubmit={createConversation}>
           <div className="segmented-control segmented-control-3"><span className="segmented-indicator"
                                                                       aria-hidden="true"

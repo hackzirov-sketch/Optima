@@ -218,7 +218,7 @@ export function ProfilePage() {
           </div>
           <h2><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} nameEmoji={nameEmoji} /></h2>
           <p>{user?.username ? `@${user.username}` : t("profile.usernameNotSet")}</p>
-          <div className="public-id-block"><span>{profilePath}</span><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")}><Link2 size={16} /></button></div>
+          <div className="profile-quick-actions"><EmojiPickerButton className="name-emoji-picker" label={t("profile.nameEmojiChoose")} onSelect={setNameEmoji} /><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")} title={t("profile.copyProfileLink")}><Link2 size={18} /></button></div>
           <span className="role-badge">{user?.occupation ? t(`common.occupations.${user.occupation}`) : t("profile.teamMember")}</span>
           <dl className="profile-meta"><div><Mail size={16} /><span><small>{t("profile.email")}</small><strong>{user?.email}</strong></span></div><div><MapPin size={16} /><span><small>{t("profile.timezone")}</small><strong>{user?.timezone || "Asia/Tashkent"}</strong></span></div><div><ShieldCheck size={16} /><span><small>{t("profile.account")}</small><strong>{t("profile.verified")}</strong></span></div></dl>
           <Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>{t("profile.logoutButton")}</Button>

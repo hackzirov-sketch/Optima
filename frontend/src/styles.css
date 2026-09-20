@@ -3310,9 +3310,9 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
     --shadow-md: none;
   }
 
-  html, body, #root { min-height: 100%; background: #fbf6ec; }
-  body { color: #171727; }
-  .app-shell { background: #fbf6ec; }
+  html, body, #root { min-height: 100%; background: var(--canvas); }
+  body { color: var(--text); }
+  .app-shell { background: var(--canvas); }
   .app-main { padding: 28px 20px calc(96px + env(safe-area-inset-bottom)); }
   .topbar { height: 70px; padding-inline: 20px; }
   .topbar-context strong { font-size: 30px; letter-spacing: 0; }
@@ -3322,17 +3322,17 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .page-header h1,
   .panel-header h2,
   .education-section h2,
-  .library-section h2 { color: #171727; letter-spacing: 0; }
+  .library-section h2 { color: var(--text); letter-spacing: 0; }
   .page-header h1 { font-size: 32px; }
   .panel, .metric-card, .meeting-card, .settings-panel, .profile-summary {
-    border: 1px solid #e8ddc2;
+    border: 1px solid var(--line);
     border-radius: 20px;
-    background: #fffdfa;
+    background: var(--card);
     box-shadow: none;
   }
-  .panel:hover, .metric-card:hover, .meeting-card:hover { border-color: #e8ddc2; box-shadow: none; transform: none; }
+  .panel:hover, .metric-card:hover, .meeting-card:hover { border-color: var(--line); box-shadow: none; transform: none; }
   .button { border-radius: 999px; box-shadow: none; }
-  input, textarea, select { border-color: #e8ddc2; background: #fffdfa; }
+  input, textarea, select { border-color: var(--line); background: var(--card); }
 
   .mobile-nav {
     height: calc(78px + env(safe-area-inset-bottom));
@@ -3349,10 +3349,10 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .dashboard-page .page-header .button svg { margin: 0; }
   .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-bottom: 28px; }
   .metric-card { min-height: 126px; padding: 18px; display: block; }
-  .metric-card .metric-icon { width: 36px; height: 36px; margin-bottom: 13px; border-radius: 11px; background: #efe7d3; color: #423f91; }
-  .metric-card strong { font: 700 31px/1 Georgia,"Times New Roman",serif; }
-  .metric-card small { margin-top: 7px; color: #968b78; font-size: 12px; }
-  .metric-card-accent { background: #fffdfa; border-color: #e8ddc2; }
+  .metric-card .metric-icon { width: 36px; height: 36px; margin-bottom: 13px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); }
+  .metric-card strong { font: 750 31px/1 var(--font-display); color: var(--text); }
+  .metric-card small { margin-top: 7px; color: var(--muted); font-size: 12px; }
+  .metric-card-accent { background: var(--card); border-color: var(--line); }
   .education-dashboard { margin-top: 0; }
   .education-dashboard > .panel-header,
   .dashboard-grid .panel-header { min-height: 58px; padding: 0 2px 14px; border: 0; background: transparent; }
@@ -3361,10 +3361,10 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
   .education-dashboard > .panel-header p,
   .dashboard-grid .panel-header p { display: none; }
   .education-dashboard-grid, .dashboard-grid { grid-template-columns: 1fr; gap: 18px; }
-  .education-donut-card, .education-bars-card { border-radius: 20px; border-color: #e8ddc2; background: #fffdfa; box-shadow: none; }
+  .education-donut-card, .education-bars-card { border-radius: 20px; border-color: var(--line); background: var(--card); box-shadow: none; }
   .dashboard-grid .panel { border: 0; background: transparent; }
   .dashboard-grid .list-stack { gap: 10px; }
-  .dashboard-list-row { border: 1px solid #e8ddc2; border-radius: 18px; background: #fffdfa; overflow: hidden; }
+  .dashboard-list-row { border: 1px solid var(--line); border-radius: 18px; background: var(--card); overflow: hidden; }
   .meeting-row, .chat-row { min-height: 78px; border: 0; background: transparent; }
 
   .meetings-page .page-header { margin-bottom: 22px; }
@@ -3714,6 +3714,129 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .telegram-emoji-state strong { color: var(--text); font-size: 13px; }
 .telegram-emoji-state small { color: var(--muted); font-size: 11px; }
 .telegram-emoji-state button { width: auto; min-height: 34px; aspect-ratio: auto; margin-top: 5px; padding: 0 12px; display: flex; gap: 6px; border: 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-weight: 750; }
+
+/* Dashboard refinement: compact hierarchy and theme-safe contrast. */
+.dashboard-page {
+  --dashboard-font: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
+.dashboard-page .page-header {
+  min-height: 72px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.dashboard-page .page-header h1 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font: 750 clamp(24px, 2.2vw, 32px)/1.18 var(--dashboard-font);
+  letter-spacing: 0;
+}
+.dashboard-page .page-header p,
+.dashboard-page .panel-header p,
+.dashboard-page .education-donut-copy p,
+.dashboard-page .education-chart-empty,
+.dashboard-page .compact-empty,
+.dashboard-page .row-main small { color: var(--muted); }
+.dashboard-page .metric-grid { gap: 10px; }
+.dashboard-page .metric-card {
+  min-height: 104px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--motion-normal) var(--ease-out), border-color var(--motion-normal) ease, box-shadow var(--motion-normal) ease;
+}
+.dashboard-page .metric-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.dashboard-page .metric-card strong,
+.dashboard-page .education-donut strong,
+.dashboard-page .education-donut-copy h3,
+.dashboard-page .education-bars-card strong,
+.dashboard-page .compact-empty strong,
+.dashboard-page .row-main strong { color: var(--text); }
+.dashboard-page .metric-card strong { font-family: var(--dashboard-font); font-variant-numeric: tabular-nums; }
+.dashboard-page .metric-icon { border-radius: 10px; }
+.dashboard-page .education-dashboard {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+.dashboard-page .education-dashboard > .panel-header { border-bottom-color: var(--line); }
+.dashboard-page .education-dashboard > .panel-header h2,
+.dashboard-page .dashboard-grid .panel-header h2 {
+  color: var(--text);
+  font: 720 17px/1.3 var(--dashboard-font);
+  letter-spacing: 0;
+}
+.dashboard-page .education-dashboard > .panel-header span { color: var(--accent); letter-spacing: .04em; }
+.dashboard-page .education-dashboard > .panel-header > a,
+.dashboard-page .dashboard-grid .panel-header > a { min-height: 36px; padding: 0 8px; border-radius: 8px; }
+.dashboard-page .education-dashboard > .panel-header > a:hover,
+.dashboard-page .dashboard-grid .panel-header > a:hover { background: var(--accent-soft); }
+.dashboard-page .education-donut-card,
+.dashboard-page .education-bars-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: none;
+}
+.dashboard-page .dashboard-grid { gap: 14px; }
+.dashboard-page .dashboard-grid > .panel {
+  overflow: hidden;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+}
+.dashboard-page .dashboard-list-row { border-radius: 10px; }
+
+:root[data-theme="dark"] .dashboard-page .page-header h1,
+:root[data-theme="dark"] .dashboard-page .panel-header h2,
+:root[data-theme="dark"] .dashboard-page .education-donut-copy h3,
+:root[data-theme="dark"] .dashboard-page .education-bars-card strong,
+:root[data-theme="dark"] .dashboard-page .compact-empty strong,
+:root[data-theme="dark"] .dashboard-page .row-main strong,
+:root[data-theme="dark"] .dashboard-page .metric-card strong { color: #f8fafc !important; }
+:root[data-theme="dark"] .dashboard-page .page-header p,
+:root[data-theme="dark"] .dashboard-page .panel-header p,
+:root[data-theme="dark"] .dashboard-page .education-donut-copy p,
+:root[data-theme="dark"] .dashboard-page .education-chart-empty,
+:root[data-theme="dark"] .dashboard-page .compact-empty,
+:root[data-theme="dark"] .dashboard-page .row-main small,
+:root[data-theme="dark"] .dashboard-page .metric-card small { color: #aebbd0 !important; }
+:root[data-theme="dark"] .dashboard-page .education-dashboard > .panel-header span,
+:root[data-theme="dark"] .dashboard-page .education-donut-copy > span { color: #a5b4fc; }
+:root[data-theme="dark"] .dashboard-page .education-dashboard,
+:root[data-theme="dark"] .dashboard-page .dashboard-grid > .panel,
+:root[data-theme="dark"] .dashboard-page .metric-card {
+  background: rgba(17,24,39,.78) !important;
+  border-color: rgba(255,255,255,.11) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,.24) !important;
+}
+:root[data-theme="dark"] .dashboard-page .education-donut-card,
+:root[data-theme="dark"] .dashboard-page .education-bars-card,
+:root[data-theme="dark"] .dashboard-page .dashboard-list-row {
+  background: rgba(26,34,53,.88) !important;
+  border-color: rgba(255,255,255,.09) !important;
+}
+
+@media (max-width: 820px) {
+  .dashboard-page .page-header { margin-bottom: 20px; }
+  .dashboard-page .page-header h1 { font-size: clamp(24px, 7.2vw, 29px); }
+  .dashboard-page .metric-grid { gap: 10px; margin-bottom: 20px; }
+  .dashboard-page .metric-card { min-height: 108px; padding: 15px; border-radius: 14px; }
+  .dashboard-page .metric-card .metric-icon { margin-bottom: 11px; }
+  .dashboard-page .metric-card strong { font-size: 27px; }
+  .dashboard-page .education-dashboard { padding: 14px; border-radius: 16px; }
+  .dashboard-page .education-dashboard > .panel-header,
+  .dashboard-page .dashboard-grid .panel-header { min-height: 52px; padding-bottom: 12px; }
+  .dashboard-page .education-dashboard > .panel-header h2,
+  .dashboard-page .dashboard-grid .panel-header h2 { font-size: 20px; }
+  .dashboard-page .education-donut-card,
+  .dashboard-page .education-bars-card { border-radius: 12px; }
+  .dashboard-page .dashboard-list-row { border-radius: 12px; }
+}
 .emoji-skeleton { aspect-ratio: 1; border-radius: 10px; background: linear-gradient(100deg, var(--surface-muted) 20%, color-mix(in srgb, var(--surface-muted) 60%, var(--card)) 45%, var(--surface-muted) 70%); background-size: 220% 100%; animation: emoji-skeleton-shift 1.2s ease-in-out infinite; }
 .telegram-emoji-pagination { justify-content: space-between; padding-inline: 14px; }
 .telegram-emoji-pagination span { min-width: 62px; text-align: center; }
