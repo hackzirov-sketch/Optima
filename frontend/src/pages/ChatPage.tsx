@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowRight,
   Bell,
   BellOff,
   Bot,
@@ -284,7 +285,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
-  const [createScope, setCreateScope] = useState<"public" | "private">("public");
+  const [groupCreateStep, setGroupCreateStep] = useState<"members" | "info">("members");
+  const [groupCreateName, setGroupCreateName] = useState("");
+  const [groupCreatePhoto, setGroupCreatePhoto] = useState<File | null>(null);
+  const [groupPhotoPreview, setGroupPhotoPreview] = useState("");
+  useEffect(() => {
+    if (!createOpen) {
+      setGroupCreateStep("members");
+      setGroupCreateName("");
+      setGroupCreatePhoto(null);
+    }
+  }, [createOpen]);
+  useEffect(() => {
+    if (!groupCreatePhoto) { setGroupPhotoPreview(""); return; }
+    const url = URL.createObjectURL(groupCreatePhoto);
+    setGroupPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [groupCreatePhoto]);
   const [creating, setCreating] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
@@ -1637,6 +1654,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function createConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (creating) return;
+    if (createMode !== "direct" && groupCreateStep === "members") {
+      setGroupCreateStep("info");
+      return;
+    }
+    if (createMode !== "direct" && !groupCreateName.trim()) return;
     if (!group) return;
     setCreating(true);
     const data = new FormData(event.currentTarget);
@@ -1648,11 +1671,20 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         ? await api.chat.createRoom({ type: "direct", targetUserId: selectedMembers[0] })
         : await api.chat.createRoom({
           type: createMode,
-          scope: createScope,
-          name: String(data.get("name") || "").trim(),
+          scope: "private",
+          name: groupCreateName.trim(),
           description: String(data.get("description") || "").trim() || undefined,
           memberIds: selectedMembers
         });
+      if (createMode !== "direct" && groupCreatePhoto) {
+        try {
+          const uploaded = await api.chat.uploadFile(room.id, groupCreatePhoto);
+          await api.chat.updateRoomSettings(room.id, { avatarUrl: uploaded.storageUrl });
+        } catch {
+          // The room already exists; a photo failure must not create a duplicate on retry.
+          show(t("chat.photoUploadFailed"), "error");
+        }
+      }
       await loadRooms(room.id);
       setCreateOpen(false);
       setSelectedMembers([]);
@@ -2696,7 +2728,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
       {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true"
                           aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ?
-        <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> :
+        <MeetingRoomPage meetingId={directCall.meetingId} directMode directKind={directCall.kind} directPeer={memberMap.get(directCall.peerId)} onDirectClose={closeDirectCall} /> :
         <section className="direct-call-ringing">
           <div className="direct-call-backdrop" aria-hidden="true" />
           <span className="direct-call-type">
@@ -2956,48 +2988,44 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
       </Modal>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")}
-             description={t("chat.newConversationModalDesc")} className="conversation-create" width="md">
+      <Modal open={createOpen} onClose={() => !creating && setCreateOpen(false)} title={createMode !== "direct" ? t(groupCreateStep === "members" ? (createMode === "channel" ? "chat.selectSubscribersLegend" : "chat.selectMembersLegend") : (createMode === "channel" ? "chat.createChannelButton" : "chat.createGroupButton")) : t("chat.newConversationTitle")}
+             className={`conversation-create ${createMode !== "direct" ? "group-create-simple" : ""}`} width="md">
         <form className="modal-form" onSubmit={createConversation}>
-          <div className="segmented-control segmented-control-3"><span className="segmented-indicator"
+          {(createMode === "direct" || groupCreateStep === "members") && <div className="segmented-control segmented-control-3"><span className="segmented-indicator"
                                                                       aria-hidden="true"
                                                                       style={{ transform: `translateX(${createMode === "direct" ? "200%" : createMode === "channel" ? "100%" : "0"})` }} />
             <button type="button" className={createMode === "group" ? "active" : ""} onClick={() => {
               setCreateMode("group");
+              setGroupCreateStep("members");
               setSelectedMembers([]);
             }}><UsersRound size={17} /> {t("chat.groupWord")}</button>
             <button type="button" className={createMode === "channel" ? "active" : ""} onClick={() => {
               setCreateMode("channel");
+              setGroupCreateStep("members");
               setSelectedMembers([]);
             }}><RadioTower size={17} /> {t("chat.channelWord")}</button>
             <button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => {
               setCreateMode("direct");
               setSelectedMembers([]);
             }}><UserRound size={17} /> {t("chat.personalWord")}</button>
-          </div>
-          {createMode !== "direct" && <>
-            <label>{createMode === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input name="name"
-                                                                                                           placeholder={createMode === "channel" ? t("chat.channelNamePlaceholder") : t("chat.groupNamePlaceholder")}
-                                                                                                           required
-                                                                                                           maxLength={200} /></label>
-            <label>{t("chat.descriptionLabel")}<input name="description" placeholder={t("chat.descriptionPlaceholder")}
-                                                      maxLength={1000} /></label>
-            {/* Without this every room was created `private`, and a private
-                room is invisible to search — so a "public channel" was not
-                something the UI could actually produce. */}
-            <fieldset className="create-scope">
-              <legend>{t("chat.visibilityLegend")}</legend>
-              <label><input type="radio" name="scope" value="public" checked={createScope === "public"}
-                            onChange={() => setCreateScope("public")} />
-                <span><strong>{t("chat.visibilityPublicTitle")}</strong><small>{t("chat.visibilityPublicDesc")}</small></span>
+          </div>}
+          {createMode !== "direct" && groupCreateStep === "info" && <>
+            <div className="group-create-identity">
+              <label className="group-create-photo" title={t("chat.setPhoto")}>
+                {groupPhotoPreview ? <img src={groupPhotoPreview} alt={t("chat.chatPhotoAlt")} /> : <Camera size={28} />}
+                <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={t("chat.setPhoto")} disabled={creating} onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  if (!file.type.startsWith("image/")) { show(t("chat.imageOnlyError"), "error"); return; }
+                  if (file.size > 5 * 1024 * 1024) { show(t("chat.imageSizeError"), "error"); return; }
+                  setGroupCreatePhoto(file);
+                }} />
               </label>
-              <label><input type="radio" name="scope" value="private" checked={createScope === "private"}
-                            onChange={() => setCreateScope("private")} />
-                <span><strong>{t("chat.visibilityPrivateTitle")}</strong><small>{t("chat.visibilityPrivateDesc")}</small></span>
-              </label>
-            </fieldset>
+              <label>{t(createMode === "channel" ? "chat.channelNameLabel" : "chat.groupNameLabel")}<input autoFocus name="name" value={groupCreateName} onChange={(event) => setGroupCreateName(event.target.value)} maxLength={200} required disabled={creating} placeholder={t(createMode === "channel" ? "chat.channelNamePlaceholder" : "chat.groupNamePlaceholder")} /></label>
+            </div>
+            <p className="group-create-count">{t(createMode === "channel" ? "chat.subscribersCountDesc" : "chat.memberCount", { count: selectedMembers.length + 1 })}</p>
           </>}
-          <label className="search-field member-search"><Search size={17} /><input value={memberSearch}
+          {(createMode === "direct" || groupCreateStep === "members") && <><label className="search-field member-search"><Search size={17} /><input value={memberSearch}
                                                                                    onChange={(event) => setMemberSearch(event.target.value)}
                                                                                    placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")}
                                                                                    aria-label={t("chat.searchUserAria")}
@@ -3017,17 +3045,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
               size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check
               size={16} /></label>;
-          })}</fieldset>
-          <button type="button" className="invite-email-prompt" onClick={() => {
+          })}</fieldset></>}
+          {createMode === "direct" && <button type="button" className="invite-email-prompt" onClick={() => {
             setCreateOpen(false);
             setWorkspaceInviteOpen(true);
           }}><MailPlus
             size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span>
-          </button>
+          </button>}
           <div className="modal-actions"><Button type="button" variant="secondary"
-                                                 onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button
+                                                 disabled={creating} onClick={() => createMode !== "direct" && groupCreateStep === "info" ? setGroupCreateStep("members") : setCreateOpen(false)}>{t(createMode !== "direct" && groupCreateStep === "info" ? "common.back" : "common.cancel")}</Button><Button
             type="submit" loading={creating}
-            disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : createMode === "channel" ? t("chat.createChannelButton") : t("chat.openChatButton")}</Button>
+            icon={createMode !== "direct" && groupCreateStep === "members" ? <ArrowRight size={18} /> : undefined}
+            disabled={(createMode === "direct" && selectedMembers.length !== 1) || (createMode !== "direct" && groupCreateStep === "info" && !groupCreateName.trim())}>{createMode !== "direct" ? t(groupCreateStep === "members" ? "common.next" : createMode === "channel" ? "chat.createChannelButton" : "chat.createGroupButton") : t("chat.openChatButton")}</Button>
           </div>
         </form>
       </Modal>

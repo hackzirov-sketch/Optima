@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
+import { DirectCallSurface } from "../components/DirectCallSurface";
 import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -140,7 +141,7 @@ function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, o
  * exactly as before: a single call, full-screen, torn down when its parent
  * stops rendering it.
  */
-export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, onDirectClose }: { meetingId?: string; directMode?: boolean; onDirectClose?: () => void }) {
+export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, directKind = "audio", directPeer, onDirectClose }: { meetingId?: string; directMode?: boolean; directKind?: "audio" | "video"; directPeer?: Pick<User, "firstName" | "lastName" | "avatarUrl">; onDirectClose?: () => void }) {
   const { user, group } = useAuth();
   const selfId = user?.id || "__self__";
   const { show } = useToast();
@@ -1341,6 +1342,17 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   if (!isFullMode) return null;
 
   const overlayClass = directMode ? "" : "meeting-standalone-overlay";
+  if (directMode) {
+    const peer = allTiles.find((tile) => !tile.isSelf);
+    const profile = peer?.avatar || directPeer;
+    const name = profile ? `${profile.firstName} ${profile.lastName || ""}`.trim() : t("chat.userFallback");
+    const hasVideo = directKind === "video" || camera || screenSharing || Boolean(peer?.video && peer?.stream?.getVideoTracks().length);
+    const status = accessDenied || (!loading && !meeting ? t("meetingRoom.callNotFound") : callState === "failed" ? t("meetingRoom.mediaFailed") : callState === "offline" ? t("meetingRoom.reconnecting") : entered && peer ? t("meetingRoom.connectionStable") : t("chat.connectingText"));
+    return <DirectCallSurface name={name} video={hasVideo} status={status} ready={entered && !loading && !accessDenied} microphone={microphone} camera={camera} screenSharing={screenSharing} securityCode={securityCode}
+      remote={<VideoTile stream={peer?.stream} label={name} avatar={profile} microphoneOn={peer?.mic ?? true} videoOn={peer?.video ?? false} pipEnabled />}
+      local={camera || screenSharing ? <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} videoOn={camera || screenSharing} /> : null}
+      onMic={() => void toggleTrack("audio")} onCamera={() => void toggleTrack("video")} onScreen={() => void toggleScreen()} onLeave={leave} />;
+  }
   if (loading) return <div className={`meeting-room-loading ${overlayClass}`}><LoaderCircle className="spin" size={26} /><p>{t("meetingRoom.preparing")}</p></div>;
   if (accessDenied) return <div className={`meeting-room-loading ${overlayClass}`}><ShieldX size={26} /><p><strong>{t("meetingRoom.accessDeniedTitle")}</strong></p><p>{accessDenied}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;
   if (!meeting) return <div className={`meeting-room-loading ${overlayClass}`}><p>{directMode ? t("meetingRoom.callNotFound") : t("meetingRoom.meetingNotFound")}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;

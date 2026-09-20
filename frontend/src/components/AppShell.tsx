@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const mobileNav = [nav[1], nav[2], nav[0], location.startsWith("/library") ? nav[3] : nav[4], nav[5]];
   const mobileActiveIndex = Math.max(0, mobileNav.findIndex((item) => active(item.href)));
   const mobileDockCenter = 50 + mobileActiveIndex * 100;
-  const mobileDockPath = `M22 20 H${mobileDockCenter - 34} C${mobileDockCenter - 28} 20 ${mobileDockCenter - 27} 45 ${mobileDockCenter} 45 C${mobileDockCenter + 27} 45 ${mobileDockCenter + 28} 20 ${mobileDockCenter + 34} 20 H478 Q496 20 496 38 V82 H4 V38 Q4 20 22 20 Z`;
+  const mobileDockPath = `M0 18 H${mobileDockCenter - 48} C${mobileDockCenter - 22} 18 ${mobileDockCenter - 22} 32 ${mobileDockCenter} 32 C${mobileDockCenter + 22} 32 ${mobileDockCenter + 22} 18 ${mobileDockCenter + 48} 18 H500 V86 H0 Z`;
 
   function chooseLanguage(next: Locale) {
     setLocale(next);

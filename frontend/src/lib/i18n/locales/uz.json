@@ -1,5 +1,6 @@
 {
   "common": {
+    "next": "Keyingi",
     "loading": "Yuklanmoqda",
     "cancel": "Bekor qilish",
     "confirm": "Tasdiqlash",
