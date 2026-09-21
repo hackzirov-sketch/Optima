@@ -272,6 +272,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [draft, setDraft] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState(false);
+  const hasDraft = draft.trim().length > 0;
+  const isAiDraft = /^\/ai(?:\s|$)/i.test(draft);
+  useEffect(() => {
+    setAiSuggestion(false);
+    if (!hasDraft || isAiDraft) return;
+    const timer = window.setTimeout(() => setAiSuggestion(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, [hasDraft, isAiDraft, selectedId]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [readReceipts, setReadReceipts] = useState<Map<string, number>>(new Map());
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
@@ -1192,7 +1201,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   async function runComposerAi() {
-    const prompt = aiAssistPrompt.trim() || draft.replace(/^\/ai\s*/i, "").trim();
+    const source = draft.replace(/^\/ai\s*/i, "").trim();
+    const prompt = [aiAssistPrompt.trim(), source].filter(Boolean).join("\n\n");
     if (!prompt || aiThinking) return;
     setAiThinking(true);
     try {
@@ -2644,7 +2654,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       <header><span><Sparkles size={17} /></span>
                         <div><strong>{t("chat.aiAssistTitle")}</strong><small>{t("chat.aiAssistHint")}</small></div>
                         <button type="button" onClick={() => {
-                          setDraft("");
+                          setDraft((value) => value.replace(/^\/ai\s*/i, ""));
                           setAiAssistPrompt("");
                         }} aria-label={t("chat.closeAiAssistAria")}><X size={17} /></button>
                       </header>
@@ -2660,7 +2670,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                                                  onChange={(event) => setAiAssistPrompt(event.target.value)}
                                                                  placeholder={t("chat.aiAssistPlaceholder")} rows={3}
                                                                  autoFocus />
-                        <button type="submit" disabled={!aiAssistPrompt.trim() || aiThinking}
+                        <button type="submit" disabled={(!aiAssistPrompt.trim() && !draft.replace(/^\/ai\s*/i, "").trim()) || aiThinking}
                                 aria-label={t("chat.runAiAssistAria")}>{aiThinking ?
                           <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}</button>
                       </div>
@@ -2676,17 +2686,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           setDraft("");
                         }} aria-label={t("chat.cancelAria")}><X size={17} /></button>
                       </div>}
-                    <button type="button"
+                    {aiSuggestion && !isAiDraft && <button type="button"
                             className={`icon-button composer-ai-trigger ${/^\/ai(?:\s|$)/i.test(draft) ? "active" : ""}`}
                             onClick={() => {
-                              const opening = !/^\/ai(?:\s|$)/i.test(draft);
-                              setDraft(opening ? "/ai " : "");
-                              if (!opening) setAiAssistPrompt("");
+                              setDraft((value) => `/ai ${value}`);
+                              setAiSuggestion(false);
                               window.requestAnimationFrame(() => richMessageInput.current?.focus());
                             }}
                             aria-label={t("chat.aiAssistTitle")}
                             title={t("chat.aiAssistTitle")}
-                            aria-pressed={/^\/ai(?:\s|$)/i.test(draft)}><Sparkles size={19} /></button>
+                            aria-pressed={isAiDraft}><Sparkles size={16} /><span>{t("chat.aiAssistTitle")}</span></button>}
+                    <div className="composer-input-shell">
                     <EmojiPickerButton onSelect={(emojiId) => {
                       richMessageInput.current?.insertEmoji(emojiId);
                     }} />
@@ -2709,6 +2719,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                                onSubmit={() => void sendMessage()}
                                                placeholder={t("chat.messagePlaceholder")}
                                                maxLength={1500} ariaLabel={t("chat.messageTextAria")} />}
+                    </div>
                     {(draft.trim() || staged.length > 0) && !recording ?
                       <button className="send-button" onClick={() => void sendMessage()}
                               disabled={sending || staged.some((item) => !item.attachment && !item.error)}

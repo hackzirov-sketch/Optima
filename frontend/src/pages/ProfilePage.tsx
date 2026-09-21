@@ -1,5 +1,6 @@
-import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Link2, Lock, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
+import { Bell, BellRing, Camera, Check, ChevronRight, Globe2, Image as ImageIcon, Laptop, Lock, LoaderCircle, LogOut, Mail, MapPin, Save, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "wouter";
 import { Avatar, Button, DisplayName, PageHeader, Skeleton } from "../components/ui";
 import { EmojiPickerButton } from "../components/EmojiPicker";
 import { AnimatedEmoji } from "../components/AnimatedEmoji";
@@ -25,7 +26,7 @@ const occupationValues = ["developer", "designer", "freelancer", "project_manage
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
 export function ProfilePage() {
-  const { user, group, refreshUser, logout } = useAuth();
+  const { user, group, groups, selectWorkspace, refreshUser, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -93,7 +94,6 @@ export function ProfilePage() {
     }
   }
 
-  const profilePath = `/profile/${user?.username || user?.publicId || ""}`;
 
   async function uploadAvatar(file?: File) {
     if (!file) return;
@@ -216,13 +216,13 @@ export function ProfilePage() {
               <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label={t("profile.selectPhotoAria")} disabled={uploadingAvatar} onChange={(event) => { void uploadAvatar(event.target.files?.[0]); event.currentTarget.value = ""; }} />
             </label>
           </div>
-          <h2><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} nameEmoji={nameEmoji} /></h2>
-          <p>{user?.username ? `@${user.username}` : t("profile.usernameNotSet")}</p>
-          <div className="profile-quick-actions"><EmojiPickerButton className="name-emoji-picker" label={t("profile.nameEmojiChoose")} onSelect={setNameEmoji} /><button className="icon-button" onClick={() => void copyProfileValue(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))} aria-label={t("profile.copyProfileLink")} title={t("profile.copyProfileLink")}><Link2 size={18} /></button></div>
+          <h2 className="profile-editable-name"><EmojiPickerButton className="name-emoji-picker" selectedEmoji={nameEmoji} label={t("profile.nameEmojiChoose")} onSelect={setNameEmoji} /><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} /></h2>
+          {user?.username ? <button className="profile-username-copy" title={t("profile.copyUsername")} onClick={() => void copyProfileValue(`@${user.username}`, t("profile.usernameCopied"))}>@{user.username}</button> : <p>{t("profile.usernameNotSet")}</p>}
           <span className="role-badge">{user?.occupation ? t(`common.occupations.${user.occupation}`) : t("profile.teamMember")}</span>
           <dl className="profile-meta"><div><Mail size={16} /><span><small>{t("profile.email")}</small><strong>{user?.email}</strong></span></div><div><MapPin size={16} /><span><small>{t("profile.timezone")}</small><strong>{user?.timezone || "Asia/Tashkent"}</strong></span></div><div><ShieldCheck size={16} /><span><small>{t("profile.account")}</small><strong>{t("profile.verified")}</strong></span></div></dl>
-          <Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>{t("profile.logoutButton")}</Button>
+          {groups.length > 1 && <label className="profile-group-select">{t("shell.group")}<select value={group?.id || ""} onChange={(event) => { const next = groups.find((item) => item.id === event.target.value); if (next) selectWorkspace(next); }}>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
           <nav className="settings-tabs" aria-label={t("profile.sectionsAria")}>
+            <Link href="/library" className="profile-library-link">{t("shell.library")}<ChevronRight size={18} /></Link>
             <button aria-pressed={settingsSection === "profile"} className={settingsSection === "profile" ? "active" : ""} onClick={() => setSettingsSection("profile")}><UserRound size={18} /><span><strong>{t("profile.tabProfile")}</strong><small>{t("profile.tabProfileHint")}</small></span></button>
             <button aria-pressed={settingsSection === "notifications"} className={settingsSection === "notifications" ? "active" : ""} onClick={() => setSettingsSection("notifications")}><BellRing size={18} /><span><strong>{t("profile.tabNotifications")}</strong><small>{t("profile.tabNotificationsHint")}</small></span></button>
             <button aria-pressed={settingsSection === "privacy"} className={settingsSection === "privacy" ? "active" : ""} onClick={() => setSettingsSection("privacy")}><UsersRound size={18} /><span><strong>{t("profile.tabPrivacy")}</strong><small>{t("profile.tabPrivacyHint")}</small></span></button>
@@ -311,6 +311,7 @@ export function ProfilePage() {
           </section>}
         </div>
       </div>
+      <div className="profile-logout-footer"><Button variant="secondary" onClick={() => void logout()} icon={<LogOut size={17} />}>{t("profile.logoutButton")}</Button></div>
     </div>
   );
 }

@@ -183,6 +183,8 @@
     "proofSecurity": "Безопасный вход"
   },
   "profile": {
+    "copyUsername": "Копировать имя пользователя",
+    "usernameCopied": "Имя пользователя скопировано",
     "pageTitle": "Профиль и настройки",
     "pageDescription": "Управляйте личными данными, уведомлениями и активными устройствами.",
     "usernameNotSet": "Username не указан",

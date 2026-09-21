@@ -183,6 +183,8 @@
     "proofSecurity": "Güvenli giriş"
   },
   "profile": {
+    "copyUsername": "Kullanıcı adını kopyala",
+    "usernameCopied": "Kullanıcı adı kopyalandı",
     "pageTitle": "Profil ve ayarlar",
     "pageDescription": "Kişisel bilgilerinizi, bildirimlerinizi ve aktif cihazlarınızı yönetin.",
     "usernameNotSet": "Kullanıcı adı ayarlanmadı",

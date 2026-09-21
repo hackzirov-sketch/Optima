@@ -176,7 +176,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <svg className="mobile-nav-plate" viewBox="0 0 500 86" preserveAspectRatio="none" aria-hidden="true"><path d={mobileDockPath} /></svg>
         {mobileNav.map((item) => {
           const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
+          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} aria-label={t(`shell.${item.key}`)} title={t(`shell.${item.key}`)} aria-current={active(item.href) ? "page" : undefined}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
         })}
       </nav>
     </div>

@@ -183,6 +183,8 @@
     "proofSecurity": "Xavfsiz kirish"
   },
   "profile": {
+    "copyUsername": "Username nusxalash",
+    "usernameCopied": "Username nusxalandi",
     "pageTitle": "Profil va sozlamalar",
     "pageDescription": "Shaxsiy ma’lumotlar, xabarnomalar va faol qurilmalarni boshqaring.",
     "usernameNotSet": "Username o‘rnatilmagan",

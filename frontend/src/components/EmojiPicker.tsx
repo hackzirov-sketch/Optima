@@ -78,10 +78,11 @@ function navigateTabs(event: KeyboardEvent<HTMLDivElement>) {
   tabs[next]?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", className = "" }: {
+export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", className = "", selectedEmoji }: {
   onSelect: (emojiId: string) => void;
   label?: string;
   className?: string;
+  selectedEmoji?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<EmojiAsset[]>([]);
@@ -267,7 +268,7 @@ export function EmojiPickerButton({ onSelect, label = "Telegram emoji tanlash", 
       <button type="button" className={`icon-button ${open ? "active" : ""}`}
               onClick={() => setOpen((value) => !value)} aria-label={label} title={label}
               aria-expanded={open} aria-haspopup="dialog">
-        <Smile size={20} />
+        {selectedEmoji ? <AnimatedEmoji id={selectedEmoji} label="" /> : <Smile size={20} />}
       </button>
       {open && createPortal(
         <div ref={panelRef} className="emoji-picker telegram-emoji-picker emoji-picker-floating" role="dialog" aria-label="Telegram emojilari">

@@ -183,6 +183,8 @@
     "proofSecurity": "Secure sign-in"
   },
   "profile": {
+    "copyUsername": "Copy username",
+    "usernameCopied": "Username copied",
     "pageTitle": "Profile & settings",
     "pageDescription": "Manage your personal details, notifications and active devices.",
     "usernameNotSet": "Username not set",
