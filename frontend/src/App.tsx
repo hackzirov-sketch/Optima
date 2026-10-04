@@ -6,6 +6,10 @@ import { Logo } from "./components/ui";
 import { useAuth } from "./lib/auth";
 import { AuthPage } from "./pages/AuthPage";
 import { ChatPage } from "./pages/ChatPage";
+import { AiPage } from "./pages/AiPage";
+import { YoutubePage } from "./pages/YoutubePage";
+import { StatisticsPage } from "./pages/StatisticsPage";
+import { UsageTracker } from "./components/UsageTracker";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MeetingRoomPage } from "./pages/MeetingRoomPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
@@ -66,6 +70,9 @@ export function App() {
       <div className="route-transition" key={isEducation ? "/education" : location}>
         {isEducation ? <EducationPage /> : isChat ? null : (
           <Switch>
+            <Route path="/ai" component={AiPage} />
+            <Route path="/youtube" component={YoutubePage} />
+            <Route path="/statistics" component={StatisticsPage} />
             <Route path="/" component={DashboardPage} />
             <Route path="/meetings" component={MeetingsPage} />
             <Route path="/library" component={LibraryPage} />
@@ -80,6 +87,7 @@ export function App() {
   return (
     <>
       {mainContent}
+      <UsageTracker />
       {/* MeetingRoomPage (no meetingId prop = the standalone instance) is
           mounted here unconditionally, same reasoning as ChatPage below: it
           renders its own full-screen UI on top of everything via CSS when

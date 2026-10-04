@@ -1,5 +1,5 @@
-import { BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { BarChart3, BookOpen, BrainCircuit, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X, Youtube } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
@@ -17,12 +17,15 @@ const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_mee
   { value: "invisible", dotClass: "status-dot-invisible" },
 ];
 
-type TextKey = "home" | "chat" | "meetings" | "library" | "education" | "profile";
+type TextKey = "home" | "chat" | "meetings" | "statistics" | "ai" | "youtube" | "library" | "education" | "profile";
 
 const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
   { href: "/", key: "home", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageCircle },
   { href: "/meetings", key: "meetings", icon: Video },
+  { href: "/statistics", key: "statistics", icon: BarChart3 },
+  { href: "/ai", key: "ai", icon: BrainCircuit },
+  { href: "/youtube", key: "youtube", icon: Youtube },
   { href: "/library", key: "library", icon: BookOpen },
   { href: "/education", key: "education", icon: GraduationCap },
   { href: "/profile", key: "profile", icon: UserRound },
@@ -48,10 +51,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       : href === "/chat"
         ? /^\/(chat|u|g|ch)(\/|$)/.test(location)
         : location.startsWith(href);
-  const mobileNav = [nav[1], nav[2], nav[0], location.startsWith("/library") ? nav[3] : nav[4], nav[5]];
-  const mobileActiveIndex = Math.max(0, mobileNav.findIndex((item) => active(item.href)));
-  const mobileDockCenter = 50 + mobileActiveIndex * 100;
-  const mobileDockPath = `M0 18 H${mobileDockCenter - 48} C${mobileDockCenter - 22} 18 ${mobileDockCenter - 22} 32 ${mobileDockCenter} 32 C${mobileDockCenter + 22} 32 ${mobileDockCenter + 22} 18 ${mobileDockCenter + 48} 18 H500 V86 H0 Z`;
+  const dockItems = nav.map((item) => {
+    const Icon = item.icon;
+    return <Link key={item.href} href={item.href}
+      className={`${active(item.href) ? "active" : ""} ${item.key === "ai" ? "dock-ai" : ""}`}
+      aria-label={t(`shell.${item.key}`)} title={t(`shell.${item.key}`)}
+      aria-current={active(item.href) ? "page" : undefined}>
+      <span className="dock-icon"><Icon size={22} strokeWidth={1.8} /></span>
+      {item.key === "chat" && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}
+      <span className="dock-label">{t(`shell.${item.key}`)}</span>
+    </Link>;
+  });
 
   function chooseLanguage(next: Locale) {
     setLocale(next);
@@ -165,20 +175,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="app-main">{children}</main>
       </div>
-      <nav className="desktop-dock" aria-label={t("shell.mainNav")}>
-        <span className="dock-indicator" style={{ transform: `translateX(${nav.findIndex((item) => active(item.href)) * 50}px)`, opacity: nav.some((item) => active(item.href)) ? 1 : 0 }} aria-hidden="true" />
-        {nav.map((item) => {
-          const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}</Link>;
-        })}
-      </nav>
-      <nav className="mobile-nav" aria-label={t("shell.mobileNav")} style={{ "--mobile-active-index": mobileActiveIndex } as CSSProperties}>
-        <svg className="mobile-nav-plate" viewBox="0 0 500 86" preserveAspectRatio="none" aria-hidden="true"><path d={mobileDockPath} /></svg>
-        {mobileNav.map((item) => {
-          const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} aria-label={t(`shell.${item.key}`)} title={t(`shell.${item.key}`)} aria-current={active(item.href) ? "page" : undefined}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
-        })}
-      </nav>
+      <nav className="desktop-dock reference-dock" aria-label={t("shell.mainNav")}>{dockItems}</nav>
+      <nav className="mobile-nav reference-dock" aria-label={t("shell.mobileNav")}>{dockItems}</nav>
     </div>
   );
 }

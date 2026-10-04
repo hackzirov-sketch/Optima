@@ -9,6 +9,7 @@ import "./styles.css";
 import "./premium.css";
 import "./motion.css";
 import "./feedback-polish.css";
+import "./navigation-ai.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

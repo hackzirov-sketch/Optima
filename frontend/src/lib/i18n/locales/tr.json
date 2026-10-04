@@ -1,4 +1,13 @@
 {
+  "youtube": {
+    "search": "Search videos or paste a YouTube link",
+    "catalog": "OPTIMA video catalog",
+    "external": "YouTube",
+    "close": "Close",
+    "loading": "Loading",
+    "empty": "No videos found",
+    "more": "Load more"
+  },
   "common": {
     "next": "İleri",
     "loading": "Yükleniyor",
@@ -39,6 +48,9 @@
     "close": "Bildirimi kapat"
   },
   "shell": {
+    "statistics": "İstatistik",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Ana sayfa",
     "chat": "Sohbet",
     "meetings": "Toplantılar",
@@ -803,6 +815,11 @@
     "invisible": "Görünmez"
   },
   "meetingRoom": {
+    "chatTitle": "Toplantı sohbeti",
+    "chatAudience": "Bağlı: {count}",
+    "chatSessionHint": "Mesajlar yalnızca bağlı katılımcılara gider. Oturum kapanınca geçmiş silinir.",
+    "chatEmpty": "Sohbeti başlatın",
+    "chatSendFailed": "Mesaj gönderilmedi. Katılımcı bağlantılarını kontrol edin.",
     "loadFailed": "Toplantı açılamadı",
     "linkCopied": "Toplantı bağlantısı kopyalandı",
     "shareFailed": "Bağlantı paylaşılamadı",

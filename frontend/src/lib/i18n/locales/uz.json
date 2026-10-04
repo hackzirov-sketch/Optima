@@ -1,4 +1,13 @@
 {
+  "youtube": {
+    "search": "Video qidirish yoki YouTube havolasi",
+    "catalog": "OPTIMA video katalogi",
+    "external": "YouTube",
+    "close": "Yopish",
+    "loading": "Yuklanmoqda",
+    "empty": "Video topilmadi",
+    "more": "Yana yuklash"
+  },
   "common": {
     "next": "Keyingi",
     "loading": "Yuklanmoqda",
@@ -39,6 +48,9 @@
     "close": "Xabarni yopish"
   },
   "shell": {
+    "statistics": "Statistika",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Bosh sahifa",
     "chat": "Chat",
     "meetings": "Meeting",
@@ -803,6 +815,11 @@
     "invisible": "Ko‘rinmas"
   },
   "meetingRoom": {
+    "chatTitle": "Meeting chati",
+    "chatAudience": "Ulangan: {count}",
+    "chatSessionHint": "Xabarlar faqat hozir ulanganlarga yuboriladi. Tarix sessiya yopilganda o‘chadi.",
+    "chatEmpty": "Suhbatni boshlang",
+    "chatSendFailed": "Xabar yuborilmadi. Qatnashchilar ulanishini tekshiring.",
     "loadFailed": "Meeting ochilmadi",
     "linkCopied": "Meeting havolasi nusxalandi",
     "shareFailed": "Havolani ulashib bo‘lmadi",

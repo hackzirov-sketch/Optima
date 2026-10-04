@@ -1,3 +1,33 @@
+.meeting-chat-toggle { position: absolute; z-index: 35; right: 18px; bottom: 100px; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #4a4f60; background: #272c37; color: #eef1ff; box-shadow: 0 4px 16px #0003; }
+.meeting-chat-toggle.active { color: #181d2c; background: #bfccff; }
+.meeting-chat-toggle b { position: absolute; top: -3px; right: -3px; padding: 2px 5px; border-radius: 12px; background: #bfccff; color: #151927; font-size: 11px; }
+.meeting-stage.meeting-chat-open { margin-right: 366px; }
+.meeting-chat-panel { position: absolute; right: 16px; top: 82px; bottom: 160px; width: 340px; z-index: 34; display: flex; flex-direction: column; overflow: hidden; border-radius: 8px; border: 1px solid #3d4352; background: #222630; color: #f5f6fb; box-shadow: 0 8px 32px #0003; }
+.meeting-chat-panel header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid #3d4352; }
+.meeting-chat-panel header div { display: grid; gap: 5px; }
+.meeting-chat-panel small, .meeting-chat-panel time { color: #b5bed1; font-size: 12px; }
+.meeting-chat-panel button, .meeting-chat-notice button { border: 0; background: transparent; color: inherit; cursor: pointer; min-height: 40px; min-width: 40px; border-radius: 50%; }
+.meeting-chat-hint { margin: 0; padding: 12px 16px; font-size: 12px; line-height: 1.5; color: #b5bed1; border-bottom: 1px solid #333947; }
+.meeting-chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
+.meeting-chat-list article { margin-bottom: 18px; }
+.meeting-chat-list article > div { display: flex; gap: 8px; align-items: baseline; }
+.meeting-chat-list strong { font-size: 13px; overflow-wrap: anywhere; }
+.meeting-chat-list time { flex-shrink: 0; font-size: 11px; }
+.meeting-chat-list p { margin: 6px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.meeting-chat-list .is-self strong { color: #bfccff; }
+.meeting-chat-empty { display: grid; justify-items: center; gap: 12px; padding: 40px 0; color: #b5bed1; }
+.meeting-chat-panel form { padding: 12px; border-top: 1px solid #3d4352; }
+.meeting-chat-panel form > div { display: flex; align-items: flex-end; gap: 6px; background: #303643; border-radius: 24px; padding: 4px; }
+.meeting-chat-panel textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 120px; resize: vertical; border: 0; background: transparent; color: #f5f6fb; font: inherit; font-size: 16px; padding: 11px 10px; }
+.meeting-chat-panel form button { color: #bfccff; }
+.meeting-chat-panel button:disabled { opacity: .4; cursor: not-allowed; }
+.meeting-chat-notice { position: absolute; z-index: 36; bottom: 100px; left: 50%; transform: translateX(-50%); display: flex; width: min(420px, calc(100% - 100px)); background: #2d3442; color: #f5f6fb; border: 1px solid #515b70; border-radius: 8px; padding: 8px; box-shadow: 0 8px 30px #0005; }
+.meeting-chat-notice > button:first-child { display: flex; gap: 12px; align-items: center; flex: 1; min-width: 0; text-align: left; border-radius: 4px; }
+.meeting-chat-notice button > span { display: grid; gap: 5px; min-width: 0; }
+.meeting-chat-notice strong { font-size: 13px; }
+.meeting-chat-notice span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.meeting-chat-panel button:focus-visible, .meeting-chat-toggle:focus-visible, .meeting-chat-notice button:focus-visible { outline: 2px solid #bfccff; outline-offset: 2px; }
+@media(max-width: 820px) { .meeting-stage.meeting-chat-open { margin-right: 0; } .meeting-chat-panel { width: auto; left: 8px; right: 8px; top: 72px; bottom: 156px; } .meeting-chat-toggle { bottom: 98px; right: 12px; } }
 /* Feedback: compact controls without removing their accessible names. */
 .composer:has(.composer-input-shell) { display: flex; flex-wrap: wrap; }
 .profile-library-link { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 12px; color: var(--text); }
@@ -173,10 +203,14 @@
   .meeting-room .meeting-reaction-menu { left: auto; right: -70px; transform: none; gap: 0; }
 }
 .modal-layer:has(.chat-info-drawer) { justify-content: flex-end; align-items: stretch; padding: 0; }
-.modal.chat-info-drawer { width: min(440px, 100%); height: 100dvh; max-height: 100dvh; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); }
+.modal.chat-info-drawer { width: 540px; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); }
+@media (max-width: 768px) {
+  .modal-layer:has(.chat-info-drawer) { place-items: stretch; }
+  .modal.chat-info-drawer { width: 100vw !important; max-width: 100vw !important; min-width: 0; }
+}
 @media (min-width: 769px) {
   .modal-layer:has(.chat-info-drawer) { justify-content: center; align-items: center; padding: 24px; }
-  .modal.chat-info-drawer { height: min(760px,calc(100dvh - 48px)); max-height: calc(100dvh - 48px); border-radius: 8px; }
+  .modal.chat-info-drawer { max-width: calc(100vw - 48px); height: min(760px,calc(100dvh - 48px)); max-height: calc(100dvh - 48px); border-radius: 8px; }
 }
 .chat-info-drawer > .modal-header { flex: 0 0 auto; padding: 18px 20px; border-bottom: 1px solid var(--line); }
 .chat-info-drawer > .modal-header h2 { font-size: 19px; }

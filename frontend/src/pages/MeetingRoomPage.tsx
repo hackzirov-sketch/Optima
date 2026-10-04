@@ -4,6 +4,8 @@ import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
 import { DirectCallSurface } from "../components/DirectCallSurface";
+import { MeetingChat } from "../components/MeetingChat";
+import { useMeetingChat } from "../lib/meetingChat";
 import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -195,6 +197,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [notes, setNotes] = useState<Note[]>([]);
   const [savingNote, setSavingNote] = useState(false);
   const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | "notes" | "waiting" | "settings" | null>(null);
+  const [meetingChatOpen, setMeetingChatOpen] = useState(false);
+  const meetingChat = useMeetingChat(meetingId, user?.id || "");
+  const attachMeetingChat = meetingChat.attach;
+  useEffect(() => { if (sidePanel) setMeetingChatOpen(false); }, [sidePanel]);
   const [accessDenied, setAccessDenied] = useState("");
   const [requestState, setRequestState] = useState<"idle" | "requesting" | "pending" | "rejected">("idle");
   const [waitingRequests, setWaitingRequests] = useState<MeetingJoinRequest[]>([]);
@@ -592,6 +598,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (existing) return existing;
     const socket = getSocket();
     const peer = new RTCPeerConnection(rtcConfig.current);
+    if (!directMode) attachMeetingChat(peer, targetUserId);
     currentStream.current?.getTracks().forEach((track) => peer.addTrack(track, currentStream.current!));
     peer.onicecandidate = (event) => {
       if (event.candidate) socket.emit("meeting:ice-candidate", { meetingId, targetUserId, candidate: event.candidate.toJSON() });
@@ -642,7 +649,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
     peers.current.set(targetUserId, peer);
     return peer;
-  }, [meetingId, closePeer]);
+  }, [meetingId, closePeer, directMode, attachMeetingChat]);
 
   /**
    * The one place an offer is ever created. Called directly to open a
@@ -1385,7 +1392,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     <div className={`meeting-room ${gridViewForced ? "grid-forced" : ""} ${directMode ? "direct-call-room" : overlayClass}`}>
       <header className="meeting-room-header"><div><span className={`connection-dot ${callState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{callState === "connected" ? t("meetingRoom.connectionStable") : callState === "offline" ? t("meetingRoom.reconnecting") : callState === "failed" ? t("meetingRoom.mediaFailed") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label={t("meetingRoom.checkSecurityKeyAria")}><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>{t("meetingRoom.compareKeyHint")}</small></button>}
-      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
+      <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => { const person = id === user?.id ? user : users.get(id); return person ? `${person.firstName} ${person.lastName || ""}`.trim() : t("meetingRoom.participantFallback"); }} open={meetingChatOpen} onOpen={(open) => { setMeetingChatOpen(open); if (open) setSidePanel(null); }} onSend={meetingChat.send} />
+      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""} ${meetingChatOpen ? "meeting-chat-open" : ""}`}>
       {focusedTile ? (
         <main className="meeting-stage-focus">
           <div className="stage-main">

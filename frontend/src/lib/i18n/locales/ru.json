@@ -1,4 +1,13 @@
 {
+  "youtube": {
+    "search": "Search videos or paste a YouTube link",
+    "catalog": "OPTIMA video catalog",
+    "external": "YouTube",
+    "close": "Close",
+    "loading": "Loading",
+    "empty": "No videos found",
+    "more": "Load more"
+  },
   "common": {
     "next": "Далее",
     "loading": "Загрузка",
@@ -39,6 +48,9 @@
     "close": "Закрыть уведомление"
   },
   "shell": {
+    "statistics": "Статистика",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Главная",
     "chat": "Чаты",
     "meetings": "Встречи",
@@ -803,6 +815,11 @@
     "invisible": "Невидимый"
   },
   "meetingRoom": {
+    "chatTitle": "Чат встречи",
+    "chatAudience": "Подключено: {count}",
+    "chatSessionHint": "Сообщения получают подключённые участники. История очищается при закрытии сессии.",
+    "chatEmpty": "Начните разговор",
+    "chatSendFailed": "Сообщение не отправлено. Проверьте соединение участников.",
     "loadFailed": "Встреча не открылась",
     "linkCopied": "Ссылка на встречу скопирована",
     "shareFailed": "Не удалось поделиться ссылкой",

@@ -1,4 +1,4 @@
-import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Plus, Target, Trash2, UsersRound, Video } from "lucide-react";
+import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Plus, Sparkles, Target, Trash2, UsersRound, Video } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, Skeleton } from "../components/ui";
@@ -73,6 +73,20 @@ export function DashboardPage() {
   return (
     <div className="page dashboard-page">
       <StarfieldBackground />
+      <section className="dashboard-welcome" aria-labelledby="welcome-heading">
+        <div className="welcome-copy">
+          <span className="welcome-brand">Optima Aloqa</span>
+          <h2 id="welcome-heading">{t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })}</h2>
+          <p>{t("dashboard.description")}</p>
+          <Link href="/ai" className="welcome-ai-link" aria-label="Optima AI" title="Optima AI"><Sparkles size={20} /></Link>
+          <div className="welcome-facts">
+            <span><GraduationCap size={20} /><span><small>{t("dashboard.completedLabel")}</small><strong>{education.completed}</strong></span></span>
+            <span><Target size={20} /><span><small>{t("dashboard.avgProgress")}</small><strong>{education.completionRate}%</strong></span></span>
+            <span><MessageCircle size={20} /><span><small>{t("dashboard.activeChats")}</small><strong>{loading ? "\u2014" : rooms.length}</strong></span></span>
+          </div>
+        </div>
+        <img className="welcome-robot" src="/welcome-robot.png" alt="" width="220" height="280" fetchPriority="high" />
+      </section>
       <PageHeader eyebrow={group?.name} title={t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })} description={t("dashboard.description")} action={<Link href="/meetings" className="button button-primary"><Plus size={17} /> {t("dashboard.createMeeting")}</Link>} />
       <section className="metric-grid" aria-label={t("dashboard.statsAria")}>
         <article className="metric-card"><span className="metric-icon"><UsersRound size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : members.length}</strong><small>{t("dashboard.teamMembers")}</small></div></article>

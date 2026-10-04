@@ -1,4 +1,13 @@
 {
+  "youtube": {
+    "search": "Search videos or paste a YouTube link",
+    "catalog": "OPTIMA video catalog",
+    "external": "YouTube",
+    "close": "Close",
+    "loading": "Loading",
+    "empty": "No videos found",
+    "more": "Load more"
+  },
   "common": {
     "next": "Next",
     "loading": "Loading",
@@ -39,6 +48,9 @@
     "close": "Close message"
   },
   "shell": {
+    "statistics": "Statistics",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Home",
     "chat": "Chat",
     "meetings": "Meetings",
@@ -803,6 +815,11 @@
     "invisible": "Invisible"
   },
   "meetingRoom": {
+    "chatTitle": "In-call messages",
+    "chatAudience": "Connected: {count}",
+    "chatSessionHint": "Messages reach connected participants only. History clears when this session closes.",
+    "chatEmpty": "Start the conversation",
+    "chatSendFailed": "Message not sent. Check participant connections.",
     "loadFailed": "Meeting didn’t load",
     "linkCopied": "Meeting link copied",
     "shareFailed": "Couldn’t share the link",

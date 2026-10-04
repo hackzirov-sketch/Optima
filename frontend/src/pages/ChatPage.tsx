@@ -266,7 +266,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAssistPrompt, setAiAssistPrompt] = useState("");
-  const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
+  const [aiOpen, setAiOpen] = useState(() => location === "/ai" || new URLSearchParams(window.location.search).get("bot") === "optima-ai");
+  useEffect(() => {
+    if (location === "/ai") {
+      setAiOpen(true);
+      setSelectedId(null);
+      aiShouldScroll.current = true;
+    } else if (location === "/chat" && new URLSearchParams(window.location.search).get("bot") === "optima-ai") {
+      navigate("/ai", { replace: true });
+    } else {
+      setAiOpen(false);
+    }
+  }, [location, navigate]);
   const [aiDraft, setAiDraft] = useState("");
   const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
   const [recording, setRecording] = useState(false);
@@ -634,7 +645,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setAiOpen(true);
     setSelectedId(null);
     setCatalog("bot");
-    window.history.replaceState({}, "", "/chat?bot=optima-ai");
+    navigate("/ai");
   }
 
   async function sendAiMessage() {
@@ -2154,7 +2165,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   return (
-    <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""}`}>
+    <div className={`chat-page ${selectedRoom || aiOpen ? "chat-room-open" : ""} ${location === "/ai" ? "chat-ai-page" : ""}`}>
       {messageToastStack}
       <StarfieldBackground />
       {mediaPreview && <div className="media-viewer" role="dialog" aria-modal="true" aria-label={mediaPreview.name}
@@ -2309,7 +2320,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           <header className="conversation-header">
             <button className="icon-button chat-back" onClick={() => {
               setAiOpen(false);
-              window.history.replaceState({}, "", "/chat");
+              navigate("/chat");
             }} aria-label={t("chat.backToBotsAria")}><ArrowLeft size={20} /></button>
             <span className="room-avatar room-avatar-sm"><Bot size={17} /></span>
             <div className="conversation-title"><h2>OPTIMA AI</h2>
@@ -2452,6 +2463,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       <MessageCircle size={24} />}</span>
                       <h3>{messageSearch ? t("chat.messageNotFound") : t("chat.startConversationTitle")}</h3>
                       <p>{messageSearch ? t("chat.tryOtherSearch") : t("chat.sendFirstMessage")}</p></div>}
+                  {visibleMessages.length > 0 && <div className="message-list-spacer" aria-hidden="true" />}
                   {visibleMessages.map((message, index) => {
                     const mine = message.senderId === user?.id;
                     const sender = message.sender || memberMap.get(message.senderId);
