@@ -1,5 +1,5 @@
 import { ArrowLeft, Bookmark, BookOpen, ChevronLeft, ChevronRight, Heart, LoaderCircle, Minus, Moon, Plus, Search, Share2, Sun, Type, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n/i18n";
 
@@ -27,6 +27,17 @@ export function LibraryPage() {
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("sepia");
   const [fontSize, setFontSize] = useState(18);
   const [saved, setSaved] = useState<number[]>(savedIds);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const topicBar = useRef<HTMLElement>(null);
+  const suppressClick = useRef(false);
+
+  useEffect(() => {
+    const button = topicBar.current?.querySelector<HTMLElement>("button.active");
+    if (button && topicBar.current) {
+      const bar = topicBar.current;
+      bar.scrollTo({ left: button.offsetLeft - bar.offsetLeft - (bar.clientWidth - button.offsetWidth) / 2, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+  }, [category, debounced]);
 
   function author(book: GutendexBook) { return book.authors.map((item) => item.name).join(", ") || t("library.unknownAuthor"); }
   function cover(book: GutendexBook) { return book.formats["image/jpeg"] || ""; }
@@ -56,9 +67,23 @@ export function LibraryPage() {
 
   if (readerBook) return <div className={`book-reader reader-${readerTheme}`}><header><button onClick={() => setReaderBook(null)} aria-label={t("library.backToLibraryAria")}><ArrowLeft /></button><div><strong>{readerBook.title}</strong><small>{author(readerBook)}</small></div><div className="reader-tools"><button onClick={() => setFontSize((value) => Math.max(14,value-1))}><Minus /></button><span><Type /> {fontSize}</span><button onClick={() => setFontSize((value) => Math.min(28,value+1))}><Plus /></button><button onClick={() => setReaderTheme(readerTheme === "light" ? "sepia" : readerTheme === "sepia" ? "dark" : "light")}>{readerTheme === "dark" ? <Moon /> : <Sun />}</button><button onClick={() => toggleSaved(readerBook.id)} className={saved.includes(readerBook.id) ? "active" : ""}><Bookmark /></button></div></header><div className="reader-progress"><i /></div><main style={{ fontSize }}>{readerLoading ? <LoaderCircle className="spin" /> : <pre>{readerText}</pre>}</main></div>;
 
-  return <div className="library-page">
+  return <div className="library-page" onTouchStart={event => {
+    suppressClick.current = false;
+    if (!window.matchMedia("(max-width: 820px)").matches || event.touches.length !== 1 || (event.target as HTMLElement).closest("input,textarea,.library-categories,.book-detail-backdrop")) { swipe.current = null; return; }
+    swipe.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }} onTouchCancel={() => { swipe.current = null; }} onTouchEnd={event => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start || !event.changedTouches.length) return;
+    const dx = event.changedTouches[0].clientX - start.x;
+    const dy = event.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    const next = categories.indexOf(category) + (dx < 0 ? 1 : -1);
+    suppressClick.current = true;
+    if (next >= 0 && next < categories.length) { setQuery(""); setCategory(categories[next]); }
+  }} onClickCapture={event => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); suppressClick.current = false; } }}>
     <header className="library-heading"><div><span>OPTIMA LIBRARY</span><h1>{t("library.pageTitle")}</h1><p>{t("library.pageDescription")}</p></div><label><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.searchPlaceholder")} />{query && <button onClick={() => setQuery("")}><X /></button>}</label></header>
-    <nav className="library-categories">{categories.map((item) => <button key={item} onClick={() => { setQuery(""); setCategory(item); }} className={category === item && !debounced ? "active" : ""}>{t(`library.${categoryLabelKeys[item]}`)}</button>)}</nav>
+    <nav ref={topicBar} className="library-categories">{categories.map((item) => <button key={item} aria-pressed={category === item && !debounced} onClick={() => { setQuery(""); setCategory(item); }} className={category === item && !debounced ? "active" : ""}>{t(`library.${categoryLabelKeys[item]}`)}</button>)}</nav>
     {featured && !debounced && <section className="library-featured"><div><span>{t("library.todayPick")}</span><h2>{featured.title}</h2><p>{featured.summaries?.[0] || featured.subjects.slice(0,3).join(" · ")}</p><small>{author(featured)} · {featured.languages.join(", ").toUpperCase()}</small><div><button className="primary" onClick={() => void openReader(featured)}><BookOpen /> {t("library.startReading")}</button><button onClick={() => toggleSaved(featured.id)}><Bookmark /> {t("library.save")}</button></div></div>{cover(featured) && <img src={cover(featured)} alt={featured.title} />}</section>}
     <section className="library-section"><header><div><span>{debounced ? t("library.searchResults") : t(`library.${categoryLabelKeys[category]}`).toUpperCase()}</span><h2>{debounced ? t("library.searchResultsFor", { query: debounced }) : t("library.openShelfBooks")}</h2></div><small>{page?.count ? t("library.bookCount", { count: page.count.toLocaleString() }) : ""}</small></header>
       {loading ? <div className="library-loading"><LoaderCircle className="spin" /><span>{t("library.loadingBooks")}</span></div> : !page ? <div className="library-empty">{t("library.sourceUnreachable")}</div> : <div className="book-grid">{page.results.map((book) => <article className="book-card" key={book.id}><button className="book-cover" onClick={() => setSelected(book)}>{cover(book) ? <img loading="lazy" src={cover(book)} alt={book.title} /> : <span><BookOpen /></span>}<i>{book.languages[0]?.toUpperCase()}</i></button><div><h3>{book.title}</h3><p>{author(book)}</p><small>{t("library.readTimes", { count: book.download_count.toLocaleString() })}</small><div><button onClick={() => void openReader(book)} disabled={!readingUrl(book)}><BookOpen /> {t("library.read")}</button><button onClick={() => toggleSaved(book.id)} className={saved.includes(book.id) ? "active" : ""} aria-label={t("library.saveAria")}><Heart /></button></div></div></article>)}</div>}

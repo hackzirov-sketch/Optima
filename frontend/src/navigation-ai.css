@@ -1,4 +1,10 @@
 /* Shared dock geometry; colors follow the existing theme tokens. */
+:root[data-theme] body .library-page .book-card > div button { color: #0872ce; background: #e6f4ff; border: 1px solid #75c7ff; min-height: 38px; }
+:root[data-theme="dark"] body .library-page .book-card > div button { color: #64d8ff; background: #102d40; border-color: #278fc0; box-shadow: 0 0 10px rgb(38 181 255 / .16); }
+:root[data-theme] body .library-page .book-card > div button:hover { border-color: #00b7ff; box-shadow: 0 0 14px rgb(0 183 255 / .28); }
+:root[data-theme] body .library-page .book-card > div button:focus-visible { outline: 2px solid #00b7ff; outline-offset: 3px; }
+:root[data-theme] body .library-page .book-card > div button.active svg { fill: currentColor; }
+:root[data-theme] body .library-page .book-card > div button:disabled { opacity: .45; box-shadow: none; }
 .statistics-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .statistics-header > div { display:flex; align-items:center; gap:10px; }
 .statistics-header h1 { font-size:26px; margin:0; }
