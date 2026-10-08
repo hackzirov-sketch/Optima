@@ -12,90 +12,115 @@ import { setupSwagger } from './bootstrap/swagger.bootstrap';
 import { setupRedisAndWebSockets } from './bootstrap/redis.bootstrap';
 import { setupValidation } from './bootstrap/validation.bootstrap';
 
-setDefaultResultOrder('ipv4first');
+// setDefaultResultOrder('ipv4first');
 
-function installProcessGuards(logger: Logger): void {
-  process.on('unhandledRejection', (reason) => {
-    logger.error(
-      'Unhandled promise rejection',
-      reason instanceof Error ? reason.stack : String(reason),
-    );
-  });
-
-  process.on('uncaughtException', (err) => {
-    logger.error(
-      'Uncaught exception - shutting down',
-      err instanceof Error ? err.stack : String(err),
-    );
-
-    process.exit(1);
-  });
-}
+// function installProcessGuards(logger: Logger): void {
+//   process.on('unhandledRejection', (reason) => {
+//     logger.error(
+//         'Unhandled promise rejection',
+//         reason instanceof Error ? reason.stack : String(reason),
+//     );
+//   });
+//
+//   process.on('uncaughtException', (err) => {
+//     logger.error(
+//         'Uncaught exception - shutting down',
+//         err instanceof Error ? err.stack : String(err),
+//     );
+//
+//     process.exit(1);
+//   });
+// }
 
 async function bootstrap() {
-  const bootstrapLogger = new Logger('Bootstrap');
+  console.log('BOOTSTRAP 2');
 
-  installProcessGuards(bootstrapLogger);
+  // const bootstrapLogger = new Logger('Bootstrap');
+
+  // installProcessGuards(bootstrapLogger);
+
+  console.log('BOOTSTRAP 3');
 
   const isProd = process.env.NODE_ENV === 'production';
 
+  console.log('BEFORE NEST FACTORY');
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
-
-    /**
-     * Disable Nest's default logger.
-     *
-     * We use nestjs-pino instead.
-     */
     logger: false,
   });
+
+  console.log('AFTER NEST FACTORY');
 
   /**
    * Get Pino logger registered by LoggerConfigModule.
    */
-  const pinoLogger = app.get(PinoLogger);
+  console.log('BEFORE PINO');
+
+  // const pinoLogger = app.get(PinoLogger);
+
+  console.log('AFTER PINO');
 
   /**
    * Replace Nest's default logger with Pino.
    */
-  app.useLogger(pinoLogger);
+  // app.useLogger(pinoLogger);
+
+  console.log('BEFORE CONFIG');
 
   const config = app.get(ConfigService);
 
+  console.log('AFTER CONFIG');
+
   setupApp(app, config);
+
+  console.log('AFTER setupApp');
 
   setupRedisAndWebSockets(app, config);
 
+  console.log('AFTER setupRedisAndWebSockets');
+
   setupValidation(app, config);
+
+  console.log('AFTER setupValidation');
 
   if (!isProd) {
     setupSwagger(app, config);
+
+    console.log('AFTER setupSwagger');
   }
 
   app.enableShutdownHooks();
 
-  const port = config.get<number>('app.port') || 3000;
-  const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
+  // const port = config.get<number>('app.port') || 3000;
+  // const prefix = config.get<string>('app.apiPrefix') || 'api/v1';
+  const port = process.env.PORT || 3000;
+  const prefix = process.env.API_PREFIX || '';
+  console.log('BEFORE APP.LISTEN');
 
   await app.listen(port);
 
-  bootstrapLogger.log(
-    `🚀 UPZ API running on: http://localhost:${port}/${prefix}`,
-  );
+  console.log('AFTER APP.LISTEN');
 
-  if (!isProd) {
-    bootstrapLogger.log(
-      `📖 Swagger docs: http://localhost:${port}/${prefix}/docs`,
-    );
-  }
+  // bootstrapLogger.log(
+  //     `🚀 UPZ API running on: http://localhost:${port}/${prefix}`,
+  // );
+  //
+  // if (!isProd) {
+  //   bootstrapLogger.log(
+  //       `📖 Swagger docs: http://localhost:${port}/${prefix}/docs`,
+  //   );
+  // }
 }
 
-bootstrap().catch((err) => {
-  const logger = new Logger('Bootstrap');
+console.log('BEFORE BOOTSTRAP');
 
-  logger.error(
-    'Failed to start application',
-    err instanceof Error ? err.stack : String(err),
+bootstrap().catch((err) => {
+  // const logger = new Logger('Bootstrap');
+
+  console.log(
+      'Failed to start application',
+      err instanceof Error ? err.stack : String(err),
   );
 
   process.exit(1);

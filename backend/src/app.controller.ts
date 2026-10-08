@@ -4,11 +4,11 @@ import { Public } from './common/decorators/public.decorator';
 @Controller()
 export class AppController {
   @Public()
-  @Get(['health', 'healt'])
+  @Get(['health'])
   getHealth() {
     return {
       ok: true,
-      service: 'upz-backend',
+      service: 'optima backend',
       timestamp: new Date().toISOString(),
     };
   }
@@ -16,6 +16,6 @@ export class AppController {
   @Public()
   @Get()
   getHello(): string {
-    return 'UPZ backend is running';
+    return 'Optima backend is running';
   }
 }
