@@ -373,16 +373,16 @@ export class ChannelSettingsService {
     // Search visibility is expressed as scope, which the discovery query reads.
     if ('discoverable' in changes) {
       await this.dataSource.query(
-        `UPDATE chat_rooms SET scope = $2 WHERE id = $1 AND scope <> 'workspace_only'`,
+        `UPDATE chat_rooms SET scope = $2 WHERE id = $1 AND scope <> 'group_only'`,
         [roomId, patch.discoverable ? 'public' : 'private'],
       );
     }
 
     // audit_logs is the platform's one trail — the same table that records a
-    // workspace deletion or a project rename, so a room's history and a
-    // workspace's activity feed are one query with a different filter.
+    // group deletion or a project rename, so a room's history and a
+    // group's activity feed are one query with a different filter.
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId: userId,
       action: 'chat_room.settings_updated',
       entityType: 'chat_room',
@@ -580,16 +580,16 @@ export class ChannelSettingsService {
   }
 
   /**
-   * The workspace a room belongs to, if any — channels and groups opened from
-   * chat carry none, and audit_logs.workspace_id is nullable precisely so those
+   * The group a room belongs to, if any — channels and groups opened from
+   * chat carry none, and audit_logs.group_id is nullable precisely so those
    * rows are still recorded rather than dropped.
    */
-  private async workspaceOf(roomId: string): Promise<string | null> {
-    const rows = await this.dataSource.query<{ workspaceId: string | null }>(
-      `SELECT workspace_id AS "workspaceId" FROM chat_rooms WHERE id = $1`,
+  private async groupOf(roomId: string): Promise<string | null> {
+    const rows = await this.dataSource.query<{ groupId: string | null }>(
+      `SELECT group_id AS "groupId" FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
-    return rows[0]?.workspaceId ?? null;
+    return rows[0]?.groupId ?? null;
   }
 
   /**
@@ -641,7 +641,7 @@ export class ChannelSettingsService {
     );
     await this.memberService.invalidateRoomMember(roomId, targetUserId);
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId,
       action: 'chat_room.member_role_changed',
       entityType: 'chat_room',
@@ -713,7 +713,7 @@ export class ChannelSettingsService {
 
     await this.memberService.invalidateRoomMember(roomId, targetUserId);
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId,
       action: 'chat_room.member_removed',
       entityType: 'chat_room',
@@ -759,7 +759,7 @@ export class ChannelSettingsService {
 
     await this.memberService.invalidateRoomMember(roomId, targetUserId);
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId,
       action: 'chat_room.member_banned',
       entityType: 'chat_room',
@@ -797,7 +797,7 @@ export class ChannelSettingsService {
 
     await this.memberService.invalidateRoomMember(roomId, targetUserId);
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId,
       action: 'chat_room.member_unbanned',
       entityType: 'chat_room',
@@ -847,7 +847,7 @@ export class ChannelSettingsService {
       targetUserId,
     );
     await this.audit.log({
-      workspaceId: await this.workspaceOf(roomId),
+      groupId: await this.groupOf(roomId),
       actorId,
       action: 'chat_room.ownership_transferred',
       entityType: 'chat_room',

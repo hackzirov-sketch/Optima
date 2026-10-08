@@ -31,3 +31,5 @@ export default [
   moderationConfig,
   r2Config,
 ];
+
+export * from './logger-config';

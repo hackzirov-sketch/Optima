@@ -1,7 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 
-import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { GroupsModule } from '../groups/groups.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
@@ -24,7 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   imports: [
     BullModule.registerQueue({ name: 'chat' }),
-    forwardRef(() => WorkspacesModule),
+    forwardRef(() => GroupsModule),
     ModerationModule,
     StorageModule,
     UsersModule,

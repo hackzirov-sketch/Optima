@@ -20,7 +20,7 @@ export type UploadFolder =
   | 'avatars'
   | 'backgrounds'
   | 'attachments'
-  | 'workspace'
+  | 'group'
   | 'pushes'
   | 'meeting-recordings'
   | 'meeting-files';
@@ -48,7 +48,7 @@ const FOLDER_LIMITS: Record<
     mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
     formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
   },
-  workspace: {
+  group: {
     maxBytes: 5 * 1024 * 1024,
     mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
     formats: ['jpg', 'jpeg', 'png', 'webp'],

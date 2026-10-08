@@ -6,12 +6,23 @@ export const updateProfileSchema = z.object({
   firstName: z.string().max(50).optional(),
   lastName: z.string().max(50).optional(),
   username: z.preprocess(
-    (value) => typeof value === 'string' ? value.trim().replace(/^@+/, '') || null : value,
-    z.string().regex(/^[A-Za-z0-9_-]{3,50}$/).nullable().optional(),
+    (value) =>
+      typeof value === 'string'
+        ? value.trim().replace(/^@+/, '') || null
+        : value,
+    z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{3,50}$/)
+      .nullable()
+      .optional(),
   ),
   nickname: z.string().trim().min(1).max(50).nullable().optional(),
   avatarUrl: z.string().url().optional(),
-  nameEmoji: z.string().regex(/^(?:p[1-4]|[aw]\d{3})-\d{4}$/).nullable().optional(),
+  nameEmoji: z
+    .string()
+    .regex(/^(?:p[1-4]|[aw]\d{3})-\d{4}$/)
+    .nullable()
+    .optional(),
   language: z.nativeEnum(UserLanguage).optional(),
   timezone: z.string().optional(),
   theme: z.nativeEnum(UserTheme).optional(),

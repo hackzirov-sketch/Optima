@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 
 export interface AuditLogEntry {
-  workspaceId?: string | null;
+  groupId?: string | null;
   actorId: string;
-  action: string; // e.g. 'workspace.deleted', 'member.role_changed'
+  action: string; // e.g. 'group.deleted', 'member.role_changed'
   entityType?: string;
   entityId?: string;
   oldValue?: unknown;
@@ -21,7 +21,7 @@ export interface AuditLogPage {
 
 export interface AuditLogRow {
   id: string;
-  workspaceId: string | null;
+  groupId: string | null;
   actorId: string | null;
   action: string;
   entityType: string | null;
@@ -36,7 +36,7 @@ export interface AuditLogRow {
 }
 
 export interface AuditQuery {
-  workspaceId?: string | null;
+  groupId?: string | null;
   entityType?: string;
   entityId?: string;
   actorId?: string;
@@ -50,7 +50,7 @@ export interface AuditQuery {
  *
  * `audit_logs` had a migration and an entity but nothing ever wrote to it, and
  * even once writes existed nothing could read them — a log nobody can open is
- * not a log. `list()` is the read side, and it is what makes the workspace
+ * not a log. `list()` is the read side, and it is what makes the group
  * activity feed and a room's change history the same query with a different
  * filter.
  *
@@ -66,10 +66,10 @@ export class AuditService {
     try {
       await this.dataSource.query(
         `INSERT INTO audit_logs
-           (workspace_id, actor_id, action, entity_type, entity_id, old_value, new_value, ip_address, user_agent)
+           (group_id, actor_id, action, entity_type, entity_id, old_value, new_value, ip_address, user_agent)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
-          entry.workspaceId ?? null,
+          entry.groupId ?? null,
           entry.actorId,
           entry.action,
           entry.entityType ?? null,
@@ -87,12 +87,12 @@ export class AuditService {
 
   /**
    * Reads history back. Every filter is optional and composes, so the same
-   * method serves "this workspace's activity", "this room's change history"
+   * method serves "this group's activity", "this room's change history"
    * and "what has this person been doing" — the three questions an audit trail
    * exists to answer.
    *
    * Authorisation lives with the caller: this class has no idea who may see a
-   * given workspace, and guessing would put a second, weaker copy of the
+   * given group, and guessing would put a second, weaker copy of the
    * permission rules here.
    */
   async list(query: AuditQuery = {}): Promise<AuditLogPage> {
@@ -104,10 +104,10 @@ export class AuditService {
       where.push(clause.replace('$?', `$${params.length}`));
     };
 
-    // `workspaceId: null` is a real filter (platform-level rows), distinct
-    // from the key being absent, which means "any workspace".
-    if (query.workspaceId === null) where.push('a.workspace_id IS NULL');
-    else if (query.workspaceId) add('a.workspace_id = $?', query.workspaceId);
+    // `groupId: null` is a real filter (platform-level rows), distinct
+    // from the key being absent, which means "any group".
+    if (query.groupId === null) where.push('a.group_id IS NULL');
+    else if (query.groupId) add('a.group_id = $?', query.groupId);
     if (query.entityType) add('a.entity_type = $?', query.entityType);
     if (query.entityId) add('a.entity_id = $?', query.entityId);
     if (query.actorId) add('a.actor_id = $?', query.actorId);
@@ -124,7 +124,7 @@ export class AuditService {
 
     params.push(limit, offset);
     const items = await this.dataSource.query<AuditLogRow>(
-      `SELECT a.id, a.workspace_id AS "workspaceId", a.actor_id AS "actorId",
+      `SELECT a.id, a.group_id AS "groupId", a.actor_id AS "actorId",
               a.action, a.entity_type AS "entityType", a.entity_id AS "entityId",
               a.old_value AS "oldValue", a.new_value AS "newValue",
               a.ip_address::text AS "ipAddress", a.created_at AS "createdAt",

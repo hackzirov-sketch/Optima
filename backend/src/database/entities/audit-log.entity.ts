@@ -1,12 +1,12 @@
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 import { User } from './user.entity';
 
 export interface AuditLog {
   id: string;
 
-  workspaceId: string | null;
+  groupId: string | null;
 
-  workspace: Workspace;
+  group: Group | null;
 
   actorId: string | null;
 

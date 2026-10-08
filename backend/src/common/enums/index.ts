@@ -10,12 +10,12 @@ export enum UserLanguage {
   EN = 'en',
 }
 
-export enum WorkspaceVisibility {
+export enum GroupVisibility {
   PUBLIC = 'public',
   PRIVATE = 'private',
 }
 
-export enum WorkspaceRole {
+export enum MemberRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   LEAD = 'lead',
@@ -48,7 +48,7 @@ export enum ProjectStatus {
 
 export enum ProjectVisibility {
   PUBLIC = 'public',
-  WORKSPACE = 'workspace',
+  GROUP = 'group',
   PRIVATE = 'private',
 }
 
@@ -108,17 +108,17 @@ export enum PushStatus {
  * frontend branched on a 'channel' type that existed nowhere in the schema),
  * so any change here needs a migration and vice versa.
  *
- * DIRECT/GROUP/CHANNEL are the user-facing kinds:
- *   DIRECT  — exactly two people, no workspace, unique per pair (dm_key)
- *   GROUP   — many people, workspace optional
- *   CHANNEL — broadcast, posting restricted by posting_mode, workspace optional
+ * DIRECT/CHANNEL are the user-facing kinds:
+ *   DIRECT  — exactly two people, no group, unique per pair (dm_key)
+ *   CHANNEL — broadcast, posting restricted by posting_mode, group optional
  *
- * WORKSPACE/PROJECT are structural rooms derived from workspaceId/projectId.
+ * GROUP/PROJECT are structural rooms derived from groupId/projectId. GROUP is
+ * the group's own dedicated room (formerly split into GROUP + GROUP —
+ * merged into one now that Group is the sole top-level container).
  * PUBLIC/PRIVATE are legacy values kept only so existing rows still parse —
  * scope, not type, is what governs visibility now.
  */
 export enum ChatRoomType {
-  WORKSPACE = 'workspace',
   PROJECT = 'project',
   GROUP = 'group',
   DIRECT = 'direct',
@@ -146,18 +146,18 @@ export enum ChatMemberStatus {
  * creation time, replacing the old ChatVisibility/MeetingVisibility enums
  * (which had different, overlapping value sets for what is really the same
  * concept). Determines both who can see/join the room and whether a
- * workspace is required:
- *  - WORKSPACE_ONLY: workspace_id required, visible only to workspace members
- *  - PRIVATE:        workspace_id optional, host + invited users join directly,
- *                     anyone else with the link can send a "request to join"
- *  - PUBLIC:         workspace_id optional, discoverable in global search
- *  - INVITE_ONLY:    workspace_id optional, not discoverable at all — only
- *                     the host + explicitly invited users can join; unlike
- *                     PRIVATE there is no "request to join" fallback
- *                     (meetings-only today; see MeetingJoinPolicy)
+ * group is required:
+ *  - GROUP_ONLY:  group_id required, visible only to group members
+ *  - PRIVATE:     group_id optional, host + invited users join directly,
+ *                 anyone else with the link can send a "request to join"
+ *  - PUBLIC:      group_id optional, discoverable in global search
+ *  - INVITE_ONLY: group_id optional, not discoverable at all — only
+ *                 the host + explicitly invited users can join; unlike
+ *                 PRIVATE there is no "request to join" fallback
+ *                 (meetings-only today; see MeetingJoinPolicy)
  */
 export enum RoomScope {
-  WORKSPACE_ONLY = 'workspace_only',
+  GROUP_ONLY = 'group_only',
   PRIVATE = 'private',
   PUBLIC = 'public',
   INVITE_ONLY = 'invite_only',
@@ -184,7 +184,7 @@ export enum NotificationType {
   MEMBER_JOINED = 'member_joined',
   MEMBER_ROLE_CHANGED = 'member_role_changed',
   MENTION = 'mention',
-  WORKSPACE_INVITE = 'workspace_invite',
+  GROUP_INVITE = 'group_invite',
   TASK_COMPLETED = 'task_completed',
   TASK_STATUS_CHANGED = 'task_status_changed',
   PROJECT_MEMBER_INVITE = 'project_member_invite',
@@ -237,8 +237,8 @@ export enum ReminderJobType {
 /**
  * Self-selected profession at signup — purely informational/onboarding data
  * (used for personalization, defaults, analytics). NOT to be confused with
- * `WorkspaceRole` (owner/admin/lead/senior/middle/junior/guest), which is the
- * per-workspace RBAC role and governs actual permissions.
+ * `MemberRole` (owner/admin/lead/senior/middle/junior/guest), which is the
+ * per-group RBAC role and governs actual permissions.
  */
 export enum UserOccupation {
   DEVELOPER = 'developer',

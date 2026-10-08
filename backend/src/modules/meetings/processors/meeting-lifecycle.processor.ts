@@ -49,15 +49,19 @@ export class MeetingLifecycleProcessor extends WorkerHost {
     try {
       const meeting = await this.meetingsService.checkAutoEnd(meetingId);
       if (meeting) {
-        this.logger.log(`Auto-ended empty meeting ${meetingId}`);
-        this.gateway.broadcastToMeeting(meetingId, 'meeting:ended', {
+        this.logger.log(`Deactivated empty meeting ${meetingId}`);
+        // Not 'meeting:ended': the room is INACTIVE, not ENDED — the link
+        // still works and reactivates on the next join. Nobody is actually
+        // in the room to hear this (that's why it deactivated), so this is
+        // mostly for a stray pre-join/lobby tab still watching the room.
+        this.gateway.broadcastToMeeting(meetingId, 'meeting:inactive', {
           meetingId,
           reason: 'empty',
         });
       }
     } catch (err) {
       this.logger.debug(
-        `Auto-end check skipped for ${meetingId}: ${err instanceof Error ? err.message : err}`,
+        `Auto-deactivate check skipped for ${meetingId}: ${err instanceof Error ? err.message : err}`,
       );
     }
   }

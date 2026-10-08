@@ -11,6 +11,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket, DefaultEventsMap } from 'socket.io';
 import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -45,8 +46,8 @@ export interface WsSocketData {
   auth?: WsUser;
   /** Periodic re-validation timer, cleared on disconnect. */
   authTimer?: NodeJS.Timeout;
-  /** Workspaces this socket joined rooms for, kept for disconnect cleanup. */
-  workspaceIds?: string[];
+  /** Groups this socket joined rooms for, kept for disconnect cleanup. */
+  groupIds?: string[];
   /** The meeting this socket is currently in, if any. */
   meetingId?: string;
 }
@@ -75,7 +76,7 @@ interface AccessTokenPayload {
   jti?: string;
   iat?: number;
   exp?: number;
-  workspaceIds?: string[];
+  groupIds?: string[];
 }
 
 export interface WsUser {
@@ -87,7 +88,7 @@ export interface WsUser {
   iat?: number;
   /** Token expiry in epoch milliseconds; 0 when the token carried no `exp`. */
   expiresAt: number;
-  workspaceIds: string[];
+  groupIds: string[];
 }
 
 // ─── DTOs ──────────────────────────────────────────────
@@ -156,6 +157,20 @@ export interface DirectCallDto {
   targetUserId: string;
   kind: 'audio' | 'video';
 }
+export interface MeetingReactionDto {
+  meetingId: string;
+  /** A single emoji character/sequence — validated below, never trusted raw. */
+  emoji: string;
+}
+export interface MeetingHandDto {
+  meetingId: string;
+  raised: boolean;
+}
+
+// Emoji reactions are ephemeral fire-and-forget events — capped to a small
+// allow-list (matching the picker in MeetingRoomPage.tsx) so the payload can
+// never carry arbitrary text through what looks like an emoji field.
+const ALLOWED_MEETING_REACTIONS = new Set(['👍', '❤️', '🎉', '👏', '😂', '😮']);
 
 // A socket drop (network blip, tab refresh) shouldn't immediately count as
 // "left the meeting" — give it a window to reconnect and rejoin before the
@@ -283,7 +298,7 @@ export class EventsGateway
         jti: payload.jti,
         iat: payload.iat,
         expiresAt: payload.exp ? payload.exp * 1000 : 0,
-        workspaceIds: payload.workspaceIds ?? [],
+        groupIds: payload.groupIds ?? [],
       };
     } catch {
       return null;
@@ -387,17 +402,17 @@ export class EventsGateway
     // otherwise be unhandled.
     await client.join(`user:${user.id}`);
 
-    // Load workspace memberships → join scoped rooms
-    const memberships = await this.dataSource.query<{ workspaceId: string }>(
-      `SELECT workspace_id AS "workspaceId" FROM workspace_members WHERE user_id = $1`,
+    // Load group memberships → join scoped rooms
+    const memberships = await this.dataSource.query<{ groupId: string }>(
+      `SELECT group_id AS "groupId" FROM group_members WHERE user_id = $1`,
       [user.id],
     );
-    const wsIds = memberships.map((m) => m.workspaceId);
+    const groupIds = memberships.map((m) => m.groupId);
 
-    // Store workspace memberships in socket data for cleanup on disconnect
-    client.data.workspaceIds = wsIds;
+    // Store group memberships in socket data for cleanup on disconnect
+    client.data.groupIds = groupIds;
     // Socket#join accepts an array and handles the adapter round trip itself.
-    await client.join(wsIds.map((wsId) => `workspace:${wsId}`));
+    await client.join(groupIds.map((groupId) => `group:${groupId}`));
 
     // Redis presence: per-socket freshness tracking (self-healing against
     // orphaned entries from a dead process) - only the 0->1+ transition
@@ -407,21 +422,19 @@ export class EventsGateway
       client.id,
     );
     if (isNewlyOnline) {
-      wsIds.forEach((wsId) =>
-        this.server.to(`workspace:${wsId}`).emit('presence_update', {
+      groupIds.forEach((groupId) =>
+        this.server.to(`group:${groupId}`).emit('presence_update', {
           userId: user.id,
           status: this.presenceService.maskForOthers(status),
         }),
       );
     }
 
-    // Bulk presence snapshot for everyone in my workspaces, in one shot.
+    // Bulk presence snapshot for everyone in my groups, in one shot.
     const peerIds = new Set<string>();
     await Promise.all(
-      wsIds.map(async (wsId) => {
-        const sockets = await this.server
-          .in(`workspace:${wsId}`)
-          .fetchSockets();
+      groupIds.map(async (groupId) => {
+        const sockets = await this.server.in(`group:${groupId}`).fetchSockets();
         for (const s of sockets) {
           if (s.data?.userId && s.data.userId !== user.id)
             peerIds.add(s.data.userId);
@@ -457,11 +470,11 @@ export class EventsGateway
     if (!Object.values(PresenceStatus).includes(status)) return;
     if (status === PresenceStatus.OFFLINE) return; // offline is derived, never set directly
     await this.presenceService.setStatus(userId, status);
-    const wsIds: string[] = client.data?.workspaceIds || [];
+    const groupIds: string[] = client.data?.groupIds || [];
     const masked = this.presenceService.maskForOthers(status);
-    wsIds.forEach((wsId) =>
+    groupIds.forEach((groupId) =>
       this.server
-        .to(`workspace:${wsId}`)
+        .to(`group:${groupId}`)
         .emit('presence_update', { userId, status: masked }),
     );
   }
@@ -489,9 +502,9 @@ export class EventsGateway
       );
       if (isNowOffline) {
         void this.usersService.updateLastSeen(userId);
-        const wsIds: string[] = client.data?.workspaceIds || [];
-        for (const wsId of wsIds) {
-          this.server.to(`workspace:${wsId}`).emit('presence_update', {
+        const groupIds: string[] = client.data?.groupIds || [];
+        for (const groupId of groupIds) {
+          this.server.to(`group:${groupId}`).emit('presence_update', {
             userId,
             status: PresenceStatus.OFFLINE,
           });
@@ -558,10 +571,10 @@ export class EventsGateway
     }
   }
 
-  // ─── Workspace join/leave ────────────────────────────
-  @SubscribeMessage('join_workspace')
-  async handleJoinWorkspace(
-    @MessageBody() data: { workspaceId: string },
+  // ─── Group join/leave ────────────────────────────
+  @SubscribeMessage('join_group')
+  async handleJoinGroup(
+    @MessageBody() data: { groupId: string },
     @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
@@ -572,23 +585,23 @@ export class EventsGateway
       });
 
     const memberRows = await this.dataSource.query(
-      `SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [data.workspaceId, userId],
+      `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [data.groupId, userId],
     );
     const member = memberRows[0];
     if (!member)
       throw new WsException({
-        code: 'WS_NOT_WORKSPACE_MEMBER',
-        message: 'Not a workspace member',
+        code: 'WS_NOT_GROUP_MEMBER',
+        message: 'Not a group member',
       });
 
-    await client.join(`workspace:${data.workspaceId}`);
-    return { event: 'workspace_joined', workspaceId: data.workspaceId };
+    await client.join(`group:${data.groupId}`);
+    return { event: 'group_joined', groupId: data.groupId };
   }
 
-  @SubscribeMessage('leave_workspace')
-  async handleLeaveWorkspace(
-    @MessageBody() data: { workspaceId: string },
+  @SubscribeMessage('leave_group')
+  async handleLeaveGroup(
+    @MessageBody() data: { groupId: string },
     @ConnectedSocket() client: AppSocket,
   ) {
     const userId = client.data?.userId;
@@ -598,8 +611,8 @@ export class EventsGateway
         message: 'Not authenticated',
       });
 
-    await client.leave(`workspace:${data.workspaceId}`);
-    return { event: 'workspace_left', workspaceId: data.workspaceId };
+    await client.leave(`group:${data.groupId}`);
+    return { event: 'group_left', groupId: data.groupId };
   }
 
   // ─── Room join/leave ──────────────────────────────────
@@ -972,7 +985,7 @@ export class EventsGateway
     }
 
     // Run the SAME validation + persistence path as the REST endpoint
-    // (meeting exists, not ended/cancelled, caller is a workspace member,
+    // (meeting exists, not ended/cancelled, caller is a group member,
     // capacity not exceeded) and write a meeting_participants row. Without
     // this, the socket would join a Socket.IO room for ANY meetingId with
     // zero checks, and no participant record would ever be created —
@@ -1018,10 +1031,10 @@ export class EventsGateway
     // Both payloads carry identities, not just ids.
     //
     // A tile used to appear only once a media stream arrived, and the name on
-    // it was looked up in the viewer's workspace member list. So someone who
+    // it was looked up in the viewer's group member list. So someone who
     // joined with their camera and microphone off was invisible to everyone
     // else — the room said "waiting for others" while they sat in it — and
-    // anyone outside the viewer's workspace rendered as "Qatnashchi". The
+    // anyone outside the viewer's group rendered as "Qatnashchi". The
     // roster is what the client draws from now, so it has to be complete.
     const profiles = await this.meetingsService.getParticipantProfiles([
       ...participants,
@@ -1038,6 +1051,18 @@ export class EventsGateway
       })),
     });
 
+    // Reconnect/late-join snapshot of raised hands — without this, a host
+    // who refreshes mid-call would lose the raised-hand list even though
+    // the state itself is still live in Redis.
+    const raisedHandUserIds =
+      await this.meetingsService.listRaisedHands(meetingId);
+    if (raisedHandUserIds.length) {
+      client.emit('meeting:hands-snapshot', {
+        meetingId,
+        userIds: raisedHandUserIds,
+      });
+    }
+
     // Notify everyone else that this user joined
     client.to(`meeting:${meetingId}`).emit('meeting:user-joined', {
       meetingId,
@@ -1048,10 +1073,10 @@ export class EventsGateway
     // Auto-presence: joining a call is a strong, unambiguous "in a meeting"
     // signal - no reason to make the user set this by hand.
     await this.presenceService.setStatus(userId, PresenceStatus.IN_MEETING);
-    const wsIds: string[] = client.data?.workspaceIds || [];
-    wsIds.forEach((wsId) =>
+    const groupIds: string[] = client.data?.groupIds || [];
+    groupIds.forEach((groupId) =>
       this.server
-        .to(`workspace:${wsId}`)
+        .to(`group:${groupId}`)
         .emit('presence_update', { userId, status: PresenceStatus.IN_MEETING }),
     );
 
@@ -1067,6 +1092,66 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) return;
     await this.leaveMeeting(client, userId, data.meetingId);
+  }
+
+  // ─── Meeting: reactions (emoji) ───────────────────────
+  // Fully ephemeral — broadcast-only, nothing written to Postgres. Payload
+  // shape (`{id, userId, emoji}`) matches what MeetingRoomPage.tsx's
+  // onReaction already expects — the frontend had this wired up with no
+  // server-side handler behind it.
+  @SubscribeMessage('meeting:reaction')
+  handleMeetingReaction(
+    @MessageBody() data: MeetingReactionDto,
+    @ConnectedSocket() client: AppSocket,
+  ) {
+    const userId = client.data?.userId;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`) ||
+      !ALLOWED_MEETING_REACTIONS.has(data.emoji)
+    )
+      return;
+
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:reaction', {
+      id: randomUUID(),
+      userId,
+      emoji: data.emoji,
+    });
+  }
+
+  // ─── Meeting: raise/lower hand ─────────────────────────
+  // Also ephemeral and broadcast-only: this is Meet/Zoom-style "hand raised"
+  // — a visibility signal for the host, not a mic unlock. Actual mute state
+  // still goes through `meeting:toggle` under the participant's own control;
+  // the server here only relays who currently has a hand up.
+  //
+  // Cached in Redis (not just broadcast) so a host who refreshes mid-call —
+  // the exact scenario this whole pass was about — doesn't lose the list of
+  // raised hands; see the snapshot sent from handleMeetingJoin.
+  @SubscribeMessage('meeting:hand')
+  async handleMeetingHand(
+    @MessageBody() data: MeetingHandDto,
+    @ConnectedSocket() client: AppSocket,
+  ) {
+    const userId = client.data?.userId;
+    if (
+      !userId ||
+      client.data?.meetingId !== data.meetingId ||
+      !client.rooms.has(`meeting:${data.meetingId}`)
+    )
+      return;
+
+    await this.meetingsService.setHandRaised(
+      data.meetingId,
+      userId,
+      Boolean(data.raised),
+    );
+
+    this.server.to(`meeting:${data.meetingId}`).emit('meeting:hand', {
+      userId,
+      raised: Boolean(data.raised),
+    });
   }
 
   // ─── Meeting: WebRTC offer ────────────────────────────
@@ -1461,6 +1546,11 @@ export class EventsGateway
       // Swallow errors: the participant row may not exist if this socket
       // never completed a validated join (e.g. it disconnected mid-join).
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
+      // A departed participant shouldn't linger in the raised-hands list —
+      // best-effort clear, mirrors the resilience of the leave() call above.
+      await this.meetingsService
+        .setHandRaised(meetingId, userId, false)
+        .catch(() => {});
       client
         .to(`meeting:${meetingId}`)
         .emit('meeting:user-left', { meetingId, userId });
@@ -1480,10 +1570,10 @@ export class EventsGateway
     if (current !== PresenceStatus.IN_MEETING) return;
 
     await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
-    const wsIds: string[] = client.data?.workspaceIds || [];
-    wsIds.forEach((wsId) =>
+    const groupIds: string[] = client.data?.groupIds || [];
+    groupIds.forEach((groupId) =>
       this.server
-        .to(`workspace:${wsId}`)
+        .to(`group:${groupId}`)
         .emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
     );
   }
@@ -1557,9 +1647,9 @@ export class EventsGateway
     this.server?.to(`meeting:${meetingId}`)?.emit(event, payload);
   }
 
-  /** Broadcast an event to all sockets in a workspace room */
-  broadcastToWorkspace(workspaceId: string, event: string, payload: unknown) {
-    this.server?.to(`workspace:${workspaceId}`)?.emit(event, payload);
+  /** Broadcast an event to all sockets in a group room */
+  broadcastToGroup(groupId: string, event: string, payload: unknown) {
+    this.server?.to(`group:${groupId}`)?.emit(event, payload);
   }
 
   /** Check whether a user has at least one active socket across the cluster */

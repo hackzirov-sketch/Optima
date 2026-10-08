@@ -19,7 +19,7 @@ import {
   MeetingParticipantRole,
 } from '../../common/enums/meeting.enum';
 import { RoomScope } from '../../common/enums';
-import { MembersService } from '../workspaces/services/members.service';
+import { MembersService } from '../groups/services/members.service';
 import { ReminderSchedulerService } from '../notifications/reminder-scheduler.service';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { buildUpdateSet } from '../../common/utils/sql.util';
@@ -32,6 +32,7 @@ import {
 import {
   MEETING_LIFECYCLE_QUEUE,
   MEETING_AUTO_END_GRACE_SECONDS,
+  MEETING_INACTIVE_RETENTION_DAYS,
   MESH_MAX_PARTICIPANTS,
   effectiveCapacity,
 } from './meetings.constants';
@@ -40,6 +41,8 @@ import { MeetingAccessService } from './services/meeting-access.service';
 import { MeetingRecordingService } from './services/meeting-recording.service';
 import { MeetingJoinRequestService } from './services/meeting-join-request.service';
 import { MeetingFilesService } from './services/meeting-files.service';
+import { RedisService } from '../../redis/redis.service';
+import { RedisKeys } from '../../redis/redis.keys';
 
 export {
   MEETING_RECORDING_QUEUE,
@@ -78,22 +81,23 @@ export class MeetingsService {
     private readonly reminderScheduler: ReminderSchedulerService,
     @InjectQueue(MEETING_LIFECYCLE_QUEUE)
     private readonly lifecycleQueue: Queue,
+    private readonly redisService: RedisService,
   ) {}
 
-  async listForWorkspace(workspaceId: string, userId: string) {
-    await this.membersService.assertMember(workspaceId, userId);
+  async listForGroup(groupId: string, userId: string) {
+    await this.membersService.assertMember(groupId, userId);
 
     const meetings = await this.dataSource.query<any>(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings
-             WHERE workspace_id = $1
+             WHERE group_id = $1
                AND (host_id = $2 OR EXISTS (
                  SELECT 1 FROM meeting_participants mp
                  WHERE mp.meeting_id = meetings.id AND mp.user_id = $2
                ))
              ORDER BY start_time DESC) m
        LEFT JOIN users u ON u.id = m."hostId"`,
-      [workspaceId, userId],
+      [groupId, userId],
     );
     if (!meetings.length) return [];
 
@@ -157,7 +161,7 @@ export class MeetingsService {
         h_firstName,
         h_lastName,
         h_avatarUrl,
-        workspace_id,
+        group_id,
         host_id,
         meeting_code,
         start_time,
@@ -178,7 +182,7 @@ export class MeetingsService {
       return this.meetingsRepository.enrichMeeting(
         {
           ...meetingRest,
-          workspaceId: workspace_id,
+          groupId: group_id,
           hostId: host_id,
           meetingCode: meeting_code,
           startTime: start_time,
@@ -193,21 +197,17 @@ export class MeetingsService {
     });
   }
 
-  async create(
-    workspaceId: string | null,
-    userId: string,
-    dto: CreateMeetingDto,
-  ) {
-    const scope = dto.scope ?? RoomScope.WORKSPACE_ONLY;
+  async create(groupId: string | null, userId: string, dto: CreateMeetingDto) {
+    const scope = dto.scope ?? RoomScope.GROUP_ONLY;
     const joinPolicy = dto.joinPolicy ?? defaultJoinPolicy(scope);
-    if (scope === RoomScope.WORKSPACE_ONLY && !workspaceId) {
+    if (scope === RoomScope.GROUP_ONLY && !groupId) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
-        message: 'workspace_only meetings require a workspace',
+        message: 'group_only meetings require a group',
       });
     }
-    if (workspaceId) {
-      await this.membersService.assertMember(workspaceId, userId);
+    if (groupId) {
+      await this.membersService.assertMember(groupId, userId);
     }
 
     let code = '';
@@ -237,12 +237,12 @@ export class MeetingsService {
       // COALESCE beside it needs no cast: the `false` literal supplies a type.
       const rows = await this.dataSource.query(
         `INSERT INTO meetings
-           (workspace_id, host_id, title, description, meeting_code, start_time, end_time,
+           (group_id, host_id, title, description, meeting_code, start_time, end_time,
             max_participants, is_recurring, agenda, scope, join_policy)
          VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::int, $13::int), COALESCE($9, false), $10, $11, $12)
          RETURNING ${MEETING_COLUMNS_SQL}`,
         [
-          workspaceId,
+          groupId,
           userId,
           dto.title,
           dto.description ?? null,
@@ -453,6 +453,10 @@ export class MeetingsService {
         `UPDATE meeting_participants SET joined_at = now() WHERE id = $1`,
         [openRows[0].id],
       );
+      await this.dataSource.query(
+        `UPDATE meetings SET last_activity_at = now() WHERE id = $1`,
+        [meetingId],
+      );
       return this.getOne(meetingId, userId);
     }
 
@@ -485,11 +489,21 @@ export class MeetingsService {
       });
     }
 
-    // Auto-start meeting when first non-host joins
-    if (meeting.status === MeetingStatus.SCHEDULED) {
+    // Auto-start meeting when first non-host joins; also reactivates an
+    // abandoned-but-not-ended room ("old link should still work" — see
+    // migration 015 and MeetingsService.sweepExpiredInactiveMeetings).
+    if (
+      meeting.status === MeetingStatus.SCHEDULED ||
+      meeting.status === MeetingStatus.INACTIVE
+    ) {
       await this.dataSource.query(
-        `UPDATE meetings SET status = $2::meeting_status_enum WHERE id = $1`,
+        `UPDATE meetings SET status = $2::meeting_status_enum, last_activity_at = now() WHERE id = $1`,
         [meetingId, MeetingStatus.LIVE],
+      );
+    } else {
+      await this.dataSource.query(
+        `UPDATE meetings SET last_activity_at = now() WHERE id = $1`,
+        [meetingId],
       );
     }
 
@@ -737,6 +751,36 @@ export class MeetingsService {
     }
   }
 
+  // ── Raise hand ("qo'l ko'tarish") ─────────────────────────────────────────
+  // Ephemeral, session-scoped, like reactions — a visibility cue for the
+  // host, not a permission grant, so there's no review/approve step and no
+  // Postgres table. The gateway is what makes it real-time; this just owns
+  // the authoritative "who currently has a hand up" set so a host who
+  // refreshes mid-call (see leave()/scheduleMeetingLeaveGrace above) doesn't
+  // lose it.
+
+  /** Idempotent: raising an already-raised hand or lowering an unraised one is a no-op. */
+  async setHandRaised(
+    meetingId: string,
+    userId: string,
+    raised: boolean,
+  ): Promise<void> {
+    const client = this.redisService.getClient();
+    if (!client) return;
+    const key = RedisKeys.meetingRaisedHands(meetingId);
+    if (raised) await client.sadd(key, userId);
+    else await client.srem(key, userId);
+  }
+
+  /** Host (or a reconnecting/late-joining client): who currently has a hand up. */
+  async listRaisedHands(meetingId: string): Promise<string[]> {
+    return (
+      (await this.redisService
+        .getClient()
+        ?.smembers(RedisKeys.meetingRaisedHands(meetingId))) ?? []
+    );
+  }
+
   async leave(meetingId: string, userId: string) {
     const participantRows = await this.dataSource.query(
       `SELECT id FROM meeting_participants WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -822,7 +866,7 @@ export class MeetingsService {
     );
     if (Number(activeCountRows[0]?.count ?? 0) > 0) return null;
 
-    return this.finishMeeting(meetingId);
+    return this.deactivateMeeting(meetingId);
   }
 
   /** Host-only: end the meeting for everyone right now ("End meeting" popup choice). */
@@ -839,18 +883,81 @@ export class MeetingsService {
   }
 
   /**
+   * Empty-room transition (Google Meet-style): LIVE → INACTIVE, not ENDED.
+   * The link/code stays valid — join() reactivates it straight back to LIVE
+   * (see the "Auto-start meeting" block there). Nothing is left running for
+   * an INACTIVE room: no socket, no media session, no TURN allocation — it's
+   * pure metadata sitting in Postgres until either someone rejoins or
+   * sweepExpiredInactiveMeetings() finally retires it. That split (durable
+   * cheap metadata vs. torn-down-immediately runtime resources) is the same
+   * one finishMeeting() draws for a fully ENDED meeting; this is just the
+   * non-final version of it.
+   */
+  private async deactivateMeeting(meetingId: string) {
+    const rows = await this.dataSource.query(
+      `UPDATE meetings SET status = $2::meeting_status_enum, last_activity_at = now()
+         WHERE id = $1 AND status = $3::meeting_status_enum
+         RETURNING ${MEETING_COLUMNS_SQL}`,
+      [meetingId, MeetingStatus.INACTIVE, MeetingStatus.LIVE],
+    );
+    const meeting = rows[0];
+    if (!meeting) return null; // already changed under us — no-op
+
+    await this.dataSource.query(
+      `UPDATE meeting_participants SET left_at = now() WHERE meeting_id = $1 AND left_at IS NULL`,
+      [meetingId],
+    );
+
+    await this.recordingService
+      .stopRecording(meetingId, null, { autoStopped: true })
+      .catch(() => undefined);
+
+    const job = await this.lifecycleQueue.getJob(`auto-end_${meetingId}`);
+    await job?.remove().catch(() => undefined);
+
+    return meeting;
+  }
+
+  /**
+   * Retention sweep (see MeetingRetentionSweepService for the timer that
+   * calls this): an INACTIVE room older than MEETING_INACTIVE_RETENTION_DAYS
+   * finally becomes ENDED — the link stops working for good. Returns how
+   * many rows were swept, purely for logging.
+   */
+  async sweepExpiredInactiveMeetings(): Promise<number> {
+    const rows = await this.dataSource.query<{ id: string }>(
+      `UPDATE meetings SET status = $1::meeting_status_enum, end_time = now()
+         WHERE status = $2::meeting_status_enum
+           AND last_activity_at < now() - ($3 || ' days')::interval
+         RETURNING id`,
+      [
+        MeetingStatus.ENDED,
+        MeetingStatus.INACTIVE,
+        MEETING_INACTIVE_RETENTION_DAYS,
+      ],
+    );
+    return rows.length;
+  }
+
+  /**
    * Shared terminal transition, used by both the explicit host "End meeting"
-   * action and the automatic empty-room timeout. Marks the meeting ENDED
-   * (history is never deleted — only ever transitions to ENDED/CANCELLED),
-   * force-closes any still-active participant rows, auto-stops an in-progress
-   * recording, and cancels any pending auto-end job so it doesn't fire twice.
+   * action and the retention sweep. Marks the meeting ENDED (history is
+   * never deleted — only ever transitions to ENDED/CANCELLED), force-closes
+   * any still-active participant rows, auto-stops an in-progress recording,
+   * and cancels any pending auto-end job so it doesn't fire twice. Allowed
+   * from LIVE, INACTIVE or SCHEDULED — a host can kill an abandoned link
+   * just as validly as a live call.
    */
   private async finishMeeting(meetingId: string) {
     const rows = await this.dataSource.query(
       `UPDATE meetings SET status = $2::meeting_status_enum, end_time = now()
-         WHERE id = $1 AND status = $3::meeting_status_enum
+         WHERE id = $1 AND status = ANY($3::meeting_status_enum[])
          RETURNING ${MEETING_COLUMNS_SQL}`,
-      [meetingId, MeetingStatus.ENDED, MeetingStatus.LIVE],
+      [
+        meetingId,
+        MeetingStatus.ENDED,
+        [MeetingStatus.LIVE, MeetingStatus.INACTIVE, MeetingStatus.SCHEDULED],
+      ],
     );
     const meeting = rows[0];
     if (!meeting) return null; // already ended/cancelled — no-op

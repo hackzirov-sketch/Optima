@@ -3,12 +3,15 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
+import { DirectCallSurface } from "../components/DirectCallSurface";
+import { MeetingChat } from "../components/MeetingChat";
+import { useMeetingChat } from "../lib/meetingChat";
 import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, WorkspaceMember } from "../types";
+import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
@@ -79,7 +82,7 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
       <span className="video-label">{label}</span>
       {handRaised && <span className="tile-hand" title={t("meetingRoom.handRaisedTitle")}><Hand size={16} /></span>}
       {pipEnabled && hasVideo && document.pictureInPictureEnabled && <button className="tile-pip" onClick={requestPip} aria-label={t("meetingRoom.pipAria")} title={t("meetingRoom.pipAria")}><PictureInPicture2 size={15} /></button>}
-      {onPin && <button className={`tile-pin ${pinned ? "active" : ""}`} onClick={onPin} aria-label={pinned ? t("meetingRoom.releaseVideoAria") : t("meetingRoom.pinVideoAria")}><Pin size={15} /></button>}
+      {onPin && <button className={`tile-pin ${pinned ? "active" : ""}`} onClick={onPin} title={pinned ? t("meetingRoom.releaseVideoAria") : t("meetingRoom.pinVideoAria")} aria-label={pinned ? t("meetingRoom.releaseVideoAria") : t("meetingRoom.pinVideoAria")}><Pin size={15} /></button>}
       {!microphoneOn && <span className="tile-muted" aria-label={t("meetingRoom.micOffTileAria")}><MicOff size={15} /></span>}
     </article>
   );
@@ -120,12 +123,12 @@ function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, o
       </div>
       <header>
         <strong>{title}</strong>
-        <button onClick={onExpand} aria-label={t("meetingRoom.expandWidgetAria")}><Maximize2 size={15} /></button>
+        <button onClick={onExpand} title={t("meetingRoom.expandWidgetAria")} aria-label={t("meetingRoom.expandWidgetAria")}><Maximize2 size={15} /></button>
       </header>
       <div className="floating-widget-controls">
-        <button className={microphone ? "" : "off"} onClick={onToggleMic} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={17} /> : <MicOff size={17} />}</button>
-        <button className={camera ? "" : "off"} onClick={onToggleCamera} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={17} /> : <CameraOff size={17} />}</button>
-        <button className="leave-control" onClick={onLeave} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={17} /></button>
+        <button className={microphone ? "" : "off"} onClick={onToggleMic} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={17} /> : <MicOff size={17} />}</button>
+        <button className={camera ? "" : "off"} onClick={onToggleCamera} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={17} /> : <CameraOff size={17} />}</button>
+        <button className="leave-control" onClick={onLeave} title={t("meetingRoom.leaveMeetingAria")} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={17} /></button>
       </div>
     </div>
   );
@@ -140,8 +143,8 @@ function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, o
  * exactly as before: a single call, full-screen, torn down when its parent
  * stops rendering it.
  */
-export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, onDirectClose }: { meetingId?: string; directMode?: boolean; onDirectClose?: () => void }) {
-  const { user, workspace } = useAuth();
+export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, directKind = "audio", directPeer, onDirectClose }: { meetingId?: string; directMode?: boolean; directKind?: "audio" | "video"; directPeer?: Pick<User, "firstName" | "lastName" | "avatarUrl">; onDirectClose?: () => void }) {
+  const { user, group } = useAuth();
   const selfId = user?.id || "__self__";
   const { show } = useToast();
   const { t, locale } = useI18n();
@@ -160,7 +163,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // The lobby camera preview keys off this: see the getUserMedia effect below.
   const isFullMode = directMode || Boolean(routeMatch);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [entered, setEntered] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -194,12 +197,16 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [notes, setNotes] = useState<Note[]>([]);
   const [savingNote, setSavingNote] = useState(false);
   const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | "notes" | "waiting" | "settings" | null>(null);
+  const [meetingChatOpen, setMeetingChatOpen] = useState(false);
+  const meetingChat = useMeetingChat(meetingId, user?.id || "");
+  const attachMeetingChat = meetingChat.attach;
+  useEffect(() => { if (sidePanel) setMeetingChatOpen(false); }, [sidePanel]);
   const [accessDenied, setAccessDenied] = useState("");
   const [requestState, setRequestState] = useState<"idle" | "requesting" | "pending" | "rejected">("idle");
   const [waitingRequests, setWaitingRequests] = useState<MeetingJoinRequest[]>([]);
   const [waitingBusy, setWaitingBusy] = useState<string | null>(null);
   const [waitingCount, setWaitingCount] = useState<number | null>(null);
-  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("workspace_only");
+  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("group_only");
   const [settingsJoinPolicy, setSettingsJoinPolicy] = useState<MeetingJoinPolicyValue>("auto");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
@@ -214,6 +221,11 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [reactions, setReactions] = useState<Array<{ id: string; userId: string; emoji: string }>>([]);
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  // Manual override for the footer's grid-view button — lets someone drop
+  // out of screen-share/speaker/pinned spotlight and see everyone at once,
+  // Meet-style, without having to unpin or wait for the share to stop.
+  const [gridViewForced, setGridViewForced] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const audioAnalysers = useRef(new Map<string, { ctx: AudioContext; analyser: AnalyserNode; data: Uint8Array<ArrayBuffer> }>());
   const speakerStableTicks = useRef(new Map<string, number>());
   const [localStream, setLocalStream] = useState<MediaStream>();
@@ -327,7 +339,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   useEffect(() => {
     if (!meetingId) return;
-    Promise.all([api.meetings.one(meetingId), workspace ? api.workspaces.members(workspace.id).catch(() => []) : Promise.resolve([])])
+    Promise.all([api.meetings.one(meetingId), group ? api.groups.members(group.id).catch(() => []) : Promise.resolve([])])
       .then(([nextMeeting, nextMembers]) => {
         setMeeting(nextMeeting);
         setMembers(nextMembers);
@@ -345,15 +357,15 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         show(error instanceof Error ? error.message : t("meetingRoom.loadFailed"), "error");
       })
       .finally(() => setLoading(false));
-  }, [meetingId, workspace?.id, show, t]);
+  }, [meetingId, group?.id, show, t]);
 
   /**
    * Identities for everyone on screen.
    *
    * The meeting's own roster comes first: it covers guests, standalone
-   * meetings with no workspace at all, and anyone who simply isn't in the
+   * meetings with no group at all, and anyone who simply isn't in the
    * viewer's organisation — all of whom used to fall through to the generic
-   * "Qatnashchi" label because this map was built purely from the workspace
+   * "Qatnashchi" label because this map was built purely from the group
    * member list. That list is still consulted as a fallback, since it carries
    * the richer profile for colleagues.
    */
@@ -437,7 +449,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   function visibilityLabel(value: MeetingVisibility) {
     return ({
-      workspace_only: t("meetings.visibilityWorkspace"),
+      group_only: t("meetings.visibilityWorkspace"),
       private: t("meetings.visibilityPrivate"),
       public: t("meetings.visibilityPublic"),
       invite_only: t("meetings.visibilityInviteOnly"),
@@ -586,6 +598,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (existing) return existing;
     const socket = getSocket();
     const peer = new RTCPeerConnection(rtcConfig.current);
+    if (!directMode) attachMeetingChat(peer, targetUserId);
     currentStream.current?.getTracks().forEach((track) => peer.addTrack(track, currentStream.current!));
     peer.onicecandidate = (event) => {
       if (event.candidate) socket.emit("meeting:ice-candidate", { meetingId, targetUserId, candidate: event.candidate.toJSON() });
@@ -636,7 +649,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
     peers.current.set(targetUserId, peer);
     return peer;
-  }, [meetingId, closePeer]);
+  }, [meetingId, closePeer, directMode, attachMeetingChat]);
 
   /**
    * The one place an offer is ever created. Called directly to open a
@@ -705,9 +718,20 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
     const onUserJoined = ({ userId: joinedUserId, user: joinedUser }: { userId: string; user?: MeetingUser | null }) => {
       setRoster((current) => ({ ...current, [joinedUserId]: joinedUser ?? current[joinedUserId] ?? null }));
+      // A `user-joined` event always means a brand-new socket/session for
+      // this user — either a genuinely new participant, or someone who
+      // refreshed/reconnected. Either way, any RTCPeerConnection we already
+      // hold for them belongs to a session that's gone. Because a quick
+      // refresh reconnects inside the server's grace window, `user-left`
+      // never fires for it — so without this, createPeer's "if already
+      // exists, reuse it" kept wiring a dead connection back up forever.
+      // That was the actual cause of the permanent frozen-camera/stuck-on-
+      // Connecting bug: neither side ever renegotiated because each thought
+      // a (dead) peer connection already existed.
+      if (peers.current.has(joinedUserId)) closePeer(joinedUserId);
       void sendSecurityKey(joinedUserId);
       window.setTimeout(() => {
-        if (user?.id && !isPolite(joinedUserId) && !peers.current.has(joinedUserId)) void negotiate(joinedUserId);
+        if (user?.id && !isPolite(joinedUserId)) void negotiate(joinedUserId);
       }, 300);
     };
     /**
@@ -768,8 +792,24 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         return next;
       });
       closePeer(leftUserId);
+      setRaisedHands((current) => {
+        if (!current.has(leftUserId)) return current;
+        const next = new Set(current);
+        next.delete(leftUserId);
+        return next;
+      });
     };
     const onHand = ({ userId, raised }: { userId: string; raised: boolean }) => setRaisedHands((current) => { const next = new Set(current); if (raised) next.add(userId); else next.delete(userId); return next; });
+    // Reconnect/late-join snapshot: without this, refreshing mid-call would
+    // silently drop every hand that was already raised before the socket
+    // reconnected — the server still has them (Redis), the client just
+    // hadn't been told yet.
+    const onHandsSnapshot = ({ userIds }: { userIds: string[] }) =>
+      setRaisedHands((current) => {
+        const next = new Set(current);
+        userIds.forEach((id) => next.add(id));
+        return next;
+      });
     const onReaction = (reaction: { id: string; userId: string; emoji: string }) => {
       setReactions((current) => [...current, reaction]);
       window.setTimeout(() => setReactions((current) => current.filter((item) => item.id !== reaction.id)), 3200);
@@ -805,6 +845,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     socket.on("meeting:ice-candidate", onIce);
     socket.on("meeting:user-left", onLeft);
     socket.on("meeting:hand", onHand);
+    socket.on("meeting:hands-snapshot", onHandsSnapshot);
     socket.on("meeting:reaction", onReaction);
     socket.on("meeting:toggled", onToggle);
     socket.on("meeting:file-shared", onFileShared);
@@ -821,6 +862,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:ice-candidate", onIce);
       socket.off("meeting:user-left", onLeft);
       socket.off("meeting:hand", onHand);
+      socket.off("meeting:hands-snapshot", onHandsSnapshot);
       socket.off("meeting:reaction", onReaction);
       socket.off("meeting:toggled", onToggle);
       socket.off("meeting:file-shared", onFileShared);
@@ -1024,6 +1066,19 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     else if (routeMatch) navigate("/meetings");
   }
 
+  // Host-only "End meeting for everyone" — the backend endpoint
+  // (POST /meetings/:id/end) already existed and broadcasts meeting:ended
+  // to every socket, but nothing in this UI ever called it.
+  async function endMeetingForAll() {
+    if (!meetingId || !window.confirm(t("meetingRoom.endMeetingConfirm"))) return;
+    setMoreMenuOpen(false);
+    try {
+      await api.meetings.end(meetingId);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("meetingRoom.endMeetingFailed"));
+    }
+  }
+
   function toggleHand() {
     const raised = !handRaised;
     setHandRaised(raised);
@@ -1034,6 +1089,18 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   function sendReaction(emoji: string) {
     setReactionOpen(false);
     getSocket().emit("meeting:reaction", { meetingId, emoji });
+  }
+
+  // Pinning always means "show me this person" — if grid view was forced
+  // (footer grid button), a pin should win over it rather than being
+  // silently ignored because focusedUserId still resolves to null.
+  function togglePin(id: string | null | undefined) {
+    if (!id) return;
+    setPinnedUserId((current) => {
+      const next = current === id ? null : id;
+      if (next) setGridViewForced(false);
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -1207,7 +1274,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return entry ? entry[0] : null;
   }, [screenSharing, remoteMedia, selfId]);
 
-  const focusedUserId = screenSharingUserId || activeSpeakerId || pinnedUserId || null;
+  const focusedUserId = gridViewForced ? null : (screenSharingUserId || activeSpeakerId || pinnedUserId || null);
 
   /**
    * What the header actually reports. The socket being up only means
@@ -1282,6 +1349,17 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   if (!isFullMode) return null;
 
   const overlayClass = directMode ? "" : "meeting-standalone-overlay";
+  if (directMode) {
+    const peer = allTiles.find((tile) => !tile.isSelf);
+    const profile = peer?.avatar || directPeer;
+    const name = profile ? `${profile.firstName} ${profile.lastName || ""}`.trim() : t("chat.userFallback");
+    const hasVideo = directKind === "video" || camera || screenSharing || Boolean(peer?.video && peer?.stream?.getVideoTracks().length);
+    const status = accessDenied || (!loading && !meeting ? t("meetingRoom.callNotFound") : callState === "failed" ? t("meetingRoom.mediaFailed") : callState === "offline" ? t("meetingRoom.reconnecting") : entered && peer ? t("meetingRoom.connectionStable") : t("chat.connectingText"));
+    return <DirectCallSurface name={name} video={hasVideo} status={status} ready={entered && !loading && !accessDenied} microphone={microphone} camera={camera} screenSharing={screenSharing} securityCode={securityCode}
+      remote={<VideoTile stream={peer?.stream} label={name} avatar={profile} microphoneOn={peer?.mic ?? true} videoOn={peer?.video ?? false} pipEnabled />}
+      local={camera || screenSharing ? <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} videoOn={camera || screenSharing} /> : null}
+      onMic={() => void toggleTrack("audio")} onCamera={() => void toggleTrack("video")} onScreen={() => void toggleScreen()} onLeave={leave} />;
+  }
   if (loading) return <div className={`meeting-room-loading ${overlayClass}`}><LoaderCircle className="spin" size={26} /><p>{t("meetingRoom.preparing")}</p></div>;
   if (accessDenied) return <div className={`meeting-room-loading ${overlayClass}`}><ShieldX size={26} /><p><strong>{t("meetingRoom.accessDeniedTitle")}</strong></p><p>{accessDenied}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;
   if (!meeting) return <div className={`meeting-room-loading ${overlayClass}`}><p>{directMode ? t("meetingRoom.callNotFound") : t("meetingRoom.meetingNotFound")}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;
@@ -1311,25 +1389,26 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   );
 
   return (
-    <div className={`meeting-room ${directMode ? "direct-call-room" : overlayClass}`}>
+    <div className={`meeting-room ${gridViewForced ? "grid-forced" : ""} ${directMode ? "direct-call-room" : overlayClass}`}>
       <header className="meeting-room-header"><div><span className={`connection-dot ${callState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{callState === "connected" ? t("meetingRoom.connectionStable") : callState === "offline" ? t("meetingRoom.reconnecting") : callState === "failed" ? t("meetingRoom.mediaFailed") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
       {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label={t("meetingRoom.checkSecurityKeyAria")}><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>{t("meetingRoom.compareKeyHint")}</small></button>}
-      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""}`}>
+      <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => { const person = id === user?.id ? user : users.get(id); return person ? `${person.firstName} ${person.lastName || ""}`.trim() : t("meetingRoom.participantFallback"); }} open={meetingChatOpen} onOpen={(open) => { setMeetingChatOpen(open); if (open) setSidePanel(null); }} onSend={meetingChat.send} />
+      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""} ${meetingChatOpen ? "meeting-chat-open" : ""}`}>
       {focusedTile ? (
         <main className="meeting-stage-focus">
           <div className="stage-main">
-            <VideoTile stream={focusedTile.stream} muted={focusedTile.isSelf} mirrored={focusedTile.isSelf && !screenSharing} label={focusedTile.label} avatar={focusedTile.avatar} microphoneOn={focusedTile.mic} videoOn={focusedTile.video} pinned={pinnedUserId === focusedTile.id} pipEnabled handRaised={raisedHands.has(focusedTile.id)} onPin={() => setPinnedUserId((current) => current === focusedTile.id ? null : focusedTile.id)} />
+            <VideoTile stream={focusedTile.stream} muted={focusedTile.isSelf} mirrored={focusedTile.isSelf && !screenSharing} label={focusedTile.label} avatar={focusedTile.avatar} microphoneOn={focusedTile.mic} videoOn={focusedTile.video} pinned={pinnedUserId === focusedTile.id} pipEnabled handRaised={raisedHands.has(focusedTile.id)} onPin={() => togglePin(focusedTile.id)} />
           </div>
           <div className="stage-filmstrip">
             {allTiles.filter((tile) => tile.id !== focusedTile.id).map((tile) => (
-              <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} onPin={() => setPinnedUserId((current) => current === tile.id ? null : tile.id)} />
+              <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} onPin={() => togglePin(tile.id)} />
             ))}
           </div>
         </main>
       ) : (
         <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
-          <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? t("meetingRoom.youSharingScreen") : t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} speaking={selfId === activeSpeakerId} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => setPinnedUserId((current) => current === user?.id ? null : user?.id || null)} />
-          {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : t("meetingRoom.participantFallback")}${media?.screen ? t("meetingRoom.screenSuffix") : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} speaking={remoteUserId === activeSpeakerId} handRaised={raisedHands.has(remoteUserId)} onPin={() => setPinnedUserId((current) => current === remoteUserId ? null : remoteUserId)} />; })}
+          <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? t("meetingRoom.youSharingScreen") : t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} speaking={selfId === activeSpeakerId} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => togglePin(user?.id)} />
+          {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : t("meetingRoom.participantFallback")}${media?.screen ? t("meetingRoom.screenSuffix") : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} speaking={remoteUserId === activeSpeakerId} handRaised={raisedHands.has(remoteUserId)} onPin={() => togglePin(remoteUserId)} />; })}
           {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>{t("meetingRoom.waitingTitle")}</h2><p>{t("meetingRoom.waitingDesc")}</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> {t("meetingRoom.shareLinkButton")}</button></article>}
         </main>
       )}
@@ -1346,7 +1425,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       </div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}</div> : sidePanel === "notes" ? <div className="meeting-notes-panel"><form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>{notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}</div> : sidePanel === "settings" ? <div className="meeting-info-panel">
         <label>{t("meetings.visibilityLabel")}
           <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
-            {(["workspace_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+            {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
           </select>
         </label>
         {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (
@@ -1369,7 +1448,30 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       </div>
       <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
       <input ref={meetingFileInput} className="sr-only" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMeetingFile(file); }} />
-      <footer className="meeting-controls"><div className="meeting-control-info"><time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div><div className="meeting-control-primary"><button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button><button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button><button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-label={t("meetingRoom.shareScreenAria")}><MonitorUp size={21} /></button><button onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile} aria-label={t("meetingRoom.shareFileAria")}>{uploadingFile ? <LoaderCircle className="spin" size={20} /> : <Paperclip size={20} />}</button><button className={handRaised ? "active" : ""} onClick={toggleHand} aria-label={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")}><Hand size={21} /></button><span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => setReactionOpen((value) => !value)} aria-label={t("meetingRoom.sendReactionAria")}><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span><button className="leave-control" onClick={leave} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={21} /></button></div><div className="meeting-control-secondary"><button aria-label={t("meetingRoom.gridViewAria")}><LayoutGrid size={20} /></button><button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={20} /></button><button aria-label={t("meetingRoom.moreActionsAria")}><MoreVertical size={20} /></button></div></footer>
+      <footer className="meeting-controls">
+        <div className="meeting-control-info"><time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div>
+        <div className="meeting-control-primary">
+          <button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-pressed={microphone} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button>
+          <button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-pressed={camera} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button>
+          <button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-pressed={screenSharing} title={t("meetingRoom.shareScreenAria")} aria-label={t("meetingRoom.shareScreenAria")}><MonitorUp size={21} /></button>
+          <button className={handRaised ? "active" : ""} onClick={toggleHand} aria-pressed={handRaised} title={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")} aria-label={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")}><Hand size={21} /></button>
+          <span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => { setReactionOpen((value) => !value); setMoreMenuOpen(false); }} aria-expanded={reactionOpen} title={t("meetingRoom.sendReactionAria")} aria-label={t("meetingRoom.sendReactionAria")}><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span>
+          <span className="meeting-more-wrap"><button className={moreMenuOpen ? "active" : ""} onClick={() => { setMoreMenuOpen((value) => !value); setReactionOpen(false); }} aria-expanded={moreMenuOpen} title={t("meetingRoom.moreActionsAria")} aria-label={t("meetingRoom.moreActionsAria")}><MoreVertical size={21} /></button>
+            {moreMenuOpen && <span className="meeting-more-menu">
+              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("participants"); }}><UsersRound size={18} />{t("meetingRoom.participantsTab")}</button>
+              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("files"); }}><Paperclip size={18} />{t("meetingRoom.filesTab")}</button>
+              <button onClick={() => { setMoreMenuOpen(false); meetingFileInput.current?.click(); }} disabled={uploadingFile}><Paperclip size={18} />{t("meetingRoom.shareFileAria")}</button>
+              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("notes"); }}><NotebookPen size={18} />{t("meetingRoom.notesTab")}</button>
+              <button onClick={() => { setMoreMenuOpen(false); setGridViewForced((value) => !value); }}><LayoutGrid size={18} />{gridViewForced ? t("meetingRoom.exitGridViewAria") : t("meetingRoom.gridViewAria")}</button>
+              <button onClick={() => { setMoreMenuOpen(false); void shareMeetingLink(); }}><Link2 size={18} />{t("meetingRoom.shareLinkButton")}</button>
+              {meeting.hostId === user?.id && <button onClick={() => { setMoreMenuOpen(false); setSidePanel("settings"); }}><Settings2 size={18} />{t("meetingRoom.settingsTab")}</button>}
+              {meeting.hostId === user?.id && <button className="danger" onClick={() => void endMeetingForAll()}><PhoneOff size={18} />{t("meetingRoom.endMeetingButton")}</button>}
+            </span>}
+          </span>
+          <button className="leave-control" onClick={leave} title={t("meetingRoom.leaveMeetingAria")} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={21} /></button>
+        </div>
+        <div className="meeting-control-secondary"><button className={sidePanel === "participants" ? "active" : ""} onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-expanded={sidePanel === "participants"} title={t("meetingRoom.participantsAria")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={20} /><span className="meeting-participant-count">{remoteEntries.length + 1}</span></button><button className={sidePanel === "info" ? "active" : ""} onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} title={t("meetingRoom.meetingInfoAria")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={20} /></button></div>
+      </footer>
     </div>
   );
 }

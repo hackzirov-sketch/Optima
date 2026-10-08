@@ -11,7 +11,7 @@ import type { User } from "../types";
 type PublicProfile = Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji">;
 
 export function PublicProfilePage({ identifier }: { identifier: string }) {
-  const { user, workspace } = useAuth();
+  const { user, group } = useAuth();
   const { t } = useI18n();
   const [, navigate] = useLocation();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
@@ -27,7 +27,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
   }
 
   function openChat() {
-    if (!profile?.publicId || !workspace) return;
+    if (!profile?.publicId || !group) return;
     if (String(profile.publicId) === String(user?.publicId)) {
       navigate("/chat");
       return;
@@ -53,7 +53,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
           <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
           <p className="public-profile-status">{formatPresenceLabel(presence, t)}</p>
         </div>
-        {user && <button className="public-profile-message" onClick={openChat} disabled={!workspace}>
+        {user && <button className="public-profile-message" onClick={openChat} disabled={!group}>
           <MessageCircle size={19} />
           <span><strong>{t("publicProfile.chatTitle")}</strong><small>{String(profile.publicId) === String(user.publicId) ? t("publicProfile.backToChats") : t("publicProfile.openPersonalChat")}</small></span>
         </button>}

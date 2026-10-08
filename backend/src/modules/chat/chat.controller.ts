@@ -175,8 +175,8 @@ export class ChatController {
 
   /**
    * The primary listing. Chat membership is itself the permission, so the JWT
-   * is all the authorisation needed — no workspace in the path, and DMs,
-   * groups and channels the user opened outside any workspace are included.
+   * is all the authorisation needed — no group in the path, and DMs,
+   * groups and channels the user opened outside any group are included.
    */
   @Get('chat/rooms')
   @ApiOperation({ summary: 'List every chat room the caller belongs to' })
@@ -184,44 +184,44 @@ export class ChatController {
     return this.roomService.listUserRooms(userId);
   }
 
-  @Get('workspaces/:workspaceId/chat/rooms')
+  @Get('groups/:groupId/chat/rooms')
   @ApiOperation({
     summary:
-      'List chat rooms for a workspace — a filtered view of GET /chat/rooms; user-owned rooms (direct/group/channel) are always included',
+      'List chat rooms for a group — a filtered view of GET /chat/rooms; user-owned rooms (direct/group/channel) are always included',
   })
-  @ApiParam({ name: 'workspaceId' })
-  listWorkspaceRooms(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  @ApiParam({ name: 'groupId' })
+  listGroupRooms(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.roomService.listRooms(workspaceId, userId);
+    return this.roomService.listRooms(groupId, userId);
   }
 
-  @Post('workspaces/:workspaceId/chat/rooms')
-  @ApiOperation({ summary: 'Create chat room in a workspace' })
+  @Post('groups/:groupId/chat/rooms')
+  @ApiOperation({ summary: 'Create chat room in a group' })
   createRoom(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateChatRoomDto,
   ) {
-    return this.roomService.createRoom(workspaceId, userId, dto);
+    return this.roomService.createRoom(groupId, userId, dto);
   }
 
-  @Get('workspaces/:workspaceId/chat/resolve/:type/:identifier')
+  @Get('groups/:groupId/chat/resolve/:type/:identifier')
   @ApiOperation({
     summary:
       'Resolve a /u, /g or /ch route identifier (username, slug or public_id) to its internal room — the only entry point that ever turns a public route into a room UUID',
   })
   @ApiParam({ name: 'type', enum: ['direct', 'group', 'channel'] })
   async resolveRoute(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Param('type') type: string,
     @Param('identifier') identifier: string,
     @CurrentUser('id') userId: string,
   ) {
     if (type === 'direct') {
       const target = await this.usersService.findPublic(identifier);
-      const room = await this.roomService.createRoom(workspaceId, userId, {
+      const room = await this.roomService.createRoom(groupId, userId, {
         type: ChatRoomType.DIRECT,
         targetUserId: target.id,
       });
@@ -236,14 +236,14 @@ export class ChatController {
   }
 
   /**
-   * Create a direct chat, group or channel with no workspace involved — the
+   * Create a direct chat, group or channel with no group involved — the
    * JWT identifies the owner and that is the whole authorisation check. This
-   * is the route the chat UI uses; the workspace-scoped POST above only exists
-   * for rooms that genuinely belong to a workspace.
+   * is the route the chat UI uses; the group-scoped POST above only exists
+   * for rooms that genuinely belong to a group.
    */
   @Post('chat/rooms')
   @ApiOperation({
-    summary: 'Create a chat room (direct/group/channel) without a workspace',
+    summary: 'Create a chat room (direct/group/channel) without a group',
   })
   createStandaloneRoom(
     @CurrentUser('id') userId: string,
@@ -282,7 +282,7 @@ export class ChatController {
   @Get('chat/presence')
   @ApiOperation({
     summary:
-      'Bulk presence lookup (status + last-seen fallback) for a set of user ids — DMs can be cross-workspace, so this is not workspace-scoped',
+      'Bulk presence lookup (status + last-seen fallback) for a set of user ids — DMs can be cross-group, so this is not group-scoped',
   })
   async getPresenceBulk(@Query('ids') ids: string) {
     const userIds = (ids || '')
@@ -608,9 +608,9 @@ export class ChatController {
   }
 
   /**
-   * Platform-wide search for public channels and groups. Workspace-less by
-   * design — a channel opened from chat belongs to no workspace, so the
-   * workspace-scoped listing below could never surface it.
+   * Platform-wide search for public channels and groups. Group-less by
+   * design — a channel opened from chat belongs to no group, so the
+   * group-scoped listing below could never surface it.
    */
   @Get('chat/discover')
   @ApiOperation({
@@ -626,13 +626,13 @@ export class ChatController {
     return this.roomService.discoverRooms(userId, q, Number(limit) || 20);
   }
 
-  @Get('workspaces/:workspaceId/chat/public-rooms')
+  @Get('groups/:groupId/chat/public-rooms')
   @ApiOperation({ summary: 'List public rooms the user has not joined' })
   listPublicRooms(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.roomService.listPublicRooms(workspaceId, userId);
+    return this.roomService.listPublicRooms(groupId, userId);
   }
 
   @Post('chat/rooms/:roomId/join')

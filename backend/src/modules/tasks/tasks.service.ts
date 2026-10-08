@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
@@ -9,15 +8,14 @@ import { DatabaseService } from '../../database/database.service';
 import { EventsGateway } from '../gateway/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RedisService } from '../../redis/redis.service';
-import { RedisKeys } from '../../redis/redis.keys';
 
 import { Task } from '../../database/entities/task.entity';
 import { TaskDependency } from '../../database/entities/task-dependency.entity';
 import { TaskTag } from '../../database/entities/task-tag.entity';
 import {
   MembersService,
-  WorkspaceMembership,
-} from '../workspaces/services/members.service';
+  GroupMembership,
+} from '../groups/services/members.service';
 
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -83,12 +81,12 @@ export class TasksService {
   ): Promise<void> {
     const projectRows = await this.dataSource.query<{
       id: string;
-      workspaceId: string;
+      groupId: string;
       status: ProjectStatus;
       progress: number;
       completedAt: Date | null;
     }>(
-      `SELECT id, workspace_id AS "workspaceId", status, progress, completed_at AS "completedAt"
+      `SELECT id, group_id AS "groupId", status, progress, completed_at AS "completedAt"
        FROM projects WHERE id = $1`,
       [projectId],
     );
@@ -131,14 +129,14 @@ export class TasksService {
     const updatedRows = await this.dataSource.query(
       `UPDATE projects SET progress = $2, status = $3::projects_status_enum, completed_at = $4
          WHERE id = $1
-         RETURNING id, workspace_id AS "workspaceId", name, slug, description, status, priority,
+         RETURNING id, group_id AS "groupId", name, slug, description, status, priority,
                    progress, start_date AS "startDate", deadline, completed_at AS "completedAt",
                    created_by AS "createdById", created_at AS "createdAt", updated_at AS "updatedAt"`,
       [projectId, progress, status, completedAt],
     );
     const updated = updatedRows[0];
 
-    this.gateway.broadcastToWorkspace(project.workspaceId, 'project:updated', {
+    this.gateway.broadcastToGroup(project.groupId, 'project:updated', {
       project: updated,
     });
   }
@@ -150,14 +148,14 @@ export class TasksService {
    * This used to be a private copy: same Redis key, a 5-minute TTL, and no
    * invalidation anywhere, because the writes that change a membership live in
    * MembersService and had no idea this cache existed. A member removed from a
-   * workspace kept full access to its tasks until the entry aged out. Sharing
+   * group kept full access to its tasks until the entry aged out. Sharing
    * one implementation is what makes that impossible to reintroduce.
    */
   private async assertMember(
-    workspaceId: string,
+    groupId: string,
     userId: string,
-  ): Promise<WorkspaceMembership> {
-    return this.membersService.assertMember(workspaceId, userId);
+  ): Promise<GroupMembership> {
+    return this.membersService.assertMember(groupId, userId);
   }
 
   private async getTask(taskId: string): Promise<Task> {
@@ -192,9 +190,9 @@ export class TasksService {
   private async hasCycle(
     taskId: string,
     newDependsOnId: string,
-    workspaceId: string,
+    groupId: string,
   ): Promise<boolean> {
-    // Fetch all dependencies for tasks in the same workspace in ONE query
+    // Fetch all dependencies for tasks in the same group in ONE query
     const allDependencies = await this.dataSource.query<{
       taskId: string;
       dependsOnId: string;
@@ -202,8 +200,8 @@ export class TasksService {
       `SELECT dep.task_id AS "taskId", dep.depends_on_id AS "dependsOnId"
        FROM task_dependencies dep
        JOIN tasks t ON t.id = dep.task_id
-       WHERE t.workspace_id = $1`,
-      [workspaceId],
+       WHERE t.group_id = $1`,
+      [groupId],
     );
 
     // Build adjacency list: dependsOnId -> array of taskIds (reverse dependencies)
@@ -285,7 +283,7 @@ export class TasksService {
   // ─────────────────────────────────────────────
 
   async create(userId: string, dto: CreateTaskDto): Promise<Task> {
-    await this.assertMember(dto.workspaceId, userId);
+    await this.assertMember(dto.groupId, userId);
 
     // Validate column belongs to the project
     if (dto.columnId) {
@@ -313,7 +311,7 @@ export class TasksService {
       // here, doing so would double-increment task_sequences.
       const savedRows: Task[] = await query(
         `INSERT INTO tasks
-           (workspace_id, project_id, column_id, parent_task_id, assignee_id, reviewer_id,
+           (group_id, project_id, column_id, parent_task_id, assignee_id, reviewer_id,
             title, description, type, priority, status, story_points, estimated_hours,
             start_date, due_date, creator_id, position)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
@@ -323,7 +321,7 @@ export class TasksService {
                  $12, $13, $14, $15, $16, $17)
          RETURNING ${TASK_COLUMNS_SQL}`,
         [
-          dto.workspaceId,
+          dto.groupId,
           dto.projectId,
           dto.columnId ?? null,
           dto.parentTaskId ?? null,
@@ -352,7 +350,7 @@ export class TasksService {
       `Task UPZ-${saved.taskNumber} created`,
     );
     const full = await this.findById(saved.id, userId);
-    this.gateway.broadcastToWorkspace(dto.workspaceId, 'task:created', {
+    this.gateway.broadcastToGroup(dto.groupId, 'task:created', {
       task: full,
     });
     await this.syncProjectStatusWithProgress(dto.projectId);
@@ -470,7 +468,7 @@ export class TasksService {
   }
 
   private readonly TASK_LIST_SELECT = `
-    task.id AS "id", task.workspace_id AS "workspaceId", task.project_id AS "projectId",
+    task.id AS "id", task.group_id AS "groupId", task.project_id AS "projectId",
     task.group_id AS "groupId", task.column_id AS "columnId", task.parent_task_id AS "parentTaskId",
     task.task_number AS "taskNumber", task.creator_id AS "creatorId", task.assignee_id AS "assigneeId",
     task.reviewer_id AS "reviewerId", task.title, task.description, task.type, task.priority,
@@ -495,8 +493,8 @@ export class TasksService {
     // Always check membership — even if the project has no tasks yet
     const projectRows = await this.dataSource.query<{
       id: string;
-      workspaceId: string;
-    }>(`SELECT id, workspace_id AS "workspaceId" FROM projects WHERE id = $1`, [
+      groupId: string;
+    }>(`SELECT id, group_id AS "groupId" FROM projects WHERE id = $1`, [
       projectId,
     ]);
     const project = projectRows[0];
@@ -505,7 +503,7 @@ export class TasksService {
         code: ErrorCode.PROJECT_NOT_FOUND,
         message: 'Project not found',
       });
-    await this.assertMember(project.workspaceId, userId);
+    await this.assertMember(project.groupId, userId);
 
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 50;
@@ -535,23 +533,23 @@ export class TasksService {
     return { data: rows.map((r: any) => this.mapTaskRow(r)), total };
   }
 
-  async findAllByWorkspace(
-    workspaceId: string,
+  async findAllByGroup(
+    groupId: string,
     userId: string,
     dto: FilterTasksDto,
   ): Promise<{ data: Task[]; total: number }> {
-    await this.assertMember(workspaceId, userId);
+    await this.assertMember(groupId, userId);
 
     const page = dto.page ?? 1;
     const limit = Math.min(dto.limit ?? 200, 500);
 
-    const params: unknown[] = [workspaceId];
+    const params: unknown[] = [groupId];
     const filterClause = this.buildTaskFilters(dto, params, 2);
 
     const countRows = await this.dataSource.query<{ count: string }>(
       `SELECT COUNT(*) FROM tasks task
        JOIN projects project ON project.id = task.project_id
-       WHERE project.workspace_id = $1 AND task.deleted_at IS NULL${filterClause}`,
+       WHERE project.group_id = $1 AND task.deleted_at IS NULL${filterClause}`,
       params,
     );
     const total = Number(countRows[0]?.count ?? 0);
@@ -564,7 +562,7 @@ export class TasksService {
        LEFT JOIN users assignee ON assignee.id = task.assignee_id
        LEFT JOIN users creator ON creator.id = task.creator_id
        LEFT JOIN project_columns col ON col.id = task.column_id
-       WHERE project.workspace_id = $1 AND task.deleted_at IS NULL${filterClause}
+       WHERE project.group_id = $1 AND task.deleted_at IS NULL${filterClause}
        ORDER BY task.position ASC, task.created_at ASC
        LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`,
       listParams,
@@ -575,7 +573,7 @@ export class TasksService {
 
   async findById(taskId: string, userId: string): Promise<any> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const [
       assigneeRows,
@@ -655,7 +653,7 @@ export class TasksService {
     dto: UpdateTaskDto,
   ): Promise<Task> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const old = {
       status: task.status,
@@ -733,7 +731,7 @@ export class TasksService {
         await this.dailyStats.increment(
           saved.assigneeId ?? userId,
           saved.projectId,
-          saved.workspaceId,
+          saved.groupId,
           {
             tasksCompleted: 1,
           },
@@ -741,7 +739,7 @@ export class TasksService {
       }
     }
 
-    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:updated', {
+    this.gateway.broadcastToGroup(saved.groupId, 'task:updated', {
       task: saved,
     });
     return saved;
@@ -830,20 +828,20 @@ export class TasksService {
 
   async remove(taskId: string, userId: string): Promise<void> {
     const task = await this.getTask(taskId);
-    const member = await this.assertMember(task.workspaceId, userId);
+    const member = await this.assertMember(task.groupId, userId);
 
     if (task.creatorId !== userId) {
-      this.permission.assertCanDeleteTask(member as any);
+      this.permission.assertCanDeleteTask(member);
     }
 
-    const { workspaceId } = task;
+    const { groupId } = task;
     await this.dataSource.query(
       `UPDATE tasks SET deleted_at = now(), deleted_by = $2 WHERE id = $1`,
       [taskId, userId],
     );
-    this.gateway.broadcastToWorkspace(workspaceId, 'task:deleted', {
+    this.gateway.broadcastToGroup(groupId, 'task:deleted', {
       taskId,
-      workspaceId,
+      groupId,
     });
     await this.syncProjectStatusWithProgress(task.projectId);
   }
@@ -854,7 +852,7 @@ export class TasksService {
 
   async move(taskId: string, userId: string, dto: MoveTaskDto): Promise<Task> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const oldColumnId = task.columnId;
     const oldStatus = task.status;
@@ -922,7 +920,7 @@ export class TasksService {
       );
     }
 
-    this.gateway.broadcastToWorkspace(saved.workspaceId, 'task:moved', {
+    this.gateway.broadcastToGroup(saved.groupId, 'task:moved', {
       task: saved,
       oldColumnId,
       oldStatus,
@@ -934,7 +932,7 @@ export class TasksService {
         await this.dailyStats.increment(
           saved.assigneeId ?? userId,
           saved.projectId,
-          saved.workspaceId,
+          saved.groupId,
           {
             tasksCompleted: 1,
           },
@@ -951,7 +949,7 @@ export class TasksService {
 
   async watch(taskId: string, userId: string): Promise<{ watching: boolean }> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const existing = await this.dataSource.query<{ id: string }>(
       `SELECT * FROM task_watchers WHERE task_id = $1 AND user_id = $2`,
@@ -971,7 +969,7 @@ export class TasksService {
     userId: string,
   ): Promise<{ watching: boolean }> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     await this.dataSource.query(
       `DELETE FROM task_watchers WHERE task_id = $1 AND user_id = $2`,
@@ -982,7 +980,7 @@ export class TasksService {
 
   async getWatchers(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
     const rows = await this.dataSource.query<any>(
       `SELECT tw.user_id AS "userId", tw.created_at AS "createdAt",
               u.id AS "u_id", u.first_name AS "u_firstName", u.last_name AS "u_lastName", u.avatar_url AS "u_avatarUrl"
@@ -1007,7 +1005,7 @@ export class TasksService {
 
   async getActivities(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const rows = await this.dataSource.query<any>(
       `SELECT ta.id, ta.task_id AS "taskId", ta.user_id AS "userId", ta.type, ta.description,
@@ -1045,7 +1043,7 @@ export class TasksService {
         message: 'Task not found in this project',
       });
     }
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     return this.dataSource.query(
       `SELECT ${TASK_PUSH_COLUMNS_SQL} FROM task_pushes WHERE task_id = $1 ORDER BY created_at DESC`,
@@ -1063,7 +1061,7 @@ export class TasksService {
     dto: AddDependencyDto,
   ): Promise<TaskDependency> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     if (taskId === dto.dependsOnId) {
       throw new BadRequestException({
@@ -1072,17 +1070,17 @@ export class TasksService {
       });
     }
 
-    // Ensure target task exists and is in the same workspace
+    // Ensure target task exists and is in the same group
     const target = await this.getTask(dto.dependsOnId);
-    if (target.workspaceId !== task.workspaceId) {
+    if (target.groupId !== task.groupId) {
       throw new BadRequestException({
-        code: ErrorCode.TASK_CROSS_WORKSPACE,
-        message: 'Dependencies must be within the same workspace',
+        code: ErrorCode.TASK_CROSS_GROUP,
+        message: 'Dependencies must be within the same group',
       });
     }
 
     // Cycle detection using local BFS (single query)
-    if (await this.hasCycle(taskId, dto.dependsOnId, task.workspaceId)) {
+    if (await this.hasCycle(taskId, dto.dependsOnId, task.groupId)) {
       throw new ConflictException({
         code: ErrorCode.TASK_DEPENDENCY_CYCLE,
         message: 'Adding this dependency would create a cycle',
@@ -1110,7 +1108,7 @@ export class TasksService {
 
   async getDependencies(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     return this.dataSource
       .query(
@@ -1146,7 +1144,7 @@ export class TasksService {
     userId: string,
   ): Promise<void> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const dep = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM task_dependencies WHERE id = $1 AND task_id = $2`,
@@ -1173,16 +1171,16 @@ export class TasksService {
     userId: string,
   ): Promise<TaskTag> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     const tag = await this.dataSource.query<{ id: string }>(
-      `SELECT id FROM tags WHERE id = $1 AND workspace_id = $2`,
-      [tagId, task.workspaceId],
+      `SELECT id FROM tags WHERE id = $1 AND group_id = $2`,
+      [tagId, task.groupId],
     );
     if (!tag[0])
       throw new NotFoundException({
         code: ErrorCode.TAG_NOT_FOUND,
-        message: 'Tag not found in this workspace',
+        message: 'Tag not found in this group',
       });
 
     const existing = await this.dataSource.query<{ task_id: string }>(
@@ -1209,7 +1207,7 @@ export class TasksService {
     userId: string,
   ): Promise<void> {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
 
     await this.dataSource.query(
       `DELETE FROM task_tags WHERE task_id = $1 AND tag_id = $2`,
@@ -1219,7 +1217,7 @@ export class TasksService {
 
   async getTags(taskId: string, userId: string) {
     const task = await this.getTask(taskId);
-    await this.assertMember(task.workspaceId, userId);
+    await this.assertMember(task.groupId, userId);
     return this.dataSource
       .query(
         `SELECT tt.task_id AS "taskId", tt.tag_id AS "tagId", tt.created_at AS "createdAt",

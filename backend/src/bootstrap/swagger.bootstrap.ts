@@ -20,7 +20,7 @@ export function setupSwagger(
     )
     .addTag('Auth')
     .addTag('Users')
-    .addTag('Workspaces')
+    .addTag('Groups')
     .addTag('Groups')
     .addTag('Projects')
     .addTag('Tasks')

@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
-import { MembersService } from '../../workspaces/services/members.service';
+import { MembersService } from '../../groups/services/members.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { RedisService } from '../../../redis/redis.service';
 import { RedisKeys } from '../../../redis/redis.keys';
@@ -28,7 +28,7 @@ export class MeetingJoinRequestService {
     private readonly dataSource: DatabaseService,
     private readonly meetingsRepository: MeetingsRepository,
     private readonly accessService: MeetingAccessService,
-    // WorkspacesModule <-> MeetingsModule is a forwardRef'd module import
+    // GroupsModule <-> MeetingsModule is a forwardRef'd module import
     // (see meetings.module.ts) — mirror that on the injected service too.
     @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
@@ -281,12 +281,12 @@ export class MeetingJoinRequestService {
   }
 
   /**
-   * Invites people to a meeting by workspace member id and/or email address.
+   * Invites people to a meeting by group member id and/or email address.
    * An email invite resolves to an existing registered account — this does
    * not send an email to non-users; it just gives a second lookup path for
-   * "I know their email, not their workspace member id", which matters most
+   * "I know their email, not their group member id", which matters most
    * for PRIVATE/INVITE_ONLY meetings where the target may not be a member
-   * of any shared workspace yet.
+   * of any shared group yet.
    */
   async inviteMembers(
     meetingId: string,
@@ -301,11 +301,11 @@ export class MeetingJoinRequestService {
         message: 'Meeting not found',
       });
 
-    // Workspace meetings: any workspace member can invite. Standalone
-    // (workspace-less) meetings have no membership list to check against —
+    // Group meetings: any group member can invite. Standalone
+    // (group-less) meetings have no membership list to check against —
     // only the host may invite there.
-    if (meeting.workspaceId) {
-      await this.membersService.assertMember(meeting.workspaceId, inviterId);
+    if (meeting.groupId) {
+      await this.membersService.assertMember(meeting.groupId, inviterId);
     } else if (meeting.hostId !== inviterId) {
       throw new ForbiddenException({
         code: ErrorCode.MEETING_HOST_ONLY,
@@ -342,10 +342,10 @@ export class MeetingJoinRequestService {
     ).filter((uid) => uid !== inviterId);
 
     let validUserIds: string[];
-    if (meeting.workspaceId && meeting.scope === RoomScope.WORKSPACE_ONLY) {
-      // WORKSPACE_ONLY is the one scope where membership IS the access
+    if (meeting.groupId && meeting.scope === RoomScope.GROUP_ONLY) {
+      // GROUP_ONLY is the one scope where membership IS the access
       // control — inviting a non-member here would be a promise the meeting
-      // can't keep (they'd hit the workspace-membership wall in resolveAccess
+      // can't keep (they'd hit the group-membership wall in resolveAccess
       // anyway), so filter to actual members.
       //
       // One query rather than one assertMember() per invitee: this is a bulk
@@ -353,17 +353,17 @@ export class MeetingJoinRequestService {
       // use for the per-user cache and every reason to avoid N round trips.
       const memberRows = targetIds.length
         ? await this.dataSource.query<{ userId: string }>(
-            `SELECT user_id AS "userId" FROM workspace_members
-              WHERE workspace_id = $1 AND user_id = ANY($2::uuid[])`,
-            [meeting.workspaceId as string, targetIds],
+            `SELECT user_id AS "userId" FROM group_members
+              WHERE group_id = $1 AND user_id = ANY($2::uuid[])`,
+            [meeting.groupId as string, targetIds],
           )
         : [];
       validUserIds = memberRows.map((row) => row.userId);
     } else {
       // PRIVATE/INVITE_ONLY/PUBLIC: the invite itself IS the access grant —
-      // workspace membership is irrelevant here by design (that's the whole
+      // group membership is irrelevant here by design (that's the whole
       // point of these scopes), so any resolved user id (explicit id or a
-      // matched email, workspace member or not) is invitable.
+      // matched email, group member or not) is invitable.
       validUserIds = targetIds;
     }
 

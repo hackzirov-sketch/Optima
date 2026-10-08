@@ -1,11 +1,11 @@
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 
 export interface Repository {
   id: string;
 
-  workspaceId: string;
+  groupId: string;
 
-  workspace: Workspace;
+  group: Group;
 
   githubRepoId: number;
 

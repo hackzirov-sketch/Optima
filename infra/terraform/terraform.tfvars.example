@@ -1,0 +1,54 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored (see .gitignore below) — never commit it,
+# it will contain real secrets.
+
+aws_region   = "eu-north-1"
+environment  = "production"
+project_name = "upz"
+
+# Leave both empty for a first deploy over plain HTTP on the ALB's own DNS
+# name. Fill in once you have a Route53 hosted zone for the domain.
+domain_name     = ""
+route53_zone_id = ""
+
+# Optional: set to an existing EC2 key pair name to allow SSH into the
+# coturn box in addition to SSM Session Manager (which always works).
+ssh_key_name     = ""
+ssh_allowed_cidr = "0.0.0.0/0"
+
+# Set by CI right before `terraform apply`, after building+pushing images —
+# terraform does not build images itself.
+backend_image_tag  = "latest"
+frontend_image_tag = "latest"
+
+# Every one of these should have a real, freshly-generated value — see
+# backend/.env.example for what each does. Do NOT reuse any secret that
+# has ever been pasted into a chat, committed, or otherwise left the
+# secrets manager it belongs in; generate new ones for this environment.
+app_secrets = {
+  JWT_ACCESS_SECRET      = "CHANGE_ME_64_char_random_string"
+  JWT_REFRESH_SECRET     = "CHANGE_ME_different_64_char_random_string"
+  ENCRYPTION_KEY         = "CHANGE_ME_32_char_min"
+  CHAT_ENCRYPTION_KEY    = "CHANGE_ME_32_char_min"
+  TURN_SECRET            = "CHANGE_ME_32_char_min"
+
+  SMTP_HOST = "smtp.gmail.com"
+  SMTP_PORT = "587"
+  SMTP_USER = "CHANGE_ME"
+  SMTP_PASS = "CHANGE_ME"
+
+  GITHUB_CLIENT_ID     = "CHANGE_ME"
+  GITHUB_CLIENT_SECRET = "CHANGE_ME"
+
+  GOOGLE_CLIENT_ID     = "CHANGE_ME"
+  GOOGLE_CLIENT_SECRET = "CHANGE_ME"
+  GOOGLE_CALLBACK_URL  = "https://your-domain/api/v1/auth/google/callback"
+
+  CLOUDINARY_CLOUD_NAME = "CHANGE_ME"
+  CLOUDINARY_API_KEY    = "CHANGE_ME"
+  CLOUDINARY_API_SECRET = "CHANGE_ME"
+  CLOUDINARY_FOLDER     = "optima"
+
+  GEMINI_API_KEY        = "CHANGE_ME"
+  GOOGLE_VISION_API_KEY = "CHANGE_ME"
+}

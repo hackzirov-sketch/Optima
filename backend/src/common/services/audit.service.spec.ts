@@ -37,7 +37,7 @@ describe('AuditService.list', () => {
 
   it('composes filters and passes every value as a bound parameter', async () => {
     await service.list({
-      workspaceId: 'ws-1',
+      groupId: 'ws-1',
       entityType: 'chat_room',
       entityId: 'room-1',
       actorId: 'user-1',
@@ -45,7 +45,7 @@ describe('AuditService.list', () => {
     });
 
     const [sql, params] = lastSelect();
-    expect(sql).toContain('a.workspace_id = $1');
+    expect(sql).toContain('a.group_id = $1');
     expect(sql).toContain('a.entity_type = $2');
     expect(sql).toContain('a.entity_id = $3');
     expect(sql).toContain('a.actor_id = $4');
@@ -62,21 +62,21 @@ describe('AuditService.list', () => {
     ]);
   });
 
-  it('treats an explicit null workspace as a filter, not as "any"', async () => {
-    // Platform-level rows (a channel belongs to its members, not a workspace)
+  it('treats an explicit null group as a filter, not as "any"', async () => {
+    // Platform-level rows (a channel belongs to its members, not a group)
     // must be reachable; `undefined` still means "don't filter".
-    await service.list({ workspaceId: null });
+    await service.list({ groupId: null });
     const [sql] = lastSelect();
-    expect(sql).toContain('a.workspace_id IS NULL');
+    expect(sql).toContain('a.group_id IS NULL');
   });
 
-  it('does not filter on workspace when the key is absent', async () => {
+  it('does not filter on group when the key is absent', async () => {
     await service.list({ actorId: 'user-1' });
     const [sql] = lastSelect();
     // The column is always in the SELECT list, so only the WHERE clause can
     // tell us whether it was filtered on.
     const where = String(sql).slice(String(sql).indexOf('WHERE'));
-    expect(where).not.toContain('workspace_id');
+    expect(where).not.toContain('group_id');
     expect(where).toContain('a.actor_id = $1');
   });
 

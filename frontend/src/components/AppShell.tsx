@@ -1,5 +1,5 @@
-import { BookOpen, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { BarChart3, BookOpen, BrainCircuit, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X, Youtube } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
@@ -17,12 +17,15 @@ const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_mee
   { value: "invisible", dotClass: "status-dot-invisible" },
 ];
 
-type TextKey = "home" | "chat" | "meetings" | "library" | "education" | "profile";
+type TextKey = "home" | "chat" | "meetings" | "statistics" | "ai" | "youtube" | "library" | "education" | "profile";
 
 const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
   { href: "/", key: "home", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageCircle },
   { href: "/meetings", key: "meetings", icon: Video },
+  { href: "/statistics", key: "statistics", icon: BarChart3 },
+  { href: "/ai", key: "ai", icon: BrainCircuit },
+  { href: "/youtube", key: "youtube", icon: Youtube },
   { href: "/library", key: "library", icon: BookOpen },
   { href: "/education", key: "education", icon: GraduationCap },
   { href: "/profile", key: "profile", icon: UserRound },
@@ -31,11 +34,11 @@ const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [groupOpen, setWorkspaceOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   const { locale, setLocale, t } = useI18n();
   const [languageOpen, setLanguageOpen] = useState(false);
-  const { user, workspace, workspaces, selectWorkspace, logout } = useAuth();
+  const { user, group, groups, selectWorkspace, logout } = useAuth();
   const unreadTotal = useUnreadTotal();
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   // Not read back from the server: /chat/presence masks INVISIBLE -> OFFLINE
@@ -48,10 +51,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       : href === "/chat"
         ? /^\/(chat|u|g|ch)(\/|$)/.test(location)
         : location.startsWith(href);
-  const mobileNav = [nav[1], nav[2], nav[0], location.startsWith("/library") ? nav[3] : nav[4], nav[5]];
-  const mobileActiveIndex = Math.max(0, mobileNav.findIndex((item) => active(item.href)));
-  const mobileDockCenter = 50 + mobileActiveIndex * 100;
-  const mobileDockPath = `M22 20 H${mobileDockCenter - 34} C${mobileDockCenter - 28} 20 ${mobileDockCenter - 27} 45 ${mobileDockCenter} 45 C${mobileDockCenter + 27} 45 ${mobileDockCenter + 28} 20 ${mobileDockCenter + 34} 20 H478 Q496 20 496 38 V82 H4 V38 Q4 20 22 20 Z`;
+  const dockItems = nav.map((item) => {
+    const Icon = item.icon;
+    return <Link key={item.href} href={item.href}
+      className={`${active(item.href) ? "active" : ""} ${item.key === "ai" ? "dock-ai" : ""}`}
+      aria-label={t(`shell.${item.key}`)} title={t(`shell.${item.key}`)}
+      aria-current={active(item.href) ? "page" : undefined}>
+      <span className="dock-icon"><Icon size={22} strokeWidth={1.8} /></span>
+      {item.key === "chat" && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}
+      <span className="dock-label">{t(`shell.${item.key}`)}</span>
+    </Link>;
+  });
 
   function chooseLanguage(next: Locale) {
     setLocale(next);
@@ -78,17 +88,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Logo />
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X size={20} /></button>
         </div>
-        <div className="workspace-switcher">
-          <button className="workspace-button" onClick={() => setWorkspaceOpen((value) => !value)} aria-expanded={workspaceOpen}>
-            <span className="workspace-avatar">{workspace?.name?.[0]?.toUpperCase() || "O"}</span>
-            <span><small>{t("shell.workspace")}</small><strong>{workspace?.name || "Optima"}</strong></span>
+        <div className="group-switcher">
+          <button className="group-button" onClick={() => setWorkspaceOpen((value) => !value)} aria-expanded={groupOpen}>
+            <span className="group-avatar">{group?.name?.[0]?.toUpperCase() || "O"}</span>
+            <span><small>{t("shell.group")}</small><strong>{group?.name || "Optima"}</strong></span>
             <ChevronDown size={16} />
           </button>
-          {workspaceOpen && (
-            <div className="workspace-menu">
-              {workspaces.map((item) => (
-                <button key={item.id} onClick={() => { selectWorkspace(item); setWorkspaceOpen(false); }} className={item.id === workspace?.id ? "selected" : ""}>
-                  <span className="workspace-avatar workspace-avatar-sm">{item.name[0]?.toUpperCase()}</span>
+          {groupOpen && (
+            <div className="group-menu">
+              {groups.map((item) => (
+                <button key={item.id} onClick={() => { selectWorkspace(item); setWorkspaceOpen(false); }} className={item.id === group?.id ? "selected" : ""}>
+                  <span className="group-avatar group-avatar-sm">{item.name[0]?.toUpperCase()}</span>
                   <span>{item.name}</span>
                 </button>
               ))}
@@ -141,7 +151,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-body">
         <header className="topbar">
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("shell.openMenu")}><Menu size={21} /></button>
-          <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{t(`shell.${nav.find((item) => active(item.href))?.key || "home"}`)}</strong><small>{workspace?.name}</small></div>
+          <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{t(`shell.${nav.find((item) => active(item.href))?.key || "home"}`)}</strong><small>{group?.name}</small></div>
           <div className="topbar-actions">
             <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={theme === "light" ? t("shell.themeToDark") : t("shell.themeToLight")} title={theme === "light" ? t("shell.themeDark") : t("shell.themeLight")}>{theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
             <div className="language-switcher">
@@ -165,20 +175,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="app-main">{children}</main>
       </div>
-      <nav className="desktop-dock" aria-label={t("shell.mainNav")}>
-        <span className="dock-indicator" style={{ transform: `translateX(${nav.findIndex((item) => active(item.href)) * 50}px)`, opacity: nav.some((item) => active(item.href)) ? 1 : 0 }} aria-hidden="true" />
-        {nav.map((item) => {
-          const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} data-label={t(`shell.${item.key}`)} aria-label={t(`shell.${item.key}`)}><Icon size={21} strokeWidth={1.9} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}</Link>;
-        })}
-      </nav>
-      <nav className="mobile-nav" aria-label={t("shell.mobileNav")} style={{ "--mobile-active-index": mobileActiveIndex } as CSSProperties}>
-        <svg className="mobile-nav-plate" viewBox="0 0 500 86" preserveAspectRatio="none" aria-hidden="true"><path d={mobileDockPath} /></svg>
-        {mobileNav.map((item) => {
-          const Icon = item.icon;
-          return <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""}><Icon size={20} />{item.key === "chat" && !active(item.href) && unreadTotal > 0 && <b className="dock-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}<span>{t(`shell.${item.key}`)}</span></Link>;
-        })}
-      </nav>
+      <nav className="desktop-dock reference-dock" aria-label={t("shell.mainNav")}>{dockItems}</nav>
+      <nav className="mobile-nav reference-dock" aria-label={t("shell.mobileNav")}>{dockItems}</nav>
     </div>
   );
 }

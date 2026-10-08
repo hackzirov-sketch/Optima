@@ -1,5 +1,5 @@
 export const NOTE_COLUMNS_SQL = `
-  id, workspace_id AS "workspaceId", project_id AS "projectId", task_id AS "taskId",
+  id, group_id AS "groupId", project_id AS "projectId", task_id AS "taskId",
   meeting_id AS "meetingId", creator_id AS "creatorId", title, content,
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;

@@ -116,9 +116,9 @@ describe('JwtStrategy.validate', () => {
     expect(usersService.findById).toHaveBeenCalledWith('user-1');
   });
 
-  it('carries the token workspace through to req.user', async () => {
+  it('carries the token group through to req.user', async () => {
     await expect(
-      strategy.validate({ sub: 'user-1', iat: NOW, workspaceId: 'ws-9' }),
-    ).resolves.toMatchObject({ workspaceId: 'ws-9' });
+      strategy.validate({ sub: 'user-1', iat: NOW, groupId: 'ws-9' }),
+    ).resolves.toMatchObject({ groupId: 'ws-9' });
   });
 });

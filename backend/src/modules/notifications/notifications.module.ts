@@ -19,7 +19,7 @@ import { RedisModule } from '../../redis/redis.module';
 @Module({
   imports: [
     BullModule.registerQueue({ name: REMINDER_QUEUE }),
-    // GatewayModule -> ... -> MeetingsModule -> WorkspacesModule ->
+    // GatewayModule -> ... -> MeetingsModule -> GroupsModule ->
     // NotificationsModule -> GatewayModule closes a cycle now that
     // GatewayModule also depends on MeetingsModule. forwardRef() is
     // required on BOTH ends of the edge that closes the loop — it was

@@ -1,4 +1,4 @@
-import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Plus, Target, Trash2, UsersRound, Video } from "lucide-react";
+import { ArrowUpRight, BookOpen, CalendarClock, GraduationCap, MessageCircle, Plus, Sparkles, Target, Trash2, UsersRound, Video } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, Skeleton } from "../components/ui";
@@ -7,18 +7,18 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
-import type { ChatRoom, Meeting, WorkspaceMember } from "../types";
+import type { ChatRoom, Meeting, GroupMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const subjectKeys: Record<string, string> = { ielts: "ielts", cefr: "cefr", mathematics: "mathematics", sat: "sat" };
 
 export function DashboardPage() {
-  const { user, workspace } = useAuth();
+  const { user, group } = useAuth();
   const { t, locale } = useI18n();
   const confirm = useConfirm();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [education, setEducation] = useState<{ subjects: Array<{ subject: string; opened: number; completed: number; progress: number; watchSeconds: number }>; opened: number; completed: number; watchSeconds: number; saved: number; completionRate: number }>({ subjects: [], opened: 0, completed: 0, watchSeconds: 0, saved: 0, completionRate: 0 });
 
@@ -34,20 +34,20 @@ export function DashboardPage() {
   }
 
   useEffect(() => {
-    if (!workspace) return;
+    if (!group) return;
     setLoading(true);
-    Promise.all([api.chat.rooms(), api.meetings.list(workspace.id), api.workspaces.members(workspace.id)])
+    Promise.all([api.chat.rooms(), api.meetings.list(group.id), api.groups.members(group.id)])
       .then(([nextRooms, nextMeetings, nextMembers]) => {
         setRooms(nextRooms);
         setMeetings(nextMeetings);
         setMembers(nextMembers);
       })
       .finally(() => setLoading(false));
-  }, [workspace]);
+  }, [group]);
 
   useEffect(() => { api.education.dashboard().then(setEducation).catch(() => undefined); }, []);
 
-  const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
+  const upcoming = useMemo(() => meetings.filter((meeting) => meeting.status === "scheduled" || meeting.status === "live" || meeting.status === "inactive").sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)).slice(0, 3), [meetings]);
   const unread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
 
   async function removeMeeting(id: string) {
@@ -73,7 +73,21 @@ export function DashboardPage() {
   return (
     <div className="page dashboard-page">
       <StarfieldBackground />
-      <PageHeader eyebrow={workspace?.name} title={t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })} description={t("dashboard.description")} action={<Link href="/meetings" className="button button-primary"><Plus size={17} /> {t("dashboard.createMeeting")}</Link>} />
+      <section className="dashboard-welcome" aria-labelledby="welcome-heading">
+        <div className="welcome-copy">
+          <span className="welcome-brand">Optima Aloqa</span>
+          <h2 id="welcome-heading">{t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })}</h2>
+          <p>{t("dashboard.description")}</p>
+          <Link href="/ai" className="welcome-ai-link" aria-label="Optima AI" title="Optima AI"><Sparkles size={20} /></Link>
+          <div className="welcome-facts">
+            <span><GraduationCap size={20} /><span><small>{t("dashboard.completedLabel")}</small><strong>{education.completed}</strong></span></span>
+            <span><Target size={20} /><span><small>{t("dashboard.avgProgress")}</small><strong>{education.completionRate}%</strong></span></span>
+            <span><MessageCircle size={20} /><span><small>{t("dashboard.activeChats")}</small><strong>{loading ? "\u2014" : rooms.length}</strong></span></span>
+          </div>
+        </div>
+        <img className="welcome-robot" src="/welcome-robot.png" alt="" width="220" height="280" fetchPriority="high" />
+      </section>
+      <PageHeader eyebrow={group?.name} title={t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })} description={t("dashboard.description")} action={<Link href="/meetings" className="button button-primary"><Plus size={17} /> {t("dashboard.createMeeting")}</Link>} />
       <section className="metric-grid" aria-label={t("dashboard.statsAria")}>
         <article className="metric-card"><span className="metric-icon"><UsersRound size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : members.length}</strong><small>{t("dashboard.teamMembers")}</small></div></article>
         <article className="metric-card"><span className="metric-icon"><MessageCircle size={20} /></span><div><strong>{loading ? <Skeleton className="skeleton-number" /> : rooms.length}</strong><small>{t("dashboard.activeChats")}</small></div></article>

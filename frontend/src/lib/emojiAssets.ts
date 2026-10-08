@@ -29,30 +29,59 @@ export function emojiPreviewUrl(id: string) {
 }
 
 export function localEmojiAssetUrl(id: string) {
+  if (id.startsWith("a")) return `/telegram-emojis/animated/${id}.lottie`;
+  if (id.startsWith("w")) return `/telegram-emojis/animated/${id}.webp`;
   return `/telegram-emojis/${id}.png`;
 }
 
-export function fallbackEmojiImage(image: HTMLImageElement, id: string) {
-  if (image.dataset.fallbackApplied === "true") return;
-  image.dataset.fallbackApplied = "true";
-  image.src = localEmojiAssetUrl(id);
-}
-
-export async function fetchEmojiManifest<T>() {
-  try {
-    const cdnResponse = await fetch(`${EMOJI_CDN_BASE}/manifest.json`, { cache: "force-cache" });
-    if (cdnResponse.ok) return cdnResponse.json() as Promise<T>;
-  } catch {
-    // The local catalog keeps chat usable during a temporary CDN outage.
+export function localEmojiPreviewUrl(id: string) {
+  if (id.startsWith("a") || id.startsWith("w")) {
+    return `/telegram-emojis/animated/previews/${id}.${id.startsWith("w") ? "webp" : "png"}`;
   }
-
-  const localResponse = await fetch("/telegram-emojis/manifest.json?v=2", { cache: "no-store" });
-  if (!localResponse.ok) throw new Error("Emoji manifest unavailable");
-  return localResponse.json() as Promise<T>;
+  return localEmojiAssetUrl(id);
 }
 
-export async function fetchAnimatedEmojiManifest<T>() {
-  const response = await fetch(`${ANIMATED_EMOJI_CDN_BASE}/manifest.json`, { cache: "force-cache" });
-  if (!response.ok) throw new Error("Animated emoji manifest unavailable");
-  return response.json() as Promise<T>;
+export function emojiImageSources(id: string, preview = true): string[] {
+  // Static packs ship with the app. Remote-only packs retain their CDN URL.
+  const local = preview ? localEmojiPreviewUrl(id) : localEmojiAssetUrl(id);
+  const remote = preview ? emojiPreviewUrl(id) : emojiAssetUrl(id);
+  return id.startsWith("p") ? [local, remote] : [remote, local];
+}
+
+export function fallbackEmojiImage(image: HTMLImageElement, id: string) {
+  const sources = emojiImageSources(id);
+  const next = Number(image.dataset.sourceIndex || 0) + 1;
+  image.dataset.sourceIndex = String(next);
+  if (next < sources.length) image.src = sources[next];
+  else {
+    image.removeAttribute("src");
+    image.alt = "[emoji]";
+    image.title = "Emoji yuklanmadi";
+  }
+}
+
+async function fetchManifest<T>(urls: string[]): Promise<T> {
+  for (const url of urls) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) continue;
+      const value: unknown = await response.json();
+      if (Array.isArray(value) && value.length) return value as T;
+    } catch {
+      // A missing host, stale HTML response, or timeout must not empty the picker.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error("Emoji manifest unavailable");
+}
+
+export function fetchEmojiManifest<T>() {
+  return fetchManifest<T>(["/telegram-emojis/manifest.json?v=3", `${EMOJI_CDN_BASE}/manifest.json`]);
+}
+
+export function fetchAnimatedEmojiManifest<T>() {
+  return fetchManifest<T>([`${ANIMATED_EMOJI_CDN_BASE}/manifest.json`, "/telegram-emojis/animated/manifest.json"]);
 }

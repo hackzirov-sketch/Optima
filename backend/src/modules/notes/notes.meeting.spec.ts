@@ -5,7 +5,7 @@ const MEETING = 'meeting-1';
 const USER = 'user-1';
 
 /**
- * A meeting can belong to a workspace, so the interesting question is which
+ * A meeting can belong to a group, so the interesting question is which
  * rule wins. Meeting notes are visible to the people who were in the call —
  * not to everyone in the organisation that owns it.
  */
@@ -59,7 +59,7 @@ describe('NotesService — meeting scope', () => {
         title: 'x',
         meetingId: MEETING,
         projectId: 'project-1',
-        workspaceId: 'ws-1',
+        groupId: 'ws-1',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -85,13 +85,13 @@ describe('NotesService — meeting scope', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('does not fall through to workspace membership', async () => {
-    // The note's meeting belongs to a workspace this user is a member of.
+  it('does not fall through to group membership', async () => {
+    // The note's meeting belongs to a group this user is a member of.
     // Membership of the organisation is not membership of the conversation.
     withParticipation(false, {
       id: 'note-1',
       meetingId: MEETING,
-      workspaceId: 'ws-1',
+      groupId: 'ws-1',
       creatorId: 'someone-else',
     });
 
@@ -107,7 +107,7 @@ describe('NotesService — meeting scope', () => {
     withParticipation(true, {
       id: 'note-1',
       meetingId: MEETING,
-      workspaceId: null,
+      groupId: null,
       creatorId: 'someone-else',
     });
 

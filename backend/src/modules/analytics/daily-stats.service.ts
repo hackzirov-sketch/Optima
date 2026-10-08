@@ -36,7 +36,7 @@ export class DailyStatsService {
   async increment(
     userId: string,
     projectId: string,
-    workspaceId: string,
+    groupId: string,
     inc: Increments,
   ): Promise<void> {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -56,11 +56,11 @@ export class DailyStatsService {
       .join(', ');
 
     await this.dataSource.query(
-      `INSERT INTO developer_daily_stats (user_id, project_id, workspace_id, date, ${insertCols.join(', ')})
+      `INSERT INTO developer_daily_stats (user_id, project_id, group_id, date, ${insertCols.join(', ')})
        VALUES ($1, $2, $3, $4, ${insertVals.map((_, i) => `$${i + 5}`).join(', ')})
        ON CONFLICT (user_id, project_id, date)
        DO UPDATE SET ${conflictSet}`,
-      [userId, projectId, workspaceId, today, ...insertVals],
+      [userId, projectId, groupId, today, ...insertVals],
     );
   }
 }

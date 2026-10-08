@@ -32,9 +32,9 @@ export class NotesController {
   @Get()
   @ApiOperation({
     summary:
-      'List notes for a scope. Pass exactly the narrowest filter you have — meetingId, or taskId, or projectId, or workspaceId. No filter lists your own global notes.',
+      'List notes for a scope. Pass exactly the narrowest filter you have — meetingId, or taskId, or projectId, or groupId. No filter lists your own global notes.',
   })
-  @ApiQuery({ name: 'workspaceId', required: false })
+  @ApiQuery({ name: 'groupId', required: false })
   @ApiQuery({ name: 'projectId', required: false })
   @ApiQuery({ name: 'taskId', required: false })
   @ApiQuery({
@@ -45,13 +45,13 @@ export class NotesController {
   })
   list(
     @CurrentUser('id') userId: string,
-    @Query('workspaceId') workspaceId?: string,
+    @Query('groupId') groupId?: string,
     @Query('projectId') projectId?: string,
     @Query('taskId') taskId?: string,
     @Query('meetingId') meetingId?: string,
   ) {
     return this.notesService.list(userId, {
-      workspaceId,
+      groupId,
       projectId,
       taskId,
       meetingId,
@@ -60,7 +60,7 @@ export class NotesController {
 
   @Post()
   @ApiOperation({
-    summary: 'Create a note (workspace/project/task-scoped, or fully global)',
+    summary: 'Create a note (group/project/task-scoped, or fully global)',
   })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateNoteDto) {
     return this.notesService.create(userId, dto);

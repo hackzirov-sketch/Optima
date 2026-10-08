@@ -1,6 +1,14 @@
 export enum MeetingStatus {
   SCHEDULED = 'scheduled',
   LIVE = 'live',
+  /**
+   * Room is empty but the link/code is still valid — like Google Meet, an
+   * abandoned meeting doesn't kill its own link. The next join reactivates
+   * it straight back to LIVE. Only an explicit host "End meeting" transitions
+   * to ENDED, and so does the retention sweep once a room has sat INACTIVE
+   * longer than MEETING_INACTIVE_RETENTION_DAYS.
+   */
+  INACTIVE = 'inactive',
   ENDED = 'ended',
   CANCELLED = 'cancelled',
 }

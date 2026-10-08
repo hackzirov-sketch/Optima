@@ -62,7 +62,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     }
     const { name, emails, photos } = profile;
     // Google almost always returns verified addresses, but "almost always" is
-    // not a security boundary — Workspace domains can hand out unverified ones.
+    // not a security boundary — Group domains can hand out unverified ones.
     // Carry the flag through and let OAuthService decide (same rule as GitHub).
     const primary = emails?.[0];
     const user: GoogleOAuthProfile = {

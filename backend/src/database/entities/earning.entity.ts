@@ -1,12 +1,12 @@
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 import { User } from './user.entity';
 
 export interface Earning {
   id: string;
 
-  workspaceId: string;
+  groupId: string;
 
-  workspace: Workspace;
+  group: Group;
 
   userId: string;
 

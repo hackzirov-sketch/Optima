@@ -1,5 +1,15 @@
 {
+  "youtube": {
+    "search": "Search videos or paste a YouTube link",
+    "catalog": "OPTIMA video catalog",
+    "external": "YouTube",
+    "close": "Close",
+    "loading": "Loading",
+    "empty": "No videos found",
+    "more": "Load more"
+  },
   "common": {
+    "next": "İleri",
     "loading": "Yükleniyor",
     "cancel": "Vazgeç",
     "confirm": "Onayla",
@@ -38,6 +48,9 @@
     "close": "Bildirimi kapat"
   },
   "shell": {
+    "statistics": "İstatistik",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Ana sayfa",
     "chat": "Sohbet",
     "meetings": "Toplantılar",
@@ -46,7 +59,7 @@
     "profile": "Profil",
     "systemOnline": "Sistem çalışıyor",
     "realtime": "Gerçek zamanlı bağlı",
-    "workspace": "Çalışma alanı",
+    "group": "Çalışma alanı",
     "logout": "Çıkış",
     "settings": "Ayarlar",
     "notifications": "Bildirimler",
@@ -182,6 +195,8 @@
     "proofSecurity": "Güvenli giriş"
   },
   "profile": {
+    "copyUsername": "Kullanıcı adını kopyala",
+    "usernameCopied": "Kullanıcı adı kopyalandı",
     "pageTitle": "Profil ve ayarlar",
     "pageDescription": "Kişisel bilgilerinizi, bildirimlerinizi ve aktif cihazlarınızı yönetin.",
     "usernameNotSet": "Kullanıcı adı ayarlanmadı",
@@ -279,7 +294,7 @@
     "otherSessionsClosed": "Diğer oturumlar kapatıldı",
     "otherSessionsCloseFailed": "Oturumlar kapatılamadı"
   },
-  "workspaceSetup": {
+  "groupSetup": {
     "switchAccount": "Başka hesap",
     "greeting": "Merhaba, {{name}}",
     "heading": "İlk çalışma alanınızı oluşturun.",
@@ -300,9 +315,9 @@
   "invite": {
     "eyebrow": "OPTIMA DAVETİ",
     "chatTitle": "Gruba katılın",
-    "workspaceTitle": "Çalışma alanına katılın",
+    "groupTitle": "Çalışma alanına katılın",
     "chatDescription": "Bu bağlantı sizi grup sohbetine götürür. Önce bu çalışma alanının üyesi olmanız gerekir.",
-    "workspaceDescription": "Davet e-posta adresinize bağlıdır. Kabul edildiğinde ekip hemen açılır.",
+    "groupDescription": "Davet e-posta adresinize bağlıdır. Kabul edildiğinde ekip hemen açılır.",
     "acceptButton": "Daveti kabul et",
     "skip": "Şimdi değil",
     "acceptFailed": "Davet kabul edilemedi"
@@ -325,6 +340,7 @@
   "meetings": {
     "statusScheduled": "Planlandı",
     "statusLive": "Canlı",
+    "statusInactive": "Beklemede",
     "statusEnded": "Tamamlandı",
     "statusCancelled": "İptal edildi",
     "pageTitle": "Toplantılar",
@@ -372,7 +388,7 @@
     "codeCaseHint": "Kod büyük/küçük harfe duyarlı değildir.",
     "visibilityLabel": "Kimler katılabilir",
     "visibilityWorkspace": "Çalışma alanı",
-    "visibilityWorkspaceHint": "Sadece workspace üyeleri görebilir ve katılabilir",
+    "visibilityWorkspaceHint": "Sadece group üyeleri görebilir ve katılabilir",
     "visibilityPrivate": "Özel",
     "visibilityPrivateHint": "Sadece davetliler doğrudan katılır, diğerleri istek gönderir",
     "visibilityPublic": "Herkese açık",
@@ -499,7 +515,7 @@
     "conversationCreateFailed": "Sohbet oluşturulamadı",
     "inviteAccepted": "Davet kabul edildi",
     "inviteAcceptFailed": "Davet kabul edilemedi",
-    "workspaceInviteSent": "Çalışma alanı daveti e-postayla gönderildi",
+    "groupInviteSent": "Çalışma alanı daveti e-postayla gönderildi",
     "inviteSendFailed": "Davet gönderilemedi",
     "inviteLinksLoadFailed": "Davet bağlantıları yüklenemedi",
     "inviteLinkCreated": "Davet bağlantısı oluşturuldu",
@@ -743,10 +759,10 @@
     "inviteNewPersonHint": "E-posta ile çalışma alanına ekleyin",
     "createGroupButton": "Grup oluştur",
     "openChatButton": "Sohbeti aç",
-    "workspaceInviteTitle": "Çalışma alanına davet",
-    "workspaceInviteDesc": "Yeni kullanıcı e-posta ile ekibe katılır.",
+    "groupInviteTitle": "Çalışma alanına davet",
+    "groupInviteDesc": "Yeni kullanıcı e-posta ile ekibe katılır.",
     "roleLabel": "Rol",
-    "workspaceInviteHint": "Davet kabul edildikten sonra kullanıcıyı bir gruba ekleyebilir veya grup bağlantısını gönderebilirsiniz.",
+    "groupInviteHint": "Davet kabul edildikten sonra kullanıcıyı bir gruba ekleyebilir veya grup bağlantısını gönderebilirsiniz.",
     "backButton": "Geri",
     "sendInviteButton": "Davet gönder",
     "inviteLinkModalDesc": "Bağlantının süresini ve kullanım sınırını belirleyin.",
@@ -799,6 +815,11 @@
     "invisible": "Görünmez"
   },
   "meetingRoom": {
+    "chatTitle": "Toplantı sohbeti",
+    "chatAudience": "Bağlı: {count}",
+    "chatSessionHint": "Mesajlar yalnızca bağlı katılımcılara gider. Oturum kapanınca geçmiş silinir.",
+    "chatEmpty": "Sohbeti başlatın",
+    "chatSendFailed": "Mesaj gönderilmedi. Katılımcı bağlantılarını kontrol edin.",
     "loadFailed": "Toplantı açılamadı",
     "linkCopied": "Toplantı bağlantısı kopyalandı",
     "shareFailed": "Bağlantı paylaşılamadı",
@@ -886,7 +907,11 @@
     "sendReactionAria": "Tepki gönder",
     "leaveMeetingAria": "Toplantıdan ayrıl",
     "gridViewAria": "Izgara görünümü",
+    "exitGridViewAria": "Izgara görünümünden çık",
     "moreActionsAria": "Diğer işlemler",
+    "endMeetingButton": "Toplantıyı herkes için bitir",
+    "endMeetingConfirm": "Toplantı herkes için bitirilsin mi? Tüm katılımcılar çıkarılacak.",
+    "endMeetingFailed": "Toplantı bitirilemedi",
     "requestToJoinButton": "Katılma isteği gönder",
     "requestPendingTitle": "İsteğiniz gönderildi",
     "requestPendingDesc": "Organizatörün onayı bekleniyor...",

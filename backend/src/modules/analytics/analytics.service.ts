@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
 import { DatabaseService } from '../../database/database.service';
 
-import { MembersService } from '../workspaces/services/members.service';
+import { MembersService } from '../groups/services/members.service';
 import { RedisService } from '../../redis/redis.service';
 import { RedisKeys } from '../../redis/redis.keys';
 
@@ -30,7 +30,7 @@ export class AnalyticsService {
    * Authorization is deliberately *not* part of this — callers check
    * membership before calling, so a cached payload is never a way to reach
    * data the caller couldn't have queried directly. The key is the resource,
-   * not the viewer, so two members of a workspace share one entry.
+   * not the viewer, so two members of a group share one entry.
    */
   private async cached<T>(
     scope: string,
@@ -47,13 +47,13 @@ export class AnalyticsService {
 
   private async getActiveProject(
     projectId: string,
-  ): Promise<{ id: string; workspaceId: string }> {
+  ): Promise<{ id: string; groupId: string }> {
     const rows = await this.dataSource.query<{
       id: string;
-      workspaceId: string;
+      groupId: string;
       deletedAt: Date | null;
     }>(
-      `SELECT id, workspace_id AS "workspaceId", deleted_at AS "deletedAt" FROM projects WHERE id = $1`,
+      `SELECT id, group_id AS "groupId", deleted_at AS "deletedAt" FROM projects WHERE id = $1`,
       [projectId],
     );
     const project = rows[0];
@@ -66,29 +66,29 @@ export class AnalyticsService {
     return project;
   }
 
-  async workspaceOverview(workspaceId: string, userId: string) {
-    await this.membersService.assertMember(workspaceId, userId);
-    return this.cached('ws-overview', workspaceId, () =>
-      this.computeWorkspaceOverview(workspaceId),
+  async groupOverview(groupId: string, userId: string) {
+    await this.membersService.assertMember(groupId, userId);
+    return this.cached('ws-overview', groupId, () =>
+      this.computeGroupOverview(groupId),
     );
   }
 
-  private async computeWorkspaceOverview(workspaceId: string) {
+  private async computeGroupOverview(groupId: string) {
     const [projectCountRows, memberCountRows, taskByStatus] = await Promise.all(
       [
         this.dataSource.query(
-          `SELECT COUNT(*) FROM projects WHERE workspace_id = $1 AND deleted_at IS NULL`,
-          [workspaceId],
+          `SELECT COUNT(*) FROM projects WHERE group_id = $1 AND deleted_at IS NULL`,
+          [groupId],
         ),
         this.dataSource.query(
-          `SELECT COUNT(*) FROM workspace_members WHERE workspace_id = $1`,
-          [workspaceId],
+          `SELECT COUNT(*) FROM group_members WHERE group_id = $1`,
+          [groupId],
         ),
         this.dataSource.query(
           `SELECT status, COUNT(*) AS count FROM tasks
-         WHERE workspace_id = $1 AND deleted_at IS NULL
+         WHERE group_id = $1 AND deleted_at IS NULL
          GROUP BY status`,
-          [workspaceId],
+          [groupId],
         ),
       ],
     );
@@ -105,7 +105,7 @@ export class AnalyticsService {
       .reduce((sum: number, row: any) => sum + Number(row.count ?? 0), 0);
 
     return {
-      workspaceId,
+      groupId,
       projectCount,
       memberCount,
       totalTasks,
@@ -117,7 +117,7 @@ export class AnalyticsService {
 
   async projectAnalytics(projectId: string, userId: string) {
     const project = await this.getActiveProject(projectId);
-    await this.membersService.assertMember(project.workspaceId, userId);
+    await this.membersService.assertMember(project.groupId, userId);
     return this.cached('project', projectId, () =>
       this.computeProjectAnalytics(projectId),
     );
@@ -141,7 +141,7 @@ export class AnalyticsService {
 
   async projectDevelopers(projectId: string, userId: string) {
     const project = await this.getActiveProject(projectId);
-    await this.membersService.assertMember(project.workspaceId, userId);
+    await this.membersService.assertMember(project.groupId, userId);
     return this.cached('project-devs', projectId, () =>
       this.computeProjectDevelopers(projectId),
     );
@@ -205,7 +205,7 @@ export class AnalyticsService {
         [userId],
       ),
       this.dataSource.query(
-        `SELECT id, user_id AS "userId", project_id AS "projectId", workspace_id AS "workspaceId",
+        `SELECT id, user_id AS "userId", project_id AS "projectId", group_id AS "groupId",
                 date, commits_count AS "commitsCount", tasks_completed AS "tasksCompleted",
                 pushes_submitted AS "pushesSubmitted", pushes_approved AS "pushesApproved",
                 added_lines AS "addedLines", removed_lines AS "removedLines",

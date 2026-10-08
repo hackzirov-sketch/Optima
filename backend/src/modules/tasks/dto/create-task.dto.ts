@@ -20,10 +20,10 @@ export class CreateTaskDto {
   @IsNotEmpty()
   projectId: string;
 
-  @ApiProperty({ example: 'uuid-of-workspace' })
+  @ApiProperty({ example: 'uuid-of-group' })
   @IsUUID()
   @IsNotEmpty()
-  workspaceId: string;
+  groupId: string;
 
   @ApiProperty({ required: false, example: 'uuid-of-column' })
   @IsOptional()

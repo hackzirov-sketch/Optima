@@ -16,9 +16,9 @@ export class CreateChatRoomDto {
 
   @ApiPropertyOptional({
     enum: RoomScope,
-    default: RoomScope.WORKSPACE_ONLY,
+    default: RoomScope.GROUP_ONLY,
     description:
-      'workspace_only requires a workspace; private/public may be created without one',
+      'group_only requires a group; private/public may be created without one',
   })
   @IsOptional()
   @IsEnum(RoomScope)

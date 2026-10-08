@@ -1,6 +1,6 @@
 import { User } from './user.entity';
 import { Project } from './project.entity';
-import { Workspace } from './workspace.entity';
+import { Group } from './group.entity';
 
 export interface DeveloperDailyStats {
   id: string;
@@ -13,9 +13,9 @@ export interface DeveloperDailyStats {
 
   project: Project;
 
-  workspaceId: string;
+  groupId: string;
 
-  workspace: Workspace;
+  group: Group;
 
   date: string;
 

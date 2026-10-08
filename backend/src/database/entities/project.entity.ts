@@ -1,5 +1,4 @@
 import { ProjectStatus, PriorityLevel } from '../../common/enums';
-import { Workspace } from './workspace.entity';
 import { Group } from './group.entity';
 import { Repository } from './repository.entity';
 import { User } from './user.entity';
@@ -7,10 +6,6 @@ import { ProjectColumn } from './project-column.entity';
 
 export interface Project {
   id: string;
-
-  workspaceId: string;
-
-  workspace: Workspace;
 
   groupId: string;
 

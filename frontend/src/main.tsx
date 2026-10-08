@@ -7,7 +7,6 @@ import { ToastProvider } from "./components/Toast";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import "./styles.css";
 import "./premium.css";
-import "./motion.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -44,27 +44,27 @@ export class MeetingsController {
     private readonly gateway: EventsGateway,
   ) {}
 
-  // ─── Workspace-scoped list/create ─────────────────────────────────────────
+  // ─── Group-scoped list/create ─────────────────────────────────────────
 
-  @Get('workspaces/:workspaceId/meetings')
-  @ApiOperation({ summary: 'List meetings in a workspace' })
-  @ApiParam({ name: 'workspaceId', format: 'uuid' })
+  @Get('groups/:groupId/meetings')
+  @ApiOperation({ summary: 'List meetings in a group' })
+  @ApiParam({ name: 'groupId', format: 'uuid' })
   list(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.meetingsService.listForWorkspace(workspaceId, userId);
+    return this.meetingsService.listForGroup(groupId, userId);
   }
 
-  @Post('workspaces/:workspaceId/meetings')
-  @ApiOperation({ summary: 'Create a meeting in a workspace' })
-  @ApiParam({ name: 'workspaceId', format: 'uuid' })
-  createInWorkspace(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  @Post('groups/:groupId/meetings')
+  @ApiOperation({ summary: 'Create a meeting in a group' })
+  @ApiParam({ name: 'groupId', format: 'uuid' })
+  createInGroup(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateMeetingDto,
   ) {
-    return this.meetingsService.create(workspaceId, userId, dto);
+    return this.meetingsService.create(groupId, userId, dto);
   }
 
   // ─── Global (User-centric) list/create ────────────────────────────────────
@@ -87,7 +87,7 @@ export class MeetingsController {
     return this.meetingsService.getIceServers(userId);
   }
 
-  // ─── Join by meeting code (workspace-agnostic) ────────────────────────────
+  // ─── Join by meeting code (group-agnostic) ────────────────────────────
 
   @Post('meetings/join-by-code')
   @UseGuards(IpRateLimitGuard)
@@ -372,7 +372,7 @@ export class MeetingsController {
   @Post('meetings/:meetingId/invite')
   @ApiOperation({
     summary:
-      'Invite members to a meeting, by workspace member id and/or email address',
+      'Invite members to a meeting, by group member id and/or email address',
   })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
   invite(

@@ -191,7 +191,7 @@ export class UpdateChannelSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() aiTranslate?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() aiSpamDetect?: boolean;
 
-  // ── Education / Workspace / Community ─────────────────────────────────────
+  // ── Education / Group / Community ─────────────────────────────────────
   @ApiPropertyOptional()
   @IsOptional()
   @ValidateIf((_, v) => v !== null)

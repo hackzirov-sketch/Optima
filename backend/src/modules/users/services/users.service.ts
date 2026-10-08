@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { User } from '../../../database/entities/user.entity';
@@ -114,14 +118,14 @@ export class UsersService {
            w.visibility AS "visibility", w.max_members AS "maxMembers",
            w.max_projects AS "maxProjects", w.created_at AS "createdAt",
            w.updated_at AS "updatedAt"
-         FROM workspace_members wm
-         JOIN workspaces w ON w.id = wm.workspace_id
+         FROM group_members wm
+         JOIN groups w ON w.id = wm.group_id
          WHERE wm.user_id = $1 AND w.deleted_at IS NULL`,
         [id],
       ),
     ]);
 
-    return { ...user, settings: settings[0] ?? null, workspaces: memberships };
+    return { ...user, settings: settings[0] ?? null, groups: memberships };
   }
 
   /** Bulk last_seen lookup — the durable "history" half of presence (see ChatPresenceService for the live half). */
@@ -336,15 +340,23 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
-    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(Boolean) as string[];
+    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(
+      Boolean,
+    ) as string[];
     for (const t of texts) {
       await this.contentFilter.filterText(t, userId, 'profile');
     }
     try {
       await this.update(userId, dto);
     } catch (error) {
-      if ((error as { code?: string })?.code === '23505' && dto.username !== undefined) {
-        throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'Username is already taken' });
+      if (
+        (error as { code?: string })?.code === '23505' &&
+        dto.username !== undefined
+      ) {
+        throw new ConflictException({
+          code: 'USERNAME_TAKEN',
+          message: 'Username is already taken',
+        });
       }
       throw error;
     }

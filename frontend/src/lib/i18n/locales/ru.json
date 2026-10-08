@@ -1,5 +1,15 @@
 {
+  "youtube": {
+    "search": "Search videos or paste a YouTube link",
+    "catalog": "OPTIMA video catalog",
+    "external": "YouTube",
+    "close": "Close",
+    "loading": "Loading",
+    "empty": "No videos found",
+    "more": "Load more"
+  },
   "common": {
+    "next": "Далее",
     "loading": "Загрузка",
     "cancel": "Отмена",
     "confirm": "Подтвердить",
@@ -38,6 +48,9 @@
     "close": "Закрыть уведомление"
   },
   "shell": {
+    "statistics": "Статистика",
+    "youtube": "YouTube",
+    "ai": "AI",
     "home": "Главная",
     "chat": "Чаты",
     "meetings": "Встречи",
@@ -46,7 +59,7 @@
     "profile": "Профиль",
     "systemOnline": "Система работает",
     "realtime": "Подключено",
-    "workspace": "Пространство",
+    "group": "Пространство",
     "logout": "Выйти",
     "settings": "Настройки",
     "notifications": "Уведомления",
@@ -182,6 +195,8 @@
     "proofSecurity": "Безопасный вход"
   },
   "profile": {
+    "copyUsername": "Копировать имя пользователя",
+    "usernameCopied": "Имя пользователя скопировано",
     "pageTitle": "Профиль и настройки",
     "pageDescription": "Управляйте личными данными, уведомлениями и активными устройствами.",
     "usernameNotSet": "Username не указан",
@@ -279,7 +294,7 @@
     "otherSessionsClosed": "Остальные сессии закрыты",
     "otherSessionsCloseFailed": "Не удалось закрыть сессии"
   },
-  "workspaceSetup": {
+  "groupSetup": {
     "switchAccount": "Другой аккаунт",
     "greeting": "Привет, {{name}}",
     "heading": "Создайте своё первое пространство.",
@@ -300,9 +315,9 @@
   "invite": {
     "eyebrow": "ПРИГЛАШЕНИЕ OPTIMA",
     "chatTitle": "Присоединиться к группе",
-    "workspaceTitle": "Присоединиться к пространству",
+    "groupTitle": "Присоединиться к пространству",
     "chatDescription": "Эта ссылка приведёт вас в групповой чат. Сначала нужно стать участником этого пространства.",
-    "workspaceDescription": "Приглашение привязано к вашему email. После принятия команда откроется сразу.",
+    "groupDescription": "Приглашение привязано к вашему email. После принятия команда откроется сразу.",
     "acceptButton": "Принять приглашение",
     "skip": "Не сейчас",
     "acceptFailed": "Не удалось принять приглашение"
@@ -325,6 +340,7 @@
   "meetings": {
     "statusScheduled": "Запланировано",
     "statusLive": "В эфире",
+    "statusInactive": "Ожидание",
     "statusEnded": "Завершено",
     "statusCancelled": "Отменено",
     "pageTitle": "Встречи",
@@ -372,7 +388,7 @@
     "codeCaseHint": "Код нечувствителен к регистру.",
     "visibilityLabel": "Кому доступно",
     "visibilityWorkspace": "Рабочее пространство",
-    "visibilityWorkspaceHint": "Видят и присоединяются только участники workspace",
+    "visibilityWorkspaceHint": "Видят и присоединяются только участники group",
     "visibilityPrivate": "Приватная",
     "visibilityPrivateHint": "Присоединяются только приглашённые, остальные отправляют запрос",
     "visibilityPublic": "Публичная",
@@ -499,7 +515,7 @@
     "conversationCreateFailed": "Не удалось создать беседу",
     "inviteAccepted": "Приглашение принято",
     "inviteAcceptFailed": "Не удалось принять приглашение",
-    "workspaceInviteSent": "Приглашение в пространство отправлено на email",
+    "groupInviteSent": "Приглашение в пространство отправлено на email",
     "inviteSendFailed": "Не удалось отправить приглашение",
     "inviteLinksLoadFailed": "Не удалось загрузить ссылки-приглашения",
     "inviteLinkCreated": "Ссылка-приглашение создана",
@@ -743,10 +759,10 @@
     "inviteNewPersonHint": "Добавьте его в пространство по email",
     "createGroupButton": "Создать группу",
     "openChatButton": "Открыть чат",
-    "workspaceInviteTitle": "Приглашение в пространство",
-    "workspaceInviteDesc": "Новый пользователь присоединится к команде по email.",
+    "groupInviteTitle": "Приглашение в пространство",
+    "groupInviteDesc": "Новый пользователь присоединится к команде по email.",
     "roleLabel": "Роль",
-    "workspaceInviteHint": "После принятия приглашения вы сможете добавить пользователя в группу или отправить ему ссылку на группу.",
+    "groupInviteHint": "После принятия приглашения вы сможете добавить пользователя в группу или отправить ему ссылку на группу.",
     "backButton": "Назад",
     "sendInviteButton": "Отправить приглашение",
     "inviteLinkModalDesc": "Задайте срок действия и лимит использования ссылки.",
@@ -799,6 +815,11 @@
     "invisible": "Невидимый"
   },
   "meetingRoom": {
+    "chatTitle": "Чат встречи",
+    "chatAudience": "Подключено: {count}",
+    "chatSessionHint": "Сообщения получают подключённые участники. История очищается при закрытии сессии.",
+    "chatEmpty": "Начните разговор",
+    "chatSendFailed": "Сообщение не отправлено. Проверьте соединение участников.",
     "loadFailed": "Встреча не открылась",
     "linkCopied": "Ссылка на встречу скопирована",
     "shareFailed": "Не удалось поделиться ссылкой",
@@ -886,7 +907,11 @@
     "sendReactionAria": "Отправить реакцию",
     "leaveMeetingAria": "Покинуть встречу",
     "gridViewAria": "Сетка",
+    "exitGridViewAria": "Выйти из сетки",
     "moreActionsAria": "Ещё действия",
+    "endMeetingButton": "Завершить встречу для всех",
+    "endMeetingConfirm": "Завершить встречу для всех? Все участники будут удалены.",
+    "endMeetingFailed": "Не удалось завершить встречу",
     "requestToJoinButton": "Запросить присоединение",
     "requestPendingTitle": "Запрос отправлен",
     "requestPendingDesc": "Ожидайте подтверждения от организатора...",

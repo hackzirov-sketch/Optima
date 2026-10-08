@@ -74,11 +74,7 @@ export class MailService {
     }
   }
 
-  async sendInvitationEmail(
-    email: string,
-    token: string,
-    workspaceName: string,
-  ) {
+  async sendInvitationEmail(email: string, token: string, groupName: string) {
     try {
       if (!this.transporter) {
         this.logger.warn(
@@ -89,10 +85,10 @@ export class MailService {
       await this.transporter.sendMail({
         from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: `You're invited to join ${workspaceName} on UPZ`,
+        subject: `You're invited to join ${groupName} on UPZ`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>You've been invited to ${escapeHtml(workspaceName)}!</h2>
+            <h2>You've been invited to ${escapeHtml(groupName)}!</h2>
             <p>Someone invited you to collaborate on UPZ. Use the link below to accept:</p>
             <a href="${this.configService.get('APP_URL') ?? 'http://localhost:3000'}/invite?token=${escapeHtml(token)}"
                style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0;">

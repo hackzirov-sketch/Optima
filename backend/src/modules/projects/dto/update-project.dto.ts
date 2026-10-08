@@ -2,5 +2,5 @@ import { PartialType, OmitType } from '@nestjs/swagger';
 import { CreateProjectDto } from './create-project.dto';
 
 export class UpdateProjectDto extends PartialType(
-  OmitType(CreateProjectDto, ['workspaceId']),
+  OmitType(CreateProjectDto, ['groupId']),
 ) {}

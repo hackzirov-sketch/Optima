@@ -51,7 +51,7 @@ export class CreateMeetingDto {
   @IsString()
   agenda?: string;
 
-  @ApiPropertyOptional({ enum: RoomScope, default: RoomScope.WORKSPACE_ONLY })
+  @ApiPropertyOptional({ enum: RoomScope, default: RoomScope.GROUP_ONLY })
   @IsOptional()
   @IsEnum(RoomScope)
   scope?: RoomScope;

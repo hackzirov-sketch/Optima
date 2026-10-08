@@ -13,15 +13,7 @@ export class CreateProjectDto {
   @ApiProperty({ example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
   @IsUUID()
   @IsNotEmpty()
-  workspaceId: string;
-
-  @ApiProperty({
-    required: false,
-    example: '3a954c01-34a1-40e3-a927-ad8e96d8e615',
-  })
-  @IsOptional()
-  @IsUUID()
-  groupId?: string;
+  groupId: string;
 
   @ApiProperty({ example: 'UPZ Backend Refactoring' })
   @IsString()

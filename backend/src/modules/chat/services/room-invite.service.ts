@@ -7,7 +7,7 @@ import {
 import { DatabaseService } from '../../../database/database.service';
 
 import { ChatRoom } from '../../../database/entities/chat-room.entity';
-import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
+import { GroupMember } from '../../../database/entities/group-member.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { PermissionService } from '../../../common/services/permission.service';
 import { ChatMemberService } from './member.service';
@@ -92,8 +92,8 @@ export class ChatRoomInviteService {
     if (room.createdById === userId) return;
 
     // The room's own role is the primary authority: a group or channel has no
-    // workspace at all, so its admins would otherwise be told they are "not a
-    // workspace member" while looking at a room they administer.
+    // group at all, so its admins would otherwise be told they are "not a
+    // group member" while looking at a room they administer.
     const roomRoleRows = await this.dataSource.query<{ role: string }>(
       `SELECT role FROM chat_members
        WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
@@ -101,22 +101,22 @@ export class ChatRoomInviteService {
     );
     if (['owner', 'admin'].includes(roomRoleRows[0]?.role)) return;
 
-    if (!room.workspaceId) {
+    if (!room.groupId) {
       throw new ForbiddenException({
         code: ErrorCode.ROOM_INVITE_FORBIDDEN,
         message: 'Only room admins can manage invite links',
       });
     }
 
-    const rows = await this.dataSource.query<WorkspaceMember>(
-      `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-      [room.workspaceId, userId],
+    const rows = await this.dataSource.query<GroupMember>(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [room.groupId, userId],
     );
     const wsMember = rows[0];
     if (!wsMember) {
       throw new ForbiddenException({
-        code: ErrorCode.NOT_WORKSPACE_MEMBER,
-        message: 'Not a workspace member',
+        code: ErrorCode.NOT_GROUP_MEMBER,
+        message: 'Not a group member',
       });
     }
     try {
@@ -298,14 +298,14 @@ export class ChatRoomInviteService {
       }
       // A chat invite grants exactly one thing: membership of that room.
       //
-      // It used to also INSERT the joiner into workspace_members as 'junior'.
+      // It used to also INSERT the joiner into group_members as 'junior'.
       // Chat invite links are meant to be passed around — that is what they are
       // for — so anyone who received one silently became a member of the whole
-      // workspace, and every workspace-scoped check downstream is a bare
+      // group, and every group-scoped check downstream is a bare
       // assertMember(): projects, tasks, the analytics overview, the earnings
       // ledger, and the member list with everyone's email address on it. A link
-      // to one room is not consent to any of that. Workspace membership now only
-      // comes from the workspace invitation flow (InvitationsService), which is
+      // to one room is not consent to any of that. Group membership now only
+      // comes from the group invitation flow (InvitationsService), which is
       // gated on an admin actually inviting the person.
       // ON CONFLICT because the check above only looks at *open* memberships:
       // someone who left the room still has their row, so a plain INSERT hit

@@ -1,5 +1,4 @@
 import { ChatRoomType, RoomScope } from '../../common/enums';
-import { Workspace } from './workspace.entity';
 import { Group } from './group.entity';
 import { Project } from './project.entity';
 import { User } from './user.entity';
@@ -8,13 +7,9 @@ import { ChatMessage } from './chat-message.entity';
 export interface ChatRoom {
   id: string;
 
-  workspaceId: string;
+  groupId: string | null;
 
-  workspace: Workspace;
-
-  groupId: string;
-
-  group: Group;
+  group: Group | null;
 
   projectId: string;
 

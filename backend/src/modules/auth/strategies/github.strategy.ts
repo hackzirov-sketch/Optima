@@ -41,7 +41,7 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
         configService.get<string>('github.callbackUrl') ||
         'http://localhost:5001/api/v1/auth/github/callback',
       // Login only needs to identify the user. Repository access is granted
-      // separately by installing the GitHub App on a workspace — asking for
+      // separately by installing the GitHub App on a group — asking for
       // read/write on every private repo just to sign in is far more than this
       // flow needs, and the stored token is a much bigger prize as a result.
       scope: ['user:email'],
