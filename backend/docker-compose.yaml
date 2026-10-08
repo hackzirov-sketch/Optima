@@ -1,46 +1,46 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      # "deps" is the first stage — full `npm ci` including devDependencies
-      # (@nestjs/cli, ts-node, etc.), no compiled source. Source comes from
-      # the bind mount below instead, so `npm run dev` (nest start --watch)
-      # can hot-reload; the production image build (`docker build` with no
-      # --target, or the root docker-compose.yml) still uses the full
-      # multi-stage Dockerfile as before.
-      target: deps
-    container_name: upz-backend-app
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    environment:
-      PORT: 8080
-      # Point at the local containers below rather than whatever
-      # DATABASE_URL/REDIS_URL happen to be in .env (e.g. a cloud DB used
-      # for host-side `npm run dev`) — override always wins over env_file.
-      DATABASE_URL: postgresql://app:secret@postgres:5432/upz
-      REDIS_URL: redis://redis:6379
-    volumes:
-      - .:/app
-      - /app/node_modules
-    command: npm run dev
-    depends_on:
-      - postgres
-      - redis
+#  app:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#      # "deps" is the first stage — full `npm ci` including devDependencies
+#      # (@nestjs/cli, ts-node, etc.), no compiled source. Source comes from
+#      # the bind mount below instead, so `npm run dev` (nest start --watch)
+#      # can hot-reload; the production image build (`docker build` with no
+#      # --target, or the root docker-compose.yml) still uses the full
+#      # multi-stage Dockerfile as before.
+#      target: deps
+#    container_name: upz-backend-app
+#    ports:
+#      - "8080:8080"
+#    env_file:
+#      - .env
+#    environment:
+#      PORT: 8080
+#      # Point at the local containers below rather than whatever
+#      # DATABASE_URL/REDIS_URL happen to be in .env (e.g. a cloud DB used
+#      # for host-side `npm run dev`) — override always wins over env_file.
+#      DATABASE_URL: postgresql://app:secret@postgres:5432/upz
+#      REDIS_URL: redis://redis:6379
+#    volumes:
+#      - .:/app
+#      - /app/node_modules
+#    command: npm run dev
+#    depends_on:
+#      - postgres
+#      - redis
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: upz-backend-postgres
     environment:
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: upz
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   redis:
