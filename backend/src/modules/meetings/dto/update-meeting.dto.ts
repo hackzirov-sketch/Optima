@@ -10,12 +10,9 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import {
-  MeetingStatus,
-  MeetingJoinPolicy,
-} from '../../../common/enums/meeting.enum';
+import { MeetingJoinPolicy } from '../../../common/enums/meeting.enum';
 import { RoomScope } from '../../../common/enums';
-import { MESH_MAX_PARTICIPANTS } from '../meetings.constants';
+import { SFU_MAX_PARTICIPANTS } from '../meetings.constants';
 
 export class UpdateMeetingDto {
   @ApiPropertyOptional()
@@ -39,16 +36,11 @@ export class UpdateMeetingDto {
   @IsDateString()
   endTime?: string;
 
-  @ApiPropertyOptional({ enum: MeetingStatus })
-  @IsOptional()
-  @IsEnum(MeetingStatus)
-  status?: MeetingStatus;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
   @Min(2)
-  @Max(MESH_MAX_PARTICIPANTS)
+  @Max(SFU_MAX_PARTICIPANTS)
   maxParticipants?: number;
 
   @ApiPropertyOptional()
@@ -70,4 +62,30 @@ export class UpdateMeetingDto {
   @IsOptional()
   @IsEnum(MeetingJoinPolicy)
   joinPolicy?: MeetingJoinPolicy;
+
+  // ── Host controls: what participants other than hosts may do ──
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allowScreenShare?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allowReactions?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allowMicrophone?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allowVideo?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  allowChat?: boolean;
 }

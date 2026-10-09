@@ -23,6 +23,19 @@ export const MAX_RECORDING_DURATION_SECONDS = 60 * 60; // hard 1-hour cap, enfor
  */
 export const MESH_MAX_PARTICIPANTS = 8;
 
+/** Upper bound behind the LiveKit SFU (and what the database allows). */
+export const SFU_MAX_PARTICIPANTS = 100;
+
+/** The capacity ceiling for the transport this deployment actually runs. */
+export function transportMaxParticipants(): number {
+  const sfu = Boolean(
+    process.env.LIVEKIT_URL?.trim() &&
+      process.env.LIVEKIT_API_KEY?.trim() &&
+      process.env.LIVEKIT_API_SECRET?.trim(),
+  );
+  return sfu ? SFU_MAX_PARTICIPANTS : MESH_MAX_PARTICIPANTS;
+}
+
 /**
  * How many people a given meeting may actually hold.
  *
@@ -34,9 +47,10 @@ export const MESH_MAX_PARTICIPANTS = 8;
  * against undefined is silently false and would let a meeting grow forever.
  */
 export function effectiveCapacity(storedLimit: number | null | undefined) {
+  const ceiling = transportMaxParticipants();
   if (typeof storedLimit !== 'number' || !Number.isFinite(storedLimit))
-    return MESH_MAX_PARTICIPANTS;
-  return Math.max(1, Math.min(storedLimit, MESH_MAX_PARTICIPANTS));
+    return ceiling;
+  return Math.max(1, Math.min(storedLimit, ceiling));
 }
 
 export const MEETING_LIFECYCLE_QUEUE = 'meeting-lifecycle';

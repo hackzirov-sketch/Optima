@@ -1,18 +1,40 @@
-import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Clock3, Copy, Link2, Plus, Radio, Search, Trash2, UsersRound, Video } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, History, Keyboard, Link2, MoreVertical, Plus, Radio, Trash2, Video } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Button, EmptyState, Modal, PageHeader, Skeleton } from "../components/ui";
+import { Button, Modal, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
+import { MeetMenu } from "../components/meet/MeetPopover";
+import { FreeTimeIllustration } from "../components/meet/MeetIllustrations";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting, MeetingVisibility } from "../types";
 import { MESH_MAX_PARTICIPANTS, clampParticipants } from "../lib/meeting-limits";
+import { clock, dayLabel, dayTitle, shortDate, weekdayShort } from "../lib/meetDates";
 
-const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const VISIBILITY_OPTIONS: MeetingVisibility[] = ["group_only", "private", "public", "invite_only"];
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+function dayKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function startOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function meetingLink(meeting: Pick<Meeting, "id">) {
+  return `${window.location.origin}/meetings/${meeting.id}`;
+}
+
+/**
+ * Meet home, modelled on Google Meet's: one bar to join by code/link or start
+ * something new, a week strip to move between days, and that day's meetings —
+ * with whatever is live right now pinned above them regardless of date.
+ */
 export function MeetingsPage() {
   const { user, group } = useAuth();
   const { show } = useToast();
@@ -21,62 +43,20 @@ export function MeetingsPage() {
   const [, navigate] = useLocation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
+  const [tab, setTab] = useState<"meetings" | "history">("meetings");
+  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
+  const [code, setCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [newOpen, setNewOpen] = useState<"bar" | "empty" | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [laterMeeting, setLaterMeeting] = useState<Meeting | null>(null);
+  const [copied, setCopied] = useState(false);
   const [visibility, setVisibility] = useState<MeetingVisibility>("group_only");
   const [joinPolicy, setJoinPolicy] = useState<"auto" | "request_approval">("auto");
-
-  function visibilityLabel(value: MeetingVisibility) {
-    return ({
-      group_only: t("meetings.visibilityWorkspace"),
-      private: t("meetings.visibilityPrivate"),
-      public: t("meetings.visibilityPublic"),
-      invite_only: t("meetings.visibilityInviteOnly"),
-    })[value];
-  }
-
-  function visibilityHint(value: MeetingVisibility) {
-    return ({
-      group_only: t("meetings.visibilityWorkspaceHint"),
-      private: t("meetings.visibilityPrivateHint"),
-      public: t("meetings.visibilityPublicHint"),
-      invite_only: t("meetings.visibilityInviteOnlyHint"),
-    })[value];
-  }
-
-  function dateTime(value: string) {
-    return new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-  }
-
-  function statusLabel(status: Meeting["status"]) {
-    return ({ scheduled: t("meetings.statusScheduled"), live: t("meetings.statusLive"), inactive: t("meetings.statusInactive"), ended: t("meetings.statusEnded"), cancelled: t("meetings.statusCancelled") })[status];
-  }
-
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("code");
-    if (!code) return;
-    setJoinCode(code.trim().toUpperCase());
-    setJoinOpen(true);
-    window.history.replaceState({}, "", "/meetings");
-  }, []);
-
-  async function shareMeeting(meeting: Meeting) {
-    const url = `${window.location.origin}/meetings/${meeting.id}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: meeting.title, text: t("meetings.shareTextTemplate", { code: meeting.code }), url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        show(t("meetings.linkCopied"));
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      show(t("meetings.shareFailed"), "error");
-    }
-  }
+  const newBarRef = useRef<HTMLButtonElement>(null);
+  const newEmptyRef = useRef<HTMLButtonElement>(null);
+  const datePicker = useRef<HTMLInputElement>(null);
 
   async function load() {
     if (!group) return;
@@ -89,65 +69,143 @@ export function MeetingsPage() {
       setLoading(false);
     }
   }
-
   useEffect(() => { void load(); }, [group?.id]);
 
-  const active = useMemo(() => meetings.filter((meeting) => meeting.status === "live" || meeting.status === "scheduled" || meeting.status === "inactive").sort((a, b) => {
-    if (a.status === "live" && b.status !== "live") return -1;
-    if (b.status === "live" && a.status !== "live") return 1;
-    return +new Date(a.startTime) - +new Date(b.startTime);
-  }), [meetings]);
-  const history = useMemo(() => meetings.filter((meeting) => meeting.status === "ended" || meeting.status === "cancelled"), [meetings]);
+  // /meetings?code=XYZ (shared links from older invites) prefills the bar.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("code");
+    if (!fromUrl) return;
+    setCode(fromUrl.trim().toUpperCase());
+    window.history.replaceState({}, "", "/meetings");
+  }, []);
 
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!group) return;
-    setSaving(true);
-    const form = new FormData(event.currentTarget);
-    const start = new Date(String(form.get("startTime")));
+  // Week strip: Monday-first except English, which (like Google) starts on Sunday.
+  const week = useMemo(() => {
+    const first = new Date(selectedDay);
+    const offset = locale === "en" ? first.getDay() : (first.getDay() + 6) % 7;
+    first.setDate(first.getDate() - offset);
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(first);
+      day.setDate(first.getDate() + index);
+      return day;
+    });
+  }, [selectedDay, locale]);
+
+  const todayKey = dayKey(new Date());
+  const live = useMemo(() => meetings.filter((meeting) => meeting.status === "live"), [meetings]);
+  const dayMeetings = useMemo(() => meetings
+    .filter((meeting) => meeting.status !== "live" && meeting.status !== "ended" && meeting.status !== "cancelled" && dayKey(new Date(meeting.startTime)) === dayKey(selectedDay))
+    .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)), [meetings, selectedDay]);
+  const history = useMemo(() => meetings
+    .filter((meeting) => meeting.status === "ended" || meeting.status === "cancelled")
+    .sort((a, b) => +new Date(b.startTime) - +new Date(a.startTime)), [meetings]);
+
+  function shiftWeek(direction: -1 | 1) {
+    const next = new Date(selectedDay);
+    next.setDate(next.getDate() + direction * 7);
+    setSelectedDay(startOfDay(next));
+  }
+
+  async function createMeeting(extra: Record<string, unknown> = {}) {
+    if (!group) throw new Error(t("meetings.createFailed"));
+    return api.meetings.create(group.id, {
+      title: t("meet.instantTitle"),
+      startTime: new Date().toISOString(),
+      scope: "group_only",
+      joinPolicy: "auto",
+      maxParticipants: MESH_MAX_PARTICIPANTS,
+      ...extra,
+    });
+  }
+
+  async function startInstant() {
+    setCreating(true);
     try {
-      const meeting = await api.meetings.create(group.id, {
-        title: String(form.get("title") || "").trim(),
-        description: String(form.get("description") || "").trim() || undefined,
-        startTime: start.toISOString(),
-        maxParticipants: clampParticipants(Number(form.get("maxParticipants"))),
-        scope: visibility,
-        joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
-      });
-      setCreateOpen(false);
-      setVisibility("group_only");
-      setJoinPolicy("auto");
-      await load();
-      show(t("meetings.meetingCreated"));
+      const meeting = await createMeeting();
       navigate(`/meetings/${meeting.id}`);
     } catch (error) {
       show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
     } finally {
-      setSaving(false);
+      setCreating(false);
     }
   }
 
-  async function joinByCode(event: FormEvent<HTMLFormElement>) {
+  async function createForLater() {
+    setCreating(true);
+    try {
+      const meeting = await createMeeting();
+      setCopied(false);
+      setLaterMeeting(meeting);
+      setMeetings((current) => [meeting, ...current]);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function schedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
+    setCreating(true);
     const form = new FormData(event.currentTarget);
     try {
-      const meeting = await api.meetings.resolveByCode(String(form.get("code") || "").trim().toUpperCase());
-      setJoinOpen(false);
-      navigate(`/meetings/${meeting.id}`);
+      const meeting = await createMeeting({
+        title: String(form.get("title") || "").trim(),
+        description: String(form.get("description") || "").trim() || undefined,
+        startTime: new Date(String(form.get("startTime"))).toISOString(),
+        maxParticipants: clampParticipants(Number(form.get("maxParticipants"))),
+        scope: visibility,
+        joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
+      });
+      setScheduleOpen(false);
+      setVisibility("group_only");
+      setJoinPolicy("auto");
+      setMeetings((current) => [meeting, ...current]);
+      setSelectedDay(startOfDay(new Date(meeting.startTime)));
+      show(t("meetings.meetingCreated"));
     } catch (error) {
-      show(error instanceof Error ? error.message : t("meetings.codeNotFound"), "error");
+      show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
     } finally {
-      setSaving(false);
+      setCreating(false);
+    }
+  }
+
+  /** Accepts a bare code, an Optima meeting link, or a link carrying ?code=. */
+  async function join(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = code.trim();
+    if (!value) return;
+    const id = value.match(UUID)?.[0];
+    if (id && /\/meetings\//.test(value)) {
+      navigate(`/meetings/${id}`);
+      return;
+    }
+    let lookup = value;
+    try { lookup = new URL(value).searchParams.get("code") || value; } catch { /* not a URL */ }
+    setJoining(true);
+    try {
+      const meeting = await api.meetings.resolveByCode(lookup.toUpperCase());
+      navigate(`/meetings/${meeting.id}`);
+    } catch {
+      show(t("meet.invalidCode"), "error");
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  async function copy(text: string, message = t("meet.copied")) {
+    try {
+      await navigator.clipboard.writeText(text);
+      show(message);
+      return true;
+    } catch {
+      show(t("meetings.shareFailed"), "error");
+      return false;
     }
   }
 
   async function removeMeeting(meeting: Meeting) {
-    if (!(await confirm({
-      title: t("common.delete"),
-      description: t("meetings.deleteConfirm", { title: meeting.title }),
-      confirmLabel: t("common.delete")
-    }))) return;
+    if (!(await confirm({ title: t("common.delete"), description: t("meetings.deleteConfirm", { title: meeting.title }), confirmLabel: t("common.delete") }))) return;
     try {
       await api.meetings.remove(meeting.id);
       setMeetings((current) => current.filter((item) => item.id !== meeting.id));
@@ -157,43 +215,126 @@ export function MeetingsPage() {
     }
   }
 
+  const newItems = [
+    { key: "later", label: t("meet.createLater"), icon: <Link2 size={20} />, onSelect: () => void createForLater() },
+    { key: "instant", label: t("meet.startInstant"), icon: <Plus size={20} />, onSelect: () => void startInstant() },
+    { key: "schedule", label: t("meet.schedule"), icon: <CalendarPlus size={20} />, onSelect: () => setScheduleOpen(true) },
+  ];
+
   const defaultStart = new Date(Date.now() + 30 * 60_000);
   defaultStart.setMinutes(Math.ceil(defaultStart.getMinutes() / 5) * 5, 0, 0);
+  if (dayKey(selectedDay) !== todayKey && selectedDay > new Date()) defaultStart.setFullYear(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
+  const localInput = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+
+  const item = (meeting: Meeting) => (
+    <MeetingRow key={meeting.id} meeting={meeting} locale={locale} canDelete={meeting.hostId === user?.id}
+      onOpen={() => navigate(`/meetings/${meeting.id}`)}
+      onCopyLink={() => void copy(meetingLink(meeting), t("meetings.linkCopied"))}
+      onCopyCode={() => void copy(meeting.code, t("meetings.codeCopied"))}
+      onDelete={() => void removeMeeting(meeting)} />
+  );
 
   return (
-    <div className="page meetings-page">
-      <PageHeader eyebrow={group?.name} title={t("meetings.pageTitle")} description={t("meetings.pageDescription")} action={<div className="button-row"><Button variant="secondary" onClick={() => setJoinOpen(true)} icon={<Search size={17} />}>{t("meetings.joinByCode")}</Button><Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button></div>} />
+    <div className="meet-home">
+      <header className="meet-home-bar">
+        <div className="meet-brand"><span className="meet-logo" aria-hidden="true"><Video size={20} /></span><span>{t("meet.brand")}</span></div>
+        <div className="meet-home-actions">
+          <form className="meet-join" onSubmit={(event) => void join(event)}>
+            <label className="meet-join-field">
+              <Keyboard size={20} aria-hidden="true" />
+              <input value={code} onChange={(event) => setCode(event.target.value)} placeholder={t("meet.codePlaceholder")} aria-label={t("meet.codeAria")} autoComplete="off" spellCheck={false} />
+              <button type="submit" className="meet-join-submit" disabled={!code.trim() || joining}>{t("meet.join")}</button>
+            </label>
+          </form>
+          <span className="meet-anchor">
+            <button ref={newBarRef} type="button" className="meet-new" aria-haspopup="menu" aria-expanded={newOpen === "bar"} disabled={creating} onClick={() => setNewOpen((open) => open === "bar" ? null : "bar")}>
+              <Video size={20} aria-hidden="true" /> {t("meet.new")}
+            </button>
+            <MeetMenu open={newOpen === "bar"} onClose={() => setNewOpen(null)} triggerRef={newBarRef} items={newItems} placement="bottom" align="start" label={t("meet.newMenuLabel")} className="meet-menu-light" />
+          </span>
+        </div>
+      </header>
 
-      {loading ? <div className="meeting-card-grid">{[1, 2, 3].map((item) => <Skeleton key={item} className="skeleton-card" />)}</div> : active.length === 0 ? (
-        <section className="panel meeting-empty-panel"><EmptyState icon={<Video size={28} />} title={t("meetings.emptyTitle")} description={t("meetings.emptyDescription")} action={<Button onClick={() => setCreateOpen(true)} icon={<Plus size={17} />}>{t("meetings.createMeeting")}</Button>} /></section>
-      ) : (
-        <section className="meeting-card-grid">
-          {active.map((meeting) => (
-            <article className={`meeting-card ${meeting.status === "live" ? "meeting-live" : ""}`} key={meeting.id}>
-              <header><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" && <Radio size={13} />} {statusLabel(meeting.status)}</span><div className="meeting-card-tools"><button className="icon-button icon-button-sm" onClick={() => { void navigator.clipboard.writeText(meeting.code); show(t("meetings.codeCopied")); }} aria-label={t("meetings.copyCodeAria")}><Copy size={15} /></button><button className="icon-button icon-button-sm" onClick={() => void shareMeeting(meeting)} aria-label={t("meetings.shareAria")}><Link2 size={15} /></button>{meeting.hostId === user?.id && <button className="icon-button icon-button-sm icon-button-danger" onClick={() => void removeMeeting(meeting)} aria-label={t("meetings.deleteAria")}><Trash2 size={15} /></button>}</div></header>
-              <div className="meeting-card-body"><h2>{meeting.title}</h2><p>{meeting.description || t("meetings.defaultDescription")}</p></div>
-              <dl><div><dt><CalendarDays size={16} /> {t("meetings.time")}</dt><dd>{dateTime(meeting.startTime)}</dd></div><div><dt><UsersRound size={16} /> {t("meetings.participants")}</dt><dd>{meeting.participantCount} / {meeting.maxParticipants}</dd></div></dl>
-              <footer><code>{meeting.code}</code><Button onClick={() => navigate(`/meetings/${meeting.id}`)} icon={<ArrowRight size={17} />}>{meeting.status === "live" ? t("meetings.joinNow") : t("meetings.openMeeting")}</Button></footer>
-            </article>
-          ))}
-        </section>
-      )}
+      <div className="meet-home-body">
+        <nav className="meet-rail" aria-label={t("meet.brand")}>
+          <button type="button" className={tab === "meetings" ? "active" : ""} aria-current={tab === "meetings" ? "page" : undefined} onClick={() => setTab("meetings")}><span><CalendarDays size={22} /></span>{t("meet.tabMeetings")}</button>
+          <button type="button" className={tab === "history" ? "active" : ""} aria-current={tab === "history" ? "page" : undefined} onClick={() => setTab("history")}><span><History size={22} /></span>{t("meet.tabHistory")}</button>
+        </nav>
 
-      {history.length > 0 && <section className="meeting-history-wrap"><button className="history-toggle" onClick={() => setHistoryOpen((value) => !value)} aria-expanded={historyOpen}><span><strong>{t("meetings.historyTitle")}</strong><small>{t("meetings.historyCount", { count: history.length })}</small></span>{historyOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>{historyOpen && <div className="panel meeting-history"><div className="history-table">{history.map((meeting) => <button key={meeting.id} onClick={() => navigate(`/meetings/${meeting.id}`)}><span className={`meeting-status status-${meeting.status}`} /><span><strong>{meeting.title}</strong><small>{dateTime(meeting.startTime)}</small></span><span>{t("meetings.participantCount", { count: meeting.participantCount })}</span><ArrowRight size={16} /></button>)}</div></div>}</section>}
+        <main className="meet-home-main">
+          {tab === "meetings" ? <>
+            <div className="meet-day-row">
+              <h1>
+                {dayTitle(selectedDay, locale)}
+                <label className="meet-icon-button" title={t("meet.pickDate")}>
+                  <CalendarDays size={22} aria-hidden="true" />
+                  <input ref={datePicker} type="date" className="meet-date-input" aria-label={t("meet.pickDate")}
+                    value={`${selectedDay.getFullYear()}-${String(selectedDay.getMonth() + 1).padStart(2, "0")}-${String(selectedDay.getDate()).padStart(2, "0")}`}
+                    onClick={() => datePicker.current?.showPicker?.()}
+                    onChange={(event) => { if (event.target.value) setSelectedDay(startOfDay(new Date(`${event.target.value}T00:00`))); }} />
+                </label>
+              </h1>
+              <div className="meet-week" role="group" aria-label={t("meet.pickDate")}>
+                <button type="button" className="meet-icon-button" onClick={() => shiftWeek(-1)} aria-label={t("meet.prevWeek")}><ChevronLeft size={22} /></button>
+                {week.map((day) => {
+                  const selected = dayKey(day) === dayKey(selectedDay);
+                  return (
+                    <button type="button" key={dayKey(day)} className={`meet-day ${selected ? "selected" : ""} ${dayKey(day) === todayKey ? "today" : ""}`} aria-pressed={selected} onClick={() => setSelectedDay(startOfDay(day))}
+                      aria-label={dayLabel(day, locale)}>
+                      <small>{weekdayShort(day, locale)}</small>
+                      <strong>{day.getDate()}</strong>
+                    </button>
+                  );
+                })}
+                <button type="button" className="meet-icon-button" onClick={() => shiftWeek(1)} aria-label={t("meet.nextWeek")}><ChevronRight size={22} /></button>
+              </div>
+            </div>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("meetings.newMeetingTitle")} description={t("meetings.newMeetingDesc")} width="md">
-        <form className="modal-form" onSubmit={create}>
+            {loading ? <div className="meet-list">{[1, 2].map((index) => <Skeleton key={index} className="meet-row-skeleton" />)}</div> : <>
+              {live.length > 0 && <section className="meet-section" aria-label={t("meet.liveNow")}><h2><Radio size={16} /> {t("meet.liveNow")}</h2><div className="meet-list">{live.map(item)}</div></section>}
+              {dayMeetings.length > 0 ? <section className="meet-section"><div className="meet-list">{dayMeetings.map(item)}</div></section> : live.length === 0 && (
+                <section className="meet-empty">
+                  <FreeTimeIllustration />
+                  <h2>{dayKey(selectedDay) === todayKey ? t("meet.emptyToday") : t("meet.emptyDay")}</h2>
+                  <p>{t("meet.emptyDesc")}</p>
+                  <span className="meet-anchor">
+                    <button ref={newEmptyRef} type="button" className="meet-new meet-new-lg" aria-haspopup="menu" aria-expanded={newOpen === "empty"} disabled={creating} onClick={() => setNewOpen((open) => open === "empty" ? null : "empty")}>
+                      <Video size={20} aria-hidden="true" /> {t("meet.new")}
+                    </button>
+                    <MeetMenu open={newOpen === "empty"} onClose={() => setNewOpen(null)} triggerRef={newEmptyRef} items={newItems} placement="bottom" align="start" label={t("meet.newMenuLabel")} className="meet-menu-light" />
+                  </span>
+                </section>
+              )}
+            </>}
+          </> : (
+            <section className="meet-section">
+              <div className="meet-day-row"><h1>{t("meet.tabHistory")}</h1></div>
+              {history.length ? <div className="meet-list">{history.map(item)}</div> : <div className="meet-empty"><FreeTimeIllustration /><h2>{t("meet.historyEmpty")}</h2></div>}
+            </section>
+          )}
+        </main>
+      </div>
+
+      <Modal open={Boolean(laterMeeting)} onClose={() => setLaterMeeting(null)} title={t("meet.laterTitle")} description={t("meet.laterDesc")}>
+        {laterMeeting && <div className="meet-link-box">
+          <code>{meetingLink(laterMeeting).replace(/^https?:\/\//, "")}</code>
+          <button type="button" className="meet-icon-button" onClick={() => void copy(meetingLink(laterMeeting)).then((ok) => ok && setCopied(true))} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}>
+            {copied ? <Check size={20} /> : <Copy size={20} />}
+          </button>
+        </div>}
+      </Modal>
+
+      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title={t("meetings.newMeetingTitle")} description={t("meetings.newMeetingDesc")} width="md">
+        <form className="modal-form" onSubmit={(event) => void schedule(event)}>
           <label>{t("meetings.meetingNameLabel")}<input name="title" placeholder={t("meetings.meetingNamePlaceholder")} maxLength={200} autoFocus required /></label>
-          <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={3} /></label>
-          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={new Date(defaultStart.getTime() - defaultStart.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)} required /></label>
-          <p className="field-hint"><Clock3 size={15} /> {t("meetings.durationHint")}</p>
+          <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={2} /></label>
+          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={localInput(defaultStart)} required /></label>
           <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={MESH_MAX_PARTICIPANTS} defaultValue={MESH_MAX_PARTICIPANTS} /></label>
           <label>{t("meetings.visibilityLabel")}
             <select value={visibility} onChange={(event) => setVisibility(event.target.value as MeetingVisibility)}>
-              {VISIBILITY_OPTIONS.map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+              {VISIBILITY_OPTIONS.map((option) => <option key={option} value={option}>{({ group_only: t("meetings.visibilityWorkspace"), private: t("meetings.visibilityPrivate"), public: t("meetings.visibilityPublic"), invite_only: t("meetings.visibilityInviteOnly") })[option]}</option>)}
             </select>
           </label>
-          <p className="field-hint">{visibilityHint(visibility)}</p>
           {visibility !== "invite_only" && visibility !== "private" && (
             <label>{t("meetings.joinPolicyLabel")}
               <select value={joinPolicy} onChange={(event) => setJoinPolicy(event.target.value as "auto" | "request_approval")}>
@@ -202,17 +343,41 @@ export function MeetingsPage() {
               </select>
             </label>
           )}
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t("meetings.cancel")}</Button><Button type="submit" loading={saving} icon={<Video size={17} />}>{t("meetings.create")}</Button></div>
-        </form>
-      </Modal>
-
-      <Modal open={joinOpen} onClose={() => setJoinOpen(false)} title={t("meetings.joinModalTitle")} description={t("meetings.joinModalDesc")}>
-        <form className="modal-form join-code-form" onSubmit={joinByCode}>
-          <label>{t("meetings.meetingCodeLabel")}<input className="code-input code-input-small" name="code" value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} placeholder="OPTIMA-ABC-1234" autoComplete="off" autoFocus required /></label>
-          <p className="field-hint"><Clock3 size={15} /> {t("meetings.codeCaseHint")}</p>
-          <Button type="submit" loading={saving} icon={<ArrowRight size={17} />}>{t("meetings.openMeeting")}</Button>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setScheduleOpen(false)}>{t("meetings.cancel")}</Button><Button type="submit" loading={creating} icon={<CalendarPlus size={17} />}>{t("meetings.create")}</Button></div>
         </form>
       </Modal>
     </div>
+  );
+}
+
+function MeetingRow({ meeting, locale, canDelete, onOpen, onCopyLink, onCopyCode, onDelete }: {
+  meeting: Meeting; locale: string; canDelete: boolean;
+  onOpen: () => void; onCopyLink: () => void; onCopyCode: () => void; onDelete: () => void;
+}) {
+  const { t } = useI18n();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const start = new Date(meeting.startTime);
+  const ended = meeting.status === "ended" || meeting.status === "cancelled";
+  return (
+    <article className={`meet-row ${meeting.status === "live" ? "live" : ""}`}>
+      <time dateTime={meeting.startTime}>
+        <strong>{clock(start, locale)}</strong>
+        {ended && <small>{shortDate(start, locale)}</small>}
+      </time>
+      <button type="button" className="meet-row-main" onClick={onOpen}>
+        <strong>{meeting.title}</strong>
+        <small>{meeting.code} · {t("meet.participantsShort", { count: meeting.participantCount })}</small>
+      </button>
+      {!ended && <button type="button" className="meet-row-join" onClick={onOpen}>{t("meet.join")}</button>}
+      <span className="meet-anchor">
+        <button ref={trigger} type="button" className="meet-icon-button" aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("meet.itemMenu")} onClick={() => setMenuOpen((open) => !open)}><MoreVertical size={20} /></button>
+        <MeetMenu open={menuOpen} onClose={() => setMenuOpen(false)} triggerRef={trigger} placement="bottom" align="end" label={t("meet.itemMenu")} className="meet-menu-light" items={[
+          { key: "link", label: t("meet.copyLink"), icon: <Link2 size={18} />, onSelect: onCopyLink },
+          { key: "code", label: t("meet.copyCode"), icon: <Copy size={18} />, onSelect: onCopyCode },
+          ...(canDelete ? [{ key: "delete", label: t("meet.delete"), icon: <Trash2 size={18} />, danger: true, onSelect: onDelete }] : []),
+        ]} />
+      </span>
+    </article>
   );
 }

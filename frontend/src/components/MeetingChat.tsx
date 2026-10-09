@@ -3,9 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n/i18n";
 import type { MeetingChatMessage } from "../lib/meetingChat";
 
-export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen, onSend }: {
+export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen, onSend, showToggle = true, onUnreadChange }: {
   messages: MeetingChatMessage[]; connected: number; selfId: string; nameFor: (id: string) => string;
   open: boolean; onOpen: (open: boolean) => void; onSend: (text: string) => number;
+  /** False when the host page renders its own chat button (Meet's bottom-right toolbar). */
+  showToggle?: boolean;
+  onUnreadChange?: (count: number) => void;
 }) {
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState("");
@@ -30,9 +33,10 @@ export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen
   useEffect(() => {
     if (open) { setUnread(0); setNotice(null); nearBottom.current = true; list.current?.scrollTo({ top: list.current.scrollHeight }); }
   }, [open]);
+  useEffect(() => { onUnreadChange?.(unread); }, [unread, onUnreadChange]);
   const time = (value: number) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(value);
   return <>
-    <button className={`meeting-chat-toggle ${open ? "active" : ""}`} title={t("meetingRoom.chatTitle")} aria-label={t("meetingRoom.chatTitle")} aria-expanded={open} onClick={() => onOpen(!open)}><MessageCircle size={22} />{unread > 0 && <b>{unread > 99 ? "99+" : unread}</b>}</button>
+    {showToggle && <button className={`meeting-chat-toggle ${open ? "active" : ""}`} title={t("meetingRoom.chatTitle")} aria-label={t("meetingRoom.chatTitle")} aria-expanded={open} onClick={() => onOpen(!open)}><MessageCircle size={22} />{unread > 0 && <b>{unread > 99 ? "99+" : unread}</b>}</button>}
     {notice && !open && <div className="meeting-chat-notice" role="status"><button onClick={() => onOpen(true)}><MessageCircle size={20} /><span><strong>{nameFor(notice.senderId)}</strong><span>{notice.text}</span></span></button><button aria-label={t("common.close")} onClick={() => setNotice(null)}><X size={18} /></button></div>}
     {open && <section className="meeting-chat-panel" aria-label={t("meetingRoom.chatTitle")}>
       <header><div><strong>{t("meetingRoom.chatTitle")}</strong><small>{t("meetingRoom.chatAudience", { count: connected })}</small></div><button aria-label={t("meetingRoom.closePanelAria")} onClick={() => onOpen(false)}><X size={20} /></button></header>

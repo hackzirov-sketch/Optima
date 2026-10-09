@@ -102,8 +102,8 @@ export class MeetingsRepository {
 
   async findMeetingIdByCode(code: string): Promise<string> {
     const rows = await this.dataSource.query(
-      `SELECT id FROM meetings WHERE meeting_code = $1`,
-      [code.toUpperCase()],
+      `SELECT id FROM meetings WHERE lower(meeting_code) = lower($1)`,
+      [code.trim()],
     );
     if (!rows[0])
       throw new NotFoundException({
@@ -126,6 +126,13 @@ export class MeetingsRepository {
       scope: meeting.scope,
       joinPolicy: meeting.joinPolicy,
       locked: meeting.locked ?? false,
+      permissions: {
+        screenShare: meeting.allowScreenShare ?? true,
+        reactions: meeting.allowReactions ?? true,
+        microphone: meeting.allowMicrophone ?? true,
+        video: meeting.allowVideo ?? true,
+        chat: meeting.allowChat ?? true,
+      },
       startTime: meeting.startTime,
       endTime: meeting.endTime ?? null,
       maxParticipants: meeting.maxParticipants,

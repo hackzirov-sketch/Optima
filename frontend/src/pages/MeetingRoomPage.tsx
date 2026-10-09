@@ -1,10 +1,13 @@
-import { ArrowLeft, Camera, CameraOff, Check, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, Mic, MicOff, Minus, MonitorUp, MoreVertical, NotebookPen, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Signal, Smile, Unlock, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, ChevronUp, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, MessageSquareText, Mic, MicOff, Minus, MonitorUp, MoreVertical, NotebookPen, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Smile, Unlock, UserPlus, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
 import { DirectCallSurface } from "../components/DirectCallSurface";
 import { MeetingChat } from "../components/MeetingChat";
+import { MeetMenu, MeetPopover, type MeetMenuItem } from "../components/meet/MeetPopover";
+import { AllowDevicesIllustration } from "../components/meet/MeetIllustrations";
+import { clock } from "../lib/meetDates";
 import { useMeetingChat } from "../lib/meetingChat";
 import { LiveKitMeeting } from "../lib/liveKitMeeting";
 import { useToast } from "../components/Toast";
@@ -194,6 +197,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [cameraDevice, setCameraDevice] = useState("");
   const [microphoneDevice, setMicrophoneDevice] = useState("");
   const [permissionError, setPermissionError] = useState("");
+  /** The browser is showing its camera/microphone prompt right now (drives the "Click Allow" overlay). */
+  const [permissionPrompt, setPermissionPrompt] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [savingNote, setSavingNote] = useState(false);
@@ -357,6 +362,12 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       return;
     }
     let cancelled = false;
+    let settled = false;
+    // Only while the browser is actually asking: "prompt" means the
+    // permission dialog is up and nothing will happen until it's answered.
+    void navigator.permissions?.query({ name: (camera ? "camera" : "microphone") as PermissionName })
+      .then((status) => { if (!settled && !cancelled && status.state === "prompt") setPermissionPrompt(true); })
+      .catch(() => undefined);
     navigator.mediaDevices.getUserMedia({
       video: camera ? { deviceId: cameraDevice ? { exact: cameraDevice } : undefined } : false,
       audio: microphone ? { deviceId: microphoneDevice ? { exact: microphoneDevice } : undefined } : false,
@@ -365,8 +376,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       setPermissionError("");
       setPreviewStream((current) => { current?.getTracks().forEach((track) => track.stop()); return stream; });
       setDevices(await navigator.mediaDevices.enumerateDevices());
-    }).catch(() => setPermissionError(t("meetingRoom.permissionDenied")));
-    return () => { cancelled = true; };
+    }).catch(() => setPermissionError(t("meetingRoom.permissionDenied")))
+      .finally(() => { settled = true; setPermissionPrompt(false); });
+    return () => { cancelled = true; setPermissionPrompt(false); };
   // Device selection intentionally restarts preview.
   }, [isFullMode, entered, camera, microphone, cameraDevice, microphoneDevice]);
 
@@ -1197,6 +1209,41 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     getSocket().emit("meeting:hand", { meetingId, raised });
   }
 
+  /** Swap the live microphone/camera for another device without leaving the call. */
+  async function switchDevice(kind: "audio" | "video", deviceId: string) {
+    if (kind === "audio") setMicrophoneDevice(deviceId); else setCameraDevice(deviceId);
+    setDeviceMenu(null);
+    const old = currentStream.current?.getTracks().find((track) => track.kind === kind);
+    if (!old || !navigator.mediaDevices || !currentStream.current) return;
+    try {
+      const constraint = { deviceId: deviceId ? { exact: deviceId } : undefined };
+      const fresh = await navigator.mediaDevices.getUserMedia(kind === "audio" ? { audio: constraint } : { video: constraint });
+      const track = fresh.getTracks()[0];
+      track.enabled = old.enabled;
+      for (const peer of peers.current.values()) {
+        const sender = peer.getSenders().find((entry) => entry.track === old);
+        await sender?.replaceTrack(track).catch(() => undefined);
+      }
+      currentStream.current.removeTrack(old);
+      currentStream.current.addTrack(track);
+      old.stop();
+      setLocalStream(new MediaStream(currentStream.current.getTracks()));
+      await liveKit.current?.publish(track);
+    } catch {
+      show(t("meetingRoom.cameraOrMicFailed", { device: kind === "video" ? t("meetingRoom.cameraWord") : t("meetingRoom.microphoneWord") }), "error");
+    }
+  }
+
+  function togglePanel(panel: NonNullable<typeof sidePanel> | "chat") {
+    if (panel === "chat") {
+      setMeetingChatOpen((open) => !open);
+      setSidePanel(null);
+      return;
+    }
+    setMeetingChatOpen(false);
+    setSidePanel((current) => current === panel ? null : panel);
+  }
+
   function sendReaction(emoji: string) {
     setReactionOpen(false);
     getSocket().emit("meeting:reaction", { meetingId, emoji });
@@ -1440,6 +1487,43 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // top, next to routeMatch, because the lobby preview effect needs it too.)
   const isWidgetMode = !isFullMode && entered;
 
+  // ── Meet chrome state (toolbar menus, panels, cards) ──────────────────────
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const reactRef = useRef<HTMLButtonElement>(null);
+  const micMenuRef = useRef<HTMLButtonElement>(null);
+  const camMenuRef = useRef<HTMLButtonElement>(null);
+  const [deviceMenu, setDeviceMenu] = useState<"audio" | "video" | null>(null);
+  const [chatUnread, setChatUnread] = useState(0);
+  const readyKey = `optima:meet-ready:${meetingId}`;
+  const [readyDismissed, setReadyDismissed] = useState(() => {
+    try { return sessionStorage.getItem(readyKey) === "1"; } catch { return false; }
+  });
+  const dismissReady = useCallback(() => {
+    setReadyDismissed(true);
+    try { sessionStorage.setItem(readyKey, "1"); } catch { /* storage disabled */ }
+  }, [readyKey]);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!entered) return;
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [entered]);
+  // Escape closes the side panel — unless a menu inside it already used
+  // that Escape (MeetPopover marks it with preventDefault).
+  useEffect(() => {
+    if (!sidePanel && !meetingChatOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setSidePanel(null);
+      setMeetingChatOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidePanel, meetingChatOpen]);
+  useEffect(() => {
+    if (deviceMenu) void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => undefined);
+  }, [deviceMenu]);
+
   if (!meetingId && !isWidgetMode) return null;
 
   if (isWidgetMode) {
@@ -1475,113 +1559,265 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   if (accessDenied) return <div className={`meeting-room-loading ${overlayClass}`}><ShieldX size={26} /><p><strong>{t("meetingRoom.accessDeniedTitle")}</strong></p><p>{accessDenied}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;
   if (!meeting) return <div className={`meeting-room-loading ${overlayClass}`}><p>{directMode ? t("meetingRoom.callNotFound") : t("meetingRoom.meetingNotFound")}</p><Button onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>;
 
+  const tag = localeTag[locale] || "uz-UZ";
+  const personName = (person?: Pick<User, "firstName" | "lastName"> | null) =>
+    person ? `${person.firstName || ""} ${person.lastName || ""}`.trim() || t("meetingRoom.participantFallback") : t("meetingRoom.participantFallback");
+  const backToMeetings = () => directMode ? onDirectClose?.() : navigate("/meetings");
+  const audioInputs = devices.filter((device) => device.kind === "audioinput");
+  // Who is in the call besides us (the host's own participant row exists from creation).
+  const othersInCall = meeting?.participants
+    ? meeting.participants.filter((participant) => !participant.leftAt && participant.userId !== user?.id).length
+    : meeting?.participantCount ?? 0;
+  const videoInputs = devices.filter((device) => device.kind === "videoinput");
+
   if (!entered) return (
-    <div className={`meeting-lobby ${overlayClass}`}>
-      <header><button className="icon-button" onClick={() => directMode ? onDirectClose?.() : navigate("/meetings")} aria-label={t("meetingRoom.back")}><ArrowLeft size={20} /></button><span className="lobby-brand">{directMode ? t("meetingRoom.directCallBrand") : t("meetingRoom.brand")}</span><span className="lobby-secure"><Signal size={15} /> {t("meetingRoom.secureConnection")}</span></header>
-      <main>
-        <section className="lobby-media-column">
-          <div className="lobby-preview"><VideoTile stream={previewStream} muted mirrored label={t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} /><div className="lobby-preview-controls"><button className={microphone ? "active" : "off"} onClick={() => setMicrophone((value) => !value)} aria-label={t("meetingRoom.microphoneAria")}>{microphone ? <Mic size={20} /> : <MicOff size={20} />}</button><button className={camera ? "active" : "off"} onClick={() => setCamera((value) => !value)} aria-label={t("meetingRoom.cameraAria")}>{camera ? <Camera size={20} /> : <CameraOff size={20} />}</button><button onClick={() => setSettingsOpen((value) => !value)} aria-label={t("meetingRoom.deviceSettingsAria")} aria-expanded={settingsOpen}><Settings2 size={20} /></button></div></div>
-          {permissionError && <div className="permission-notice" role="alert"><CameraOff size={18} /><span>{permissionError}</span></div>}
-          {settingsOpen && <div className="device-settings"><label>{t("meetingRoom.cameraLabel")}<select value={cameraDevice} onChange={(event) => setCameraDevice(event.target.value)}><option value="">{t("meetingRoom.defaultCamera")}</option>{devices.filter((device) => device.kind === "videoinput").map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || t("meetingRoom.cameraFallback")}</option>)}</select></label><label>{t("meetingRoom.microphoneLabel")}<select value={microphoneDevice} onChange={(event) => setMicrophoneDevice(event.target.value)}><option value="">{t("meetingRoom.defaultMicrophone")}</option>{devices.filter((device) => device.kind === "audioinput").map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || t("meetingRoom.microphoneFallback")}</option>)}</select></label></div>}
+    <div className={`gm-lobby ${overlayClass}`}>
+      <header className="gm-lobby-bar">
+        <button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={backToMeetings} aria-label={t("meetingRoom.back")}><ArrowLeft size={22} /></button>
+        <span className="gm-lobby-brand"><span className="meet-logo" aria-hidden="true"><Video size={18} /></span>{t("meet.brand")}</span>
+      </header>
+      <main className="gm-lobby-main">
+        <section className="gm-lobby-preview-col">
+          <div className="gm-lobby-preview">
+            <VideoTile stream={previewStream} muted mirrored label={personName(user)} avatar={user || undefined} microphoneOn={microphone} videoOn={camera} />
+            {!camera && <span className="gm-preview-off">{t("meet.noCamera")}</span>}
+            <div className="gm-preview-controls">
+              <button type="button" className={`gm-round ${microphone ? "" : "off"}`} onClick={() => setMicrophone((value) => !value)} aria-pressed={!microphone} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={22} /> : <MicOff size={22} />}</button>
+              <button type="button" className={`gm-round ${camera ? "" : "off"}`} onClick={() => setCamera((value) => !value)} aria-pressed={!camera} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Video size={22} /> : <CameraOff size={22} />}</button>
+            </div>
+          </div>
+          {permissionError && <div className="gm-notice" role="alert"><CameraOff size={18} /><span>{permissionError}</span></div>}
+          <div className="gm-device-row">
+            <label><Mic size={18} aria-hidden="true" /><span className="sr-only">{t("meetingRoom.microphoneLabel")}</span>
+              <select value={microphoneDevice} onChange={(event) => setMicrophoneDevice(event.target.value)} aria-label={t("meetingRoom.microphoneLabel")}>
+                <option value="">{t("meetingRoom.defaultMicrophone")}</option>
+                {audioInputs.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || t("meetingRoom.microphoneFallback")}</option>)}
+              </select>
+            </label>
+            <label><Camera size={18} aria-hidden="true" /><span className="sr-only">{t("meetingRoom.cameraLabel")}</span>
+              <select value={cameraDevice} onChange={(event) => setCameraDevice(event.target.value)} aria-label={t("meetingRoom.cameraLabel")}>
+                <option value="">{t("meetingRoom.defaultCamera")}</option>
+                {videoInputs.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || t("meetingRoom.cameraFallback")}</option>)}
+              </select>
+            </label>
+          </div>
         </section>
-        <section className="lobby-details"><span className={`status-pill status-${meeting.status}`}>{meeting.status === "live" ? t("meetingRoom.liveLabel") : t("meetingRoom.readyLabel")}</span><h1>{meeting.title}</h1><p>{meeting.description || t("meetingRoom.lobbyDescriptionFallback")}</p><div className="lobby-meta"><span><UsersRound size={17} /> {t("meetingRoom.participantCountLabel", { count: meeting.participantCount })}</span><button onClick={() => void shareMeetingLink()}><Link2 size={17} /> {t("meetingRoom.shareLinkButton")}</button></div>
+        <section className="gm-lobby-join">
+          <h1>{t("meet.readyTitle")}</h1>
+          <p className="gm-lobby-title">{meeting.title}</p>
+          <p>{othersInCall > 0 ? t("meet.othersHere", { count: othersInCall }) : t("meet.nobodyHere")}</p>
           {requestState === "pending" ? (
-            <div className="join-request-pending"><Hourglass size={18} className="spin-slow" /><div><strong>{t("meetingRoom.requestPendingTitle")}</strong><small>{t("meetingRoom.requestPendingDesc")}</small></div><Button variant="secondary" onClick={() => void cancelJoinRequest()}>{t("meetingRoom.cancelRequestButton")}</Button></div>
+            <div className="gm-request-state"><Hourglass size={18} className="spin-slow" /><div><strong>{t("meetingRoom.requestPendingTitle")}</strong><small>{t("meetingRoom.requestPendingDesc")}</small></div><button type="button" className="gm-text-btn" onClick={() => void cancelJoinRequest()}>{t("meetingRoom.cancelRequestButton")}</button></div>
           ) : requestState === "rejected" ? (
-            <div className="join-request-pending join-request-rejected"><ShieldX size={18} /><div><strong>{t("meetingRoom.requestRejectedTitle")}</strong><small>{t("meetingRoom.requestRejectedDesc")}</small></div></div>
+            <div className="gm-request-state rejected"><ShieldX size={18} /><div><strong>{t("meetingRoom.requestRejectedTitle")}</strong><small>{t("meetingRoom.requestRejectedDesc")}</small></div></div>
           ) : meeting.access && !meeting.access.canJoin && meeting.access.canRequest ? (
-            <Button loading={requestState === "requesting"} onClick={() => void sendJoinRequest()} icon={<Hourglass size={18} />}>{t("meetingRoom.requestToJoinButton")}</Button>
+            <button type="button" className="gm-join-btn" disabled={requestState === "requesting"} onClick={() => void sendJoinRequest()}>{requestState === "requesting" && <LoaderCircle className="spin" size={18} />}{t("meet.askToJoin")}</button>
           ) : (
-            <Button loading={joining} onClick={() => void enterMeeting()} icon={<Video size={18} />}>{t("meetingRoom.joinNowButton")}</Button>
+            <button type="button" className="gm-join-btn" disabled={joining} onClick={() => void enterMeeting()}>{joining && <LoaderCircle className="spin" size={18} />}{t("meet.joinNow")}</button>
           )}
-          <small><Check size={14} /> {t("meetingRoom.deviceStateHint")}</small></section>
+          <button type="button" className="gm-text-btn" onClick={() => void shareMeetingLink()}><Link2 size={18} /> {t("meetingRoom.shareLinkButton")}</button>
+        </section>
       </main>
+      {permissionPrompt && (
+        <div className="gm-allow-overlay" role="dialog" aria-modal="true" aria-labelledby="gm-allow-title">
+          <div className="gm-allow-card"><AllowDevicesIllustration /><h2 id="gm-allow-title">{t("meet.allowTitle")}</h2><p>{t("meet.allowDesc")}</p></div>
+        </div>
+      )}
     </div>
   );
 
+  const isHost = meeting.hostId === user?.id;
+  const timeLabel = clock(now, locale);
+  const showReady = isHost && remoteEntries.length === 0 && !readyDismissed;
+  const firstRequest = canManageWaitingRoom && sidePanel !== "participants" ? waitingRequests[0] : undefined;
+  const participantCount = remoteEntries.length + 1;
+  const panelOpen = Boolean(sidePanel) || meetingChatOpen;
+  const presenterName = screenSharingUserId && screenSharingUserId !== selfId ? personName(users.get(screenSharingUserId)) : null;
+  const link = `${window.location.origin}/meetings/${meeting.id}`;
+  const copyLink = () => { void navigator.clipboard.writeText(link).then(() => show(t("meet.copied")), () => show(t("meetings.shareFailed"), "error")); };
+
+  const moreItems: MeetMenuItem[] = [
+    { key: "present", mobileOnly: true, label: screenSharing ? t("meet.stopPresenting") : t("meet.present"), icon: <MonitorUp size={20} />, onSelect: () => void toggleScreen() },
+    { key: "react", mobileOnly: true, label: t("meet.reactions"), icon: <Smile size={20} />, onSelect: () => setReactionOpen(true) },
+    { key: "hand", mobileOnly: true, label: handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria"), icon: <Hand size={20} />, onSelect: toggleHand },
+    { key: "people", mobileOnly: true, label: `${t("meet.people")} (${participantCount})`, icon: <UsersRound size={20} />, onSelect: () => togglePanel("participants") },
+    { key: "chat", mobileOnly: true, label: chatUnread ? `${t("meet.chat")} (${chatUnread})` : t("meet.chat"), icon: <MessageSquareText size={20} />, onSelect: () => togglePanel("chat") },
+    ...(isHost ? [{ key: "host", mobileOnly: true, label: t("meet.hostControls"), icon: <ShieldCheck size={20} />, onSelect: () => togglePanel("settings") }] : []),
+    { key: "details", label: t("meet.details"), icon: <Info size={20} />, onSelect: () => togglePanel("info") },
+    { key: "files", label: t("meet.files"), icon: <Paperclip size={20} />, onSelect: () => togglePanel("files") },
+    { key: "notes", label: t("meet.notes"), icon: <NotebookPen size={20} />, onSelect: () => togglePanel("notes") },
+    { key: "layout", label: gridViewForced ? t("meet.layoutAuto") : t("meet.layoutGrid"), icon: <LayoutGrid size={20} />, onSelect: () => setGridViewForced((value) => !value) },
+    { key: "link", label: t("meet.copyLink"), icon: <Link2 size={20} />, onSelect: copyLink },
+    { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/") },
+    ...(isHost ? [{ key: "end", label: t("meet.endForAll"), icon: <PhoneOff size={20} />, danger: true, onSelect: () => void endMeetingForAll() }] : []),
+  ];
+
+  const tileFor = (tile: MeetingTile, extra: { speaking?: boolean } = {}) => (
+    <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf && !screenSharing} label={tile.isSelf ? (screenSharing ? t("meetingRoom.youSharingScreen") : t("meet.you")) : tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={extra.speaking ?? tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} pipEnabled={!tile.isSelf} onPin={() => togglePin(tile.id)} />
+  );
+
+  const panelTitle = sidePanel === "participants" ? t("meet.people") : sidePanel === "files" ? t("meet.files") : sidePanel === "notes" ? t("meet.notes") : sidePanel === "settings" ? t("meet.hostControls") : sidePanel === "waiting" ? t("meet.waitingSection") : t("meet.details");
+
   return (
-    <div className={`meeting-room ${gridViewForced ? "grid-forced" : ""} ${directMode ? "direct-call-room" : overlayClass}`}>
-      <header className="meeting-room-header"><div><span className={`connection-dot ${callState}`} /><span><strong>{meeting.title}{meeting.locked && <span className="locked-badge"><Lock size={12} /> {t("meetingRoom.lockedBadge")}</span>}</strong><small>{callState === "connected" ? t("meetingRoom.connectionStable") : callState === "offline" ? t("meetingRoom.reconnecting") : callState === "failed" ? t("meetingRoom.mediaFailed") : t("meetingRoom.connecting")}</small></span></div><div className="meeting-header-actions">{!directMode && <button onClick={() => navigate("/")} aria-label={t("meetingRoom.minimizeMeetingAria")} title={t("meetingRoom.minimizeMeetingAria")}><Minus size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "files" ? null : "files")} aria-label={t("meetingRoom.sharedFilesAria")}><Paperclip size={18} />{files.length > 0 && <span>{files.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "notes" ? null : "notes")} aria-label={t("meetingRoom.notesTab")}><NotebookPen size={18} />{notes.length > 0 && <span>{notes.length}</span>}</button><button onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={18} /></button>{canManageWaitingRoom && <button onClick={() => setSidePanel(sidePanel === "waiting" ? null : "waiting")} aria-label={t("meetingRoom.waitingRoomTab")}><Hourglass size={18} />{(waitingCount ?? waitingRequests.length) > 0 && <span>{waitingCount ?? waitingRequests.length}</span>}</button>}{meeting.hostId === user?.id && <button onClick={() => void toggleLock()} disabled={lockBusy} aria-label={meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")} className={meeting.locked ? "active" : ""}>{lockBusy ? <LoaderCircle className="spin" size={18} /> : meeting.locked ? <Lock size={18} /> : <Unlock size={18} />}</button>}{meeting.hostId === user?.id && <button onClick={() => setSidePanel(sidePanel === "settings" ? null : "settings")} aria-label={t("meetingRoom.settingsTab")}><Settings2 size={18} /></button>}<button onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={18} /><span>{remoteEntries.length + 1}</span></button></div></header>
-      {securityCode && <button className="call-security-badge" onClick={() => setSidePanel("info")} aria-label={t("meetingRoom.checkSecurityKeyAria")}><ShieldCheck size={16} /><span>{securityCode.map((emoji, index) => <b key={`${emoji}-${index}`}>{emoji}</b>)}</span><small>{t("meetingRoom.compareKeyHint")}</small></button>}
-      <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => { const person = id === user?.id ? user : users.get(id); return person ? `${person.firstName} ${person.lastName || ""}`.trim() : t("meetingRoom.participantFallback"); }} open={meetingChatOpen} onOpen={(open) => { setMeetingChatOpen(open); if (open) setSidePanel(null); }} onSend={meetingChat.send} />
-      <div className={`meeting-stage ${sidePanel ? "panel-open" : ""} ${meetingChatOpen ? "meeting-chat-open" : ""}`}>
-      {focusedTile ? (
-        <main className="meeting-stage-focus">
-          <div className="stage-main">
-            <VideoTile stream={focusedTile.stream} muted={focusedTile.isSelf} mirrored={focusedTile.isSelf && !screenSharing} label={focusedTile.label} avatar={focusedTile.avatar} microphoneOn={focusedTile.mic} videoOn={focusedTile.video} pinned={pinnedUserId === focusedTile.id} pipEnabled handRaised={raisedHands.has(focusedTile.id)} onPin={() => togglePin(focusedTile.id)} />
-          </div>
-          <div className="stage-filmstrip">
-            {allTiles.filter((tile) => tile.id !== focusedTile.id).map((tile) => (
-              <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} onPin={() => togglePin(tile.id)} />
-            ))}
-          </div>
-        </main>
-      ) : (
-        <main className={`video-grid video-grid-${Math.min(4, remoteEntries.length + 1)}`}>
-          <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={screenSharing ? t("meetingRoom.youSharingScreen") : t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} pinned={pinnedUserId === user?.id} speaking={selfId === activeSpeakerId} handRaised={Boolean(user?.id && raisedHands.has(user.id))} onPin={() => togglePin(user?.id)} />
-          {remoteEntries.map(([remoteUserId, stream]) => { const remote = users.get(remoteUserId); const media = remoteMedia[remoteUserId]; return <VideoTile key={remoteUserId} stream={stream} label={`${remote ? `${remote.firstName} ${remote.lastName}`.trim() : t("meetingRoom.participantFallback")}${media?.screen ? t("meetingRoom.screenSuffix") : ""}`} avatar={remote} microphoneOn={media?.audio ?? true} videoOn={media?.video ?? true} pinned={pinnedUserId === remoteUserId} speaking={remoteUserId === activeSpeakerId} handRaised={raisedHands.has(remoteUserId)} onPin={() => togglePin(remoteUserId)} />; })}
-          {remoteEntries.length === 0 && <article className="waiting-tile"><span><UsersRound size={28} /></span><h2>{t("meetingRoom.waitingTitle")}</h2><p>{t("meetingRoom.waitingDesc")}</p><button onClick={() => void shareMeetingLink()}><Link2 size={16} /> {t("meetingRoom.shareLinkButton")}</button></article>}
-        </main>
-      )}
-      {sidePanel && <aside className="meeting-side-panel"><header><div><strong>{sidePanel === "participants" ? t("meetingRoom.participantsTab") : sidePanel === "files" ? t("meetingRoom.filesTab") : sidePanel === "notes" ? t("meetingRoom.notesTab") : sidePanel === "waiting" ? t("meetingRoom.waitingRoomTab") : sidePanel === "settings" ? t("meetingRoom.settingsTab") : t("meetingRoom.infoTab")}</strong><small>{sidePanel === "participants" ? t("meetingRoom.peopleCount", { count: remoteEntries.length + 1 }) : sidePanel === "files" ? t("meetingRoom.filesCount", { count: files.length }) : sidePanel === "notes" ? t("meetingRoom.notesCount", { count: notes.length }) : sidePanel === "waiting" ? t("meetingRoom.waitingRoomCount", { count: waitingCount ?? waitingRequests.length }) : meeting.code}</small></div><button onClick={() => setSidePanel(null)} aria-label={t("meetingRoom.closePanelAria")}><X size={19} /></button></header>{sidePanel === "participants" ? <div className="participant-list"><div><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{user?.firstName} {user?.lastName}{t("meetingRoom.youSuffix")}</strong><small>{meeting.hostId === user?.id ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{microphone ? <Mic size={16} /> : <MicOff size={16} />}</div>{remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return <div key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{remote ? `${remote.firstName} ${remote.lastName}` : t("meetingRoom.participantFallback")}</strong><small>{media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.inMeetingLabel")}</small></span>{media?.audio === false ? <MicOff size={16} /> : <Mic size={16} />}</div>; })}</div> : sidePanel === "waiting" ? <div className="waiting-room-panel">
-        {waitingRequests.length > 1 && <div className="waiting-room-batch"><Button variant="secondary" onClick={() => void reviewAllRequests("reject")} icon={<X size={16} />}>{t("meetingRoom.rejectAll")}</Button><Button onClick={() => void reviewAllRequests("approve")} icon={<Check size={16} />}>{t("meetingRoom.acceptAll")}</Button></div>}
-        {waitingRequests.length === 0 ? <div className="meeting-files-empty"><Hourglass size={26} /><strong>{t("meetingRoom.waitingRoomEmptyTitle")}</strong><small>{t("meetingRoom.waitingRoomEmptyDesc")}</small></div> : <div className="waiting-room-list">{waitingRequests.map((request) => (
-          <div className="waiting-room-item" key={request.id}>
-            <Avatar firstName={request.firstName} lastName={request.lastName} url={request.avatarUrl} size="sm" />
-            <span><strong>{`${request.firstName || ""} ${request.lastName || ""}`.trim() || t("meetingRoom.participantFallback")}</strong></span>
-            <button className="waiting-room-accept" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "approve")} aria-label={t("meetingRoom.acceptAria")}>{waitingBusy === request.id ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}</button>
-            <button className="waiting-room-reject" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "reject")} aria-label={t("meetingRoom.rejectAria")}><X size={16} /></button>
-          </div>
-        ))}</div>}
-      </div> : sidePanel === "files" ? <div className="meeting-files-panel"><button className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>{files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}</div> : sidePanel === "notes" ? <div className="meeting-notes-panel"><form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>{notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}</div> : sidePanel === "settings" ? <div className="meeting-info-panel">
-        <label>{t("meetings.visibilityLabel")}
-          <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
-            {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
-          </select>
-        </label>
-        {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (
-          <label>{t("meetings.joinPolicyLabel")}
-            <select value={settingsJoinPolicy} onChange={(event) => setSettingsJoinPolicy(event.target.value as MeetingJoinPolicyValue)}>
-              <option value="auto">{t("meetings.joinPolicyAuto")}</option>
-              <option value="request_approval">{t("meetings.joinPolicyApproval")}</option>
-            </select>
-          </label>
+    <div className={`gm-room ${overlayClass} ${panelOpen ? "gm-panel-open" : ""} ${gridViewForced ? "grid-forced" : ""}`}>
+      <header className="gm-top">
+        <span className="gm-clock">{timeLabel}</span>
+        <span className="gm-sep" aria-hidden="true" />
+        <button type="button" className="gm-title" onClick={() => togglePanel("info")} aria-expanded={sidePanel === "info"} title={t("meet.details")}><span>{meeting.title}</span><Info size={18} /></button>
+        {meeting.locked && <span className="gm-chip"><Lock size={14} /> {t("meetingRoom.lockedBadge")}</span>}
+        {(callState === "offline" || callState === "failed") && <span className="gm-chip gm-chip-warn" role="status">{callState === "offline" ? t("meetingRoom.reconnecting") : t("meetingRoom.mediaFailed")}</span>}
+        {callState === "connecting" && remoteEntries.length > 0 && <span className="gm-chip" role="status"><LoaderCircle className="spin" size={14} /> {t("meetingRoom.connecting")}</span>}
+      </header>
+
+      {(screenSharing || presenterName) && <div className="gm-presenting" role="status"><MonitorUp size={18} /> {screenSharing ? t("meet.youPresenting") : t("meet.presenting", { name: presenterName ?? "" })}{screenSharing && <button type="button" onClick={() => void stopScreenShare()}>{t("meet.stopPresenting")}</button>}</div>}
+
+      <div className="gm-body">
+        {focusedTile ? (
+          <main className="gm-stage gm-stage-focus">
+            <div className="gm-stage-main">{tileFor(focusedTile, { speaking: false })}</div>
+            <div className="gm-filmstrip">{allTiles.filter((tile) => tile.id !== focusedTile.id).map((tile) => tileFor(tile))}</div>
+          </main>
+        ) : (
+          <main className={`gm-stage gm-grid gm-grid-${Math.min(allTiles.length, 9)}`}>{allTiles.map((tile) => tileFor(tile))}</main>
         )}
-        <Button loading={settingsSaving} onClick={() => void saveMeetingSettings()} icon={<Check size={17} />}>{t("meetingRoom.settingsSaveButton")}</Button>
-        <Button variant="secondary" onClick={() => void toggleLock()} loading={lockBusy} icon={meeting.locked ? <Unlock size={17} /> : <Lock size={17} />}>{meeting.locked ? t("meetingRoom.unlockMeetingButton") : t("meetingRoom.lockMeetingButton")}</Button>
-        <hr className="settings-divider" />
-        <label>{t("meetingRoom.inviteSectionTitle")}
-          <textarea rows={3} value={inviteEmailsInput} onChange={(event) => setInviteEmailsInput(event.target.value)} placeholder={t("meetingRoom.inviteEmailPlaceholder")} />
-        </label>
-        <p className="field-hint">{t("meetingRoom.inviteEmailHint")}</p>
-        <Button loading={inviting} onClick={() => void sendInvite()} icon={<Link2 size={17} />}>{t("meetingRoom.inviteButton")}</Button>
-      </div> : <div className="meeting-info-panel"><p>{meeting.description || t("meetingRoom.meetingDescriptionFallback")}</p><label>{t("meetingRoom.meetingCodeLabel")}<span><code>{meeting.code}</code><button onClick={() => { void navigator.clipboard.writeText(meeting.code); show(t("meetingRoom.codeCopied")); }}><Copy size={16} /></button></span></label><Button onClick={() => void shareMeetingLink()} icon={<Link2 size={17} />}>{t("meetingRoom.shareLinkButton")}</Button></div>}</aside>}
+
+        {sidePanel && (
+          <aside className="gm-panel" aria-label={panelTitle}>
+            <header><h2>{panelTitle}</h2><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={() => setSidePanel(null)} aria-label={t("meetingRoom.closePanelAria")}><X size={22} /></button></header>
+            <div className="gm-panel-body">
+              {sidePanel === "participants" ? <>
+                {isHost && <button type="button" className="gm-pill-btn" onClick={() => togglePanel("settings")}><UserPlus size={18} /> {t("meet.addOthers")}</button>}
+                {canManageWaitingRoom && waitingRequests.length > 0 && <section className="gm-people-section">
+                  <h3>{t("meet.waitingSection")} <span>{waitingRequests.length}</span></h3>
+                  {waitingRequests.length > 1 && <div className="gm-row-actions"><button type="button" className="gm-text-btn" onClick={() => void reviewAllRequests("reject")}>{t("meetingRoom.rejectAll")}</button><button type="button" className="gm-text-btn strong" onClick={() => void reviewAllRequests("approve")}>{t("meetingRoom.acceptAll")}</button></div>}
+                  {waitingRequests.map((request) => (
+                    <div className="gm-person" key={request.id}>
+                      <Avatar firstName={request.firstName} lastName={request.lastName} url={request.avatarUrl} size="sm" />
+                      <span><strong>{`${request.firstName || ""} ${request.lastName || ""}`.trim() || t("meetingRoom.participantFallback")}</strong></span>
+                      <button type="button" className="gm-text-btn" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "reject")}>{t("meet.deny")}</button>
+                      <button type="button" className="gm-text-btn strong" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "approve")}>{waitingBusy === request.id ? <LoaderCircle className="spin" size={16} /> : t("meet.admit")}</button>
+                    </div>
+                  ))}
+                </section>}
+                <section className="gm-people-section">
+                  <h3>{t("meet.inCall")} <span>{participantCount}</span></h3>
+                  <div className="gm-person"><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{personName(user)} ({t("meet.you")})</strong><small>{isHost ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{handRaised && <Hand size={18} />}{microphone ? <Mic size={18} /> : <MicOff size={18} className="gm-muted-icon" />}</div>
+                  {remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return (
+                    <div className="gm-person" key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{personName(remote)}</strong><small>{id === meeting.hostId ? t("meetingRoom.hostLabel") : media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.participantLabel")}</small></span>{raisedHands.has(id) && <Hand size={18} />}{media?.audio === false ? <MicOff size={18} className="gm-muted-icon" /> : <Mic size={18} />}</div>
+                  ); })}
+                </section>
+              </> : sidePanel === "settings" ? <>
+                <section className="gm-host-section">
+                  <label className="gm-switch-row">
+                    <span><strong>{t("meet.lockTitle")}</strong><small>{t("meet.lockHint")}</small></span>
+                    <input type="checkbox" role="switch" checked={Boolean(meeting.locked)} disabled={lockBusy} onChange={() => void toggleLock()} />
+                  </label>
+                </section>
+                <section className="gm-host-section">
+                  <h3>{t("meet.accessTitle")}</h3>
+                  <label>{t("meetings.visibilityLabel")}
+                    <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
+                      {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+                    </select>
+                  </label>
+                  {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (
+                    <label>{t("meetings.joinPolicyLabel")}
+                      <select value={settingsJoinPolicy} onChange={(event) => setSettingsJoinPolicy(event.target.value as MeetingJoinPolicyValue)}>
+                        <option value="auto">{t("meetings.joinPolicyAuto")}</option>
+                        <option value="request_approval">{t("meetings.joinPolicyApproval")}</option>
+                      </select>
+                    </label>
+                  )}
+                  <Button loading={settingsSaving} onClick={() => void saveMeetingSettings()} icon={<Check size={17} />}>{t("meetingRoom.settingsSaveButton")}</Button>
+                </section>
+                <section className="gm-host-section">
+                  <h3>{t("meet.addOthers")}</h3>
+                  <div className="gm-link-field"><span>{link.replace(/^https?:\/\//, "")}</span><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={copyLink} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}><Copy size={18} /></button></div>
+                  <label>{t("meetingRoom.inviteSectionTitle")}
+                    <textarea rows={3} value={inviteEmailsInput} onChange={(event) => setInviteEmailsInput(event.target.value)} placeholder={t("meetingRoom.inviteEmailPlaceholder")} />
+                  </label>
+                  <p className="field-hint">{t("meetingRoom.inviteEmailHint")}</p>
+                  <Button loading={inviting} onClick={() => void sendInvite()} icon={<UserPlus size={17} />}>{t("meetingRoom.inviteButton")}</Button>
+                </section>
+              </> : sidePanel === "files" ? <div className="meeting-files-panel">
+                <button type="button" className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>
+                {files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}
+              </div> : sidePanel === "notes" ? <div className="meeting-notes-panel">
+                <form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>
+                {notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button type="button" onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}
+              </div> : <div className="gm-info">
+                <h3>{meeting.title}</h3>
+                {meeting.description && <p>{meeting.description}</p>}
+                <div className="gm-link-field"><span>{link.replace(/^https?:\/\//, "")}</span><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={copyLink} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}><Copy size={18} /></button></div>
+                <p className="gm-info-row"><span>{t("meetingRoom.meetingCodeLabel")}</span><code>{meeting.code}</code></p>
+                {securityCode && <p className="gm-info-row"><span><ShieldCheck size={16} /> {t("meetingRoom.compareKeyHint")}</span><b>{securityCode.join(" ")}</b></p>}
+              </div>}
+            </div>
+          </aside>
+        )}
+
+        <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => personName(id === user?.id ? user : users.get(id))} open={meetingChatOpen} onOpen={(open) => togglePanel(open ? "chat" : "chat")} onSend={meetingChat.send} showToggle={false} onUnreadChange={setChatUnread} />
       </div>
+
+      {showReady && (
+        <section className="gm-ready-card" aria-labelledby="gm-ready-title">
+          <header><h2 id="gm-ready-title">{t("meet.readyCardTitle")}</h2><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={dismissReady} aria-label={t("common.close")}><X size={20} /></button></header>
+          <button type="button" className="gm-pill-btn gm-pill-blue" onClick={() => { dismissReady(); togglePanel("settings"); }}><UserPlus size={18} /> {t("meet.addOthers")}</button>
+          <p>{t("meet.shareHint")}</p>
+          <div className="gm-link-field"><span>{link.replace(/^https?:\/\//, "")}</span><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={copyLink} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}><Copy size={18} /></button></div>
+          <p className="gm-ready-note"><ShieldCheck size={18} /> {meeting.joinPolicy === "request_approval" || meeting.scope === "private" || meeting.scope === "invite_only" ? t("meet.approvalNote") : t("meet.openNote")}</p>
+          <small>{t("meet.joinedAs", { name: user?.email || personName(user) })}</small>
+        </section>
+      )}
+
+      {firstRequest && (
+        <section className="gm-request-toast" role="alert">
+          <Avatar firstName={firstRequest.firstName} lastName={firstRequest.lastName} url={firstRequest.avatarUrl} size="sm" />
+          <div><strong>{t("meet.wantsToJoin", { name: `${firstRequest.firstName || ""} ${firstRequest.lastName || ""}`.trim() || t("meetingRoom.participantFallback") })}</strong>{waitingRequests.length > 1 && <small>{t("meet.othersWaiting", { count: waitingRequests.length - 1 })}</small>}</div>
+          <div className="gm-row-actions">
+            {waitingRequests.length > 1 ? <button type="button" className="gm-text-btn" onClick={() => togglePanel("participants")}>{t("meet.viewAll")}</button> : <button type="button" className="gm-text-btn" disabled={waitingBusy === firstRequest.id} onClick={() => void reviewRequest(firstRequest, "reject")}>{t("meet.deny")}</button>}
+            <button type="button" className="gm-text-btn strong" disabled={waitingBusy === firstRequest.id} onClick={() => void reviewRequest(firstRequest, "approve")}>{t("meet.admit")}</button>
+          </div>
+        </section>
+      )}
+
       <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
       <input ref={meetingFileInput} className="sr-only" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMeetingFile(file); }} />
-      <footer className="meeting-controls">
-        <div className="meeting-control-info"><time>{new Intl.DateTimeFormat(localeTag[locale] || "uz-UZ", { hour: "2-digit", minute: "2-digit" }).format(new Date())}</time><span>{meeting.code}</span></div>
-        <div className="meeting-control-primary">
-          <button className={microphone ? "" : "off"} onClick={() => void toggleTrack("audio")} aria-pressed={microphone} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={21} /> : <MicOff size={21} />}</button>
-          <button className={camera ? "" : "off"} onClick={() => void toggleTrack("video")} aria-pressed={camera} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={21} /> : <CameraOff size={21} />}</button>
-          <button className={screenSharing ? "active" : ""} onClick={() => void toggleScreen()} aria-pressed={screenSharing} title={t("meetingRoom.shareScreenAria")} aria-label={t("meetingRoom.shareScreenAria")}><MonitorUp size={21} /></button>
-          <button className={handRaised ? "active" : ""} onClick={toggleHand} aria-pressed={handRaised} title={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")} aria-label={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")}><Hand size={21} /></button>
-          <span className="meeting-reaction-wrap"><button className={reactionOpen ? "active" : ""} onClick={() => { setReactionOpen((value) => !value); setMoreMenuOpen(false); }} aria-expanded={reactionOpen} title={t("meetingRoom.sendReactionAria")} aria-label={t("meetingRoom.sendReactionAria")}><Smile size={21} /></button>{reactionOpen && <span className="meeting-reaction-menu">{["👍", "❤️", "🎉", "👏", "😂", "😮"].map((emoji) => <button key={emoji} onClick={() => sendReaction(emoji)}>{emoji}</button>)}</span>}</span>
-          <span className="meeting-more-wrap"><button className={moreMenuOpen ? "active" : ""} onClick={() => { setMoreMenuOpen((value) => !value); setReactionOpen(false); }} aria-expanded={moreMenuOpen} title={t("meetingRoom.moreActionsAria")} aria-label={t("meetingRoom.moreActionsAria")}><MoreVertical size={21} /></button>
-            {moreMenuOpen && <span className="meeting-more-menu">
-              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("participants"); }}><UsersRound size={18} />{t("meetingRoom.participantsTab")}</button>
-              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("files"); }}><Paperclip size={18} />{t("meetingRoom.filesTab")}</button>
-              <button onClick={() => { setMoreMenuOpen(false); meetingFileInput.current?.click(); }} disabled={uploadingFile}><Paperclip size={18} />{t("meetingRoom.shareFileAria")}</button>
-              <button onClick={() => { setMoreMenuOpen(false); setSidePanel("notes"); }}><NotebookPen size={18} />{t("meetingRoom.notesTab")}</button>
-              <button onClick={() => { setMoreMenuOpen(false); setGridViewForced((value) => !value); }}><LayoutGrid size={18} />{gridViewForced ? t("meetingRoom.exitGridViewAria") : t("meetingRoom.gridViewAria")}</button>
-              <button onClick={() => { setMoreMenuOpen(false); void shareMeetingLink(); }}><Link2 size={18} />{t("meetingRoom.shareLinkButton")}</button>
-              {meeting.hostId === user?.id && <button onClick={() => { setMoreMenuOpen(false); setSidePanel("settings"); }}><Settings2 size={18} />{t("meetingRoom.settingsTab")}</button>}
-              {meeting.hostId === user?.id && <button className="danger" onClick={() => void endMeetingForAll()}><PhoneOff size={18} />{t("meetingRoom.endMeetingButton")}</button>}
-            </span>}
+
+      <footer className="gm-bar">
+        <div className="gm-bar-left" />
+        <div className="gm-bar-center">
+          <div className={`gm-split ${microphone ? "" : "off"}`}>
+            <button ref={micMenuRef} type="button" className="gm-split-more gm-desktop-only" aria-haspopup="dialog" aria-expanded={deviceMenu === "audio"} aria-label={t("meet.micOptions")} title={t("meet.micOptions")} onClick={() => setDeviceMenu((open) => open === "audio" ? null : "audio")}><ChevronUp size={18} /></button>
+            <button type="button" className="gm-ctl" onClick={() => void toggleTrack("audio")} aria-pressed={!microphone} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={22} /> : <MicOff size={22} />}</button>
+            <MeetPopover open={deviceMenu === "audio"} onClose={() => setDeviceMenu(null)} triggerRef={micMenuRef} label={t("meet.micOptions")} align="start" className="gm-device-popover">
+              {(audioInputs.length ? audioInputs : [{ deviceId: "", label: t("meet.defaultDevice") } as MediaDeviceInfo]).map((device) => <button type="button" key={device.deviceId || "default"} aria-pressed={(microphoneDevice || "") === device.deviceId} onClick={() => void switchDevice("audio", device.deviceId)}>{(microphoneDevice || "") === device.deviceId && <Check size={18} />}<span>{device.label || t("meetingRoom.microphoneFallback")}</span></button>)}
+            </MeetPopover>
+          </div>
+          <div className={`gm-split ${camera ? "" : "off"}`}>
+            <button ref={camMenuRef} type="button" className="gm-split-more gm-desktop-only" aria-haspopup="dialog" aria-expanded={deviceMenu === "video"} aria-label={t("meet.cameraOptions")} title={t("meet.cameraOptions")} onClick={() => setDeviceMenu((open) => open === "video" ? null : "video")}><ChevronUp size={18} /></button>
+            <button type="button" className="gm-ctl" onClick={() => void toggleTrack("video")} aria-pressed={!camera} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Video size={22} /> : <CameraOff size={22} />}</button>
+            <MeetPopover open={deviceMenu === "video"} onClose={() => setDeviceMenu(null)} triggerRef={camMenuRef} label={t("meet.cameraOptions")} align="start" className="gm-device-popover">
+              {(videoInputs.length ? videoInputs : [{ deviceId: "", label: t("meet.defaultDevice") } as MediaDeviceInfo]).map((device) => <button type="button" key={device.deviceId || "default"} aria-pressed={(cameraDevice || "") === device.deviceId} onClick={() => void switchDevice("video", device.deviceId)}>{(cameraDevice || "") === device.deviceId && <Check size={18} />}<span>{device.label || t("meetingRoom.cameraFallback")}</span></button>)}
+            </MeetPopover>
+          </div>
+          <button type="button" className={`gm-ctl gm-desktop-only ${screenSharing ? "active" : ""}`} onClick={() => void toggleScreen()} aria-pressed={screenSharing} aria-label={screenSharing ? t("meet.stopPresenting") : t("meet.present")} title={screenSharing ? t("meet.stopPresenting") : t("meet.present")}><MonitorUp size={22} /></button>
+          <button ref={reactRef} type="button" className={`gm-ctl gm-desktop-only ${reactionOpen ? "active" : ""}`} aria-haspopup="dialog" aria-expanded={reactionOpen} onClick={() => setReactionOpen((value) => !value)} aria-label={t("meet.reactions")} title={t("meet.reactions")}><Smile size={22} /></button>
+          <button type="button" className={`gm-ctl gm-desktop-only ${handRaised ? "active" : ""}`} onClick={toggleHand} aria-pressed={handRaised} aria-label={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")} title={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")}><Hand size={22} /></button>
+          <span className="meet-anchor">
+            <button ref={moreRef} type="button" data-shot="more" className={`gm-ctl gm-ctl-narrow ${moreMenuOpen ? "active" : ""}`} aria-haspopup="menu" aria-expanded={moreMenuOpen} onClick={() => setMoreMenuOpen((value) => !value)} aria-label={t("meet.moreOptions")} title={t("meet.moreOptions")}><MoreVertical size={22} />{chatUnread > 0 && <b className="gm-dot gm-mobile-only" aria-label={t("meet.unreadCount", { count: chatUnread })} />}</button>
+            <MeetMenu open={moreMenuOpen} onClose={() => setMoreMenuOpen(false)} triggerRef={moreRef} items={moreItems} placement="top" align="center" label={t("meet.moreOptions")} className="gm-menu-dark" />
           </span>
-          <button className="leave-control" onClick={leave} title={t("meetingRoom.leaveMeetingAria")} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={21} /></button>
+          <button type="button" className="gm-ctl gm-hangup" onClick={leave} aria-label={t("meet.leave")} title={t("meet.leave")}><PhoneOff size={24} /></button>
+          <MeetPopover open={reactionOpen} onClose={() => setReactionOpen(false)} triggerRef={reactRef} label={t("meet.reactions")} className="gm-reaction-bar">
+            {["💖", "👍", "🎉", "👏", "😂", "😮", "😢", "🤔", "👎"].map((emoji) => <button type="button" key={emoji} onClick={() => sendReaction(emoji)} aria-label={emoji}>{emoji}</button>)}
+          </MeetPopover>
         </div>
-        <div className="meeting-control-secondary"><button className={sidePanel === "participants" ? "active" : ""} onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} aria-expanded={sidePanel === "participants"} title={t("meetingRoom.participantsAria")} aria-label={t("meetingRoom.participantsAria")}><UsersRound size={20} /><span className="meeting-participant-count">{remoteEntries.length + 1}</span></button><button className={sidePanel === "info" ? "active" : ""} onClick={() => setSidePanel(sidePanel === "info" ? null : "info")} title={t("meetingRoom.meetingInfoAria")} aria-label={t("meetingRoom.meetingInfoAria")}><Info size={20} /></button></div>
+        <div className="gm-bar-right gm-desktop-only">
+          <button type="button" className={`gm-icon-btn ${sidePanel === "participants" ? "active" : ""}`} onClick={() => togglePanel("participants")} aria-expanded={sidePanel === "participants"} aria-label={t("meet.people")} title={t("meet.people")}><UsersRound size={22} /><span className="gm-count">{participantCount}</span>{canManageWaitingRoom && waitingRequests.length > 0 && <b className="gm-dot" />}</button>
+          <button type="button" data-shot="chat" className={`gm-icon-btn ${meetingChatOpen ? "active" : ""}`} onClick={() => togglePanel("chat")} aria-expanded={meetingChatOpen} aria-label={chatUnread ? `${t("meet.chat")} — ${t("meet.unreadCount", { count: chatUnread })}` : t("meet.chat")} title={t("meet.chat")}><MessageSquareText size={22} />{chatUnread > 0 && <b className="gm-dot" />}</button>
+          {isHost && <button type="button" className={`gm-icon-btn ${sidePanel === "settings" ? "active" : ""}`} onClick={() => togglePanel("settings")} aria-expanded={sidePanel === "settings"} aria-label={t("meet.hostControls")} title={t("meet.hostControls")}>{meeting.locked ? <Lock size={22} /> : <ShieldCheck size={22} />}</button>}
+        </div>
       </footer>
     </div>
   );

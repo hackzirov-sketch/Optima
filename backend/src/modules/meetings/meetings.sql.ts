@@ -7,7 +7,9 @@ export const MEETING_COLUMNS_SQL = `
   meeting_code AS "meetingCode", status, scope, join_policy AS "joinPolicy", locked,
   start_time AS "startTime", end_time AS "endTime",
   max_participants AS "maxParticipants", is_recurring AS "isRecurring", agenda,
-  created_at AS "createdAt", updated_at AS "updatedAt", last_activity_at AS "lastActivityAt"
+  created_at AS "createdAt", updated_at AS "updatedAt", last_activity_at AS "lastActivityAt",
+  allow_screen_share AS "allowScreenShare", allow_reactions AS "allowReactions",
+  allow_microphone AS "allowMicrophone", allow_video AS "allowVideo", allow_chat AS "allowChat"
 `;
 
 export const JOIN_REQUEST_COLUMNS_SQL = `
@@ -28,13 +30,18 @@ export const RECORDING_COLUMNS_SQL = `
   file_size AS "fileSize", created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 
+/**
+ * Google Meet–style code, e.g. `kcn-xcbt-mvy`: lowercase letters only (no
+ * l/o, which read as 1/0), easy to say aloud and to type from a phone. Used
+ * in /meet/<code> links. 24^10 ≈ 6·10^13 codes.
+ */
 export function generateMeetingCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const chars = 'abcdefghijkmnpqrstuvwxyz';
   const segment = (n: number) =>
     Array.from({ length: n }, () => chars[crypto.randomInt(chars.length)]).join(
       '',
     );
-  return `OPTIMA-${segment(3)}-${segment(4)}`;
+  return `${segment(3)}-${segment(4)}-${segment(3)}`;
 }
 
 /**
