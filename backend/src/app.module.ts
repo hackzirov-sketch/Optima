@@ -33,52 +33,96 @@ import { LibraryModule } from './modules/library/library.module';
 import { EducationModule } from './modules/education/education.module'; // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
-import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   controllers: [AppController],
   imports: [
+    // ── Config (global) ────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
       load: configs,
       envFilePath: '.env',
+      validate,
     }),
+
+    // ── Database (plain `pg` pool — see DatabaseModule) ───────────────────
+    DatabaseModule,
+
+    // ── Redis Queue ────────────────────────────────
     BullModule.forRootAsync({
       useFactory: (config: ConfigService) => ({
         connection: {
           url: config.get('REDIS_URL'),
           password: config.get('REDIS_PASSWORD') || undefined,
+          // Pipeline mode — batches commands, cuts RTT per command in half
           enableAutoPipelining: true,
         },
       }),
       inject: [ConfigService],
     }),
-      DatabaseModule,
-      RedisModule,
-      CommonModule,
-      AuthModule,
-      UsersModule,
-      GithubModule,
-      // StorageModule,
-      // GroupsModule,
-      ProjectsModule,
-      // TasksModule,
-      // PushesModule,
-      // ChatModule,
-      // NotificationsModule,
-      // MailModule,
-    // AnalyticsModule,
-      // GatewayModule,
-      // MeetingsModule,
-      ModerationModule,
-      // EarningsModule,
-      // NotesModule,
-      LibraryModule,
-      // EducationModule
-  // JwtAuthGuard,
-  //     CsrfGuard,
-      MailModule
 
+    // ── Rate Limiting ─────────────────────────────
+    // NOTE: Auth endpoints use AuthRateLimitGuard (custom, smarter).
+    // Global ThrottlerGuard is kept for non-auth API protection only.
+    // Auth routes skip this via @SkipThrottle() in AuthController.
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          // Burst guard — catches request floods within a single second.
+          { name: 'short', ttl: 1000, limit: 20 },
+          // Standard window — the project-wide 90s rate-limit baseline.
+          { name: 'standard', ttl: 90000, limit: 450 },
+        ],
+        storage: new RedisThrottlerStorage(config.get('REDIS_URL') as string),
+      }),
+    }),
+
+    // ── Event Emitter (internal) ───────────────────
+    EventEmitterModule.forRoot({ wildcard: true }),
+
+    RedisModule,
+
+    CommonModule,
+
+    // ── Feature Modules ────────────────────────────
+    AuthModule,
+    UsersModule,
+    GithubModule,
+    StorageModule,
+    GroupsModule,
+    ProjectsModule,
+    TasksModule,
+    PushesModule,
+    ChatModule,
+    NotificationsModule,
+    AnalyticsModule,
+    GatewayModule,
+    MeetingsModule,
+    ModerationModule,
+    EarningsModule,
+    NotesModule,
+    LibraryModule,
+    EducationModule,
+    LoggerConfigModule,
+  ],
+  providers: [
+    // Runs before JwtAuthGuard: a forged cross-site request should be turned
+    // away on the shape of the request, without the cookie it carries ever
+    // being honoured.
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
