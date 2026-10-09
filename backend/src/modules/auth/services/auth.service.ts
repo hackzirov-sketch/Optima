@@ -107,6 +107,12 @@ export class AuthService {
       code,
     });
     void this.mailService.sendVerificationEmail(email, code);
+    // Local development often runs without working SMTP credentials; the
+    // code in the log is then the only way to finish signing up. Never in
+    // production, where it would put a login secret into shipped logs.
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.warn(`[dev] email verification code for ${email}: ${code}`);
+    }
 
     return token;
   }

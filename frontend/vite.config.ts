@@ -1,6 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// Backend the dev server proxies to. Defaults to the shared API; point it at a
+// local backend with e.g. `API_PROXY_TARGET=http://localhost:8080 npm run dev`.
+const apiTarget = process.env.API_PROXY_TARGET || "https://api.honeymedia.uz";
+const apiSecure = apiTarget.startsWith("https://");
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,20 +14,20 @@ export default defineConfig({
     allowedHosts: [".trycloudflare.com"],
     proxy: {
       "/api": {
-        target: "https://api.honeymedia.uz",
+        target: apiTarget,
         changeOrigin: true,
-        secure: true,
+        secure: apiSecure,
       },
       "/socket.io": {
-        target: "https://api.honeymedia.uz",
+        target: apiTarget,
         changeOrigin: true,
-        secure: true,
+        secure: apiSecure,
         ws: true,
       },
       "/uploads": {
-        target: "https://api.honeymedia.uz",
+        target: apiTarget,
         changeOrigin: true,
-        secure: true,
+        secure: apiSecure,
       },
     },
   },

@@ -9,11 +9,21 @@ export class MailService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailService.name);
 
+  /** Sender address: SMTP_FROM, else SMTP_USER when it is an address (it isn't for SendGrid's "apikey"). */
+  private readonly fromAddress: string | undefined;
+
   constructor(private configService: ConfigService) {
-    const port = this.configService.get<number>('SMTP_PORT') || 587;
+    const port = Number(this.configService.get('SMTP_PORT')) || 587;
     const secure = port === 465;
-    const user = this.configService.get<string>('SMTP_USER');
-    const pass = this.configService.get<string>('SMTP_PASS');
+    const host =
+      this.configService.get<string>('SMTP_HOST')?.trim() || 'smtp.gmail.com';
+    const user = this.configService.get<string>('SMTP_USER')?.trim();
+    const pass = normalizeSmtpPassword(
+      this.configService.get<string>('SMTP_PASS'),
+    );
+    const from = this.configService.get<string>('SMTP_FROM')?.trim();
+    this.fromAddress = from || (user?.includes('@') ? user : undefined);
+
     if (!user || !pass) {
       this.logger.warn(
         'SMTP_USER or SMTP_PASS not configured — email sending disabled',
@@ -22,9 +32,12 @@ export class MailService {
       this.transporter = null as any;
       return;
     }
+    for (const problem of smtpConfigProblems(host, user, pass, from)) {
+      this.logger.warn(`SMTP config: ${problem}`);
+    }
 
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST') || 'smtp.gmail.com',
+      host,
       port,
       secure,
       requireTLS: !secure,
@@ -39,6 +52,17 @@ export class MailService {
         pass,
       },
     } as any);
+
+    // Fail loudly at startup instead of on the first sign-up: a bad login
+    // otherwise only shows up as a verification email that never arrives.
+    void this.transporter
+      .verify()
+      .then(() => this.logger.log(`SMTP login ok (${host} as ${user})`))
+      .catch((err: Error) =>
+        this.logger.error(
+          `SMTP login failed (${host} as ${user}): ${err.message}`,
+        ),
+      );
   }
 
   async sendVerificationEmail(email: string, code: string) {
@@ -50,7 +74,7 @@ export class MailService {
         return;
       }
       await this.transporter.sendMail({
-        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        from: `"UPZ Team" <${this.fromAddress}>`,
         to: email,
         subject: 'Email Verification — UPZ',
         html: `
@@ -83,7 +107,7 @@ export class MailService {
         return;
       }
       await this.transporter.sendMail({
-        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        from: `"UPZ Team" <${this.fromAddress}>`,
         to: email,
         subject: `You're invited to join ${groupName} on UPZ`,
         html: `
@@ -116,7 +140,7 @@ export class MailService {
         return;
       }
       await this.transporter.sendMail({
-        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        from: `"UPZ Team" <${this.fromAddress}>`,
         to: email,
         subject: 'Password Reset Code — UPZ',
         html: `
@@ -150,7 +174,7 @@ export class MailService {
         return;
       }
       await this.transporter.sendMail({
-        from: `"UPZ Team" <${this.configService.get('SMTP_USER')}>`,
+        from: `"UPZ Team" <${this.fromAddress}>`,
         to: email,
         subject: 'Password Reset — UPZ',
         html: `
@@ -187,7 +211,7 @@ export class MailService {
         return;
       }
       await this.transporter.sendMail({
-        from: `"UPZ" <${this.configService.get('SMTP_USER')}>`,
+        from: `"UPZ" <${this.fromAddress}>`,
         to: email,
         subject: title,
         html: `
@@ -216,4 +240,45 @@ export class MailService {
       throw error;
     }
   }
+}
+
+/**
+ * App passwords are shown grouped for reading ("abcd efgh ijkl mnop") and
+ * often pasted that way, quotes included; the server wants the bare 16
+ * characters. Whitespace is never part of a real SMTP secret here.
+ */
+export function normalizeSmtpPassword(raw: string | undefined): string {
+  return (raw ?? '').replace(/^['"]|['"]$/g, '').replace(/\s+/g, '');
+}
+
+/** Mismatches that make every login fail with a cryptic 535. */
+export function smtpConfigProblems(
+  host: string,
+  user: string,
+  pass: string,
+  from?: string,
+): string[] {
+  const problems: string[] = [];
+  const isSendGrid = /sendgrid/i.test(host);
+  const isGmail = /gmail|googlemail/i.test(host);
+  const looksLikeGmailAppPassword = /^[a-z]{16}$/.test(pass);
+
+  if (isSendGrid && !pass.startsWith('SG.')) {
+    problems.push(
+      looksLikeGmailAppPassword
+        ? 'SMTP_PASS looks like a Gmail app password but SMTP_HOST is SendGrid — set SMTP_HOST=smtp.gmail.com and SMTP_USER to that Gmail address'
+        : 'SendGrid API keys start with "SG." — SMTP_PASS is not one',
+    );
+  }
+  if (isSendGrid && user !== 'apikey')
+    problems.push('SendGrid expects SMTP_USER=apikey');
+  if (isSendGrid && !from)
+    problems.push('SendGrid needs SMTP_FROM (a verified sender address)');
+  if (isGmail && !user.includes('@'))
+    problems.push('Gmail expects SMTP_USER to be the full Gmail address');
+  if (isGmail && !looksLikeGmailAppPassword)
+    problems.push(
+      'Gmail needs a 16-letter app password (Google Account → Security → App passwords), not the account password',
+    );
+  return problems;
 }
