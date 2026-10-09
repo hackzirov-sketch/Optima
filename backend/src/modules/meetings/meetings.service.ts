@@ -542,6 +542,28 @@ export class MeetingsService {
    * Falls back to the old static pair when no secret is configured, so an
    * existing deployment keeps working until it sets TURN_SECRET.
    */
+  private turnUrlsChecked = false;
+
+  /**
+   * TURN_URLS goes to the browser verbatim. A loopback or private address
+   * there is only reachable from this machine or its LAN, so participants on
+   * other networks get no relay — and two of them behind different NATs often
+   * can't see or hear each other at all. Said once, at the first call.
+   */
+  private warnAboutLocalTurnUrls(urls: string[]) {
+    if (this.turnUrlsChecked) return;
+    this.turnUrlsChecked = true;
+    const local = urls.filter((url) =>
+      /^turns?:(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(
+        url,
+      ),
+    );
+    if (local.length)
+      this.logger.warn(
+        `TURN_URLS has local-only addresses (${local.join(', ')}) — participants on other networks get no relay. Point it at the TURN server's public address.`,
+      );
+  }
+
   getIceServers(userId?: string) {
     const urls = (process.env.TURN_URLS || '')
       .split(',')
@@ -559,6 +581,7 @@ export class MeetingsService {
     ];
 
     if (!urls.length) return iceServers;
+    this.warnAboutLocalTurnUrls(urls);
 
     const secret = process.env.TURN_SECRET;
     if (secret) {

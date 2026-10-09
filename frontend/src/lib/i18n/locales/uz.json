@@ -856,6 +856,7 @@
     "joinNowButton": "Hozir qo‘shilish",
     "deviceStateHint": "Kamera va mikrofon holati siz tanlagandek saqlanadi.",
     "permissionDenied": "Kamera yoki mikrofon ruxsati berilmadi. Brauzer sozlamalarini tekshiring.",
+    "insecureContext": "Kamera va mikrofon faqat HTTPS orqali ishlaydi. Sahifani https:// orqali oching (yoki shu kompyuterda localhost orqali).",
     "cameraOrMicFailed": "{{device}} ochilmadi. Brauzer ruxsatini tekshiring.",
     "cameraWord": "Kamera",
     "microphoneWord": "Mikrofon",

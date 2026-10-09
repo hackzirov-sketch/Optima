@@ -856,6 +856,7 @@
     "joinNowButton": "Join now",
     "deviceStateHint": "Your camera and microphone state is saved as you set it.",
     "permissionDenied": "Camera or microphone access denied. Check your browser settings.",
+    "insecureContext": "Camera and microphone only work over HTTPS. Open this page via https:// (or on this computer via localhost).",
     "cameraOrMicFailed": "{{device}} couldn’t be turned on. Check your browser permissions.",
     "cameraWord": "Camera",
     "microphoneWord": "Microphone",

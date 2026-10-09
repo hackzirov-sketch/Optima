@@ -273,6 +273,14 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const remoteSecurityKeys = useRef(new Map<string, JsonWebKey>());
   const [securityCodes, setSecurityCodes] = useState<Record<string, string[]>>({});
   const negotiateRef = useRef<(targetUserId: string, iceRestart?: boolean) => Promise<void>>(async () => {});
+  /**
+   * The socket connection this client last sent `meeting:join` on. Each join
+   * makes everyone else drop their connection to us and start a fresh one, so
+   * it must happen exactly once per socket connection: not again when the
+   * effect below merely re-subscribes (settings saved, meeting refetched), and
+   * — after a reconnect — only once our own stale connections are gone too.
+   */
+  const joinedSocketId = useRef<string | null>(null);
 
   /**
    * Perfect negotiation's tie-breaker. The same comparison already decides who
@@ -291,16 +299,23 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return securityKeyPair.current;
   }, []);
 
+  // The security code is a nicety on top of the call. Without WebCrypto (an
+  // insecure http:// origin) it can't be computed — that must not stop the
+  // offer that follows it from going out, which is what used to happen.
   const sendSecurityKey = useCallback(async (targetUserId: string) => {
-    const pair = await ensureSecurityKey();
-    const publicKey = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    getSocket().emit("meeting:key", { meetingId, targetUserId, publicKey });
+    try {
+      const pair = await ensureSecurityKey();
+      const publicKey = await crypto.subtle.exportKey("jwk", pair.publicKey);
+      getSocket().emit("meeting:key", { meetingId, targetUserId, publicKey });
+    } catch {
+      // No security code for this peer; the call itself is unaffected.
+    }
   }, [ensureSecurityKey, meetingId]);
 
   const updateSecurityCode = useCallback(async (targetUserId: string, peer: RTCPeerConnection) => {
     const remoteJwk = remoteSecurityKeys.current.get(targetUserId);
     const fingerprints = dtlsFingerprints(peer);
-    if (!remoteJwk || !fingerprints || !peer.localDescription || !peer.remoteDescription) return;
+    if (!remoteJwk || !fingerprints || !peer.localDescription || !peer.remoteDescription || !globalThis.crypto?.subtle) return;
     const pair = await ensureSecurityKey();
     const remoteKey = await crypto.subtle.importKey("jwk", remoteJwk, { name: "ECDH", namedCurve: "P-256" }, false, []);
     const shared = await crypto.subtle.deriveBits({ name: "ECDH", public: remoteKey }, pair.privateKey, 256);
@@ -321,6 +336,13 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (!isFullMode || entered || (!camera && !microphone)) {
       previewStream?.getTracks().forEach((track) => track.stop());
       setPreviewStream(undefined);
+      return;
+    }
+    // Camera and microphone exist only in secure contexts (https:// or
+    // localhost). Opened as http://<LAN IP> there is no mediaDevices at all,
+    // and calling into it threw from inside this effect.
+    if (!navigator.mediaDevices) {
+      setPermissionError(t("meetingRoom.insecureContext"));
       return;
     }
     let cancelled = false;
@@ -689,18 +711,17 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   useEffect(() => {
     if (!entered) return;
     const socket = getSocket();
-    const onConnect = () => { setConnectionState("connected"); socket.emit("meeting:join", { meetingId }); };
-    // A reload mid-call re-enters an already-populated room: the socket only
-    // reports who joins *after* this point, so the people already present come
-    // from the participant list the REST fetch returned.
-    setRoster((current) => {
-      const next = { ...current };
-      for (const participant of meeting?.participants ?? []) {
-        if (participant.leftAt || participant.userId === user?.id) continue;
-        next[participant.userId] = next[participant.userId] ?? participant.user ?? null;
-      }
-      return next;
-    });
+    const onConnect = () => {
+      setConnectionState("connected");
+      if (socket.id && joinedSocketId.current === socket.id) return;
+      // A new connection after a drop. Rejoining tells everyone else to throw
+      // away their connection to us and negotiate a new one; ours have to go
+      // as well, or we answer their fresh offers on dead connections and the
+      // call never recovers (both sides ended with no media at all).
+      if (joinedSocketId.current) for (const id of [...peers.current.keys()]) closePeer(id);
+      joinedSocketId.current = socket.id ?? null;
+      socket.emit("meeting:join", { meetingId });
+    };
     const onDisconnect = () => setConnectionState("offline");
     const onParticipants = async ({ userIds, participants }: { userIds: string[]; participants?: Array<{ userId: string; user: MeetingUser | null }> }) => {
       // The roster first, so everyone already here is on screen before a
@@ -868,7 +889,23 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id, meeting?.participants]);
+  }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
+
+  // A reload mid-call re-enters an already-populated room: the socket only
+  // reports who joins *after* this point, so the people already present come
+  // from the participant list the REST fetch returned. Kept out of the effect
+  // above — a refetched meeting must not re-subscribe (and so rejoin) the call.
+  useEffect(() => {
+    if (!entered) return;
+    setRoster((current) => {
+      const next = { ...current };
+      for (const participant of meeting?.participants ?? []) {
+        if (participant.leftAt || participant.userId === user?.id) continue;
+        next[participant.userId] = next[participant.userId] ?? participant.user ?? null;
+      }
+      return next;
+    });
+  }, [entered, meeting?.participants, user?.id]);
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -879,6 +916,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }
 
   async function enterMeeting() {
+    // Still joinable without local devices (others are seen and heard), but say why ours are off.
+    if (!navigator.mediaDevices) show(t("meetingRoom.insecureContext"), "error");
     setJoining(true);
     previewStream?.getTracks().forEach((track) => track.stop());
     setPreviewStream(undefined);
@@ -1029,6 +1068,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   const cleanup = useCallback(() => {
     getSocket().emit("meeting:leave", { meetingId });
+    joinedSocketId.current = null;
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
     makingOffer.current.clear();

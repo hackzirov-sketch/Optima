@@ -856,6 +856,7 @@
     "joinNowButton": "Şimdi katıl",
     "deviceStateHint": "Kamera ve mikrofon durumu seçtiğiniz gibi kaydedilir.",
     "permissionDenied": "Kamera veya mikrofon izni verilmedi. Tarayıcı ayarlarınızı kontrol edin.",
+    "insecureContext": "Kamera ve mikrofon yalnızca HTTPS üzerinden çalışır. Sayfayı https:// ile açın (veya bu bilgisayarda localhost ile).",
     "cameraOrMicFailed": "{{device}} açılamadı. Tarayıcı iznini kontrol edin.",
     "cameraWord": "Kamera",
     "microphoneWord": "Mikrofon",
