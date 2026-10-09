@@ -35,6 +35,8 @@ import {
   MESSAGE_ATTACHMENT_COLUMNS_SQL,
 } from '../chat.sql';
 import { extractMentions } from '../mention.util';
+import { ChatE2eeService } from '../e2ee/e2ee.service';
+import { E2eeEnvelope } from '../e2ee/e2ee.util';
 
 /**
  * Telegram's album size. The cap exists on the server as well as the composer
@@ -71,6 +73,7 @@ export interface ChatMessageRow {
   threadRootId?: string | null;
   sender?: MessageSender | null;
   deletedAt?: Date | string | null;
+  isE2ee?: boolean | null;
 }
 
 export interface MessageSender {
@@ -88,7 +91,10 @@ export interface ChatMessageResponse {
   sequence: number;
   clientMessageId?: string | null;
   metadata?: unknown;
+  /** Plaintext — null for end-to-end encrypted messages, see `e2ee`. */
   content: string | null;
+  /** Ciphertext for E2EE rooms; only member devices can open it. */
+  e2ee: E2eeEnvelope | null;
   contentType: string;
   attachments: MappedAttachment[];
   replyToId: string | null;
@@ -127,8 +133,33 @@ export class ChatMessageService {
     private readonly redisService: RedisService,
     private readonly channelSettings: ChannelSettingsService,
     private readonly events: EventEmitter2,
+    private readonly e2ee: ChatE2eeService,
     @InjectQueue('chat') private readonly chatQueue: Queue,
   ) {}
+
+  /**
+   * The readable body of a stored message. E2EE rows are handed back as the
+   * ciphertext envelope untouched — the server has no key for them; public
+   * rows are decrypted from the at-rest encryption.
+   */
+  private bodyOf(row: {
+    isE2ee?: boolean | null;
+    contentType?: string | null;
+    content?: string | null;
+    contentJson?: unknown;
+  }): { content: string | null; e2ee: E2eeEnvelope | null } {
+    if (row.isE2ee)
+      return { content: null, e2ee: (row.contentJson as E2eeEnvelope) ?? null };
+    if (row.contentType === 'document')
+      return { content: row.content ?? null, e2ee: null };
+    return {
+      content: this.chatEncryption.safeDecrypt(
+        row.contentJson as any,
+        row.content ?? '',
+      ),
+      e2ee: null,
+    };
+  }
 
   /**
    * Media/voice/file permissions. Each attachment is classified by its MIME
@@ -346,7 +377,7 @@ export class ChatMessageService {
          m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
          m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
          m.is_system AS "isSystem", m.system_metadata AS "systemMetadata", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
-         m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
+         m.sequence, m.client_message_id AS "clientMessageId", m.metadata, m.is_e2ee AS "isE2ee",
          u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
          u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname",
          t.reply_count AS "threadReplyCount", t.last_reply_at AS "threadLastReplyAt"
@@ -412,10 +443,7 @@ export class ChatMessageService {
             nickname: msg.s_nickname,
           }
         : null,
-      content:
-        msg.contentType === 'document'
-          ? msg.content
-          : this.chatEncryption.safeDecrypt(msg.contentJson, msg.content ?? ''),
+      ...this.bodyOf(msg),
       contentType: msg.contentType,
       attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) =>
         this.mapAttachment(a),
@@ -462,10 +490,15 @@ export class ChatMessageService {
   async sendMessage(roomId: string, userId: string, dto: SendMessageDto) {
     const roomRows = await this.dataSource.query<{
       id: string;
+      type: string;
+      scope: string;
+      e2eeEpoch: number;
       isReadOnly: boolean;
       postingMode: string | null;
     }>(
-      `SELECT id, is_read_only AS "isReadOnly", posting_mode AS "postingMode" FROM chat_rooms WHERE id = $1`,
+      `SELECT id, type, scope, e2ee_epoch AS "e2eeEpoch",
+              is_read_only AS "isReadOnly", posting_mode AS "postingMode"
+         FROM chat_rooms WHERE id = $1`,
       [roomId],
     );
     const room = roomRows[0];
@@ -554,7 +587,14 @@ export class ChatMessageService {
     }
 
     const hasAttachments = !!dto.attachments?.length;
-    if (!dto.content?.trim() && !hasAttachments) {
+    // DMs and private rooms take ciphertext only, public rooms plaintext only.
+    const envelope = await this.e2ee.assertMessageEncryption(
+      room,
+      userId,
+      dto.e2ee,
+      !!dto.content?.trim(),
+    );
+    if (!dto.content?.trim() && !hasAttachments && !envelope) {
       throw new BadRequestException({
         code: ErrorCode.MESSAGE_EMPTY,
         message: 'Message content is required',
@@ -585,10 +625,7 @@ export class ChatMessageService {
         // back to the client that sent it.
         return this.mapToResponse(
           existing,
-          this.chatEncryption.safeDecrypt(
-            existing.contentJson,
-            existing.content ?? '',
-          ),
+          this.bodyOf(existing).content ?? '',
           existingAttachments,
         );
       }
@@ -612,9 +649,14 @@ export class ChatMessageService {
     let contentToSave = plainText;
     let contentType = hasAttachments ? 'media' : 'text';
     let contentJson: any = null;
+    const isE2ee = !!envelope;
 
     // 3. Length check (4096) — only applies to plain text messages, not media captions
-    if (!hasAttachments && plainText.length > 4096) {
+    if (envelope) {
+      // Stored exactly as the sender's device produced it.
+      contentJson = envelope;
+      contentToSave = '';
+    } else if (!hasAttachments && plainText.length > 4096) {
       contentType = 'document';
       const key = `chat-long-messages/${uuidv4()}.txt`;
       const buffer = Buffer.from(plainText, 'utf-8');
@@ -643,8 +685,8 @@ export class ChatMessageService {
       const savedRows = await query<ChatMessage>(
         `INSERT INTO chat_messages
            (room_id, sender_id, sequence, client_message_id, content, content_json,
-            content_type, reply_to_id, metadata, is_thread_reply)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            content_type, reply_to_id, metadata, is_thread_reply, is_e2ee)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
         [
           roomId,
@@ -657,6 +699,7 @@ export class ChatMessageService {
           dto.replyToId ?? null,
           {},
           !!dto.isThreadReply,
+          isE2ee,
         ],
       );
       const message: any = savedRows[0];
@@ -851,10 +894,35 @@ export class ChatMessageService {
       });
     }
 
-    const plainText = dto.content.trim();
+    const roomRows = await this.dataSource.query<{
+      id: string;
+      type: string;
+      scope: string;
+      e2eeEpoch: number;
+    }>(
+      `SELECT id, type, scope, e2ee_epoch AS "e2eeEpoch" FROM chat_rooms WHERE id = $1`,
+      [msg.roomId],
+    );
+    const plainText = (dto.content ?? '').trim();
+    const envelope = await this.e2ee.assertMessageEncryption(
+      roomRows[0],
+      userId,
+      dto.e2ee,
+      !!plainText,
+    );
+    if (!plainText && !envelope)
+      throw new BadRequestException({
+        code: ErrorCode.MESSAGE_EMPTY,
+        message: 'Message content is required',
+      });
+
     let content: string;
     let contentJson: any;
-    if (this.chatEncryption.isEnabled()) {
+    const isE2ee = !!envelope;
+    if (envelope) {
+      contentJson = envelope;
+      content = '';
+    } else if (this.chatEncryption.isEnabled()) {
       contentJson = this.chatEncryption.encrypt(plainText);
       content = '';
     } else {
@@ -865,10 +933,10 @@ export class ChatMessageService {
     const editedAt = new Date();
     const savedRows: ChatMessage[] = await this.dataSource.query(
       `UPDATE chat_messages
-         SET content = $2, content_json = $3, is_edited = true, edited_at = $4
+         SET content = $2, content_json = $3, is_edited = true, edited_at = $4, is_e2ee = $5
          WHERE id = $1
          RETURNING ${CHAT_MESSAGE_COLUMNS_SQL}`,
-      [messageId, content, contentJson, editedAt],
+      [messageId, content, contentJson, editedAt, isE2ee],
     );
     const saved = savedRows[0];
     // Same gap as deletion: an edit made over REST reached nobody until they
@@ -876,11 +944,20 @@ export class ChatMessageService {
     this.events.emit('chat.message_updated', {
       roomId: msg.roomId,
       messageId,
-      content: plainText,
+      // Recipients need it to check an E2EE edit's associated data.
+      senderId: msg.senderId,
+      content: isE2ee ? null : plainText,
+      e2ee: envelope,
       isEdited: true,
       editedAt,
     });
-    return { ...saved, content: plainText, editedAt: saved.editedAt };
+    return {
+      ...saved,
+      contentJson: undefined,
+      content: isE2ee ? null : plainText,
+      e2ee: envelope,
+      editedAt: saved.editedAt,
+    };
   }
 
   private mapToResponse(
@@ -921,10 +998,12 @@ export class ChatMessageService {
       sequence: msg.sequence,
       clientMessageId: msg.clientMessageId,
       metadata: msg.metadata,
-      content:
-        msg.contentType === 'document'
+      content: msg.isE2ee
+        ? null
+        : msg.contentType === 'document'
           ? (msg.content ?? null)
           : decryptedContent,
+      e2ee: msg.isE2ee ? ((msg.contentJson as E2eeEnvelope) ?? null) : null,
       contentType: msg.contentType ?? 'text',
       attachments: attachments.map((a) => this.mapAttachment(a)),
       replyToId: msg.replyToId ?? null,
@@ -951,7 +1030,7 @@ export class ChatMessageService {
     m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
     m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
     m.is_thread_reply AS "isThreadReply", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
-    m.sequence, m.client_message_id AS "clientMessageId", m.metadata,
+    m.sequence, m.client_message_id AS "clientMessageId", m.metadata, m.is_e2ee AS "isE2ee",
     u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName", u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname"
   `;
 
@@ -1001,10 +1080,7 @@ export class ChatMessageService {
             nickname: row.s_nickname,
           }
         : null;
-    const decrypt = (row: any) =>
-      row.contentType === 'document'
-        ? row.content
-        : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? '');
+    const decrypt = (row: any) => this.bodyOf(row).content ?? '';
 
     return {
       root: this.mapToResponseWithSender(

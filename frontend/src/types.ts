@@ -1,3 +1,4 @@
+import type { E2eeEnvelope } from "./lib/e2ee";
 export type UserTheme = "light" | "dark" | "system";
 export type UserLanguage = "uz" | "ru" | "en";
 
@@ -67,7 +68,7 @@ export interface ChatRoom {
   id: string;
   groupId: string | null;
   type: "group" | "project" | "group" | "direct" | "public" | "private" | "channel";
-  scope: "group_only" | "private" | "public";
+  scope: "group_only" | "private" | "public" | "workspace_only" | "invite_only";
   name?: string | null;
   description?: string | null;
   avatarUrl?: string | null;
@@ -78,9 +79,12 @@ export interface ChatRoom {
   unreadCount: number;
   isReadOnly: boolean;
   memberStatus?: "pending" | "active";
+  /** DMs and non-public rooms are end-to-end encrypted; public ones are encrypted at rest on the server. */
+  e2ee?: boolean;
   lastMessage?: {
     id: string;
     content: string;
+    e2ee?: E2eeEnvelope | null;
     senderId: string;
     senderName?: string | null;
     createdAt: string;
@@ -232,7 +236,12 @@ export interface ChatMessage {
   id: string;
   roomId: string;
   senderId: string;
+  /** Plaintext. For E2EE messages it is filled in client-side from `e2ee` (see lib/e2ee.ts). */
   content: string;
+  /** Ciphertext as the server relays it — only member devices can open it. */
+  e2ee?: E2eeEnvelope | null;
+  /** True when this device had no key for the message. */
+  e2eeFailed?: boolean;
   contentType?: string;
   attachments?: Array<{ id: string; fileName: string; fileSize: number; mimeType: string; url: string }>;
   sequence?: number;

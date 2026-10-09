@@ -668,6 +668,7 @@
     "editingMessageLabel": "Editing message",
     "replyingLabel": "Replying",
     "mediaMessageFallback": "Media message",
+    "e2eeBadge": "End-to-end encrypted — only members' devices can read these messages",
     "cancelAria": "Cancel",
     "chooseEmojiAria": "Choose emoji",
     "quickEmojisAria": "Quick emojis",

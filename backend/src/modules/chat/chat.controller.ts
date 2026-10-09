@@ -60,6 +60,7 @@ import { BanMemberDto } from './dto/moderate-member.dto';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { ChatRoomType } from '../../common/enums';
 import { RedisService } from '../../redis/redis.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -79,6 +80,7 @@ export class ChatController {
     private readonly redisService: RedisService,
     private readonly channelSettings: ChannelSettingsService,
     private readonly viewService: MessageViewService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /** Per-user (not per-IP) message send limit — mirrors the socket path's check in EventsGateway. */
@@ -367,7 +369,10 @@ export class ChatController {
     @Body() dto: SendMessageDto,
   ) {
     await this.assertMessageRateLimit(userId);
-    return this.messageService.sendMessage(roomId, userId, dto);
+    const saved = await this.messageService.sendMessage(roomId, userId, dto);
+    // The socket path broadcasts by itself; this one used to reach nobody.
+    this.events.emit('chat.message_created', saved);
+    return saved;
   }
 
   @Delete('chat/messages/:messageId')

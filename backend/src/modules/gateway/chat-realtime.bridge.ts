@@ -36,11 +36,44 @@ export class ChatRealtimeBridge {
   onMessageUpdated(payload: {
     roomId: string;
     messageId: string;
-    content: string;
+    senderId: string;
+    content: string | null;
+    e2ee: unknown;
     isEdited: boolean;
     editedAt: Date;
   }) {
     this.toRoom(payload.roomId, 'message_updated', payload);
+  }
+
+  /** A message sent over the REST fallback — the socket path broadcasts its own. */
+  @OnEvent('chat.message_created')
+  async onMessageCreated(saved: { roomId: string }) {
+    try {
+      await this.gateway.broadcastNewMessage(saved);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to broadcast new_message: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * A member device published a new room key. Every member's client drops
+   * its cached key state for the room and picks the new epoch up on demand.
+   */
+  @OnEvent('chat.e2ee_rotated')
+  async onE2eeRotated(payload: { roomId: string; epoch: number }) {
+    try {
+      await this.gateway.broadcastToRoomMembers(
+        payload.roomId,
+        'room_key_rotated',
+        payload,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to broadcast room_key_rotated: ${(err as Error).message}`,
+      );
+    }
   }
 
   @OnEvent('chat.message_deleted')

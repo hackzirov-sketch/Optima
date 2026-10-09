@@ -668,6 +668,7 @@
     "editingMessageLabel": "Mesaj düzenleniyor",
     "replyingLabel": "Yanıtlanıyor",
     "mediaMessageFallback": "Medya mesajı",
+    "e2eeBadge": "Uçtan uca şifreli — bu mesajları yalnızca üyelerin cihazları okuyabilir",
     "cancelAria": "Vazgeç",
     "chooseEmojiAria": "Emoji seç",
     "quickEmojisAria": "Hızlı emojiler",

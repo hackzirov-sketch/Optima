@@ -107,6 +107,8 @@ export interface SendMessageWsDto {
     width?: number;
     height?: number;
   }>;
+  /** Ciphertext for E2EE rooms (DMs, private groups/channels) — replaces `text` there. */
+  e2ee?: unknown;
 }
 
 export interface TypingDto {
@@ -748,22 +750,36 @@ export class EventsGateway
         replyToId: data.replyToId,
         clientMessageId: data.clientMessageId, // idempotency: WS reconnect'da duplicate yo'q
         attachments: data.attachments,
+        e2ee: data.e2ee as any,
       });
     } catch (err) {
       // ForbiddenException → emit error back to sender only
-      client.emit(
-        'error',
-        extractErrorDetails(
-          err,
-          'SEND_MESSAGE_FAILED',
-          'Failed to send message',
-        ),
+      const details = extractErrorDetails(
+        err,
+        'SEND_MESSAGE_FAILED',
+        'Failed to send message',
       );
-      return;
+      client.emit('error', details);
+      // Also answer the ack, so the client can react (E2EE re-key + retry)
+      // instead of waiting for its timeout.
+      return { ok: false, error: details };
     }
 
-    // Broadcast saved message to everyone in the room (including sender)
-    // saved.content is already plaintext (decrypted by ChatService.sendMessage)
+    await this.broadcastNewMessage(saved);
+
+    // A plain object, not `{ event, ... }`: Nest emits an event-shaped return
+    // value as a separate event and never calls the ack, which left every
+    // client waiting out its 9s timeout and re-sending over REST.
+    return { ok: true, messageId: saved.id };
+  }
+
+  /**
+   * Fans a freshly saved message out to the open room and to every member's
+   * personal channel. Shared by the socket path and the REST fallback (via
+   * ChatRealtimeBridge), which used to reach nobody until they reloaded.
+   * E2EE messages carry `content: null` and the ciphertext in `e2ee`.
+   */
+  async broadcastNewMessage(saved: any) {
     const messagePayload = {
       id: saved.id,
       roomId: saved.roomId,
@@ -771,6 +787,7 @@ export class EventsGateway
       sequence: saved.sequence,
       clientMessageId: saved.clientMessageId,
       content: saved.content,
+      e2ee: saved.e2ee ?? null,
       contentType: saved.contentType ?? 'text',
       attachments: saved.attachments ?? [],
       replyToId: saved.replyToId ?? null,
@@ -780,7 +797,7 @@ export class EventsGateway
       reactions: [],
       sender: saved.sender ?? null,
     };
-    this.server.to(`room:${data.roomId}`).emit('new_message', messagePayload);
+    this.server.to(`room:${saved.roomId}`).emit('new_message', messagePayload);
     // Members only join `room:X` while that room is actually open, so a
     // room-only broadcast misses everyone browsing elsewhere (sidebar preview
     // and unread badges going stale until a manual reload). Every socket
@@ -788,16 +805,14 @@ export class EventsGateway
     // fan this out there too - that's what actually reaches a member
     // regardless of which room, if any, they currently have open.
     await this.broadcastToRoomMembers(
-      data.roomId,
+      saved.roomId,
       'new_message',
       messagePayload,
     );
-
-    return { event: 'message_sent', messageId: saved.id };
   }
 
   /** Emits an event to every active member's personal `user:<id>` channel — see handleSendMessage. */
-  private async broadcastToRoomMembers(
+  async broadcastToRoomMembers(
     roomId: string,
     event: string,
     payload: unknown,
@@ -841,18 +856,17 @@ export class EventsGateway
           content: data.text,
           clientMessageId: data.clientMessageId,
           attachments: data.attachments,
+          e2ee: data.e2ee as any,
         },
       );
     } catch (err) {
-      client.emit(
-        'error',
-        extractErrorDetails(
-          err,
-          'SEND_THREAD_REPLY_FAILED',
-          'Failed to send thread reply',
-        ),
+      const details = extractErrorDetails(
+        err,
+        'SEND_THREAD_REPLY_FAILED',
+        'Failed to send thread reply',
       );
-      return;
+      client.emit('error', details);
+      return { ok: false, error: details };
     }
 
     this.server.to(`room:${saved.roomId}`).emit('thread_reply', {
@@ -865,6 +879,7 @@ export class EventsGateway
         sequence: saved.sequence,
         clientMessageId: saved.clientMessageId,
         content: saved.content,
+        e2ee: saved.e2ee ?? null,
         contentType: saved.contentType ?? 'text',
         attachments: saved.attachments ?? [],
         replyToId: saved.replyToId ?? null,
@@ -877,7 +892,7 @@ export class EventsGateway
       },
     });
 
-    return { event: 'thread_reply_sent', messageId: saved.id };
+    return { ok: true, messageId: saved.id };
   }
 
   // ─── Message reaction ─────────────────────────────────

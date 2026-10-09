@@ -20,6 +20,8 @@ import { CommunityService } from './services/community.service';
 import { ChannelSettingsService } from './services/channel-settings.service';
 import { MessageViewService } from './services/message-view.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ChatE2eeService } from './e2ee/e2ee.service';
+import { ChatE2eeController } from './e2ee/e2ee.controller';
 
 @Module({
   imports: [
@@ -31,7 +33,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     // ChatProcessor turns @mentions into notifications.
     forwardRef(() => NotificationsModule),
   ],
-  controllers: [ChatController],
+  controllers: [ChatController, ChatE2eeController],
   providers: [
     ChatEncryptionService,
     ChatRoomService,
@@ -45,7 +47,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ChannelSettingsService,
     MessageViewService,
     ChatProcessor,
-    CommunityService,
+    ChatE2eeService,
   ],
   exports: [
     ChatEncryptionService,
@@ -58,6 +60,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ChatAiService,
     ChannelSettingsService,
     MessageViewService,
+    ChatE2eeService,
   ],
 })
 export class ChatModule {}

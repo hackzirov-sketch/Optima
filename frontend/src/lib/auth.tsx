@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AuthResult, User, Group } from "../types";
 import { api, ApiError, refreshSession } from "./api";
 import { session } from "./session";
+import { setE2eeUser } from "./e2ee";
 
 interface AuthContextValue {
   ready: boolean;
@@ -44,6 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [groups, setWorkspaces] = useState<Group[]>([]);
   const [group, setWorkspace] = useState<Group | null>(null);
+
+  // E2EE device keys are per user, so the crypto layer follows the session.
+  // Set during render (not in an effect) so children's first API calls see it.
+  setE2eeUser(user?.id ?? null);
 
   // Stable, always-current reads for callbacks/effects that must avoid
   // stale-closure state (the access token is an httpOnly cookie now — there's

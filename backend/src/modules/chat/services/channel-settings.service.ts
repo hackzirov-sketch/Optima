@@ -521,10 +521,11 @@ export class ChannelSettingsService {
       id: string;
       content: string | null;
       contentJson: EncryptedMessage | null;
+      isE2ee: boolean;
       viewCount: number;
       createdAt: Date;
     }>(
-      `SELECT id, content, content_json AS "contentJson",
+      `SELECT id, content, content_json AS "contentJson", is_e2ee AS "isE2ee",
               view_count AS "viewCount", created_at AS "createdAt"
          FROM chat_messages
         WHERE room_id = $1 AND deleted_at IS NULL AND view_count > 0
@@ -536,10 +537,11 @@ export class ChannelSettingsService {
     // empty — reading it directly is what made every top post render blank.
     const topPosts = topPostRows.map((row) => ({
       id: row.id,
-      content: this.chatEncryption.safeDecrypt(
-        row.contentJson,
-        row.content ?? '',
-      ),
+      // E2EE posts (private channels) stay ciphertext; the client opens them.
+      content: row.isE2ee
+        ? null
+        : this.chatEncryption.safeDecrypt(row.contentJson, row.content ?? ''),
+      e2ee: row.isE2ee ? row.contentJson : null,
       viewCount: row.viewCount,
       createdAt: row.createdAt,
     }));

@@ -668,6 +668,7 @@
     "editingMessageLabel": "Xabarni tahrirlash",
     "replyingLabel": "Javob berish",
     "mediaMessageFallback": "Media xabar",
+    "e2eeBadge": "Uchdan-uchga shifrlangan — bu xabarlarni faqat a’zolarning qurilmalari o‘qiy oladi",
     "cancelAria": "Bekor qilish",
     "chooseEmojiAria": "Emoji tanlash",
     "quickEmojisAria": "Tezkor emojilar",

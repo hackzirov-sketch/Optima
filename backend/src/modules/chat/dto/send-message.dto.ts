@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { E2eeEnvelopeDto } from './e2ee.dto';
 
 export class MessageAttachmentInputDto {
   @ApiProperty({
@@ -92,4 +93,13 @@ export class SendMessageDto {
   @IsOptional()
   @IsBoolean()
   isThreadReply?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Ciphertext for end-to-end encrypted rooms (DMs, private groups/channels). Mutually exclusive with `content` there; rejected in public rooms.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => E2eeEnvelopeDto)
+  e2ee?: E2eeEnvelopeDto;
 }

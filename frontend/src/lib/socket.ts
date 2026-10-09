@@ -32,3 +32,27 @@ export function closeSocket() {
   socket?.disconnect();
   socket = null;
 }
+
+/**
+ * Emits and waits for the server's ack. The gateway answers `{ ok: false,
+ * error }` when it rejects a payload; that becomes a rejected promise carrying
+ * the server's error `code`, so callers can tell a refusal from a timeout
+ * (which rejects with socket.io's own error and no code).
+ */
+export function emitWithAck<T = unknown>(event: string, payload: unknown, timeoutMs = 9000): Promise<T> {
+  const target = getSocket();
+  return new Promise<T>((resolve, reject) => {
+    target.timeout(timeoutMs).emit(event, payload, (error: Error | null, response?: { ok?: boolean; error?: { code?: string; message?: string } }) => {
+      if (error) return reject(error);
+      if (response && response.ok === false) {
+        return reject(Object.assign(new Error(response.error?.message || "Request failed"), { code: response.error?.code }));
+      }
+      resolve(response as T);
+    });
+  });
+}
+
+/** True for a refusal the server sent back, as opposed to a timeout / lost connection. */
+export function isServerRejection(error: unknown): boolean {
+  return !!error && typeof error === "object" && typeof (error as { code?: unknown }).code === "string";
+}

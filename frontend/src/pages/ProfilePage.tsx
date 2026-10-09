@@ -23,7 +23,7 @@ const occupationValues = ["developer", "designer", "freelancer", "project_manage
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 
 export function ProfilePage() {
-  const { user, workspace, refreshUser, logout } = useAuth();
+  const { user, group: workspace, refreshUser, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();

@@ -13,6 +13,7 @@ import { UserChatSettings } from '../../../database/entities/user-chat-settings.
 import { ChatRoomType, RoomScope } from '../../../common/enums';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { ChatEncryptionService } from '../chat-encryption.service';
+import { E2eeEnvelope, isE2eeRoom } from '../e2ee/e2ee.util';
 import { ChatMemberService } from './member.service';
 import { MembersService } from '../../groups/services/members.service';
 import { CreateChatRoomDto } from '../dto/create-chat-room.dto';
@@ -54,6 +55,8 @@ export interface ChatRoomDto {
   isArchived: boolean;
   isReadOnly: boolean;
   scope: RoomScope;
+  /** DMs and non-public rooms are end-to-end encrypted; public ones are encrypted at rest. */
+  e2ee: boolean;
   inviteCode: string | null;
   isMember: boolean;
   groupId: string | null;
@@ -83,7 +86,8 @@ export interface ChatRoomDto {
   linkedRoomId: string | null;
   lastMessage: {
     id: string;
-    content: string;
+    content: string | null;
+    e2ee: E2eeEnvelope | null;
     senderId: string;
     senderName: string | null;
     createdAt: Date;
@@ -110,9 +114,25 @@ export class ChatRoomService {
     return rows[0] ?? null;
   }
 
+  /** Sidebar preview: plaintext for public rooms, the untouched envelope for E2EE ones. */
+  private lastMessageBody(msg: {
+    isE2ee?: boolean;
+    content?: string | null;
+    contentJson?: any;
+  }): { content: string | null; e2ee: E2eeEnvelope | null } {
+    if (msg.isE2ee) return { content: null, e2ee: msg.contentJson ?? null };
+    return {
+      content: this.chatEncryption.safeDecrypt(
+        msg.contentJson,
+        msg.content ?? '',
+      ),
+      e2ee: null,
+    };
+  }
+
   private async fetchLastMessage(lastMessageId: string) {
     const rows = await this.dataSource.query<any>(
-      `SELECT m.id, m.content, m.content_json AS "contentJson", m.sender_id AS "senderId",
+      `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
               m.created_at AS "createdAt",
               u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
        FROM chat_messages m
@@ -124,10 +144,7 @@ export class ChatRoomService {
     if (!msg) return null;
     return {
       id: msg.id,
-      content: this.chatEncryption.safeDecrypt(
-        msg.contentJson,
-        msg.content ?? '',
-      ),
+      ...this.lastMessageBody(msg),
       senderId: msg.senderId,
       senderName: msg.senderFirstName
         ? `${msg.senderFirstName ?? ''} ${msg.senderLastName ?? ''}`.trim()
@@ -180,6 +197,7 @@ export class ChatRoomService {
       isArchived: room.isArchived,
       isReadOnly: room.isReadOnly,
       scope: room.scope,
+      e2ee: isE2eeRoom(room),
       inviteCode: room.inviteCode ?? null,
       groupId: room.groupId ?? null,
       projectId: room.projectId ?? null,
@@ -315,7 +333,7 @@ export class ChatRoomService {
     const lastMessages: any[] =
       lastMsgIds.length > 0
         ? await this.dataSource.query(
-            `SELECT m.id, m.content, m.content_json AS "contentJson", m.sender_id AS "senderId",
+            `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
                     m.created_at AS "createdAt",
                     u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
              FROM chat_messages m
@@ -342,6 +360,7 @@ export class ChatRoomService {
         isArchived: room.isArchived,
         isReadOnly: room.isReadOnly,
         scope: room.scope,
+        e2ee: isE2eeRoom(room),
         inviteCode: room.inviteCode ?? null,
         groupId: room.groupId ?? null,
         projectId: room.projectId ?? null,
@@ -366,10 +385,7 @@ export class ChatRoomService {
         lastMessage: lastMsg
           ? {
               id: lastMsg.id,
-              content: this.chatEncryption.safeDecrypt(
-                lastMsg.contentJson,
-                lastMsg.content ?? '',
-              ),
+              ...this.lastMessageBody(lastMsg),
               senderId: lastMsg.senderId,
               senderName: lastMsg.senderFirstName
                 ? `${lastMsg.senderFirstName ?? ''} ${lastMsg.senderLastName ?? ''}`.trim()

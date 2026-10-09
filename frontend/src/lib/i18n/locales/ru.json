@@ -668,6 +668,7 @@
     "editingMessageLabel": "Редактирование сообщения",
     "replyingLabel": "Ответ",
     "mediaMessageFallback": "Медиа-сообщение",
+    "e2eeBadge": "Сквозное шифрование — эти сообщения могут прочитать только устройства участников",
     "cancelAria": "Отмена",
     "chooseEmojiAria": "Выбрать эмодзи",
     "quickEmojisAria": "Быстрые эмодзи",

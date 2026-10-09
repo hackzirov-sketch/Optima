@@ -15,6 +15,7 @@ import {
   ImagePlus,
   Link2,
   LoaderCircle,
+  Lock,
   LogOut,
   MailPlus,
   Maximize2,
@@ -73,11 +74,12 @@ import { useToast }                                                         from
 import { useConfirm }                                                       from "../components/ConfirmDialog";
 import { api }                                                              from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
-import { getSocket }                                                        from "../lib/socket";
+import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
+import { decryptEnvelope, decryptMessage, invalidateRoom, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
-import type { ChatMessage, ChatRoom, RoomInvite, User, WorkspaceMember }    from "../types";
+import type { ChatMessage, ChatRoom, GroupMember, RoomInvite, User } from "../types";
 import { clampParticipants } from "../lib/meeting-limits";
 import { CUSTOM_EMOJI_ID_PATTERN, CUSTOM_EMOJI_TOKEN_PATTERN } from "../lib/emojiAssets";
 
@@ -166,7 +168,7 @@ function RoomAvatar({ room, size = "md" }: { room: ChatRoom; size?: "sm" | "md" 
   );
 }
 
-function memberUser(member: WorkspaceMember, t: TranslateFn): User {
+function memberUser(member: GroupMember, t: TranslateFn): User {
   return (member.user || {
     id: member.userId,
     firstName: member.firstName || t("chat.userFallback"),
@@ -205,7 +207,8 @@ function loadAiConversation(userId?: string): AiConversationMessage[] {
 type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: string } | null;
 
 export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
-  const { user, workspace } = useAuth();
+  // Workspaces were renamed to groups; the page still calls the current one `workspace`.
+  const { user, group: workspace } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -241,7 +244,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     senderFirstName?: string;
     senderLastName?: string
   }>>([]);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
   const [search, setSearch] = useState("");
@@ -722,7 +725,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }) {
     if (!workspace) return;
-    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.workspaces.members(workspace.id), api.chat.community()]);
+    const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.groups.members(workspace.id), api.chat.community()]);
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
       ...room!, memberIds: room!.memberIds || [], memberProfiles: room!.memberProfiles || [],
       unreadCount: room!.unreadCount || 0, memberCount: room!.memberCount || 0,
@@ -858,11 +861,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     initPresence();
     const onConnect = () => {
       setConnected(true);
-      socket.emit("join_workspace", { workspaceId: workspace.id });
+      socket.emit("join_group", { groupId: workspace.id });
       if (selectedId && selectedRoom?.memberStatus !== "pending") socket.emit("join_room", { roomId: selectedId });
     };
     const onDisconnect = () => setConnected(false);
-    const onMessage = (message: ChatMessage) => {
+    // E2EE messages arrive as ciphertext; open them before they reach state.
+    const onMessage = (incoming: ChatMessage) => {
+      void decryptMessage(incoming).then(handleMessage);
+    };
+    const handleMessage = (message: ChatMessage) => {
       if (message.roomId !== selectedId) {
         // First message of a DM somebody just opened with us: the room isn't in
         // our list yet, so patching `rooms` would silently drop it. Pull the
@@ -938,6 +945,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       }));
     };
     const onError = (data: { code?: string; message?: string }) => {
+      // Stale-room-key rejections are retried silently by sendWithE2ee.
+      if (data?.code?.startsWith("E2EE_")) return;
       if (data?.code) show(data.message || "Real-time xatolik", "error");
     };
     const onMessageRead = (data: { roomId: string; userId: string; lastReadSeq?: number }) => {
@@ -952,12 +961,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
      * edit, a delete or an un-react was visible only to whoever did it until
      * the other side reloaded. The server now emits for all of them.
      */
-    const onMessageUpdated = (data: { roomId: string; messageId: string; content: string; editedAt: string }) => {
+    const onMessageUpdated = async (data: { roomId: string; messageId: string; senderId: string; content: string | null; e2ee?: E2eeEnvelope | null; editedAt: string }) => {
       if (data.roomId !== selectedId) return;
+      const content = data.e2ee
+        ? (await decryptEnvelope(data.roomId, data.senderId, data.e2ee)) ?? UNDECRYPTABLE_TEXT
+        : data.content ?? "";
       setMessages((current) => current.map((item) => item.id === data.messageId
-        ? { ...item, content: data.content, isEdited: true, editedAt: data.editedAt }
+        ? { ...item, content, isEdited: true, editedAt: data.editedAt }
         : item));
     };
+    // Another member device published a new room key.
+    const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
     const onMessageDeleted = (data: { roomId: string; messageId: string }) => {
       if (data.roomId !== selectedId) return;
       setMessages((current) => current.filter((item) => item.id !== data.messageId));
@@ -966,6 +980,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     // reload the room list so myRole, the composer and the settings menu match
     // what the server now believes.
     const onRoomChanged = (data: { roomId: string }) => {
+      // Members (and so the devices a room key must reach) may have changed.
+      if (data.roomId) invalidateRoom(data.roomId);
       if (data.roomId && data.roomId !== selectedId && !rooms.some((room) => room.id === data.roomId)) {
         void loadRooms();
         return;
@@ -993,6 +1009,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("room_settings_updated", onRoomChanged);
     socket.on("room_created", onRoomCreated);
     socket.on("message_views_updated", onViewsUpdated);
+    socket.on("room_key_rotated", onRoomKeyRotated);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -1008,6 +1025,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("room_settings_updated", onRoomChanged);
       socket.off("room_created", onRoomCreated);
       socket.off("message_views_updated", onViewsUpdated);
+      socket.off("room_key_rotated", onRoomKeyRotated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -1195,7 +1213,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     if (editing) {
       try {
-        const updated = await api.chat.editMessage(editing.id, content);
+        const updated = await api.chat.editMessage(editing.id, content, editing.roomId);
         setMessages((current) => current.map((item) => item.id === editing.id ? updated : item));
         setDraft("");
         setEditing(null);
@@ -1231,21 +1249,24 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.emit("typing", { roomId: selectedRoom.id, typing: false });
     try {
       if (socket.connected) {
-        await new Promise<void>((resolve, reject) => {
-          socket.timeout(9000).emit("send_message", {
-            roomId: selectedRoom.id,
-            text: content,
-            clientMessageId,
-            attachments,
-            replyToId: replyingTo?.id
-          }, (error: Error | null) => error ? reject(error) : resolve());
-        });
+        // DMs and private rooms: encrypted on this device (lib/e2ee.ts), and
+        // re-keyed + re-encrypted if the server says the room key is stale.
+        await sendWithE2ee(selectedRoom.id, content, (body) => emitWithAck("send_message", {
+          roomId: selectedRoom.id,
+          text: body.content,
+          e2ee: body.e2ee,
+          clientMessageId,
+          attachments,
+          replyToId: replyingTo?.id
+        }));
       } else {
         const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id, attachments);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       }
-    } catch {
+    } catch (socketError) {
       try {
+        // A refusal (ban, slow mode, …) would be refused over REST too.
+        if (isServerRejection(socketError)) throw socketError;
         const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id, attachments);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
@@ -1674,7 +1695,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setInvitingWorkspace(true);
     const data = new FormData(event.currentTarget);
     try {
-      await api.workspaces.invite(workspace.id, String(data.get("email") || "").trim(), String(data.get("role") || "junior"));
+      await api.groups.invite(workspace.id, String(data.get("email") || "").trim(), String(data.get("role") || "junior"));
       setWorkspaceInviteOpen(false);
       show(t("chat.workspaceInviteSent"));
     } catch (error) {
@@ -2312,7 +2333,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 setDetailsTab(selectedRoom.type === "direct" ? "media" : "members");
                 setDetailMemberSearch("");
                 setDetailsOpen(true);
-              }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}</h2>
+              }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}{selectedRoom.e2ee &&
+                <Lock className="e2ee-badge" size={13} aria-label={t("chat.e2eeBadge")}><title>{t("chat.e2eeBadge")}</title></Lock>}</h2>
                 <p>{typingUsers.length ? t("chat.typingStatus") : selectedRoom.type === "direct" ? formatPresenceLabel(peerPresence, t) : t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</p>
               </button>
               <div className="conversation-tools">

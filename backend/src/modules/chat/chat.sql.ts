@@ -44,7 +44,7 @@ export const CHAT_MESSAGE_COLUMNS_SQL = `
   source_channel_message_id AS "sourceChannelMessageId",
   discussion_root_message_id AS "discussionRootMessageId",
   is_pinned AS "isPinned", view_count AS "viewCount",
-  is_thread_reply AS "isThreadReply"
+  is_thread_reply AS "isThreadReply", is_e2ee AS "isE2ee"
 `;
 
 export const CHAT_REACTION_COLUMNS_SQL = `

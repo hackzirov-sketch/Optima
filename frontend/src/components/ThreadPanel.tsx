@@ -1,7 +1,8 @@
 import { LoaderCircle, MessagesSquare, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { getSocket } from "../lib/socket";
+import { emitWithAck, getSocket, isServerRejection } from "../lib/socket";
+import { decryptMessage, sendWithE2ee } from "../lib/e2ee";
 import type { ChatMessage } from "../types";
 import { Avatar } from "./ui";
 
@@ -43,9 +44,10 @@ export function ThreadPanel({
 
   useEffect(() => {
     const socket = getSocket();
-    function handleThreadReply(payload: { threadRootId: string; threadReplyCount: number | null; message: ChatMessage }) {
+    async function handleThreadReply(payload: { threadRootId: string; threadReplyCount: number | null; message: ChatMessage }) {
       if (payload.threadRootId !== root.id) return;
-      setReplies((current) => current.some((item) => item.id === payload.message.id) ? current : [...current, payload.message]);
+      const message = await decryptMessage(payload.message);
+      setReplies((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
       if (payload.threadReplyCount != null) onReplyCountChange(root.id, payload.threadReplyCount);
     }
     socket.on("thread_reply", handleThreadReply);
@@ -63,15 +65,22 @@ export function ThreadPanel({
     setDraft("");
     const clientMessageId = crypto.randomUUID();
     try {
-      const socket = getSocket();
-      if (socket.connected) {
-        await new Promise<void>((resolve, reject) =>
-          socket.timeout(9000).emit("send_thread_reply", { threadRootId: root.id, text: content, clientMessageId }, (error: Error | null) => error ? reject(error) : resolve()),
-        );
-      } else {
-        const saved = await api.chat.sendThreadReply(root.id, content, clientMessageId);
-        setReplies((current) => [...current, saved]);
+      const viaRest = async () => {
+        const saved = await api.chat.sendThreadReply(root.id, content, clientMessageId, root.roomId);
+        setReplies((current) => current.some((item) => item.id === saved.id) ? current : [...current, saved]);
         onReplyCountChange(root.id, (root.threadReplyCount ?? 0) + replies.length + 1);
+      };
+      if (getSocket().connected) {
+        try {
+          // Encrypted on this device for E2EE rooms; re-keyed and retried if stale.
+          await sendWithE2ee(root.roomId, content, (body) =>
+            emitWithAck("send_thread_reply", { threadRootId: root.id, text: body.content, e2ee: body.e2ee, clientMessageId }));
+        } catch (error) {
+          if (isServerRejection(error)) throw error;
+          await viaRest();
+        }
+      } else {
+        await viaRest();
       }
     } catch {
       setDraft(content);

@@ -19,6 +19,7 @@ import type {
   GroupMember,
 } from "../types";
 import { session } from "./session";
+import { decryptEnvelope, decryptMessage, decryptMessages, sendWithE2ee, UNDECRYPTABLE_TEXT } from "./e2ee";
 
 const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
 export type OAuthProvider = "google" | "github";
@@ -145,6 +146,16 @@ export async function refreshSession(): Promise<RefreshResult> {
     refreshPromise = null;
   });
   return refreshPromise;
+}
+
+/** Sidebar previews of E2EE rooms arrive as ciphertext; open them here. */
+async function decryptRoomPreviews(rooms: ChatRoom[]): Promise<ChatRoom[]> {
+  return Promise.all(rooms.map(async (room) => {
+    const last = room.lastMessage;
+    if (!last?.e2ee) return room;
+    const text = await decryptEnvelope(room.id, last.senderId, last.e2ee);
+    return { ...room, lastMessage: { ...last, content: text ?? UNDECRYPTABLE_TEXT } };
+  }));
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -335,7 +346,7 @@ export const api = {
     // Chat membership is its own permission, so both of these are
     // group-less: the JWT identifies the user and that's the whole check.
     // A DM, group or channel belongs to its members, not to an organisation.
-    rooms: () => apiFetch<ChatRoom[]>("/chat/rooms"),
+    rooms: () => apiFetch<ChatRoom[]>("/chat/rooms").then(decryptRoomPreviews),
     // Public channels/groups the user hasn't joined. Platform-wide, not
     // group-scoped: a channel opened from chat belongs to no group.
     discover: (query: string) =>
@@ -357,20 +368,26 @@ export const api = {
         body: JSON.stringify(data),
       }),
     messages: (roomId: string, cursor?: number) =>
-      apiFetch<{ data: ChatMessage[]; total?: number }>(`/chat/rooms/${roomId}/messages?limit=80${cursor ? `&cursor=${cursor}` : ""}`),
+      apiFetch<{ data: ChatMessage[]; total?: number }>(`/chat/rooms/${roomId}/messages?limit=80${cursor ? `&cursor=${cursor}` : ""}`)
+        .then(async (result) => ({ ...result, data: await decryptMessages(result.data) })),
+    // Text is encrypted on this device for DMs and private rooms (lib/e2ee.ts);
+    // public rooms send plaintext, which the server encrypts at rest.
     send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments?: Array<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>) =>
-      apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
+      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, clientMessageId, replyToId, attachments }),
-      }),
-    editMessage: (messageId: string, content: string) =>
-      apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
+        body: JSON.stringify({ ...body, clientMessageId, replyToId, attachments }),
+      })).then(decryptMessage),
+    editMessage: (messageId: string, content: string, roomId: string) =>
+      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify(body) }))
+        .then(decryptMessage),
     deleteMessage: (messageId: string) =>
       apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
     getThread: (messageId: string) =>
-      apiFetch<{ root: ChatMessage; replies: ChatMessage[] }>(`/chat/messages/${messageId}/thread`),
-    sendThreadReply: (messageId: string, content: string, clientMessageId: string) =>
-      apiFetch<ChatMessage>(`/chat/messages/${messageId}/thread`, { method: "POST", body: JSON.stringify({ content, clientMessageId }) }),
+      apiFetch<{ root: ChatMessage; replies: ChatMessage[] }>(`/chat/messages/${messageId}/thread`)
+        .then(async (result) => ({ root: await decryptMessage(result.root), replies: await decryptMessages(result.replies) })),
+    sendThreadReply: (messageId: string, content: string, clientMessageId: string, roomId: string) =>
+      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}/thread`, { method: "POST", body: JSON.stringify({ ...body, clientMessageId }) }))
+        .then(decryptMessage),
     addReaction: (messageId: string, emoji: string) =>
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>
