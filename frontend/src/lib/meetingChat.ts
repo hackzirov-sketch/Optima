@@ -15,6 +15,9 @@ export function useMeetingChat(meetingId: string | null, selfId: string) {
   const ready = useRef(new WeakSet<RTCDataChannel>());
   const [messages, setMessages] = useState<MeetingChatMessage[]>([]);
   const [connected, setConnected] = useState(0);
+  // Set when meeting media runs through LiveKit: chat then rides the SFU's
+  // data channel instead of one RTCDataChannel per peer.
+  const external = useRef<((payload: string) => number) | null>(null);
   const recount = useCallback(() => setConnected([...channels.current.values()].filter(c => c.readyState === "open" && ready.current.has(c)).length), []);
   const attach = useCallback((peer: RTCPeerConnection, id: string) => {
     // Both updated clients reserve stream 42 before their existing SDP exchange.
@@ -39,11 +42,27 @@ export function useMeetingChat(meetingId: string | null, selfId: string) {
       channels.current.clear();
     };
   }, [meetingId]);
+  /** Switches chat to an external transport (or back to data channels with null). */
+  const setTransport = useCallback((send: ((payload: string) => number) | null, peers = 0) => {
+    external.current = send;
+    setConnected(send ? peers : 0);
+  }, []);
+  /** A message that arrived over the external transport. */
+  const receive = useCallback((senderId: string, raw: string) => {
+    const message = parseMeetingChat(raw, senderId);
+    if (!message) return;
+    setMessages(current => current.some(item => item.id === message.id && item.senderId === senderId) ? current : [...current.slice(-499), message]);
+  }, []);
   const send = useCallback((text: string) => {
     const body = text.trim();
     if (!body || body.length > 2000) return 0;
     const message = { id: crypto.randomUUID(), senderId: selfId, text: body, time: Date.now() };
     const payload = JSON.stringify({ type: "optima-chat-v1", id: message.id, text: body });
+    if (external.current) {
+      const reached = external.current(payload);
+      if (reached) setMessages(current => [...current.slice(-499), message]);
+      return reached;
+    }
     let sent = 0;
     channels.current.forEach(channel => {
       if (channel.readyState !== "open" || !ready.current.has(channel) || channel.bufferedAmount > 64000) return;
@@ -52,5 +71,5 @@ export function useMeetingChat(meetingId: string | null, selfId: string) {
     if (sent) setMessages(current => [...current.slice(-499), message]);
     return sent;
   }, [selfId]);
-  return { messages, connected, attach, send };
+  return { messages, connected, attach, send, setTransport, receive };
 }

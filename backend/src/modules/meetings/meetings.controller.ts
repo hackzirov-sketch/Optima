@@ -18,6 +18,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
+import { MeetingLiveKitService } from './services/meeting-livekit.service';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
@@ -40,6 +41,7 @@ import { Inject, forwardRef } from '@nestjs/common';
 export class MeetingsController {
   constructor(
     private readonly meetingsService: MeetingsService,
+    private readonly liveKit: MeetingLiveKitService,
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
   ) {}
@@ -79,6 +81,27 @@ export class MeetingsController {
   @ApiOperation({ summary: 'Create a standalone meeting' })
   create(@CurrentUser('id') userId: string, @Body() dto: CreateMeetingDto) {
     return this.meetingsService.create(null, userId, dto);
+  }
+
+  @Get('meetings/media-config')
+  @ApiOperation({
+    summary: 'Which media transport meetings use (decided before joining)',
+  })
+  mediaConfig() {
+    return { provider: this.liveKit.isEnabled() ? 'livekit' : 'p2p' };
+  }
+
+  @Post('meetings/:meetingId/media-session')
+  @ApiOperation({
+    summary:
+      'Media transport for a participant already in the meeting: a LiveKit token, or p2p when LiveKit is not configured',
+  })
+  @ApiParam({ name: 'meetingId', format: 'uuid' })
+  mediaSession(
+    @Param('meetingId', ParseUUIDPipe) meetingId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.liveKit.createSession(meetingId, userId);
   }
 
   @Get('meetings/ice-servers')

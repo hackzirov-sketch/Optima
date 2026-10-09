@@ -210,6 +210,18 @@ export class EnvironmentVariables {
   @IsOptional()
   CLOUDINARY_FOLDER?: string;
 
+  @IsString()
+  @IsOptional()
+  LIVEKIT_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  LIVEKIT_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  LIVEKIT_API_SECRET?: string;
+
   @IsIn(['cloudinary', 'r2'])
   @IsOptional()
   STORAGE_PROVIDER?: string;

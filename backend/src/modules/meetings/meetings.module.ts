@@ -16,6 +16,7 @@ import { MeetingAccessService } from './services/meeting-access.service';
 import { MeetingRecordingService } from './services/meeting-recording.service';
 import { MeetingJoinRequestService } from './services/meeting-join-request.service';
 import { MeetingFilesService } from './services/meeting-files.service';
+import { MeetingLiveKitService } from './services/meeting-livekit.service';
 import { MeetingRecordingProcessor } from './processors/meeting-recording.processor';
 import { MeetingLifecycleProcessor } from './processors/meeting-lifecycle.processor';
 import { MeetingRetentionSweepService } from './services/meeting-retention-sweep.service';
@@ -45,6 +46,7 @@ import { MeetingRetentionSweepService } from './services/meeting-retention-sweep
     MeetingRecordingService,
     MeetingJoinRequestService,
     MeetingFilesService,
+    MeetingLiveKitService,
     MeetingRecordingProcessor,
     MeetingLifecycleProcessor,
     MeetingRetentionSweepService,

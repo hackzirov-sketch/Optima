@@ -535,6 +535,11 @@ export const api = {
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
+    /** Which media transport meetings use: LiveKit (SFU) when the server has it configured. */
+    mediaConfig: () => apiFetch<{ provider: "livekit" | "p2p" }>("/meetings/media-config"),
+    /** LiveKit token for a participant already in the meeting (after the socket join). */
+    mediaSession: (meetingId: string) =>
+      apiFetch<{ provider: "livekit"; url: string; token: string; room: string } | { provider: "p2p" }>(`/meetings/${meetingId}/media-session`, { method: "POST" }),
     list: (groupId: string) => apiFetch<Meeting[]>(`/groups/${groupId}/meetings`),
     create: (groupId: string, data: Record<string, unknown>) =>
       apiFetch<Meeting>(`/groups/${groupId}/meetings`, {

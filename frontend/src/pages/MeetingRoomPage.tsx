@@ -6,6 +6,7 @@ import { Avatar, Button } from "../components/ui";
 import { DirectCallSurface } from "../components/DirectCallSurface";
 import { MeetingChat } from "../components/MeetingChat";
 import { useMeetingChat } from "../lib/meetingChat";
+import { LiveKitMeeting } from "../lib/liveKitMeeting";
 import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -281,6 +282,16 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
    * — after a reconnect — only once our own stale connections are gone too.
    */
   const joinedSocketId = useRef<string | null>(null);
+  /**
+   * Media transport, decided on entering: "livekit" (SFU) when the server has
+   * it configured, the peer-to-peer mesh otherwise. With LiveKit the socket
+   * still carries the roster, hands, reactions and toggles; only audio/video
+   * and in-call chat move to the SFU, and none of the offer/answer/ICE
+   * handling below runs.
+   */
+  const mediaProvider = useRef<"livekit" | "p2p">("p2p");
+  const liveKit = useRef<LiveKitMeeting | null>(null);
+  const liveKitStarting = useRef(false);
 
   /**
    * Perfect negotiation's tie-breaker. The same comparison already decides who
@@ -597,6 +608,51 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     }
   }
 
+  const { receive: receiveMeetingChat, setTransport: setMeetingChatTransport } = meetingChat;
+  /**
+   * Connects to the meeting's LiveKit room once the socket join has been
+   * accepted (the token endpoint only serves participants already in).
+   */
+  const startLiveKit = useCallback(async () => {
+    if (!meetingId || liveKit.current || liveKitStarting.current) return;
+    liveKitStarting.current = true;
+    try {
+      const session = await api.meetings.mediaSession(meetingId);
+      if (session.provider !== "livekit") {
+        mediaProvider.current = "p2p";
+        return;
+      }
+      const session_ = new LiveKitMeeting({
+        onRemote: (userId, stream, media) => {
+          setRemoteStreams((current) => {
+            const next = { ...current };
+            if (stream) next[userId] = stream; else delete next[userId];
+            return next;
+          });
+          setRemoteMedia((current) => ({ ...current, [userId]: media }));
+          // The speaking indicator's analyser is bound to one audio track; let
+          // it rebind to whatever this user publishes now.
+          const node = audioAnalysers.current.get(userId);
+          if (node) { node.ctx.close().catch(() => {}); audioAnalysers.current.delete(userId); }
+          setMeetingChatTransport((payload) => session_.sendChat(payload), session_.remoteCount);
+        },
+        onState: (state) => {
+          setPeerStates(state === "connected" ? { sfu: "connected" } : state === "disconnected" ? { sfu: "failed" } : { sfu: "connecting" });
+          setMeetingChatTransport((payload) => session_.sendChat(payload), session_.remoteCount);
+        },
+        onData: receiveMeetingChat,
+      });
+      liveKit.current = session_;
+      await session_.connect(session.url, session.token, currentStream.current?.getTracks() ?? []);
+      if (screenTrack.current) await session_.publish(screenTrack.current, true);
+    } catch {
+      show(t("meetingRoom.mediaFailed"), "error");
+      setPeerStates({ sfu: "failed" });
+    } finally {
+      liveKitStarting.current = false;
+    }
+  }, [meetingId, receiveMeetingChat, setMeetingChatTransport, show, t]);
+
   const closePeer = useCallback((userId: string) => {
     const timer = disconnectTimers.current.get(userId);
     if (timer) window.clearTimeout(timer);
@@ -732,6 +788,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         for (const entry of participants ?? []) next[entry.userId] = entry.user;
         return next;
       });
+      if (mediaProvider.current === "livekit") {
+        void startLiveKit();
+        return;
+      }
       for (const targetUserId of userIds) {
         await sendSecurityKey(targetUserId);
         if (user?.id && !isPolite(targetUserId)) await negotiate(targetUserId);
@@ -739,6 +799,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
     const onUserJoined = ({ userId: joinedUserId, user: joinedUser }: { userId: string; user?: MeetingUser | null }) => {
       setRoster((current) => ({ ...current, [joinedUserId]: joinedUser ?? current[joinedUserId] ?? null }));
+      if (mediaProvider.current === "livekit") return;
       // A `user-joined` event always means a brand-new socket/session for
       // this user — either a genuinely new participant, or someone who
       // refreshed/reconnected. Either way, any RTCPeerConnection we already
@@ -767,6 +828,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
      * lets setRemoteDescription roll its offer back and answers.
      */
     const onOffer = async ({ fromUserId, sdp }: { fromUserId: string; sdp: RTCSessionDescriptionInit }) => {
+      if (mediaProvider.current === "livekit") return;
       const peer = createPeer(fromUserId);
       const collision = makingOffer.current.has(fromUserId) || peer.signalingState !== "stable";
       if (collision && !isPolite(fromUserId)) return;
@@ -889,7 +951,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:file-shared", onFileShared);
       socket.off("meeting:error", onMeetingError);
     };
-  }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, show, user?.id]);
+  }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, startLiveKit, show, user?.id]);
 
   // A reload mid-call re-enters an already-populated room: the socket only
   // reports who joins *after* this point, so the people already present come
@@ -926,6 +988,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     } catch {
       rtcConfig.current = RTC_CONFIG;
     }
+    mediaProvider.current = await api.meetings.mediaConfig().then((config) => config.provider, () => "p2p" as const);
     const tracks: MediaStreamTrack[] = [];
     let cameraReady = !camera;
     let microphoneReady = !microphone;
@@ -991,8 +1054,11 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           // Keep going — the others still get the new track.
         }
       }
+      void liveKit.current?.publish(track);
     } else {
       existing && (existing.enabled = enabled);
+      // Muting through LiveKit also stops the bytes and tells everyone else.
+      void liveKit.current?.setEnabled(kind, enabled);
     }
     if (kind === "audio") setMicrophone(enabled); else setCamera(enabled);
     getSocket().emit("meeting:toggle", { meetingId, kind, enabled });
@@ -1018,6 +1084,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       }
     }
     screenSenders.current.clear();
+    if (liveKit.current && sharedTrack) await liveKit.current.unpublish(sharedTrack);
     sharedTrack?.stop();
     screenTrack.current = null;
     setScreenStream(undefined);
@@ -1061,6 +1128,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         // Keep sharing with everyone else.
       }
     }
+    if (liveKit.current) await liveKit.current.publish(track, true).catch(() => undefined);
     setScreenSharing(true);
     getSocket().emit("meeting:toggle", { meetingId, kind: "screen", enabled: true });
     track.onended = () => void stopScreenShare();
@@ -1069,6 +1137,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const cleanup = useCallback(() => {
     getSocket().emit("meeting:leave", { meetingId });
     joinedSocketId.current = null;
+    void liveKit.current?.disconnect();
+    liveKit.current = null;
+    setMeetingChatTransport(null);
     peers.current.forEach((peer) => peer.close());
     peers.current.clear();
     makingOffer.current.clear();
@@ -1089,7 +1160,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       current?.getTracks().forEach((track) => track.stop());
       return undefined;
     });
-  }, [meetingId]);
+  }, [meetingId, setMeetingChatTransport]);
 
   function leave() {
     cleanup();
