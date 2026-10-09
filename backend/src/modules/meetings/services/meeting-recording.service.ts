@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -108,6 +109,29 @@ export class MeetingRecordingService {
     } = {},
   ) {
     if (userId) await this.assertCanRecord(meetingId, userId);
+
+    // The upload itself happened browser → storage; only accept a key we
+    // minted for this meeting (see presignRecordingUpload), at our storage.
+    if (opts.storageKey || opts.storageUrl) {
+      if (!opts.storageKey || !opts.storageUrl) {
+        throw new BadRequestException({
+          code: ErrorCode.VALIDATION_ERROR,
+          message: 'storageKey and storageUrl go together',
+        });
+      }
+      const verified = await this.storageService.verifyDirectUpload(
+        'meeting-recordings',
+        meetingId,
+        opts.storageKey,
+        opts.storageUrl,
+        'video/webm',
+      );
+      opts = {
+        ...opts,
+        storageUrl: verified.storageUrl,
+        fileSize: verified.fileSize ?? opts.fileSize,
+      };
+    }
 
     const rows = await this.dataSource.query(
       `SELECT ${RECORDING_COLUMNS_SQL} FROM meeting_recordings WHERE meeting_id = $1 AND status = 'recording'`,

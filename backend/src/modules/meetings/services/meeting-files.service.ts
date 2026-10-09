@@ -60,18 +60,15 @@ export class MeetingFilesService {
     },
   ) {
     await this.assertMeetingParticipant(meetingId, userId);
-    if (!file.storageKey.startsWith(`meeting-files/${userId}/`)) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Invalid meeting file key',
-      });
-    }
-    if (!file.storageUrl.endsWith(`/${file.storageKey}`)) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_ERROR,
-        message: 'Invalid meeting file URL',
-      });
-    }
+    // Key minted for this user, URL pointing at it, and (on Cloudinary) the
+    // stored asset really exists within the size limit.
+    const verified = await this.storageService.verifyDirectUpload(
+      'meeting-files',
+      userId,
+      file.storageKey,
+      file.storageUrl,
+      file.mimeType,
+    );
     const rows = await this.dataSource.query(
       `INSERT INTO meeting_shared_files
          (meeting_id, shared_by, file_name, mime_type, file_size, storage_key, storage_url)
@@ -83,9 +80,9 @@ export class MeetingFilesService {
         userId,
         file.fileName,
         file.mimeType,
-        file.fileSize,
+        verified.fileSize ?? file.fileSize,
         file.storageKey,
-        file.storageUrl,
+        verified.storageUrl,
       ],
     );
     return rows[0];

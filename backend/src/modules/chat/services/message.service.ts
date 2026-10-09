@@ -34,9 +34,9 @@ import {
   CHAT_REACTION_COLUMNS_SQL,
   MESSAGE_ATTACHMENT_COLUMNS_SQL,
 } from '../chat.sql';
-import { extractMentions } from '../mention.util';
+import { extractMentions, MAX_MENTIONS_PER_MESSAGE } from '../mention.util';
 import { ChatE2eeService } from '../e2ee/e2ee.service';
-import { E2eeEnvelope } from '../e2ee/e2ee.util';
+import { E2eeEnvelope, normalizeMentions } from '../e2ee/e2ee.util';
 
 /**
  * Telegram's album size. The cap exists on the server as well as the composer
@@ -593,6 +593,7 @@ export class ChatMessageService {
       userId,
       dto.e2ee,
       !!dto.content?.trim(),
+      (dto.attachments ?? []).map((a) => a.mimeType),
     );
     if (!dto.content?.trim() && !hasAttachments && !envelope) {
       throw new BadRequestException({
@@ -779,7 +780,11 @@ export class ChatMessageService {
           // the only copy of the message and puts nothing but public usernames
           // on the queue. They are unverified strings at this point — the
           // worker decides which correspond to real members of this room.
-          mentions: extractMentions(dto.content),
+          // E2EE text can't be parsed here; the sender's device lists the
+          // handles instead (the worker still checks they're room members).
+          mentions: envelope
+            ? normalizeMentions(dto.mentions, MAX_MENTIONS_PER_MESSAGE)
+            : extractMentions(dto.content),
         },
         { jobId: saved.id },
       ),

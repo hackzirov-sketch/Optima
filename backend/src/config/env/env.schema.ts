@@ -1,6 +1,7 @@
 import { DEFAULT_POOL_SIZE } from '../database.config';
 import {
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -208,6 +209,10 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CLOUDINARY_FOLDER?: string;
+
+  @IsIn(['cloudinary', 'r2'])
+  @IsOptional()
+  STORAGE_PROVIDER?: string;
 
   @IsString()
   @IsOptional()

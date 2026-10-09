@@ -669,6 +669,8 @@
     "replyingLabel": "Javob berish",
     "mediaMessageFallback": "Media xabar",
     "e2eeBadge": "Uchdan-uchga shifrlangan — bu xabarlarni faqat a’zolarning qurilmalari o‘qiy oladi",
+    "safetyCodeTitle": "Xavfsizlik kodi",
+    "safetyCodeDesc": "Barcha a’zolarda bir xil kod chiqadi. Sizdagi kod boshqalarnikidan farq qilsa, bu chatda begona kalit bor. Kimdir qurilma qo‘shsa yoki o‘chirsa, kod o‘zgaradi.",
     "cancelAria": "Bekor qilish",
     "chooseEmojiAria": "Emoji tanlash",
     "quickEmojisAria": "Tezkor emojilar",

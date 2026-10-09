@@ -109,6 +109,8 @@ export interface SendMessageWsDto {
   }>;
   /** Ciphertext for E2EE rooms (DMs, private groups/channels) — replaces `text` there. */
   e2ee?: unknown;
+  /** E2EE rooms: @handles in the encrypted text (validated server-side). */
+  mentions?: unknown;
 }
 
 export interface TypingDto {
@@ -751,6 +753,7 @@ export class EventsGateway
         clientMessageId: data.clientMessageId, // idempotency: WS reconnect'da duplicate yo'q
         attachments: data.attachments,
         e2ee: data.e2ee as any,
+        mentions: data.mentions as any,
       });
     } catch (err) {
       // ForbiddenException → emit error back to sender only
@@ -857,6 +860,7 @@ export class EventsGateway
           clientMessageId: data.clientMessageId,
           attachments: data.attachments,
           e2ee: data.e2ee as any,
+          mentions: data.mentions as any,
         },
       );
     } catch (err) {

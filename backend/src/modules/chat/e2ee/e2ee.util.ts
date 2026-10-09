@@ -24,7 +24,8 @@ export function isE2eeRoom(room: { type: string; scope: string }): boolean {
  *  - `iv`/`ct` — AES-256-GCM nonce and ciphertext+tag, base64
  */
 export interface E2eeEnvelope {
-  v: 1;
+  /** 1: the plaintext is the message text. 2: it is JSON `{ t, f }` — text plus per-file keys. */
+  v: 1 | 2;
   epoch: number;
   device: string;
   iv: string;
@@ -42,8 +43,34 @@ export const E2EE_ERRORS = {
   DEVICE_KEY_MISMATCH: 'E2EE_DEVICE_KEY_MISMATCH',
 } as const;
 
-/** Upper bound on an envelope's ciphertext (base64). 1500 chars of UTF-8 is at most 6000 bytes. */
-export const E2EE_MAX_CIPHERTEXT_LENGTH = 12_000;
+/**
+ * MIME type every attachment in an E2EE room is stored under. The file was
+ * encrypted on the sender's device with its own random key, which travels
+ * inside the message envelope (v2) together with the real name, type and size
+ * — the server holds an opaque blob it can neither open nor classify.
+ */
+export const E2EE_ATTACHMENT_MIME = 'application/vnd.optima.e2ee';
+
+const USERNAME = /^[a-zA-Z0-9_-]{3,50}$/;
+
+/**
+ * @handles a client declares for an E2EE message. The server can't parse
+ * ciphertext, so mentions there are the sender's claim — the worker still only
+ * notifies handles that belong to members of the room.
+ */
+export function normalizeMentions(raw: unknown, max: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || !USERNAME.test(entry)) continue;
+    seen.add(entry.toLowerCase());
+    if (seen.size >= max) break;
+  }
+  return [...seen];
+}
+
+/** Upper bound on an envelope's ciphertext (base64): 1500 chars of text plus up to 10 file keys. */
+export const E2EE_MAX_CIPHERTEXT_LENGTH = 24_000;
 
 /** How many active devices a user may have; registering more retires the least recently seen. */
 export const E2EE_MAX_DEVICES_PER_USER = 10;
@@ -59,7 +86,7 @@ const DEVICE_ID = /^[A-Za-z0-9_-]{8,64}$/;
 export function normalizeEnvelope(raw: unknown): E2eeEnvelope | null {
   if (!raw || typeof raw !== 'object') return null;
   const e = raw as Record<string, unknown>;
-  if (e.v !== 1) return null;
+  if (e.v !== 1 && e.v !== 2) return null;
   if (!Number.isInteger(e.epoch) || (e.epoch as number) < 1) return null;
   if (typeof e.device !== 'string' || !DEVICE_ID.test(e.device)) return null;
   if (typeof e.iv !== 'string' || e.iv.length > 32 || !BASE64.test(e.iv))
@@ -72,7 +99,7 @@ export function normalizeEnvelope(raw: unknown): E2eeEnvelope | null {
   )
     return null;
   return {
-    v: 1,
+    v: e.v,
     epoch: e.epoch as number,
     device: e.device,
     iv: e.iv,

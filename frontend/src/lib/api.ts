@@ -19,7 +19,7 @@ import type {
   GroupMember,
 } from "../types";
 import { session } from "./session";
-import { decryptEnvelope, decryptMessage, decryptMessages, sendWithE2ee, UNDECRYPTABLE_TEXT } from "./e2ee";
+import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
 export type OAuthProvider = "google" | "github";
@@ -146,6 +146,72 @@ export async function refreshSession(): Promise<RefreshResult> {
     refreshPromise = null;
   });
   return refreshPromise;
+}
+
+/** What the API hands back for a browser → storage upload (StorageService.getPresignedUploadUrl). */
+interface DirectUploadTicket {
+  provider?: "r2" | "cloudinary";
+  method?: "PUT" | "POST";
+  uploadUrl: string;
+  fields?: Record<string, string>;
+  storageKey: string;
+  storageUrl: string;
+}
+
+/** Cloudinary takes big files in pieces; each must be ≥5 MB except the last. */
+const CLOUDINARY_CHUNK_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Uploads `body` with a ticket from a presign endpoint and returns where it
+ * ended up. R2: one presigned PUT. Cloudinary: signed multipart POST, chunked
+ * for large files, and the final URL is whatever Cloudinary answers with.
+ */
+async function directUpload(ticket: DirectUploadTicket, body: Blob, mimeType: string, failMessage: string) {
+  if (ticket.provider !== "cloudinary") {
+    const uploaded = await fetch(ticket.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body });
+    if (!uploaded.ok) throw new ApiError(failMessage, uploaded.status);
+    return { storageKey: ticket.storageKey, storageUrl: ticket.storageUrl };
+  }
+
+  const uploadId = crypto.randomUUID();
+  const total = body.size;
+  let result: { public_id?: string; secure_url?: string } | null = null;
+  for (let start = 0; start < total || (total === 0 && start === 0); start += CLOUDINARY_CHUNK_BYTES) {
+    const end = Math.min(start + CLOUDINARY_CHUNK_BYTES, total);
+    const form = new FormData();
+    for (const [name, value] of Object.entries(ticket.fields ?? {})) form.append(name, value);
+    form.append("file", body.slice(start, end), "upload");
+    const chunked = total > CLOUDINARY_CHUNK_BYTES;
+    const response = await fetch(ticket.uploadUrl, {
+      method: "POST",
+      headers: chunked ? { "X-Unique-Upload-Id": uploadId, "Content-Range": `bytes ${start}-${end - 1}/${total}` } : undefined,
+      body: form,
+    });
+    if (!response.ok) throw new ApiError(failMessage, response.status);
+    result = await response.json().catch(() => null);
+    if (total === 0) break;
+  }
+  if (!result?.secure_url) throw new ApiError(failMessage, 502);
+  return { storageKey: ticket.storageKey, storageUrl: result.secure_url };
+}
+
+type StoredUpload = { storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string };
+
+/**
+ * Chat attachment upload. In E2EE chats the bytes are encrypted on this
+ * device first and storage receives an opaque blob; the returned `secret`
+ * (key, real name/type/size) is sent only inside the encrypted message.
+ */
+async function uploadChatData(roomId: string, data: Blob, name: string, plainPath: "audio" | "file"): Promise<OutgoingAttachment> {
+  const body = new FormData();
+  if (await isRoomE2ee(roomId)) {
+    const { blob, secret } = await encryptFile(data, name);
+    body.append("file", blob, "encrypted.bin");
+    const stored = await apiFetch<StoredUpload>(`/chat/rooms/${roomId}/attachments/file`, { method: "POST", body });
+    return { ...stored, secret };
+  }
+  body.append("file", data, name);
+  return apiFetch<StoredUpload>(`/chat/rooms/${roomId}/attachments/${plainPath}`, { method: "POST", body });
 }
 
 /** Sidebar previews of E2EE rooms arrive as ciphertext; open them here. */
@@ -372,22 +438,27 @@ export const api = {
         .then(async (result) => ({ ...result, data: await decryptMessages(result.data) })),
     // Text is encrypted on this device for DMs and private rooms (lib/e2ee.ts);
     // public rooms send plaintext, which the server encrypts at rest.
-    send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments?: Array<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>) =>
+    send: (roomId: string, content: string, clientMessageId: string, replyToId?: string, attachments: OutgoingAttachment[] = []) =>
       sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ ...body, clientMessageId, replyToId, attachments }),
-      })).then(decryptMessage),
-    editMessage: (messageId: string, content: string, roomId: string) =>
-      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}`, { method: "PATCH", body: JSON.stringify(body) }))
-        .then(decryptMessage),
+        body: JSON.stringify({ ...body, clientMessageId, replyToId }),
+      }), attachments).then(decryptMessage),
+    /** `attachments` keeps an E2EE message's file keys in the re-encrypted envelope. */
+    editMessage: (messageId: string, content: string, roomId: string, attachments: OutgoingAttachment[] = []) =>
+      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: body.content, e2ee: body.e2ee }),
+      }), attachments).then(decryptMessage),
     deleteMessage: (messageId: string) =>
       apiFetch<void>(`/chat/messages/${messageId}`, { method: "DELETE" }),
     getThread: (messageId: string) =>
       apiFetch<{ root: ChatMessage; replies: ChatMessage[] }>(`/chat/messages/${messageId}/thread`)
         .then(async (result) => ({ root: await decryptMessage(result.root), replies: await decryptMessages(result.replies) })),
     sendThreadReply: (messageId: string, content: string, clientMessageId: string, roomId: string) =>
-      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}/thread`, { method: "POST", body: JSON.stringify({ ...body, clientMessageId }) }))
-        .then(decryptMessage),
+      sendWithE2ee(roomId, content, (body) => apiFetch<ChatMessage>(`/chat/messages/${messageId}/thread`, {
+        method: "POST",
+        body: JSON.stringify({ content: body.content, e2ee: body.e2ee, mentions: body.mentions, clientMessageId }),
+      })).then(decryptMessage),
     addReaction: (messageId: string, emoji: string) =>
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>
@@ -397,11 +468,9 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ fileName: file.name, mimeType: file.type || "application/octet-stream", fileSize: file.size }),
       }),
-    uploadAudio: (roomId: string, blob: Blob) => {
-      const body = new FormData();
-      body.append("file", blob, `voice-${Date.now()}.webm`);
-      return apiFetch<{ storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string }>(`/chat/rooms/${roomId}/attachments/audio`, { method: "POST", body });
-    },
+    uploadAudio: (roomId: string, blob: Blob) => uploadChatData(roomId, blob, `voice-${Date.now()}.webm`, "audio"),
+    /** A file for a chat message (encrypted on-device in E2EE chats). Not for avatars/backgrounds — see uploadFile. */
+    uploadChatFile: (roomId: string, file: File) => uploadChatData(roomId, file, file.name, "file"),
     uploadFile: (roomId: string, file: File) => {
       const body = new FormData();
       body.append("file", file, file.name);
@@ -515,27 +584,24 @@ export const api = {
         apiFetch<MeetingRecording>(`/meetings/${meetingId}/recordings/stop`, { method: "POST", body: JSON.stringify(data || {}) }),
       upload: async (meetingId: string, recordingId: string, blob: Blob) => {
         const mimeType = blob.type || "video/webm";
-        const signed = await apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string }>(`/meetings/${meetingId}/recordings/${recordingId}/presign`, {
+        const signed = await apiFetch<DirectUploadTicket>(`/meetings/${meetingId}/recordings/${recordingId}/presign`, {
           method: "POST",
           body: JSON.stringify({ mimeType, fileSize: blob.size }),
         });
-        const uploaded = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: blob });
-        if (!uploaded.ok) throw new ApiError("Yozuv bulutga yuklanmadi", uploaded.status);
-        return signed;
+        return directUpload(signed, blob, mimeType, "Yozuv bulutga yuklanmadi");
       },
     },
     files: (meetingId: string) => apiFetch<MeetingFile[]>(`/meetings/${meetingId}/files`),
     shareFile: async (meetingId: string, file: File) => {
       const mimeType = file.type || "application/octet-stream";
-      const signed = await apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string }>(`/meetings/${meetingId}/files/presign`, {
+      const signed = await apiFetch<DirectUploadTicket>(`/meetings/${meetingId}/files/presign`, {
         method: "POST",
         body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size }),
       });
-      const uploaded = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
-      if (!uploaded.ok) throw new ApiError("Fayl bulutga yuklanmadi", uploaded.status);
+      const stored = await directUpload(signed, file, mimeType, "Fayl bulutga yuklanmadi");
       return apiFetch<MeetingFile>(`/meetings/${meetingId}/files`, {
         method: "POST",
-        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size, storageKey: signed.storageKey, storageUrl: signed.storageUrl }),
+        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size, storageKey: stored.storageKey, storageUrl: stored.storageUrl }),
       });
     },
   },

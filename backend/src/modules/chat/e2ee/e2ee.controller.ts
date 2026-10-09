@@ -11,7 +11,11 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { CreateRoomKeyEpochDto, RegisterDeviceDto } from '../dto/e2ee.dto';
+import {
+  CreateRoomKeyEpochDto,
+  RegisterDeviceDto,
+  ShareRoomKeysDto,
+} from '../dto/e2ee.dto';
 import { ChatE2eeService } from './e2ee.service';
 
 @ApiTags('Chat E2EE')
@@ -52,5 +56,17 @@ export class ChatE2eeController {
     @Body() dto: CreateRoomKeyEpochDto,
   ) {
     return this.e2ee.createEpoch(roomId, userId, dto);
+  }
+
+  @Post('rooms/:roomId/e2ee/keys/share')
+  @ApiOperation({
+    summary: "Re-wrap older room keys for a member's newly added device",
+  })
+  shareKeys(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: ShareRoomKeysDto,
+  ) {
+    return this.e2ee.shareKeys(roomId, userId, dto);
   }
 }

@@ -1,4 +1,4 @@
-import type { E2eeEnvelope } from "./lib/e2ee";
+import type { E2eeEnvelope, FileSecret } from "./lib/e2ee";
 export type UserTheme = "light" | "dark" | "system";
 export type UserLanguage = "uz" | "ru" | "en";
 
@@ -243,7 +243,8 @@ export interface ChatMessage {
   /** True when this device had no key for the message. */
   e2eeFailed?: boolean;
   contentType?: string;
-  attachments?: Array<{ id: string; fileName: string; fileSize: number; mimeType: string; url: string }>;
+  /** For E2EE files `url` is a decrypted blob: URL; `sourceUrl`/`secret` are what forwarding and edits need. */
+  attachments?: Array<{ id: string; fileName: string; fileSize: number; mimeType: string; url: string; sourceUrl?: string; secret?: FileSecret }>;
   sequence?: number;
   clientMessageId?: string;
   replyToId?: string | null;

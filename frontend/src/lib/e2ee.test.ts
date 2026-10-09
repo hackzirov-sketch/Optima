@@ -39,7 +39,7 @@ const server = {
   devices: new Map<string, { userId: string; deviceId: string; publicKey: unknown }>(),
   rooms: new Map<string, Room>(),
   epochs: new Map<string, { creatorUserId: string; creatorDeviceId: string }>(),
-  keys: new Map<string, { wrappedKey: string; iv: string }>(),
+  keys: new Map<string, { wrappedKey: string; iv: string; wrappedByUser?: string; wrappedByDevice?: string }>(),
   me: "",
 };
 const isE2ee = (room: Room) => room.type === "direct" || room.scope !== "public";
@@ -62,11 +62,18 @@ vi.mock("./api", () => ({
       server.devices.set(`${server.me}:${body.deviceId}`, { userId: server.me, deviceId: body.deviceId, publicKey: body.publicKey });
       return {};
     }
-    const match = path.match(/^\/chat\/rooms\/([^/]+)\/e2ee(\/epochs)?(?:\?deviceId=(.+))?$/);
+    const match = path.match(/^\/chat\/rooms\/([^/]+)\/e2ee(\/epochs|\/keys\/share)?(?:\?deviceId=(.+))?$/);
     if (!match) throw new Error(`unexpected ${path}`);
     const [, roomId, epochs, deviceId] = match;
     const room = server.rooms.get(roomId)!;
     if (!room.members.has(server.me)) throw new FakeApiError("not a member", 403, "NOT_ROOM_MEMBER");
+    if (epochs === "/keys/share") {
+      for (const k of body.keys) {
+        const userHad = [...server.keys.keys()].some((id) => id.startsWith(`${roomId}|${k.epoch}|${k.userId}:`));
+        if (userHad) server.keys.set(`${roomId}|${k.epoch}|${k.userId}:${k.deviceId}`, { ...k, wrappedByUser: server.me, wrappedByDevice: body.deviceId });
+      }
+      return { shared: body.keys.length };
+    }
     if (epochs) {
       if (body.epoch !== room.epoch + 1) throw new FakeApiError("stale", 409, "E2EE_STALE_EPOCH");
       server.epochs.set(`${roomId}|${body.epoch}`, { creatorUserId: server.me, creatorDeviceId: body.deviceId });
@@ -78,18 +85,29 @@ vi.mock("./api", () => ({
       .filter(([k]) => k.startsWith(`${roomId}|`) && k.endsWith(`|${server.me}:${decodeURIComponent(deviceId)}`))
       .map(([k, v]) => {
         const epoch = Number(k.split("|")[1]);
-        const creator = server.epochs.get(`${roomId}|${epoch}`)!;
+        const epochCreator = server.epochs.get(`${roomId}|${epoch}`)!;
+        const creator = v.wrappedByUser
+          ? { creatorUserId: v.wrappedByUser, creatorDeviceId: v.wrappedByDevice! }
+          : epochCreator;
         return {
-          epoch, ...v, ...creator,
+          epoch, wrappedKey: v.wrappedKey, iv: v.iv, ...creator,
           creatorPublicKey: server.devices.get(`${creator.creatorUserId}:${creator.creatorDeviceId}`)!.publicKey,
         };
       });
+    const missing = [];
+    for (let epoch = 1; epoch <= room.epoch; epoch++) {
+      for (const d of memberDevices(room)) {
+        const userHad = [...server.keys.keys()].some((id) => id.startsWith(`${roomId}|${epoch}|${d.userId}:`));
+        if (userHad && !server.keys.has(`${roomId}|${epoch}|${d.userId}:${d.deviceId}`)) missing.push({ epoch, ...d });
+      }
+    }
     const enabled = isE2ee(room);
     return {
       roomId, enabled, epoch: room.epoch,
       needsRotation: enabled && needsRotation(roomId, room),
       devices: enabled ? memberDevices(room) : [],
       keys: mine,
+      missing,
     };
   },
 }));
@@ -124,7 +142,7 @@ describe("chat end-to-end encryption", () => {
 
   it("leaves public channels as plaintext for server-side encryption", async () => {
     as("alice");
-    expect(await e2ee.prepareOutgoing("pub", "Hammaga salom")).toEqual({ content: "Hammaga salom" });
+    expect(await e2ee.prepareOutgoing("pub", "Hammaga salom")).toEqual({ content: "Hammaga salom", attachments: [] });
     expect(server.rooms.get("pub")!.epoch).toBe(0); // no keys generated
   });
 
@@ -150,5 +168,63 @@ describe("chat end-to-end encryption", () => {
     expect(server.keys.has(`grp|${after.epoch}|carol:${[...server.devices.values()].find((d) => d.userId === "carol")!.deviceId}`)).toBe(false);
     as("bob");
     expect(await e2ee.decryptEnvelope("grp", "alice", after)).toBe("carol ketdi");
+  });
+
+  it("encrypts files on the device and opens them for the recipient", async () => {
+    const fetched = new Map<string, Blob>();
+    vi.stubGlobal("fetch", async (url: string) => new Response(fetched.get(url)));
+    as("bob"); await e2ee.isRoomE2ee("dm");
+    as("alice");
+    const original = new Blob(["%PDF-1.7 maxfiy hujjat"], { type: "application/pdf" });
+    const { blob, secret } = await e2ee.encryptFile(original, "shartnoma.pdf");
+    expect(blob.type).toBe(e2ee.E2EE_FILE_MIME);
+    expect(await blob.text()).not.toContain("maxfiy");
+    fetched.set("https://cdn.example/enc.bin", blob);
+
+    const body = await e2ee.prepareOutgoing("dm", "@bob qara", [{
+      storageKey: "k", storageUrl: "https://cdn.example/enc.bin", fileName: "encrypted.bin", fileSize: blob.size, mimeType: e2ee.E2EE_FILE_MIME, secret,
+    }]);
+    expect(body.e2ee?.v).toBe(2);
+    expect(body.mentions).toEqual(["bob"]);
+    expect(JSON.stringify(body.attachments)).not.toContain(secret.k); // the key never leaves in clear
+
+    as("bob");
+    const opened = await e2ee.decryptMessage({
+      roomId: "dm", senderId: "alice", content: null as string | null, e2ee: body.e2ee,
+      attachments: [{ id: "a1", fileName: "encrypted.bin", fileSize: blob.size, mimeType: e2ee.E2EE_FILE_MIME, url: "https://cdn.example/enc.bin" }],
+    });
+    expect(opened.content).toBe("@bob qara");
+    const file = opened.attachments![0];
+    expect(file.fileName).toBe("shartnoma.pdf");
+    expect(file.mimeType).toBe("application/pdf");
+    expect(file.url.startsWith("blob:")).toBe(true);
+  });
+
+  it("gives a member's new device the history that member already had", async () => {
+    as("bob"); await e2ee.isRoomE2ee("dm");
+    as("alice");
+    const old = (await e2ee.prepareOutgoing("dm", "eski xabar")).e2ee!;
+
+    // Bob signs in on a second browser: a fresh device record for the same user.
+    idbData.delete("bob");
+    as("bob");
+    expect(await e2ee.decryptEnvelope("dm", "alice", old)).toBeNull(); // nothing yet
+
+    as("alice"); // alice's client sees bob's new device missing epoch 1 and re-wraps it
+    await e2ee.isRoomE2ee("dm");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    as("bob");
+    expect(await e2ee.decryptEnvelope("dm", "alice", old)).toBe("eski xabar");
+  });
+
+  it("shows every member the same safety code", async () => {
+    for (const u of ["alice", "bob", "carol"]) { as(u); await e2ee.isRoomE2ee("grp"); }
+    const codes = [];
+    for (const u of ["alice", "bob", "carol"]) { as(u); codes.push(await e2ee.roomSafetyCode("grp")); }
+    expect(codes[0]).toMatch(/^(\d{5} ){11}\d{5}$/);
+    expect(new Set(codes).size).toBe(1);
+    as("alice");
+    expect(await e2ee.roomSafetyCode("pub")).toBeNull();
   });
 });

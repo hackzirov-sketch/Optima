@@ -49,8 +49,8 @@ export class RegisterDeviceDto {
 }
 
 export class E2eeEnvelopeDto {
-  @IsIn([1])
-  v: 1;
+  @IsIn([1, 2])
+  v: 1 | 2;
 
   @IsInt()
   @Min(1)
@@ -83,6 +83,27 @@ export class WrappedRoomKeyDto {
   @IsBase64()
   @MaxLength(32)
   iv: string;
+}
+
+export class SharedRoomKeyDto extends WrappedRoomKeyDto {
+  @IsInt()
+  @Min(1)
+  epoch: number;
+}
+
+export class ShareRoomKeysDto {
+  @ApiProperty({
+    description: 'Device doing the re-wrapping (must hold the keys)',
+  })
+  @Matches(DEVICE_ID_PATTERN)
+  deviceId: string;
+
+  @ApiProperty({ type: [SharedRoomKeyDto] })
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => SharedRoomKeyDto)
+  keys: SharedRoomKeyDto[];
 }
 
 export class CreateRoomKeyEpochDto {

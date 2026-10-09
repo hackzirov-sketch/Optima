@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsInt,
@@ -102,4 +103,15 @@ export class SendMessageDto {
   @ValidateNested()
   @Type(() => E2eeEnvelopeDto)
   e2ee?: E2eeEnvelopeDto;
+
+  @ApiPropertyOptional({
+    description:
+      'E2EE rooms only: @handles mentioned in the encrypted text, so mention notifications still work. Ignored for plaintext messages, which are parsed server-side.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  @MaxLength(50, { each: true })
+  mentions?: string[];
 }

@@ -105,7 +105,10 @@ describe('StorageService — Cloudinary transport failures', () => {
       service.verifyUploadedAsset('upz/avatars/x', 'avatars'),
     ).rejects.toBeInstanceOf(BadRequestException);
     // The rejected file must not be left burning storage in the account.
-    expect(destroy).toHaveBeenCalledWith('upz/avatars/x');
+    expect(destroy).toHaveBeenCalledWith(
+      'upz/avatars/x',
+      expect.objectContaining({ resource_type: 'image', invalidate: true }),
+    );
   });
 
   it('never lets a delete failure surface — cleanup is best-effort', async () => {

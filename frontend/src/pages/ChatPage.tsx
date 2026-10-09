@@ -75,7 +75,7 @@ import { useConfirm }                                                       from
 import { api }                                                              from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
-import { decryptEnvelope, decryptMessage, invalidateRoom, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope } from "../lib/e2ee";
+import { decryptEnvelope, decryptMessage, invalidateRoom, roomSafetyCode, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -95,7 +95,8 @@ interface StagedAttachment {
   id: string;
   file: File;
   previewUrl: string | null;
-  attachment: { storageKey: string; storageUrl: string; fileName: string; fileSize: number; mimeType: string } | null;
+  /** In E2EE chats this carries the file's `secret` (key + real metadata), sent only inside the encrypted message. */
+  attachment: OutgoingAttachment | null;
   error: boolean;
 }
 
@@ -319,6 +320,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [safetyCode, setSafetyCode] = useState<string | null>(null);
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
@@ -827,6 +829,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       .catch(() => setReadReceipts(new Map()));
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
+  // E2EE safety code: recomputed whenever the info panel opens, since it
+  // changes with every device members add or remove.
+  useEffect(() => {
+    let cancelled = false;
+    setSafetyCode(null);
+    if (detailsOpen && selectedRoom?.e2ee) {
+      roomSafetyCode(selectedRoom.id)
+        .then((code) => { if (!cancelled) setSafetyCode(code); })
+        .catch(() => undefined);
+    }
+    return () => { cancelled = true; };
+  }, [detailsOpen, selectedRoom?.id, selectedRoom?.e2ee]);
+
   async function loadOlderMessages() {
     if (!selectedId || loadingMessages || loadingOlderMessages || !hasOlderMessages) return;
     const oldestSequence = messages.find((message) => typeof message.sequence === "number")?.sequence;
@@ -1201,7 +1216,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function sendMessage() {
     const content = draft.trim();
-    const attachments = staged.filter((item) => item.attachment).map((item) => item.attachment!);
+    const stagedReady = staged.filter((item) => item.attachment);
+    const attachments = stagedReady.map((item) => item.attachment!);
     // A message needs either words or files. Staging means "send" is now the
     // only thing that publishes, so an empty draft with pending files must
     // still go through rather than being treated as an empty message.
@@ -1213,7 +1229,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     if (editing) {
       try {
-        const updated = await api.chat.editMessage(editing.id, content, editing.roomId);
+        // An E2EE message's file keys live in its envelope, so they go back in.
+        const keptFiles: OutgoingAttachment[] = (editing.attachments ?? [])
+          .filter((item) => item.secret)
+          .map((item) => ({ storageKey: "", storageUrl: item.sourceUrl ?? "", fileName: item.fileName, fileSize: item.fileSize, mimeType: item.mimeType, secret: item.secret }));
+        const updated = await api.chat.editMessage(editing.id, content, editing.roomId, keptFiles);
         setMessages((current) => current.map((item) => item.id === editing.id ? updated : item));
         setDraft("");
         setEditing(null);
@@ -1236,12 +1256,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       createdAt: new Date().toISOString(),
       reactions: [],
       sender: user,
+      // Encrypted uploads are opaque blobs, so the bubble shows the real name
+      // and the local preview until the server echo is decrypted.
       attachments: attachments.map((attachment, index) => ({
         id: `optimistic-attachment:${index}`,
-        fileName: attachment.fileName,
-        fileSize: attachment.fileSize,
-        mimeType: attachment.mimeType,
-        url: attachment.storageUrl
+        fileName: attachment.secret?.n ?? attachment.fileName,
+        fileSize: attachment.secret?.s ?? attachment.fileSize,
+        mimeType: attachment.secret?.m ?? attachment.mimeType,
+        url: attachment.secret ? stagedReady[index].previewUrl ?? "" : attachment.storageUrl
       }))
     };
     setMessages((current) => [...current, optimistic]);
@@ -1255,10 +1277,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           roomId: selectedRoom.id,
           text: body.content,
           e2ee: body.e2ee,
+          mentions: body.mentions,
           clientMessageId,
-          attachments,
+          attachments: body.attachments,
           replyToId: replyingTo?.id
-        }));
+        }), attachments);
       } else {
         const saved = await api.chat.send(selectedRoom.id, content, clientMessageId, replyingTo?.id, attachments);
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
@@ -1419,7 +1442,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
     await Promise.all(accepted.map(async (item) => {
       try {
-        const attachment = await api.chat.uploadFile(room.id, item.file);
+        const attachment = await api.chat.uploadChatFile(room.id, item.file);
         setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, attachment } : entry));
       } catch (error) {
         setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, error: true } : entry));
@@ -1577,15 +1600,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       const clientMessageId = crypto.randomUUID();
       if (socket.connected) {
         try {
-          await new Promise<void>((resolve, reject) => {
-            socket.timeout(12000).emit("send_message", {
-              roomId: selectedRoom.id,
-              text: "",
-              clientMessageId,
-              attachments: [attachment]
-            }, (error: Error | null) => error ? reject(error) : resolve());
-          });
-        } catch {
+          await sendWithE2ee(selectedRoom.id, "", (body) => emitWithAck("send_message", {
+            roomId: selectedRoom.id,
+            e2ee: body.e2ee,
+            clientMessageId,
+            attachments: body.attachments
+          }, 12000), [attachment]);
+        } catch (error) {
+          if (isServerRejection(error)) throw error;
           await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
         }
       } else await api.chat.send(selectedRoom.id, "", clientMessageId, undefined, [attachment]);
@@ -1926,12 +1948,21 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!forwardingMessage || forwarding) return;
     setForwarding(true);
     try {
-      const attachments = forwardingMessage.attachments?.map((attachment) => ({
-        storageKey: `forwarded/${attachment.id}`,
-        storageUrl: attachment.url,
-        fileName: attachment.fileName,
-        fileSize: attachment.fileSize,
-        mimeType: attachment.mimeType
+      // Files from an E2EE chat exist here only as decrypted blob: URLs, so
+      // they are uploaded again for the target chat — encrypted afresh if that
+      // chat is E2EE too, plain if it is public.
+      const attachments = await Promise.all((forwardingMessage.attachments ?? []).map(async (attachment): Promise<OutgoingAttachment> => {
+        if (attachment.secret) {
+          const blob = await (await fetch(attachment.url)).blob();
+          return api.chat.uploadChatFile(targetRoomId, new File([blob], attachment.fileName, { type: attachment.mimeType }));
+        }
+        return {
+          storageKey: `forwarded/${attachment.id}`,
+          storageUrl: attachment.url,
+          fileName: attachment.fileName,
+          fileSize: attachment.fileSize,
+          mimeType: attachment.mimeType
+        };
       }));
       await api.chat.send(targetRoomId, forwardingMessage.content, crypto.randomUUID(), undefined, attachments);
       setForwardingMessage(null);
@@ -2786,6 +2817,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               voice: t("chat.voiceTab")
             })[tab]}</button>)}</nav>
           <div className="chat-details-content">
+            {safetyCode &&
+              <div className="e2ee-safety"><ShieldCheck size={18} /><span><strong>{t("chat.safetyCodeTitle")}</strong><small>{t("chat.safetyCodeDesc")}</small><code>{safetyCode}</code></span></div>}
             {detailsTab === "members" &&
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch}
                                                                                   onChange={(event) => setDetailMemberSearch(event.target.value)}

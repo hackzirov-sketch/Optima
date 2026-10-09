@@ -91,6 +91,8 @@ const FOLDER_LIMITS: Record<
       'audio/mp4',
       'audio/aac',
       'audio/x-m4a',
+      // Encrypted on the sender's device (E2EE chats) — opaque to the server.
+      'application/vnd.optima.e2ee',
     ],
   },
   pushes: { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
@@ -103,6 +105,23 @@ const FOLDER_LIMITS: Record<
     mimeTypes: ['video/webm', 'video/mp4'],
   },
 };
+
+/**
+ * What a browser needs to upload a file straight to storage, without it
+ * passing through the API. R2 takes a presigned PUT of the raw bytes;
+ * Cloudinary takes a multipart POST of the signed `fields` plus `file`, and
+ * answers with the final `secure_url` (the `storageUrl` here is only the
+ * unversioned form of it).
+ */
+export interface DirectUploadTicket {
+  provider: 'r2' | 'cloudinary';
+  method: 'PUT' | 'POST';
+  uploadUrl: string;
+  fields?: Record<string, string>;
+  storageKey: string;
+  storageUrl: string;
+  expiresIn: number;
+}
 
 export interface CloudinarySignResult {
   signature: string;
@@ -140,6 +159,9 @@ export class StorageService {
    */
   private readonly storageConfigured: boolean;
 
+  /** Backend for direct uploads, long messages and push bundles — see cloudinary.config.ts. */
+  private readonly provider: 'cloudinary' | 'r2';
+
   constructor(private readonly config: ConfigService) {
     this.bucketName = this.config.get<string>('storage.bucketName')!;
     this.r2PublicUrl = this.config.get<string>('storage.publicUrl')!;
@@ -176,6 +198,17 @@ export class StorageService {
     this.apiKey = this.config.get<string>('cloudinary.apiKey')!;
     this.apiSecret = this.config.get<string>('cloudinary.apiSecret')!;
     this.baseFolder = this.config.get<string>('cloudinary.folder') ?? 'upz';
+    this.provider =
+      this.config.get<'cloudinary' | 'r2'>('cloudinary.storageProvider') ??
+      'cloudinary';
+    if (
+      this.provider === 'cloudinary' &&
+      !(this.cloudName && this.apiKey && this.apiSecret)
+    ) {
+      this.logger.warn(
+        'Cloudinary is not configured (CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET) — uploads will be refused',
+      );
+    }
 
     cloudinary.config({
       cloud_name: this.cloudName,
@@ -415,6 +448,7 @@ export class StorageService {
   async verifyUploadedAsset(
     publicId: string,
     folder: UploadFolder,
+    resourceType: 'image' | 'video' | 'raw' = 'image',
   ): Promise<{ bytes: number; format: string; secureUrl: string }> {
     const limits = FOLDER_LIMITS[folder];
     if (!limits) {
@@ -427,7 +461,7 @@ export class StorageService {
     let asset: { bytes?: number; format?: string; secure_url?: string };
     try {
       asset = await this.callCloudinary('resource lookup', () =>
-        cloudinary.api.resource(publicId),
+        cloudinary.api.resource(publicId, { resource_type: resourceType }),
       );
     } catch (err) {
       // Only a real answer from Cloudinary means the asset isn't there. A
@@ -450,7 +484,7 @@ export class StorageService {
 
     if (tooBig || wrongFormat) {
       // Don't leave a rejected file sitting in the account burning storage.
-      await this.deleteCloudinaryFile(publicId);
+      await this.deleteCloudinaryFile(publicId, resourceType);
       throw new BadRequestException({
         code: tooBig
           ? ErrorCode.STORAGE_FILE_TOO_LARGE
@@ -470,23 +504,65 @@ export class StorageService {
   }
 
   /** Delete a Cloudinary asset by public_id. Best-effort: never throws. */
-  async deleteCloudinaryFile(publicId: string): Promise<void> {
+  async deleteCloudinaryFile(
+    publicId: string,
+    resourceType: 'image' | 'video' | 'raw' = 'image',
+    type: 'upload' | 'authenticated' = 'upload',
+  ): Promise<void> {
     try {
       await this.callCloudinary('destroy', () =>
-        cloudinary.uploader.destroy(publicId),
+        cloudinary.uploader.destroy(publicId, {
+          resource_type: resourceType,
+          type,
+          invalidate: true,
+        }),
       );
     } catch (err) {
       this.logger.error(`Failed to delete Cloudinary asset: ${publicId}`, err);
     }
   }
 
-  // ── R2: push diff bundles ─────────────────────────────────────────────────
+  private cloudinaryConfigured(): boolean {
+    return Boolean(this.cloudName && this.apiKey && this.apiSecret);
+  }
 
+  private assertUploadsAvailable(): void {
+    const ready =
+      this.provider === 'cloudinary'
+        ? this.cloudinaryConfigured()
+        : this.storageConfigured;
+    if (!ready) {
+      throw new ServiceUnavailableException({
+        code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
+        message:
+          'File storage is not configured on this server — uploads are unavailable',
+      });
+    }
+  }
+
+  // ── Server-side uploads: long messages, push bundles ─────────────────────
+
+  /**
+   * Stores bytes the server already holds. `private` objects (push bundles)
+   * are only reachable through getPresignedDownloadUrl; on Cloudinary that
+   * means the `authenticated` delivery type.
+   */
   async uploadBuffer(
     buffer: Buffer,
     key: string,
     contentType: string,
+    opts: { private?: boolean } = {},
   ): Promise<{ key: string; url: string }> {
+    this.assertUploadsAvailable();
+    if (this.provider === 'cloudinary') {
+      const result = await this.uploadBufferToCloudinary(
+        buffer,
+        `${this.baseFolder}/${key}`,
+        'raw',
+        opts.private ? 'authenticated' : 'upload',
+      );
+      return { key: result.public_id, url: result.secure_url };
+    }
     await this.s3Client.send(
       new PutObjectCommand({
         Bucket: this.bucketName,
@@ -510,6 +586,7 @@ export class StorageService {
     buffer: Buffer,
     publicId: string,
     resourceType: 'image' | 'video' | 'raw',
+    type: 'upload' | 'authenticated' = 'upload',
   ): Promise<UploadApiResponse> {
     // Each attempt gets a fresh stream — a stream that already failed cannot
     // be re-ended, so the retry has to build its own.
@@ -518,7 +595,7 @@ export class StorageService {
       () =>
         new Promise<UploadApiResponse>((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
-            { public_id: publicId, resource_type: resourceType },
+            { public_id: publicId, resource_type: resourceType, type },
             (err, result) => {
               if (!err && result) return resolve(result);
               if (err instanceof Error) return reject(err);
@@ -671,22 +748,21 @@ export class StorageService {
     const base64Content = base64Data.replace(/^data:.*,/, '');
     const buffer = Buffer.from(base64Content, 'base64');
     const key = `${prefix}/${uuidv4()}.patch`;
-
-    await this.s3Client.send(
-      new PutObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-        Body: buffer,
-        ContentType: 'text/plain',
-      }),
-    );
-    return { key, url: `${this.r2PublicUrl}/${key}` };
+    return this.uploadBuffer(buffer, key, 'text/plain', { private: true });
   }
 
   async getPresignedDownloadUrl(
     key: string,
     expiresIn = 3600,
   ): Promise<string> {
+    if (this.provider === 'cloudinary') {
+      // A signed, expiring API download link for an `authenticated` raw asset.
+      return cloudinary.utils.private_download_url(key, '', {
+        resource_type: 'raw',
+        type: 'authenticated',
+        expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+      });
+    }
     const command = new GetObjectCommand({ Bucket: this.bucketName, Key: key });
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
@@ -706,19 +782,8 @@ export class StorageService {
     fileName: string,
     mimeType: string,
     fileSize: number,
-  ): Promise<{
-    uploadUrl: string;
-    storageKey: string;
-    storageUrl: string;
-    expiresIn: number;
-  }> {
-    if (!this.storageConfigured) {
-      throw new ServiceUnavailableException({
-        code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
-        message:
-          'File storage is not configured on this server — uploads are unavailable',
-      });
-    }
+  ): Promise<DirectUploadTicket> {
+    this.assertUploadsAvailable();
 
     const limits = FOLDER_LIMITS[folder];
     if (!limits)
@@ -744,6 +809,10 @@ export class StorageService {
       });
     }
 
+    if (this.provider === 'cloudinary') {
+      return this.signDirectCloudinaryUpload(folder, userId, mimeType);
+    }
+
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-150);
     const key = `${folder}/${userId}/${uuidv4()}-${safeName}`;
     const expiresIn = 300; // 5 min to complete the upload
@@ -765,6 +834,8 @@ export class StorageService {
     });
 
     return {
+      provider: 'r2',
+      method: 'PUT',
       uploadUrl,
       storageKey: key,
       storageUrl: `${this.r2PublicUrl}/${key}`,
@@ -772,7 +843,105 @@ export class StorageService {
     };
   }
 
+  /**
+   * Cloudinary's equivalent of a presigned PUT: the public_id (and so the
+   * owner path segment) is fixed by the signature. Size can't be signed, so
+   * verifyDirectUpload checks it once the client reports the upload.
+   */
+  private signDirectCloudinaryUpload(
+    folder: UploadFolder,
+    ownerId: string,
+    mimeType: string,
+  ): DirectUploadTicket {
+    const resourceType = this.cloudinaryResourceType(mimeType);
+    const timestamp = Math.round(Date.now() / 1000);
+    const publicId = `${this.baseFolder}/${folder}/${ownerId}/${uuidv4()}`;
+    const signature = cloudinary.utils.api_sign_request(
+      { public_id: publicId, timestamp },
+      this.apiSecret,
+    );
+    return {
+      provider: 'cloudinary',
+      method: 'POST',
+      uploadUrl: `https://api.cloudinary.com/v1_1/${this.cloudName}/${resourceType}/upload`,
+      fields: {
+        api_key: this.apiKey,
+        timestamp: String(timestamp),
+        signature,
+        public_id: publicId,
+      },
+      storageKey: publicId,
+      storageUrl: `https://res.cloudinary.com/${this.cloudName}/${resourceType}/upload/${publicId}`,
+      // Cloudinary signatures are valid for one hour.
+      expiresIn: 3600,
+    };
+  }
+
+  /**
+   * Checks a direct upload the client reports back (from getPresignedUploadUrl)
+   * before it is persisted: the key must be one we minted for this owner and
+   * folder, the URL must point at that key in our storage, and on Cloudinary
+   * the stored asset must exist and fit the folder's size limit. Returns the
+   * authoritative URL and size.
+   */
+  async verifyDirectUpload(
+    folder: UploadFolder,
+    ownerId: string,
+    storageKey: string,
+    storageUrl: string,
+    mimeType: string,
+  ): Promise<{ storageUrl: string; fileSize: number | null }> {
+    const reject = (message: string): never => {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message,
+      });
+    };
+
+    if (this.provider === 'r2') {
+      if (!storageKey.startsWith(`${folder}/${ownerId}/`))
+        reject('Invalid storage key');
+      if (
+        !this.r2PublicUrl ||
+        storageUrl !== `${this.r2PublicUrl}/${storageKey}`
+      )
+        reject('Invalid storage URL');
+      return { storageUrl, fileSize: null };
+    }
+
+    if (!storageKey.startsWith(`${this.baseFolder}/${folder}/${ownerId}/`))
+      reject('Invalid storage key');
+    let parsed: URL | null = null;
+    try {
+      parsed = new URL(storageUrl);
+    } catch {
+      reject('Invalid storage URL');
+    }
+    const path = decodeURIComponent(parsed!.pathname).replace(
+      /\.[A-Za-z0-9]{1,8}$/,
+      '',
+    );
+    if (
+      parsed!.protocol !== 'https:' ||
+      parsed!.host !== 'res.cloudinary.com' ||
+      !path.startsWith(`/${this.cloudName}/`) ||
+      !path.endsWith(`/${storageKey}`)
+    )
+      reject('Invalid storage URL');
+
+    const asset = await this.verifyUploadedAsset(
+      storageKey,
+      folder,
+      this.cloudinaryResourceType(mimeType),
+    );
+    return { storageUrl: asset.secureUrl || storageUrl, fileSize: asset.bytes };
+  }
+
   async deleteFile(key: string): Promise<void> {
+    if (this.provider === 'cloudinary') {
+      await this.deleteCloudinaryFile(key, 'raw', 'authenticated');
+      return;
+    }
     try {
       await this.s3Client.send(
         new DeleteObjectCommand({ Bucket: this.bucketName, Key: key }),

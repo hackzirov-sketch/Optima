@@ -669,6 +669,8 @@
     "replyingLabel": "Replying",
     "mediaMessageFallback": "Media message",
     "e2eeBadge": "End-to-end encrypted — only members' devices can read these messages",
+    "safetyCodeTitle": "Safety code",
+    "safetyCodeDesc": "Every member sees the same code. If yours differs from theirs, someone else's key is in this chat. It changes when anyone adds or removes a device.",
     "cancelAria": "Cancel",
     "chooseEmojiAria": "Choose emoji",
     "quickEmojisAria": "Quick emojis",

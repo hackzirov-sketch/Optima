@@ -14,8 +14,10 @@ import {
   CreateRoomKeyEpochDto,
   EcPublicJwkDto,
   RegisterDeviceDto,
+  ShareRoomKeysDto,
 } from '../dto/e2ee.dto';
 import {
+  E2EE_ATTACHMENT_MIME,
   E2EE_ERRORS,
   E2EE_MAX_DEVICES_PER_USER,
   E2eeEnvelope,
@@ -178,16 +180,19 @@ export class ChatE2eeService {
             creatorDeviceId: string;
             creatorPublicKey: EcPublicJwkDto | null;
           }>(
-            // The creator's key is looked up even if that device has since
-            // been retired — older epochs must stay openable.
+            // "creator" is whoever wrapped this copy: the epoch's creator, or
+            // the device that re-shared it (shareKeys). Its key is looked up
+            // even if that device has since been retired — older epochs must
+            // stay openable.
             `SELECT k.epoch, k.wrapped_key AS "wrappedKey", k.iv,
-                    e.created_by AS "creatorUserId",
-                    e.created_by_device AS "creatorDeviceId",
+                    COALESCE(k.wrapped_by_user, e.created_by) AS "creatorUserId",
+                    COALESCE(k.wrapped_by_device, e.created_by_device) AS "creatorDeviceId",
                     d.public_key AS "creatorPublicKey"
                FROM chat_room_keys k
                JOIN chat_room_key_epochs e ON e.room_id = k.room_id AND e.epoch = k.epoch
                LEFT JOIN user_device_keys d
-                 ON d.user_id = e.created_by AND d.device_id = e.created_by_device
+                 ON d.user_id = COALESCE(k.wrapped_by_user, e.created_by)
+                AND d.device_id = COALESCE(k.wrapped_by_device, e.created_by_device)
               WHERE k.room_id = $1 AND k.user_id = $2 AND k.device_id = $3
               ORDER BY k.epoch`,
             [roomId, userId, deviceId],
@@ -195,6 +200,7 @@ export class ChatE2eeService {
         : Promise.resolve([]),
       enabled ? this.needsRotation(roomId, room.e2eeEpoch) : false,
     ]);
+    const missing = await this.missingHistory(roomId);
 
     // A room that went public keeps the keys of its private past, so members
     // can still open the E2EE history; it just takes no new ciphertext.
@@ -205,7 +211,93 @@ export class ChatE2eeService {
       needsRotation,
       devices,
       keys,
+      missing,
     };
+  }
+
+  /**
+   * Older room keys a current member's *new* device lacks although that
+   * member already had them on another device. Any device holding the key may
+   * re-wrap it (shareKeys) so a member's history follows them; members who
+   * joined later never appear here.
+   */
+  private async missingHistory(roomId: string) {
+    return this.dataSource.query<{
+      epoch: number;
+      userId: string;
+      deviceId: string;
+      publicKey: EcPublicJwkDto;
+    }>(
+      `SELECT DISTINCT had.epoch, d.user_id AS "userId", d.device_id AS "deviceId",
+              d.public_key AS "publicKey"
+         FROM chat_room_keys had
+         JOIN chat_members m
+           ON m.room_id = had.room_id AND m.user_id = had.user_id
+          AND m.left_at IS NULL AND m.status = 'active'
+         JOIN user_device_keys d
+           ON d.user_id = had.user_id AND d.revoked_at IS NULL
+        WHERE had.room_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM chat_room_keys k
+             WHERE k.room_id = had.room_id AND k.epoch = had.epoch
+               AND k.user_id = d.user_id AND k.device_id = d.device_id)
+        ORDER BY had.epoch DESC
+        LIMIT 200`,
+      [roomId],
+    );
+  }
+
+  /**
+   * Stores room keys a member device re-wrapped for another device. Each one
+   * must be an epoch the caller's device holds, for an active member device
+   * whose user already held that epoch — history moves between a member's
+   * own devices, never to someone who wasn't there.
+   */
+  async shareKeys(roomId: string, userId: string, dto: ShareRoomKeysDto) {
+    await this.members.assertRoomMember(roomId, userId);
+    if (dto.keys.length === 0) return { shared: 0 };
+
+    const rows = await this.dataSource.query<{ shared: string }>(
+      `WITH incoming AS (
+         SELECT * FROM unnest($3::int[], $4::uuid[], $5::text[], $6::text[], $7::text[])
+           AS x(epoch, user_id, device_id, wrapped_key, iv)
+       ), allowed AS (
+         SELECT i.* FROM incoming i
+          WHERE EXISTS (  -- the sharing device holds this epoch
+                  SELECT 1 FROM chat_room_keys mine
+                   WHERE mine.room_id = $1 AND mine.epoch = i.epoch
+                     AND mine.user_id = $2 AND mine.device_id = $8)
+            AND EXISTS (  -- the recipient user already had it
+                  SELECT 1 FROM chat_room_keys had
+                   WHERE had.room_id = $1 AND had.epoch = i.epoch
+                     AND had.user_id = i.user_id)
+            AND EXISTS (  -- ... and is still an active member, on a live device
+                  SELECT 1 FROM chat_members m
+                    JOIN user_device_keys d
+                      ON d.user_id = m.user_id AND d.revoked_at IS NULL
+                   WHERE m.room_id = $1 AND m.user_id = i.user_id
+                     AND m.left_at IS NULL AND m.status = 'active'
+                     AND d.device_id = i.device_id)
+       ), inserted AS (
+         INSERT INTO chat_room_keys
+           (room_id, epoch, user_id, device_id, wrapped_key, iv, wrapped_by_user, wrapped_by_device)
+         SELECT $1, epoch, user_id, device_id, wrapped_key, iv, $2, $8 FROM allowed
+         ON CONFLICT DO NOTHING
+         RETURNING 1
+       )
+       SELECT count(*) AS shared FROM inserted`,
+      [
+        roomId,
+        userId,
+        dto.keys.map((k) => k.epoch),
+        dto.keys.map((k) => k.userId),
+        dto.keys.map((k) => k.deviceId),
+        dto.keys.map((k) => k.wrappedKey),
+        dto.keys.map((k) => k.iv),
+        dto.deviceId,
+      ],
+    );
+    return { shared: Number(rows[0]?.shared ?? 0) };
   }
 
   // ─── Rotation ────────────────────────────────────────────
@@ -319,8 +411,18 @@ export class ChatE2eeService {
     userId: string,
     rawEnvelope: unknown,
     hasPlaintext: boolean,
+    attachmentMimeTypes: string[] = [],
   ): Promise<E2eeEnvelope | null> {
+    const encryptedFiles = attachmentMimeTypes.filter(
+      (mime) => mime === E2EE_ATTACHMENT_MIME,
+    ).length;
     if (!isE2eeRoom(room)) {
+      // Nobody in a public room could open them.
+      if (encryptedFiles > 0)
+        throw new BadRequestException({
+          code: E2EE_ERRORS.NOT_ALLOWED,
+          message: 'Encrypted files are only for end-to-end encrypted chats',
+        });
       if (rawEnvelope)
         throw new BadRequestException({
           code: E2EE_ERRORS.NOT_ALLOWED,
@@ -342,7 +444,20 @@ export class ChatE2eeService {
         code: E2EE_ERRORS.REQUIRED,
         message: 'This conversation is end-to-end encrypted — send ciphertext',
       });
-    if (!envelope) return null; // attachment-only message: nothing to encrypt
+    // Files in an E2EE room must be encrypted on the device, and their keys
+    // ride in a v2 envelope — a plain upload here would be readable by the
+    // server and anyone holding its URL.
+    if (encryptedFiles !== attachmentMimeTypes.length)
+      throw new BadRequestException({
+        code: E2EE_ERRORS.REQUIRED,
+        message: 'Files in this conversation must be encrypted on your device',
+      });
+    if (attachmentMimeTypes.length > 0 && envelope?.v !== 2)
+      throw new BadRequestException({
+        code: E2EE_ERRORS.REQUIRED,
+        message: 'Encrypted files need their keys in the message envelope',
+      });
+    if (!envelope) return null;
 
     if (envelope.epoch !== room.e2eeEpoch)
       throw new ConflictException({
