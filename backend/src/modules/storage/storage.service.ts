@@ -586,6 +586,17 @@ export class StorageService {
     resourceType: 'image' | 'video' | 'raw',
     type: 'upload' | 'authenticated' = 'upload',
   ): Promise<UploadApiResponse> {
+    // Chat files, voice notes, avatars and backgrounds always come here,
+    // whatever STORAGE_PROVIDER says — without credentials the SDK only fails
+    // after the request ("Missing required parameter - api_key") and the
+    // caller got a bare 500.
+    if (!this.cloudinaryConfigured()) {
+      throw new ServiceUnavailableException({
+        code: ErrorCode.STORAGE_PROVIDER_UNAVAILABLE,
+        message:
+          'File storage is not configured on this server — uploads are unavailable',
+      });
+    }
     // Each attempt gets a fresh stream — a stream that already failed cannot
     // be re-ended, so the retry has to build its own.
     return this.callCloudinary(

@@ -44,6 +44,23 @@ function publicJwk(jwk: EcPublicJwkDto) {
  * wrapped for each device, and decides *when* a new room key is required —
  * never what it is. See 020_chat_e2ee.sql for the model.
  */
+/**
+ * Whether a user may hold a room's key for one epoch: they already held it
+ * (on any device), or they were a member when it was created. joined_at is
+ * reset on every rejoin, so a gap in membership never grants the epochs
+ * created while they were away.
+ */
+const ENTITLED_TO_EPOCH_SQL = (room: string, epoch: string, user: string) => `
+  EXISTS (SELECT 1 FROM chat_room_keys had
+           WHERE had.room_id = ${room} AND had.epoch = ${epoch}
+             AND had.user_id = ${user})
+  OR EXISTS (SELECT 1 FROM chat_room_key_epochs ep
+               JOIN chat_members jm
+                 ON jm.room_id = ep.room_id AND jm.user_id = ${user}
+                AND jm.left_at IS NULL AND jm.status = 'active'
+              WHERE ep.room_id = ${room} AND ep.epoch = ${epoch}
+                AND jm.joined_at <= ep.created_at)`;
+
 @Injectable()
 export class ChatE2eeService {
   constructor(
@@ -102,6 +119,17 @@ export class ChatE2eeService {
         [userId, E2EE_MAX_DEVICES_PER_USER],
       );
     });
+
+    // A new (or revived) device has no copy of any room key yet. Members who
+    // hold them are asked to re-wrap what this device is entitled to — see
+    // missingHistory — instead of it waiting until someone happens to reopen
+    // the room.
+    if (!row || row.revokedAt) {
+      this.events.emit('chat.e2ee_device_added', {
+        userId,
+        deviceId: dto.deviceId,
+      });
+    }
 
     return { deviceId: dto.deviceId, publicKey: key };
   }
@@ -216,10 +244,13 @@ export class ChatE2eeService {
   }
 
   /**
-   * Older room keys a current member's *new* device lacks although that
-   * member already had them on another device. Any device holding the key may
-   * re-wrap it (shareKeys) so a member's history follows them; members who
-   * joined later never appear here.
+   * Room keys an active member device lacks although its owner is entitled
+   * to them: the owner already held that epoch on another device, or was a
+   * member when the epoch was created but had no device registered yet (they
+   * were messaged before ever opening the app — without this, everything sent
+   * to them before their first login stayed unreadable for good). Any device
+   * holding the key may re-wrap it (shareKeys). Members who joined after an
+   * epoch was created never appear here for it — rejoining resets joined_at.
    */
   private async missingHistory(roomId: string) {
     return this.dataSource.query<{
@@ -228,20 +259,20 @@ export class ChatE2eeService {
       deviceId: string;
       publicKey: EcPublicJwkDto;
     }>(
-      `SELECT DISTINCT had.epoch, d.user_id AS "userId", d.device_id AS "deviceId",
+      `SELECT e.epoch, d.user_id AS "userId", d.device_id AS "deviceId",
               d.public_key AS "publicKey"
-         FROM chat_room_keys had
+         FROM chat_room_key_epochs e
          JOIN chat_members m
-           ON m.room_id = had.room_id AND m.user_id = had.user_id
-          AND m.left_at IS NULL AND m.status = 'active'
+           ON m.room_id = e.room_id AND m.left_at IS NULL AND m.status = 'active'
          JOIN user_device_keys d
-           ON d.user_id = had.user_id AND d.revoked_at IS NULL
-        WHERE had.room_id = $1
+           ON d.user_id = m.user_id AND d.revoked_at IS NULL
+        WHERE e.room_id = $1
+          AND (${ENTITLED_TO_EPOCH_SQL('e.room_id', 'e.epoch', 'm.user_id')})
           AND NOT EXISTS (
             SELECT 1 FROM chat_room_keys k
-             WHERE k.room_id = had.room_id AND k.epoch = had.epoch
+             WHERE k.room_id = e.room_id AND k.epoch = e.epoch
                AND k.user_id = d.user_id AND k.device_id = d.device_id)
-        ORDER BY had.epoch DESC
+        ORDER BY e.epoch DESC
         LIMIT 200`,
       [roomId],
     );
@@ -250,8 +281,8 @@ export class ChatE2eeService {
   /**
    * Stores room keys a member device re-wrapped for another device. Each one
    * must be an epoch the caller's device holds, for an active member device
-   * whose user already held that epoch — history moves between a member's
-   * own devices, never to someone who wasn't there.
+   * whose user is entitled to that epoch (see missingHistory) — history
+   * reaches the people who were there, never someone who joined later.
    */
   async shareKeys(roomId: string, userId: string, dto: ShareRoomKeysDto) {
     await this.members.assertRoomMember(roomId, userId);
@@ -267,10 +298,7 @@ export class ChatE2eeService {
                   SELECT 1 FROM chat_room_keys mine
                    WHERE mine.room_id = $1 AND mine.epoch = i.epoch
                      AND mine.user_id = $2 AND mine.device_id = $8)
-            AND EXISTS (  -- the recipient user already had it
-                  SELECT 1 FROM chat_room_keys had
-                   WHERE had.room_id = $1 AND had.epoch = i.epoch
-                     AND had.user_id = i.user_id)
+            AND (${ENTITLED_TO_EPOCH_SQL('$1', 'i.epoch', 'i.user_id')})
             AND EXISTS (  -- ... and is still an active member, on a live device
                   SELECT 1 FROM chat_members m
                     JOIN user_device_keys d
@@ -297,7 +325,16 @@ export class ChatE2eeService {
         dto.deviceId,
       ],
     );
-    return { shared: Number(rows[0]?.shared ?? 0) };
+    const shared = Number(rows[0]?.shared ?? 0);
+    if (shared > 0) {
+      // The receiving devices can now open messages they showed as locked.
+      const recipients = [...new Set(dto.keys.map((k) => k.userId))];
+      this.events.emit('chat.e2ee_keys_shared', {
+        roomId,
+        userIds: recipients,
+      });
+    }
+    return { shared };
   }
 
   // ─── Rotation ────────────────────────────────────────────

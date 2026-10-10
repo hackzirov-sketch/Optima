@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventsGateway } from './events.gateway';
+import { DatabaseService } from '../../database/database.service';
 
 /**
  * Turns chat domain events into socket broadcasts.
@@ -19,7 +20,10 @@ import { EventsGateway } from './events.gateway';
 export class ChatRealtimeBridge {
   private readonly logger = new Logger(ChatRealtimeBridge.name);
 
-  constructor(private readonly gateway: EventsGateway) {}
+  constructor(
+    private readonly gateway: EventsGateway,
+    private readonly dataSource: DatabaseService,
+  ) {}
 
   private toRoom(roomId: string, event: string, payload: unknown) {
     try {
@@ -74,6 +78,51 @@ export class ChatRealtimeBridge {
         `Failed to broadcast room_key_rotated: ${(err as Error).message}`,
       );
     }
+  }
+
+  /**
+   * A member registered a new device. In every E2EE room they belong to,
+   * the members' clients refetch key state, which re-wraps the keys that
+   * device is entitled to (e2ee.ts → shareHistory).
+   */
+  @OnEvent('chat.e2ee_device_added')
+  async onE2eeDeviceAdded(payload: { userId: string; deviceId: string }) {
+    try {
+      const rooms = await this.dataSource.query<{ roomId: string }>(
+        `SELECT r.id AS "roomId"
+           FROM chat_members m
+           JOIN chat_rooms r ON r.id = m.room_id
+          WHERE m.user_id = $1 AND m.left_at IS NULL AND m.status = 'active'
+            AND r.e2ee_epoch > 0
+            AND (r.type = 'direct' OR r.scope <> 'public')`,
+        [payload.userId],
+      );
+      for (const { roomId } of rooms) {
+        this.toRoomMembers(roomId, 'room_keys_requested', { roomId });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to request room keys: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Keys were re-wrapped for these users' devices — they can reopen locked messages. */
+  @OnEvent('chat.e2ee_keys_shared')
+  onE2eeKeysShared(payload: { roomId: string; userIds: string[] }) {
+    for (const userId of payload.userIds) {
+      this.gateway.server
+        ?.to(`user:${userId}`)
+        .emit('room_keys_shared', { roomId: payload.roomId });
+    }
+  }
+
+  private toRoomMembers(roomId: string, event: string, payload: unknown) {
+    this.gateway
+      .broadcastToRoomMembers(roomId, event, payload)
+      .catch((err: Error) =>
+        this.logger.warn(`Failed to broadcast ${event}: ${err.message}`),
+      );
   }
 
   @OnEvent('chat.message_deleted')

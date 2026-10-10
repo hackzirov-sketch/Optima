@@ -534,7 +534,6 @@ export const api = {
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
-    /** Which media transport meetings use: LiveKit (SFU) when the server has it configured. */
     /** Media transport (LiveKit SFU or p2p) and the participant ceiling it supports. */
     mediaConfig: () => apiFetch<{ provider: "livekit" | "p2p"; maxParticipants: number }>("/meetings/media-config"),
     /** LiveKit token for a participant already in the meeting (after the socket join). */

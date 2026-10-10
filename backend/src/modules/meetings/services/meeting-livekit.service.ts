@@ -156,6 +156,28 @@ export class MeetingLiveKitService {
    * no longer allowed to send. Best-effort — the socket-side gates still hold
    * if the SFU can't be reached.
    */
+  /**
+   * Ends the SFU room with the meeting: LiveKit disconnects everyone still in
+   * it. Without this, a client that missed (or ignored) `meeting:ended` kept
+   * sending and receiving media for as long as its token lasted.
+   * Best-effort — an already-empty room is simply not found.
+   */
+  async closeRoom(meetingId: string): Promise<void> {
+    if (!this.isEnabled()) return;
+    try {
+      this.rooms ??= new RoomServiceClient(
+        this.url.replace(/^ws/, 'http'),
+        this.apiKey,
+        this.apiSecret,
+      );
+      await this.rooms.deleteRoom(MeetingLiveKitService.roomName(meetingId));
+    } catch (err) {
+      this.logger.debug(
+        `LiveKit room for ${meetingId} not closed: ${(err as Error).message}`,
+      );
+    }
+  }
+
   async applyPermissions(meetingId: string): Promise<void> {
     if (!this.isEnabled()) return;
     try {

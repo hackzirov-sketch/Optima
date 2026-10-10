@@ -14,7 +14,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
+import type { Meeting, MeetingParticipant, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 /** Host controls default to "everything allowed" (older meetings, before 022). */
@@ -1000,6 +1000,45 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
   }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, startLiveKit, show, user?.id]);
 
+  // Host-driven changes that arrive while in the call. Their own effect so a
+  // re-render of `leave` never re-subscribes (and rejoins) the call above.
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
+  const meetingRef = useRef(meeting);
+  meetingRef.current = meeting;
+  useEffect(() => {
+    if (!entered || !meetingId) return;
+    const socket = getSocket();
+    // "End call for everyone": without this the others stayed in a call that
+    // no longer existed — frozen tiles until they hung up themselves.
+    const onEnded = (data: { meetingId?: string }) => {
+      if (data?.meetingId && data.meetingId !== meetingId) return;
+      show(t("meet.endedByHost"));
+      leaveRef.current();
+    };
+    // Co-host promotions/demotions: host controls appear or go away at once.
+    const onRoleChanged = (data: { meetingId?: string; userId: string; role: MeetingParticipant["role"] }) => {
+      if (data?.meetingId && data.meetingId !== meetingId) return;
+      // Someone who joined after the page loaded has no entry in the
+      // participant list to update; the server's copy has it.
+      const known = meetingRef.current?.participants.some((participant) => participant.userId === data.userId);
+      if (!known) {
+        void api.meetings.one(meetingId).then(setMeeting).catch(() => undefined);
+        return;
+      }
+      setMeeting((current) => current ? {
+        ...current,
+        participants: current.participants.map((participant) => participant.userId === data.userId ? { ...participant, role: data.role } : participant),
+      } : current);
+    };
+    socket.on("meeting:ended", onEnded);
+    socket.on("meeting:role-changed", onRoleChanged);
+    return () => {
+      socket.off("meeting:ended", onEnded);
+      socket.off("meeting:role-changed", onRoleChanged);
+    };
+  }, [entered, meetingId, show, t]);
+
   // A reload mid-call re-enters an already-populated room: the socket only
   // reports who joins *after* this point, so the people already present come
   // from the participant list the REST fetch returned. Kept out of the effect
@@ -1410,7 +1449,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   // Your own voice never pulls you into the main stage (Google Meet does the
   // same) — otherwise talking while alone flips the room into focus view.
-  const speakerFocusId = activeSpeakerId !== selfId ? activeSpeakerId : null;
+  // Up to four people stay in the tiled grid (the speaker gets the ring);
+  // switching the whole layout every time someone else spoke made small
+  // calls jump around constantly.
+  const speakerFocusId = activeSpeakerId !== selfId && remoteEntries.length + 1 > 4 ? activeSpeakerId : null;
   const focusedUserId = gridViewForced ? null : (screenSharingUserId || speakerFocusId || pinnedUserId || null);
 
   /**
@@ -1456,6 +1498,22 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }, [selfId, screenStream, localStream, screenSharing, user, microphone, camera, remoteEntries, users, remoteMedia, t]);
 
   const focusedTile = focusedUserId ? allTiles.find((tile) => tile.id === focusedUserId) ?? null : null;
+
+  // Receive each camera at the size it is shown: the main stage in full, the
+  // filmstrip as thumbnails, the grid by how many tiles share the screen.
+  const remoteTileIds = allTiles.filter((tile) => !tile.isSelf).map((tile) => tile.id).join(",");
+  const focusedId = focusedTile?.id ?? null;
+  useEffect(() => {
+    const session = liveKit.current;
+    if (!session || !remoteTileIds) return;
+    const ids = remoteTileIds.split(",");
+    for (const id of ids) {
+      const quality = focusedId
+        ? (id === focusedId ? "high" : "low")
+        : ids.length <= 1 ? "high" : ids.length <= 3 ? "medium" : "low";
+      session.setRemoteVideoQuality(id, quality);
+    }
+  }, [remoteTileIds, focusedId, callState]);
 
   // ── Standalone persistent instance: full page vs. floating widget vs. idle ──
   // directMode is unaffected (always "full", exactly as before). The

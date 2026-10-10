@@ -363,7 +363,12 @@ export class EventsGateway
       return false;
     }
 
-    const user = cachedUser ?? (await this.usersService.findById(auth.id));
+    // findById throws NotFound for a deleted account. This runs on a timer
+    // (void-called below), so a throw here was an unhandled rejection rather
+    // than the disconnect it should be.
+    const user =
+      cachedUser ??
+      (await this.usersService.findById(auth.id).catch(() => null));
     if (!user || !user.isActive) {
       this.disconnectUnauthorized(
         client,
@@ -706,36 +711,45 @@ export class EventsGateway
   }
 
   /** Per-user (not per-IP/global) message send limit — see RedisService.checkChatMessageRateLimit. */
+  /**
+   * Both guards return the refusal (also emitted as `error`) instead of a
+   * bare boolean so the handlers can answer the ack with it. Returning
+   * nothing left emitWithAck waiting out its 9s timeout, after which the
+   * client retried over REST — a refused send looked like a network fault.
+   */
   private async assertMessageRateLimit(
     userId: string,
     client: AppSocket,
-  ): Promise<boolean> {
+  ): Promise<{ code: string; message: string } | null> {
     const { exceeded, retryAfterSeconds } =
       await this.redisService.checkChatMessageRateLimit(userId);
     if (exceeded) {
-      client.emit('error', {
+      const error = {
         code: 'RATE_LIMIT_EXCEEDED',
         message: `Too many messages. Try again in ${retryAfterSeconds}s.`,
         retryAfterSeconds,
-      });
-      return false;
+      };
+      client.emit('error', error);
+      return error;
     }
-    return true;
+    return null;
   }
 
   private async assertActiveUser(
     userId: string,
     client: AppSocket,
-  ): Promise<boolean> {
+  ): Promise<{ code: string; message: string } | null> {
     try {
       await this.violationService.assertNotBlocked(userId);
-      return true;
+      return null;
     } catch (err) {
-      client.emit(
-        'error',
-        extractErrorDetails(err, 'ACCOUNT_SUSPENDED', 'Account suspended'),
-      );
-      return false;
+      const error = extractErrorDetails(
+        err,
+        'ACCOUNT_SUSPENDED',
+        'Account suspended',
+      ) as { code: string; message: string };
+      client.emit('error', error);
+      return error;
     }
   }
 
@@ -752,8 +766,10 @@ export class EventsGateway
         message: 'Not authenticated',
       });
 
-    if (!(await this.assertActiveUser(userId, client))) return;
-    if (!(await this.assertMessageRateLimit(userId, client))) return;
+    const refused =
+      (await this.assertActiveUser(userId, client)) ??
+      (await this.assertMessageRateLimit(userId, client));
+    if (refused) return { ok: false, error: refused };
 
     // Persist to DB — ChatMessageService checks room membership internally
     let saved: any;
@@ -858,8 +874,10 @@ export class EventsGateway
         code: 'WS_NOT_AUTHENTICATED',
         message: 'Not authenticated',
       });
-    if (!(await this.assertActiveUser(userId, client))) return;
-    if (!(await this.assertMessageRateLimit(userId, client))) return;
+    const refused =
+      (await this.assertActiveUser(userId, client)) ??
+      (await this.assertMessageRateLimit(userId, client));
+    if (refused) return { ok: false, error: refused };
 
     let saved: any;
     try {
@@ -923,7 +941,8 @@ export class EventsGateway
         message: 'Not authenticated',
       });
 
-    if (!(await this.assertActiveUser(userId, client))) return;
+    const suspended = await this.assertActiveUser(userId, client);
+    if (suspended) return { ok: false, error: suspended };
 
     try {
       // roomId comes back from the message row, not from `data` — otherwise a

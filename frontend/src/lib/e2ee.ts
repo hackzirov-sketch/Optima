@@ -209,6 +209,10 @@ export function setE2eeUser(userId: string | null) {
   devicePromise = null;
   stateCache.clear();
   keyCache.clear();
+  // Register this browser's device at sign-in rather than on first use: a
+  // room key can only be wrapped for devices that exist, and someone who is
+  // messaged before they ever open an E2EE chat would otherwise have none.
+  if (userId) void getDevice().catch(() => undefined);
 }
 
 function requireUser(): string {
@@ -280,6 +284,25 @@ function getState(roomId: string): Promise<RoomState> {
 /** Forget cached key state — on `room_key_rotated`, membership changes, or a rejected send. */
 export function invalidateRoom(roomId: string) {
   stateCache.delete(roomId);
+}
+
+/**
+ * After a socket outage: `room_keys_requested` events sent meanwhile were
+ * missed, so every room's state is refetched on next use (which also serves
+ * any keys owed to other members' new devices).
+ */
+export function invalidateAllRooms() {
+  stateCache.clear();
+}
+
+/**
+ * A member added a device (`room_keys_requested`): refetch the room's key
+ * state, which re-wraps any keys that device is entitled to and this one
+ * holds (getState → shareHistory).
+ */
+export function serveRoomKeys(roomId: string) {
+  invalidateRoom(roomId);
+  void getState(roomId).catch(() => undefined);
 }
 
 async function unwrapKeys(roomId: string, state: RoomState) {
@@ -480,16 +503,46 @@ export async function prepareOutgoing(roomId: string, text: string, attachments:
  * Runs a send built from `prepareOutgoing`, refreshing the room key and
  * re-encrypting when the server rejects the ciphertext as stale.
  */
-export async function sendWithE2ee<T>(roomId: string, text: string, send: (body: OutgoingBody) => Promise<T>, attachments: OutgoingAttachment[] = []): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    const body = await prepareOutgoing(roomId, text, attachments);
-    try {
-      return await send(body);
-    } catch (error) {
-      if (attempt >= 2 || !isRetryableE2eeError(error)) throw error;
-      invalidateRoom(roomId);
+/** The tail of each room's send queue — see sendWithE2ee. */
+const sendQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Sends go out one at a time per room, in the order they were made. Run
+ * concurrently (someone typing fast), every send that found the room key due
+ * for rotation rotated it itself: they raced each other into STALE_EPOCH
+ * conflicts until one ran out of retries and the message was dropped. One at
+ * a time, the first send rotates and the rest reuse its key — and sequence
+ * numbers follow the order the user wrote in, since encryption time no longer
+ * decides who reaches the server first.
+ */
+export function sendWithE2ee<T>(roomId: string, text: string, send: (body: OutgoingBody) => Promise<T>, attachments: OutgoingAttachment[] = []): Promise<T> {
+  const run = async () => {
+    for (let attempt = 0, throttled = 0; ; attempt++) {
+      const body = await prepareOutgoing(roomId, text, attachments);
+      try {
+        return await send(body);
+      } catch (error) {
+        // Typing faster than the per-user send limit: wait it out and send,
+        // rather than dropping the message (it is already shown as sent).
+        const retryAfter = (error as { code?: string; retryAfterSeconds?: number }).code === "RATE_LIMIT_EXCEEDED"
+          ? (error as { retryAfterSeconds?: number }).retryAfterSeconds ?? 1
+          : null;
+        if (retryAfter !== null && throttled++ < 5) {
+          await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfter, 10) * 1000));
+          attempt--;
+          continue;
+        }
+        if (attempt >= 2 || !isRetryableE2eeError(error)) throw error;
+        invalidateRoom(roomId);
+      }
     }
-  }
+  };
+  const previous = sendQueues.get(roomId) ?? Promise.resolve();
+  const result = previous.then(run, run);
+  const tail = result.catch(() => undefined);
+  sendQueues.set(roomId, tail);
+  void tail.then(() => { if (sendQueues.get(roomId) === tail) sendQueues.delete(roomId); });
+  return result;
 }
 
 interface OpenedPayload {
@@ -568,7 +621,9 @@ export async function decryptMessage<T extends MaybeEncrypted>(message: T): Prom
       return { ...attachment, fileName: secret.n, mimeType: secret.m, fileSize: secret.s, url, sourceUrl: attachment.url, secret };
     }))
     : message.attachments;
-  return { ...message, content: opened.text, attachments };
+  // Clear a failure from an earlier attempt: re-opening a locked message once
+  // its key arrives passes the locked copy back in.
+  return { ...message, content: opened.text, attachments, e2eeFailed: false };
 }
 
 export function decryptMessages<T extends MaybeEncrypted>(messages: T[]) {

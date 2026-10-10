@@ -1052,6 +1052,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .message-bubble > span { margin-top: 3px; display: flex; justify-content: flex-end; align-items: center; gap: 3px; color: var(--muted); font-size: 9px; }
 .message-mine .message-bubble > span svg { color: var(--accent); }
 .message-bubble > span .message-sent-check { opacity: .55; }
+.message-bubble > span .message-sending { opacity: .5; }
 .message-seen-count { display: inline-flex; align-items: center; gap: 2px; opacity: .85; }
 .typing-bubble { width: 48px; height: 29px; margin: 8px 0 0 38px; display: flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); }
 .typing-bubble i { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); animation: typing 1s infinite alternate; }

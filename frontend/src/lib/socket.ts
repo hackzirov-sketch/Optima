@@ -21,7 +21,10 @@ export function getSocket(): Socket {
       transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,
-      reconnectionAttempts: 8,
+      // Never give up: a capped number of attempts (it was 8, ~40s) left chat
+      // and calls silently dead after a laptop sleep or a longer outage until
+      // the page was reloaded. Backoff stays at socket.io's 5s ceiling.
+      reconnectionAttempts: Infinity,
     });
   }
   if (!socket.connected) socket.connect();
@@ -42,10 +45,10 @@ export function closeSocket() {
 export function emitWithAck<T = unknown>(event: string, payload: unknown, timeoutMs = 9000): Promise<T> {
   const target = getSocket();
   return new Promise<T>((resolve, reject) => {
-    target.timeout(timeoutMs).emit(event, payload, (error: Error | null, response?: { ok?: boolean; error?: { code?: string; message?: string } }) => {
+    target.timeout(timeoutMs).emit(event, payload, (error: Error | null, response?: { ok?: boolean; error?: { code?: string; message?: string; retryAfterSeconds?: number } }) => {
       if (error) return reject(error);
       if (response && response.ok === false) {
-        return reject(Object.assign(new Error(response.error?.message || "Request failed"), { code: response.error?.code }));
+        return reject(Object.assign(new Error(response.error?.message || "Request failed"), { code: response.error?.code, retryAfterSeconds: response.error?.retryAfterSeconds }));
       }
       resolve(response as T);
     });

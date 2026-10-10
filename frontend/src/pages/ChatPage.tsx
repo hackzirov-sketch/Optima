@@ -17,6 +17,7 @@ import {
   LoaderCircle,
   Lock,
   LogOut,
+  Clock3,
   MailPlus,
   Maximize2,
   Megaphone,
@@ -75,7 +76,7 @@ import { useConfirm }                                                       from
 import { api }                                                              from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
-import { decryptEnvelope, decryptMessage, invalidateRoom, roomSafetyCode, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
+import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, roomSafetyCode, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -372,6 +373,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
   const shouldStickToMessageBottom = useRef(true);
+  /** Set while the socket is down, so the next connect knows it is a reconnect. */
+  const socketWasDown = useRef(false);
   const aiMessageList = useRef<HTMLDivElement>(null);
   const aiShouldScroll = useRef(false);
   const preserveMessageScroll = useRef(false);
@@ -876,10 +879,40 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     initPresence();
     const onConnect = () => {
       setConnected(true);
+      if (socketWasDown.current) {
+        // Back from an outage: key requests and room changes may have been
+        // missed. Refetching the list re-opens previews against fresh key
+        // state, which also serves keys owed to members' new devices.
+        socketWasDown.current = false;
+        invalidateAllRooms();
+        void loadRooms(undefined, { keepSelection: true }).catch(() => undefined);
+        // Messages broadcast while this socket was down never arrive over it:
+        // fetch the open room's latest page and merge it in, or they'd stay
+        // missing from the conversation until a reload.
+        if (selectedId && selectedRoom?.memberStatus !== "pending") {
+          const roomId = selectedId;
+          void api.chat.messages(roomId).then((result) => {
+            setMessages((current) => {
+              if (current.length && current[0].roomId !== roomId) return current;
+              const known = new Set(current.map((message) => message.id));
+              const missed = result.data.filter((message) => !known.has(message.id));
+              if (!missed.length) return current;
+              // A send still showing as optimistic may be among them: the copy
+              // from the server replaces it.
+              const echoed = new Set(missed.map((message) => message.clientMessageId).filter(Boolean));
+              const withoutEchoed = current.filter((item) => !(item.id.startsWith("optimistic:") && echoed.has(item.clientMessageId)));
+              return [...withoutEchoed, ...missed].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt)));
+            });
+          }).catch(() => undefined);
+        }
+      }
       socket.emit("join_group", { groupId: workspace.id });
       if (selectedId && selectedRoom?.memberStatus !== "pending") socket.emit("join_room", { roomId: selectedId });
     };
-    const onDisconnect = () => setConnected(false);
+    const onDisconnect = () => {
+      setConnected(false);
+      socketWasDown.current = true;
+    };
     // E2EE messages arrive as ciphertext; open them before they reach state.
     const onMessage = (incoming: ChatMessage) => {
       void decryptMessage(incoming).then(handleMessage);
@@ -960,8 +993,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       }));
     };
     const onError = (data: { code?: string; message?: string }) => {
-      // Stale-room-key rejections are retried silently by sendWithE2ee.
-      if (data?.code?.startsWith("E2EE_")) return;
+      // Stale-room-key rejections are retried silently by sendWithE2ee, and so
+      // is a send over the rate limit (it waits and goes out a moment later).
+      if (data?.code?.startsWith("E2EE_") || data?.code === "RATE_LIMIT_EXCEEDED") return;
       if (data?.code) show(data.message || "Real-time xatolik", "error");
     };
     const onMessageRead = (data: { roomId: string; userId: string; lastReadSeq?: number }) => {
@@ -987,6 +1021,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
     // Another member device published a new room key.
     const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
+    const onRoomKeysRequested = (data: { roomId: string }) => serveRoomKeys(data.roomId);
+    // Keys for messages this device couldn't open were just shared with it.
+    const onRoomKeysShared = (data: { roomId: string }) => {
+      invalidateRoom(data.roomId);
+      void loadRooms(undefined, { keepSelection: true });
+      if (data.roomId !== selectedId) return;
+      setMessages((current) => {
+        const locked = current.filter((message) => message.e2eeFailed);
+        if (locked.length) {
+          void decryptMessages(locked).then((opened) => {
+            const byId = new Map(opened.filter((message) => !message.e2eeFailed).map((message) => [message.id, message]));
+            if (byId.size) setMessages((latest) => latest.map((message) => byId.get(message.id) ?? message));
+          });
+        }
+        return current;
+      });
+    };
     const onMessageDeleted = (data: { roomId: string; messageId: string }) => {
       if (data.roomId !== selectedId) return;
       setMessages((current) => current.filter((item) => item.id !== data.messageId));
@@ -1025,6 +1076,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("room_created", onRoomCreated);
     socket.on("message_views_updated", onViewsUpdated);
     socket.on("room_key_rotated", onRoomKeyRotated);
+    socket.on("room_keys_requested", onRoomKeysRequested);
+    socket.on("room_keys_shared", onRoomKeysShared);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -1041,6 +1094,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("room_created", onRoomCreated);
       socket.off("message_views_updated", onViewsUpdated);
       socket.off("room_key_rotated", onRoomKeyRotated);
+      socket.off("room_keys_requested", onRoomKeysRequested);
+      socket.off("room_keys_shared", onRoomKeysShared);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -2554,7 +2609,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                         onClick={() => void openViewers(message.id)}
                                         aria-label={t("chat.viewersTitle")}><Eye size={12} />{message.viewCount ?? 0}</button>}
                               {message.isEdited && <small>{t("chat.editedLabel")}</small>}{mine && (
-                                selectedRoom.type === "direct"
+                                // Not on the server yet: a tick here claimed a
+                                // message was sent before it had been.
+                                message.id.startsWith("optimistic:")
+                                  ? <Clock3 size={13} className="message-sending" aria-label={t("chat.readStatusSending")} />
+                                  : selectedRoom.type === "direct"
                                   ? (readByCount > 0 ? <CheckCheck size={14} className="message-read"
                                                                    aria-label={t("chat.readStatusRead")} /> :
                                     <Check size={14} className="message-sent-check"

@@ -230,9 +230,16 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
         params.push(pair.messageId, pair.userId);
       });
 
+      // Only pairs whose message and user still exist. A view buffered for a
+      // message deleted before the flush used to fail the whole batch on the
+      // foreign key — and since a failed batch is restored and retried, that
+      // one row blocked every view from being counted, forever.
       const inserted = await query<{ messageId: string }>(
         `INSERT INTO message_views (message_id, user_id)
-         VALUES ${values.join(', ')}
+         SELECT v.message_id, v.user_id
+           FROM (VALUES ${values.join(', ')}) AS v(message_id, user_id)
+           JOIN chat_messages m ON m.id = v.message_id
+           JOIN users u ON u.id = v.user_id
          ON CONFLICT (message_id, user_id) DO NOTHING
          RETURNING message_id AS "messageId"`,
         params,

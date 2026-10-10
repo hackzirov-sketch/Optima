@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler-storage';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
@@ -121,7 +122,8 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     },
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      // After JwtAuthGuard, so the limit is counted per user — see the guard.
+      useClass: UserThrottlerGuard,
     },
   ],
 })

@@ -215,6 +215,7 @@ export class MeetingsController {
       reason: 'host_ended',
     });
     await this.gateway.forceEndMeetingRoom(meetingId);
+    await this.liveKit.closeRoom(meetingId);
     return meeting;
   }
 

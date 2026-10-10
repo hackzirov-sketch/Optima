@@ -318,16 +318,7 @@ export class ChatMessageService {
     );
     const saved = savedRows[0];
 
-    await this.chatQueue.add(
-      'update-room-metadata',
-      {
-        roomId,
-        sequence,
-        lastMessageId: saved.id,
-        lastMessageAt: saved.createdAt,
-      },
-      { jobId: roomId, removeOnComplete: true, removeOnFail: true },
-    );
+    await this.updateRoomMetadata(roomId, sequence, saved.id, saved.createdAt);
 
     return this.mapToResponse(saved, content, []);
   }
@@ -743,7 +734,7 @@ export class ChatMessageService {
     // Thread replies are hidden from the main timeline (Slack-style), so they must
     // NOT bump the room's "last message" preview in the sidebar — only the
     // notification/side-effects job runs for them.
-    const jobs = [
+    const jobs: Promise<unknown>[] = [
       this.chatQueue.add(
         'message-side-effects',
         {
@@ -765,27 +756,14 @@ export class ChatMessageService {
             ? normalizeMentions(dto.mentions, MAX_MENTIONS_PER_MESSAGE)
             : extractMentions(dto.content),
         },
-        { jobId: saved.id },
+        // One job per message: kept after completion, each stayed in Redis
+        // for good — unbounded growth with message volume.
+        { jobId: saved.id, removeOnComplete: true, removeOnFail: 1000 },
       ),
     ];
     if (!dto.isThreadReply) {
       jobs.push(
-        this.chatQueue.add(
-          'update-room-metadata',
-          {
-            roomId,
-            sequence,
-            lastMessageId: saved.id,
-            lastMessageAt: saved.createdAt,
-          },
-          // jobId dedupes bursts of messages in the same room into one job, but
-          // BullMQ treats a jobId as permanently taken once that job exists -
-          // without removeOnComplete/removeOnFail, only the very first message
-          // ever sent in a room would actually update message_seq, since every
-          // later add() with the same jobId silently no-ops against the
-          // already-completed job instead of enqueuing a new one.
-          { jobId: roomId, removeOnComplete: true, removeOnFail: true },
-        ),
+        this.updateRoomMetadata(roomId, sequence, saved.id, saved.createdAt),
       );
     }
     await Promise.all(jobs);
@@ -1176,5 +1154,27 @@ export class ChatMessageService {
       String(floor),
     );
     return Number(seeded);
+  }
+
+  /**
+   * The sidebar preview and unread baseline (message_seq) for a room. Written
+   * inline: it used to be a queue job deduped on jobId = roomId, and BullMQ
+   * drops every add while a job with that id is still pending — so in a burst
+   * only the first message reached the room row, leaving a stale preview and
+   * wrong unread counts until some later message happened to land alone.
+   * `message_seq < $2` keeps concurrent sends from walking it backwards.
+   */
+  private async updateRoomMetadata(
+    roomId: string,
+    sequence: number,
+    lastMessageId: string,
+    lastMessageAt: Date | string,
+  ): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE chat_rooms
+          SET message_seq = $2, last_message_id = $3, last_message_at = $4
+        WHERE id = $1 AND message_seq < $2`,
+      [roomId, sequence, lastMessageId, new Date(lastMessageAt)],
+    );
   }
 }

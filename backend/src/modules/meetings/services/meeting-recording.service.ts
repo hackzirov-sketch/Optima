@@ -88,6 +88,8 @@ export class MeetingRecordingService {
       {
         delay: MAX_RECORDING_DURATION_SECONDS * 1000,
         jobId: `auto-stop_${recording.id}`,
+        removeOnComplete: true,
+        removeOnFail: 100,
       },
     );
 

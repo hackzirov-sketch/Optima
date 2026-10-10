@@ -57,6 +57,25 @@ async function bootstrap() {
   });
 
   /**
+   * How many reverse proxies sit in front of the API (nginx, Cloudflare
+   * tunnel, …). Without it req.ip is the proxy's address for every request,
+   * so per-IP limits and logs see one client. TRUST_PROXY takes Express's
+   * values: a hop count ("1"), "loopback", a CIDR list, or "true".
+   */
+  const trustProxy =
+    process.env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal';
+  app.set(
+    'trust proxy',
+    /^\d+$/.test(trustProxy)
+      ? Number(trustProxy)
+      : trustProxy === 'true'
+        ? true
+        : trustProxy === 'false'
+          ? false
+          : trustProxy,
+  );
+
+  /**
    * Get Pino logger registered by LoggerConfigModule.
    */
   const pinoLogger = app.get(PinoLogger);
