@@ -32,6 +32,24 @@ export const updateProfileSchema = z.object({
     .max(999999999999999)
     .optional(),
   occupation: z.nativeEnum(UserOccupation).optional(),
+  /** A line about yourself, shown on the profile (Telegram's 70-140 chars). */
+  bio: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || null : value),
+    z.string().max(140).nullable().optional(),
+  ),
+  birthday: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+      const date = new Date(`${value}T00:00:00Z`);
+      return (
+        !Number.isNaN(+date) &&
+        date < new Date() &&
+        date.getUTCFullYear() >= 1900
+      );
+    }, 'Invalid birthday')
+    .nullable()
+    .optional(),
 });
 
 export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}

@@ -121,6 +121,21 @@ export interface MappedAttachment {
   height: number | null;
 }
 
+/** Columns and joins for a timeline message row — shared by the timeline and the pinned list. */
+const MESSAGE_ROW_SELECT = `SELECT
+         m.id AS "id", m.room_id AS "roomId", m.sender_id AS "senderId",
+         m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
+         m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
+         m.is_system AS "isSystem", m.system_metadata AS "systemMetadata", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
+         m.sequence, m.client_message_id AS "clientMessageId", m.metadata, m.is_e2ee AS "isE2ee",
+         m.is_pinned AS "isPinned",
+         u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
+         u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname",
+         t.reply_count AS "threadReplyCount", t.last_reply_at AS "threadLastReplyAt"
+       FROM chat_messages m
+       LEFT JOIN users u ON u.id = m.sender_id
+       LEFT JOIN message_threads t ON t.root_message_id = m.id`;
+
 @Injectable()
 export class ChatMessageService {
   constructor(
@@ -353,18 +368,7 @@ export class ChatMessageService {
     }
 
     const messages = await this.dataSource.query<any>(
-      `SELECT
-         m.id AS "id", m.room_id AS "roomId", m.sender_id AS "senderId",
-         m.reply_to_id AS "replyToId", m.content, m.content_json AS "contentJson",
-         m.content_type AS "contentType", m.is_edited AS "isEdited", m.edited_at AS "editedAt",
-         m.is_system AS "isSystem", m.system_metadata AS "systemMetadata", m.created_at AS "createdAt", m.updated_at AS "updatedAt",
-         m.sequence, m.client_message_id AS "clientMessageId", m.metadata, m.is_e2ee AS "isE2ee",
-         u.id AS "s_id", u.first_name AS "s_firstName", u.last_name AS "s_lastName",
-         u.avatar_url AS "s_avatarUrl", u.name_emoji AS "s_nameEmoji", u.nickname AS "s_nickname",
-         t.reply_count AS "threadReplyCount", t.last_reply_at AS "threadLastReplyAt"
-       FROM chat_messages m
-       LEFT JOIN users u ON u.id = m.sender_id
-       LEFT JOIN message_threads t ON t.root_message_id = m.id
+      `${MESSAGE_ROW_SELECT}
        WHERE ${whereClause}
        ORDER BY m.sequence DESC
        LIMIT ${limitParam} ${offsetClause}`,
@@ -384,64 +388,7 @@ export class ChatMessageService {
       return { data: [], total, page: cursor ? undefined : page, limit: l };
     }
 
-    const msgIds = messages.map((m) => m.id);
-
-    const reactions = await this.dataSource.query<ChatReaction>(
-      `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions WHERE message_id = ANY($1::uuid[])`,
-      [msgIds],
-    );
-    const reactionsByMsg = new Map<string, ChatReaction[]>();
-    for (const r of reactions) {
-      if (!reactionsByMsg.has(r.messageId)) reactionsByMsg.set(r.messageId, []);
-      reactionsByMsg.get(r.messageId)!.push(r);
-    }
-
-    const attachments = await this.dataSource.query<MessageAttachment>(
-      `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = ANY($1::uuid[])`,
-      [msgIds],
-    );
-    const attachmentsByMsg = new Map<string, MessageAttachment[]>();
-    for (const a of attachments) {
-      if (!attachmentsByMsg.has(a.messageId))
-        attachmentsByMsg.set(a.messageId, []);
-      attachmentsByMsg.get(a.messageId)!.push(a);
-    }
-
-    const data = messages.map((msg) => ({
-      id: msg.id,
-      roomId: msg.roomId,
-      senderId: msg.senderId,
-      sequence: msg.sequence,
-      clientMessageId: msg.clientMessageId,
-      metadata: msg.metadata,
-      sender: msg.s_id
-        ? {
-            id: msg.s_id,
-            firstName: msg.s_firstName,
-            lastName: msg.s_lastName,
-            avatarUrl: msg.s_avatarUrl,
-            nameEmoji: msg.s_nameEmoji,
-            nickname: msg.s_nickname,
-          }
-        : null,
-      ...this.bodyOf(msg),
-      contentType: msg.contentType,
-      attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) =>
-        this.mapAttachment(a),
-      ),
-      replyToId: msg.replyToId ?? null,
-      isEdited: msg.isEdited,
-      editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
-      isSystem: msg.isSystem,
-      systemMetadata: msg.systemMetadata,
-      createdAt: msg.createdAt,
-      updatedAt: msg.updatedAt,
-      reactions: this.chatReactionService.groupReactions(
-        reactionsByMsg.get(msg.id) ?? [],
-      ),
-      threadReplyCount: msg.threadReplyCount ? Number(msg.threadReplyCount) : 0,
-      threadLastReplyAt: msg.threadLastReplyAt ?? null,
-    }));
+    const data = await this.hydrateMessages(messages);
 
     return { data, total, limit: l };
   }
@@ -1176,5 +1123,135 @@ export class ChatMessageService {
         WHERE id = $1 AND message_seq < $2`,
       [roomId, sequence, lastMessageId, new Date(lastMessageAt)],
     );
+  }
+
+  /** Reactions, attachments, sender and body for rows selected with MESSAGE_ROW_SELECT. */
+  private async hydrateMessages(messages: any[]) {
+    const msgIds = messages.map((m) => m.id);
+
+    const reactions = await this.dataSource.query<ChatReaction>(
+      `SELECT ${CHAT_REACTION_COLUMNS_SQL} FROM chat_reactions WHERE message_id = ANY($1::uuid[])`,
+      [msgIds],
+    );
+    const reactionsByMsg = new Map<string, ChatReaction[]>();
+    for (const r of reactions) {
+      if (!reactionsByMsg.has(r.messageId)) reactionsByMsg.set(r.messageId, []);
+      reactionsByMsg.get(r.messageId)!.push(r);
+    }
+
+    const attachments = await this.dataSource.query<MessageAttachment>(
+      `SELECT ${MESSAGE_ATTACHMENT_COLUMNS_SQL} FROM message_attachments WHERE message_id = ANY($1::uuid[])`,
+      [msgIds],
+    );
+    const attachmentsByMsg = new Map<string, MessageAttachment[]>();
+    for (const a of attachments) {
+      if (!attachmentsByMsg.has(a.messageId))
+        attachmentsByMsg.set(a.messageId, []);
+      attachmentsByMsg.get(a.messageId)!.push(a);
+    }
+
+    return messages.map((msg) => ({
+      id: msg.id,
+      roomId: msg.roomId,
+      senderId: msg.senderId,
+      sequence: msg.sequence,
+      clientMessageId: msg.clientMessageId,
+      metadata: msg.metadata,
+      sender: msg.s_id
+        ? {
+            id: msg.s_id,
+            firstName: msg.s_firstName,
+            lastName: msg.s_lastName,
+            avatarUrl: msg.s_avatarUrl,
+            nameEmoji: msg.s_nameEmoji,
+            nickname: msg.s_nickname,
+          }
+        : null,
+      ...this.bodyOf(msg),
+      contentType: msg.contentType,
+      attachments: (attachmentsByMsg.get(msg.id) ?? []).map((a) =>
+        this.mapAttachment(a),
+      ),
+      replyToId: msg.replyToId ?? null,
+      isEdited: msg.isEdited,
+      editedAt: msg.isEdited ? (msg.editedAt ?? msg.updatedAt) : null,
+      isSystem: msg.isSystem,
+      systemMetadata: msg.systemMetadata,
+      createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt,
+      reactions: this.chatReactionService.groupReactions(
+        reactionsByMsg.get(msg.id) ?? [],
+      ),
+      threadReplyCount: msg.threadReplyCount ? Number(msg.threadReplyCount) : 0,
+      threadLastReplyAt: msg.threadLastReplyAt ?? null,
+      isPinned: Boolean(msg.isPinned),
+    }));
+  }
+
+  // ─── Pins ───────────────────────────────────────────────────────────────
+
+  /** Newest pin first — what the pinned bar above the conversation cycles through. */
+  async listPinned(roomId: string, userId: string) {
+    await this.chatMemberService.assertRoomMember(roomId, userId);
+    const rows = await this.dataSource.query<any>(
+      `${MESSAGE_ROW_SELECT}
+       WHERE m.room_id = $1 AND m.is_pinned AND m.deleted_at IS NULL
+       ORDER BY m.pinned_at DESC NULLS LAST
+       LIMIT 100`,
+      [roomId],
+    );
+    return this.hydrateMessages(rows);
+  }
+
+  /**
+   * Pin or unpin. In a direct chat either person may; in groups and channels
+   * it is a moderation action (owner, admin, moderator), as in Telegram.
+   */
+  async setPinned(messageId: string, userId: string, pinned: boolean) {
+    const rows = await this.dataSource.query<{
+      roomId: string;
+      roomType: string;
+      isSystem: boolean;
+    }>(
+      `SELECT m.room_id AS "roomId", r.type AS "roomType", m.is_system AS "isSystem"
+         FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id
+        WHERE m.id = $1 AND m.deleted_at IS NULL`,
+      [messageId],
+    );
+    const msg = rows[0];
+    if (!msg)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
+    await this.chatMemberService.assertRoomMember(msg.roomId, userId);
+    if (msg.roomType !== 'direct') {
+      const roles = await this.dataSource.query<{ role: string }>(
+        `SELECT role FROM chat_members
+          WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL`,
+        [msg.roomId, userId],
+      );
+      if (!['owner', 'admin', 'moderator'].includes(roles[0]?.role ?? '')) {
+        throw new ForbiddenException({
+          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+          message: 'Only admins can pin messages here',
+        });
+      }
+    }
+    await this.dataSource.query(
+      `UPDATE chat_messages
+          SET is_pinned = $2,
+              pinned_at = CASE WHEN $2 THEN now() ELSE NULL END,
+              pinned_by = CASE WHEN $2 THEN $3::uuid ELSE NULL END
+        WHERE id = $1`,
+      [messageId, pinned, userId],
+    );
+    this.events.emit('chat.message_pinned', {
+      roomId: msg.roomId,
+      messageId,
+      pinned,
+      pinnedBy: userId,
+    });
+    return { messageId, pinned };
   }
 }

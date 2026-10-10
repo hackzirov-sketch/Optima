@@ -1664,11 +1664,6 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .conversation-title:is(button) { width: 100%; height: 100%; padding: 5px 7px; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .conversation-header > .conversation-title { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 3px; }
 .conversation-title .e2ee-badge { margin-left: 6px; vertical-align: -1px; color: var(--text-muted, currentColor); opacity: .75; flex: none; }
-.e2ee-safety { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-md, 10px); background: var(--surface-muted, rgba(127,127,127,.08)); }
-.e2ee-safety > svg { flex: none; margin-top: 2px; color: var(--accent, currentColor); }
-.e2ee-safety > span { display: grid; gap: 4px; min-width: 0; }
-.e2ee-safety small { opacity: .75; line-height: 1.35; }
-.e2ee-safety code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: .04em; word-spacing: .3em; overflow-wrap: anywhere; }
 .conversation-title h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-title p { color: var(--accent); }
 .chat-details { display: grid; gap: 14px; }

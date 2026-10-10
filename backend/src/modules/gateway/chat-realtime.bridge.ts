@@ -125,6 +125,16 @@ export class ChatRealtimeBridge {
       );
   }
 
+  @OnEvent('chat.message_pinned')
+  onMessagePinned(payload: {
+    roomId: string;
+    messageId: string;
+    pinned: boolean;
+    pinnedBy: string;
+  }) {
+    this.toRoomMembers(payload.roomId, 'message_pinned', payload);
+  }
+
   @OnEvent('chat.message_deleted')
   onMessageDeleted(payload: {
     roomId: string;

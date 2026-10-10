@@ -1,0 +1,48 @@
+/*
+ * One focus treatment for every text field, loaded last.
+ *
+ * Several layers each drew their own ring (an outline here, a box-shadow
+ * there, a border-colour change on top), and fields wrapped in a pill — the
+ * meet code box, search bars, the composer — got the wrapper's ring and the
+ * inner input's ring at once. Rule: a field shows one soft ring; when it sits
+ * inside a composite wrapper, the wrapper shows it and the field shows none.
+ */
+:root { --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent, #4a58b7) 22%, transparent); }
+
+:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):focus,
+:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):focus-visible {
+  outline: none !important;
+  border-color: color-mix(in srgb, var(--accent, #4a58b7) 70%, transparent) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+/* Composite fields: the wrapper is the visible control. */
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label):focus-within {
+  outline: none !important;
+  border-color: color-mix(in srgb, var(--accent, #4a58b7) 70%, transparent) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label) :is(input, textarea):is(:focus, :focus-visible) {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* The dark meet surfaces keep their own blue. */
+:root[data-theme] body .gm-room :is(input, textarea, select):is(:focus, :focus-visible) {
+  border-color: var(--gm-active, #8ab4f8) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gm-active, #8ab4f8) 35%, transparent) !important;
+}
+
+/* Underline fields (Telegram-style editors) mark focus with the underline alone. */
+:root[data-theme] body :is(.tgp-row-edit, .tg-edit-name, .tg-edit-slug) :is(input, select):is(:focus, :focus-visible) {
+  border-color: transparent !important;
+  border-bottom-color: var(--accent, #4a58b7) !important;
+  box-shadow: none !important;
+}
+:root[data-theme] body :is(.tgp-bio, .tg-edit-desc) textarea:is(:focus, :focus-visible) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:root[data-theme] body .tg-edit-desc textarea:is(:focus, :focus-visible) { border-bottom-color: var(--accent, #4a58b7) !important; }

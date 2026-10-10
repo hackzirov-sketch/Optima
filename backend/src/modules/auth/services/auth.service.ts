@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ import { VerifyEmailDto } from '../schemas/verify-email.schema';
 import { ResendVerificationDto } from '../schemas/resend-verification.schema';
 import { SetPasswordDto } from '../schemas/set-password.schema';
 import { ForgotPasswordDto } from '../schemas/forgot-password.schema';
+import { ChangePasswordDto } from '../schemas/change-password.schema';
 import { ResetPasswordDto } from '../schemas/reset-password.schema';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
 
@@ -461,6 +463,18 @@ export class AuthService {
     const user = await this.usersService.findById(finalUserId);
     if (!user) throw new UnauthorizedException();
 
+    // A signed-in session may set a *first* password (OAuth-only account),
+    // never replace one: that would let anyone holding a session — a stolen
+    // cookie, an unlocked laptop — lock the owner out without knowing the
+    // current password. Replacing goes through changePassword, or through the
+    // emailed reset flow (setupToken).
+    if (user.passwordHash && !dto.setupToken) {
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Use change-password and confirm the current password',
+      });
+    }
+
     // Replacing an existing password is a credential *change*; setting the
     // first one on an OAuth-only account is not. Only the former invalidates
     // sessions — see the note in resetPassword. Captured before the update,
@@ -491,6 +505,39 @@ export class AuthService {
       // than leaving them on a screen whose next request will 401.
       sessionsRevoked: isPasswordChange,
     };
+  }
+
+  /**
+   * Replace the password of a signed-in account, proving the current one.
+   * Every session is revoked afterwards (the caller's too), same as a reset:
+   * a password change is usually a response to suspected compromise.
+   */
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersService.findById(userId);
+    const valid =
+      !!user?.passwordHash &&
+      (await this.securityService.comparePassword(
+        dto.currentPassword,
+        user.passwordHash,
+      ));
+    if (!valid) {
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+        message: 'The current password is incorrect',
+      });
+    }
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'The new password must differ from the current one',
+      });
+    }
+    const passwordHash = await this.securityService.hashPassword(
+      dto.newPassword,
+    );
+    await this.usersService.update(userId, { passwordHash });
+    await this.sessionService.revokeAllSessions(userId);
+    return { message: 'Password changed', sessionsRevoked: true };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {

@@ -7,6 +7,15 @@ import { ToastProvider } from "./components/Toast";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import "./styles.css";
 import "./premium.css";
+// Order matters: each layer refines the ones above it. A merge once dropped
+// the last three and left the home page and dock unstyled.
+import "./motion.css";
+import "./feedback-polish.css";
+import "./navigation-ai.css";
+import "./chat-telegram.css";
+import "./profile-telegram.css";
+import "./library-v2.css";
+import "./focus.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

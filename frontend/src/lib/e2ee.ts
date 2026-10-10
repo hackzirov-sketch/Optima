@@ -629,22 +629,3 @@ export async function decryptMessage<T extends MaybeEncrypted>(message: T): Prom
 export function decryptMessages<T extends MaybeEncrypted>(messages: T[]) {
   return Promise.all(messages.map((message) => decryptMessage(message)));
 }
-
-/**
- * A code every member can compare out loud or side by side: a hash over all
- * member devices' public keys. If the server slipped in a device (or swapped
- * a key), members see different codes. It changes whenever anyone adds or
- * removes a device.
- */
-export async function roomSafetyCode(roomId: string): Promise<string | null> {
-  const state = await getState(roomId);
-  if (!state.enabled || state.devices.length === 0) return null;
-  const material = state.devices
-    .map((d) => `${d.userId}|${d.deviceId}|${d.publicKey.x}|${d.publicKey.y}`)
-    .sort()
-    .join("\n");
-  const digest = new Uint8Array(await subtle.digest("SHA-256", enc.encode(`optima-safety-v1\n${roomId}\n${material}`)));
-  const groups: string[] = [];
-  for (let i = 0; i < 24; i += 2) groups.push(String(((digest[i] << 8) | digest[i + 1]) % 100000).padStart(5, "0"));
-  return groups.join(" ");
-}

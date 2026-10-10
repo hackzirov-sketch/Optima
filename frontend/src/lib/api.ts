@@ -18,6 +18,36 @@ import type {
   GroupMember,
 } from "../types";
 import { session } from "./session";
+
+export interface LibraryBook {
+  key: string;
+  id: string;
+  title: string;
+  authors: string[];
+  languages: string[];
+  year: string | null;
+  downloads: number;
+  description: string;
+  cover: string;
+  embedUrl: string | null;
+  textUrl: string | null;
+  sourceUrl: string;
+  source: "internet-archive" | "gutenberg";
+}
+export interface LibraryReviews {
+  count: number;
+  average: number | null;
+  items: Array<{ id: string; rating: number; body: string; createdAt: string; updatedAt: string; mine: boolean; author: { id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null } }>;
+}
+export interface YoutubeVideo {
+  youtubeVideoId: string;
+  title: string;
+  channelName: string;
+  channelId: string;
+  publishedAt: string | null;
+  durationSeconds: number;
+  views: number | null;
+}
 import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
@@ -265,6 +295,9 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
 export const api = {
   auth: {
+    /** Signs every session out on success — the caller included. */
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiFetch<{ message: string; sessionsRevoked: boolean }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
     login: (email: string, password: string) =>
       apiFetch<AuthResult>("/auth/login", {
         method: "POST",
@@ -337,7 +370,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji">>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio">>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -458,6 +491,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ content: body.content, e2ee: body.e2ee, mentions: body.mentions, clientMessageId }),
       })).then(decryptMessage),
+    /** Pinned messages of a room, newest pin first (decrypted like the timeline). */
+    pins: (roomId: string) => apiFetch<ChatMessage[]>(`/chat/rooms/${roomId}/pins`).then(decryptMessages),
+    pin: (messageId: string) => apiFetch(`/chat/messages/${messageId}/pin`, { method: "POST" }),
+    unpin: (messageId: string) => apiFetch(`/chat/messages/${messageId}/pin`, { method: "DELETE" }),
     addReaction: (messageId: string, emoji: string) =>
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>
@@ -598,6 +635,17 @@ export const api = {
   },
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
+    search: (params: { q?: string; lang: string; subject: string; page: number }) =>
+      apiFetch<{ total: number; items: LibraryBook[]; page: number; hasMore: boolean }>(`/library/search?${new URLSearchParams({ q: params.q ?? "", lang: params.lang, subject: params.subject, page: String(params.page) })}`),
+    reviews: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`),
+    saveReview: (bookKey: string, rating: number, body: string) =>
+      apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "PUT", body: JSON.stringify({ rating, body }) }),
+    deleteReview: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "DELETE" }),
+  },
+  youtube: {
+    status: () => apiFetch<{ enabled: boolean }>("/youtube/status"),
+    search: (q: string, pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/search?${new URLSearchParams({ q, ...(pageToken ? { pageToken } : {}) })}`),
+    popular: (pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/popular${pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : ""}`),
   },
   education: {
     home: () => apiFetch<{ subjects: Array<{ id: string; name: string; description: string }>; trustedChannels: Array<{ id: string; name: string; handle?: string; avatarUrl?: string; subjects: string[]; examTypes: string[]; trustLevel: string }>; latest: any[]; continueLearning: any[]; saved: any[] }>("/education/home"),

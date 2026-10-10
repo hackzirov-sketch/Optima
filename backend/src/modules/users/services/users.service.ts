@@ -59,7 +59,7 @@ export class UsersService {
   async findPublicById(id: string): Promise<PublicUserDto> {
     const rows = await this.dataSource.query<PublicUserDto>(
       `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, nickname,
-              avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
+              avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
        FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id],
     );
@@ -80,10 +80,10 @@ export class UsersService {
     const rows = await this.dataSource.query<PublicUserDto>(
       isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
            FROM users WHERE public_id = $1 AND deleted_at IS NULL`
         : `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
            FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
       [isNumeric ? Number(normalized) : normalized],
     );
@@ -340,7 +340,7 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<User> {
-    const texts = [dto.firstName, dto.lastName, dto.nickname].filter(
+    const texts = [dto.firstName, dto.lastName, dto.nickname, dto.bio].filter(
       Boolean,
     ) as string[];
     for (const t of texts) {

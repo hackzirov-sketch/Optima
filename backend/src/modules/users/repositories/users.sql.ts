@@ -2,7 +2,7 @@ export const USER_COLUMNS_SQL = `
   id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName", username, nickname, email,
   phone_number AS "phoneNumber",
   avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", background_url AS "backgroundUrl", language, timezone, theme, occupation,
-  account_visibility AS "accountVisibility",
+  account_visibility AS "accountVisibility", bio, birthday::text AS "birthday",
   is_active AS "isActive", is_verified AS "isVerified", providers,
   needs_password_setup AS "needsPasswordSetup", last_seen AS "lastSeen",
   created_at AS "createdAt", updated_at AS "updatedAt",

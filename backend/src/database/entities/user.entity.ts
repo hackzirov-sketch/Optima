@@ -25,6 +25,11 @@ export interface User {
 
   avatarUrl: string | null;
 
+  bio?: string | null;
+
+  /** YYYY-MM-DD. */
+  birthday?: string | null;
+
   /** Optional custom emoji rendered before the public display name. */
   nameEmoji: string | null;
 

@@ -9,5 +9,6 @@ export interface PublicUserDto {
   nickname: string | null;
   avatarUrl: string | null;
   nameEmoji: string | null;
+  bio?: string | null;
   lastSeen: Date | null;
 }

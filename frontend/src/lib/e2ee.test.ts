@@ -217,14 +217,4 @@ describe("chat end-to-end encryption", () => {
     as("bob");
     expect(await e2ee.decryptEnvelope("dm", "alice", old)).toBe("eski xabar");
   });
-
-  it("shows every member the same safety code", async () => {
-    for (const u of ["alice", "bob", "carol"]) { as(u); await e2ee.isRoomE2ee("grp"); }
-    const codes = [];
-    for (const u of ["alice", "bob", "carol"]) { as(u); codes.push(await e2ee.roomSafetyCode("grp")); }
-    expect(codes[0]).toMatch(/^(\d{5} ){11}\d{5}$/);
-    expect(new Set(codes).size).toBe(1);
-    as("alice");
-    expect(await e2ee.roomSafetyCode("pub")).toBeNull();
-  });
 });

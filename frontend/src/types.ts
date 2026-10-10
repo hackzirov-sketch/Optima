@@ -15,6 +15,10 @@ export interface User {
   backgroundUrl?: string | null;
   accountVisibility?: "public" | "private";
   phoneNumber?: number | null;
+  /** Up to 140 characters, shown on the profile. */
+  bio?: string | null;
+  /** YYYY-MM-DD. */
+  birthday?: string | null;
   occupation?: string | null;
   language?: UserLanguage;
   timezone?: string;

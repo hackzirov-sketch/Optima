@@ -385,6 +385,33 @@ export class ChatController {
     await this.messageService.deleteMessage(messageId, userId);
   }
 
+  @Get('chat/rooms/:roomId/pins')
+  @ApiOperation({ summary: 'Pinned messages, newest first' })
+  listPinned(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.messageService.listPinned(roomId, userId);
+  }
+
+  @Post('chat/messages/:messageId/pin')
+  @ApiOperation({ summary: 'Pin a message (DM: either member; else admins)' })
+  pinMessage(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.messageService.setPinned(messageId, userId, true);
+  }
+
+  @Delete('chat/messages/:messageId/pin')
+  @ApiOperation({ summary: 'Unpin a message' })
+  unpinMessage(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.messageService.setPinned(messageId, userId, false);
+  }
+
   @Patch('chat/messages/:messageId')
   @ApiOperation({ summary: 'Edit message' })
   updateMessage(

@@ -1,0 +1,187 @@
+/* Chat, Telegram-style: message menu, pinned bar, info panel, settings. */
+
+.chat-page .conversation { position: relative; }
+
+/* ── Message menu: opens at the click point, inside the conversation pane ── */
+.chat-page .conversation > .message-context-menu.message-menu-floating {
+  position: absolute !important;
+  left: var(--menu-x, 0px) !important;
+  top: var(--menu-y, 0px) !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 40 !important;
+  width: 236px !important;
+  max-height: calc(100% - 16px) !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  overflow-y: auto;
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--surface) !important;
+  color: var(--text);
+  box-shadow: 0 12px 36px rgba(20, 28, 52, .18), 0 2px 6px rgba(20, 28, 52, .08) !important;
+  transform-origin: top left;
+  animation: tg-menu-in 160ms cubic-bezier(.2, .9, .3, 1.2) both !important;
+}
+.chat-page .conversation > .message-menu-floating::after { display: none !important; }
+.chat-page .conversation > .message-menu-floating > button {
+  width: 100%; min-height: 38px; padding: 0 10px; gap: 12px;
+  display: flex; align-items: center; border: 0; border-radius: 9px;
+  background: transparent; color: inherit; font-size: 14px; font-weight: 500; text-align: left;
+  transform: none !important; transition: background-color 120ms ease;
+}
+.chat-page .conversation > .message-menu-floating > button:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.chat-page .conversation > .message-menu-floating > button svg { flex: none; opacity: .8; }
+.chat-page .conversation > .message-menu-floating > button.danger { color: var(--danger, #d93025); }
+.chat-page .conversation > .message-menu-floating .reaction-strip {
+  display: flex; justify-content: space-between; gap: 2px;
+  margin: 0 0 4px; padding: 2px 2px 6px; border-bottom: 1px solid var(--line);
+}
+.chat-page .conversation > .message-menu-floating .reaction-strip button {
+  width: 36px; height: 36px; flex: none; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent;
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+.chat-page .conversation > .message-menu-floating .reaction-strip button:hover { transform: scale(1.18); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.chat-page .conversation > .message-menu-floating .reaction-strip :is(img, .animated-emoji, svg) { width: 26px !important; height: 26px !important; }
+@keyframes tg-menu-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+
+/* ── Pinned bar under the header ── */
+.pinned-bar {
+  position: relative; z-index: 5;
+  display: flex; align-items: center; gap: 4px;
+  min-height: 52px; padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  animation: tg-pinned-in 200ms ease-out both;
+}
+.pinned-bar-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.pinned-bar-ticks { display: grid; gap: 2px; align-self: stretch; padding: 4px 0; }
+.pinned-bar-ticks i { width: 3px; min-height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 30%, transparent); transition: background-color 160ms ease; }
+.pinned-bar-ticks i.active { background: var(--accent); }
+.pinned-bar-copy { min-width: 0; display: grid; gap: 1px; }
+.pinned-bar-copy strong { color: var(--accent); font-size: 13px; font-weight: 600; }
+.pinned-bar-copy small { overflow: hidden; color: var(--text); font-size: 13.5px; white-space: nowrap; text-overflow: ellipsis; }
+.pinned-bar-close { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.pinned-bar-close:hover { background: var(--surface-muted); color: var(--text); }
+@keyframes tg-pinned-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-page .conversation > .message-menu-floating, .pinned-bar { animation: none !important; }
+}
+.chat-page .conversation > .pinned-bar { flex: 0 0 auto; height: auto; min-height: 52px; max-height: 60px; }
+
+/* ── Info panel (Telegram: hero, action tiles, grouped rows) ── */
+.modal.tg-info-modal { width: min(100%, 420px) !important; max-height: min(88dvh, 760px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0; }
+.modal.tg-info-modal > .modal-header { min-height: 56px; padding: 12px 14px 12px 20px; border-bottom: 0; align-items: center; }
+.modal.tg-info-modal > .modal-header p { display: none; }
+.tg-info { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 8px; padding-bottom: 12px; background: var(--surface-muted); }
+.tg-info-hero { display: grid; justify-items: center; gap: 4px; padding: 4px 20px 18px; background: var(--surface); text-align: center; }
+.tg-info-avatar { display: grid; place-items: center; margin-bottom: 8px; }
+.tg-info-avatar .avatar, .tg-info-avatar .room-avatar { width: 96px !important; height: 96px !important; border-radius: 50% !important; font-size: 32px; }
+.tg-info-avatar .room-avatar svg { width: 38px; height: 38px; }
+.tg-info-hero > strong { font-size: 19px; font-weight: 650; overflow-wrap: anywhere; }
+.tg-info-hero > small { color: var(--muted); font-size: 13.5px; }
+.tg-info-hero > small.online { color: var(--accent); }
+.tg-info-actions { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin-top: -8px; padding: 0 16px 16px; background: var(--surface); }
+.tg-info-actions > button {
+  min-height: 62px; display: grid; justify-items: center; align-content: center; gap: 6px;
+  border: 0; border-radius: 12px; background: var(--surface-muted); color: var(--text);
+  font-size: 12px; font-weight: 550; transition: background-color 140ms ease, transform 140ms ease;
+}
+.tg-info-actions > button:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface-muted)); }
+.tg-info-actions > button:active { transform: scale(.97); }
+.tg-info-actions > button svg { color: var(--accent); }
+.tg-info-section { display: grid; padding: 6px 0; background: var(--surface); }
+.tg-info-section:empty { display: none; }
+.tg-info-row {
+  width: 100%; min-height: 54px; display: flex; align-items: center; gap: 22px;
+  padding: 8px 20px; border: 0; background: transparent; color: var(--text); text-align: left;
+  transition: background-color 120ms ease;
+}
+button.tg-info-row:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.tg-info-row > svg { flex: none; color: var(--muted); }
+.tg-info-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.tg-info-text strong { overflow: hidden; font-size: 14.5px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.tg-info-text strong.multiline { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tg-info-text strong.link { color: var(--accent); }
+.tg-info-text small { color: var(--muted); font-size: 12.5px; }
+.tg-info-text small .online { color: var(--accent); }
+.tg-info-members > header { display: flex; justify-content: space-between; padding: 6px 20px 8px; color: var(--accent); font-size: 14px; }
+.tg-info-members > header span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tg-info-members .details-member-search { margin: 0 16px 6px; }
+.tg-info-member { gap: 14px; min-height: 58px; }
+.tg-info-member-avatar { position: relative; flex: none; }
+.tg-info-member-avatar .avatar { width: 42px; height: 42px; }
+.tg-info-member-avatar > i { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border: 2px solid var(--surface); border-radius: 50%; background: transparent; }
+.tg-info-member-avatar > i.online { background: #22c55e; }
+.tg-info-role { color: var(--accent); font-size: 12px; font-style: normal; }
+.tg-info-back { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 16px; border: 0; background: var(--surface); color: var(--accent); font-weight: 600; }
+.tg-info-list { display: grid; background: var(--surface); padding: 4px 0; }
+.tg-info-thumb { width: 44px; height: 44px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: var(--surface-muted); color: var(--accent); }
+.tg-info-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.tg-info-list .tg-info-row { gap: 14px; }
+@media (max-width: 640px) {
+  .modal.tg-info-modal { width: 100% !important; max-height: 92dvh; }
+}
+.modal:focus { outline: none; }
+.tg-info .details-member-search { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-muted); }
+.tg-info .details-member-search input { flex: 1; min-width: 0; height: 38px; padding: 0; border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; }
+
+/* ── Edit group / channel (Telegram "Edit channel") ── */
+.modal.tg-edit-modal { width: min(100%, 440px) !important; max-height: min(90dvh, 720px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0; }
+.modal.tg-edit-modal > .modal-header { min-height: 56px; padding: 12px 14px 8px 20px; border-bottom: 0; align-items: center; }
+.tg-edit { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.tg-edit-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 0; background: var(--surface-muted); }
+.tg-edit-top { display: flex; align-items: center; gap: 18px; padding: 8px 20px 4px; background: var(--surface); }
+.tg-edit-avatar { position: relative; flex: none; width: 84px; height: 84px; isolation: isolate; }
+.tg-edit-avatar-pic { width: 84px; height: 84px; padding: 0; overflow: hidden; display: grid; place-items: center; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); font-size: 30px; cursor: pointer; }
+.tg-edit-avatar-pic img { width: 100%; height: 100%; object-fit: cover; }
+/* Sits on the avatar's lower-right edge, above everything around it. */
+.tg-edit-avatar-cam {
+  position: absolute; z-index: 999; right: -2px; bottom: -2px;
+  width: 32px; height: 32px; padding: 0; display: grid; place-items: center;
+  border: 3px solid var(--surface); border-radius: 50%;
+  background: var(--accent); color: #fff; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(20, 28, 52, .25);
+  transition: transform 140ms ease;
+}
+.tg-edit-avatar-cam:hover { transform: scale(1.08); }
+.tg-edit-name { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.tg-edit-name > span { color: var(--accent); font-size: 12.5px; font-weight: 600; }
+.tg-edit-name input, .tg-edit-desc textarea {
+  width: 100%; min-height: 0; padding: 6px 0; border: 0 !important; border-bottom: 2px solid var(--line) !important;
+  border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 16px;
+  transition: border-color 140ms ease;
+}
+.tg-edit-name input:focus, .tg-edit-desc textarea:focus { border-bottom-color: var(--accent) !important; box-shadow: none !important; }
+.tg-edit-desc { display: grid; gap: 2px; padding: 8px 20px 14px; background: var(--surface); }
+.tg-edit-desc textarea { resize: none; font-size: 14.5px; }
+.tg-edit-desc small { justify-self: end; color: var(--muted); font-size: 11.5px; }
+.tg-edit-link { justify-self: start; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 20px 14px; border: 0; background: var(--surface); color: var(--accent); font-size: 13.5px; font-weight: 600; width: 100%; }
+.tg-edit-link.danger { color: var(--danger, #d93025); }
+.tg-edit-group { display: grid; margin-top: 8px; padding: 4px 0; background: var(--surface); }
+.tg-edit-row { min-height: 56px; display: flex; align-items: center; gap: 18px; padding: 8px 20px; }
+.tg-edit-row > svg { flex: none; color: var(--muted); }
+.tg-edit-row-label { flex: 1; min-width: 0; font-size: 14.5px; }
+.tg-edit-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface-muted); }
+.tg-edit-seg button { min-height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; transition: background-color 160ms ease, color 160ms ease; }
+.tg-edit-seg button.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(20, 28, 52, .12); }
+.tg-edit-slug { display: flex; align-items: center; min-width: 0; max-width: 55%; gap: 2px; color: var(--muted); }
+.tg-edit-slug input { min-width: 0; width: 100%; min-height: 32px; padding: 0 2px; border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--accent); text-align: right; }
+.tg-edit-bg { display: flex; align-items: center; gap: 8px; }
+.tg-edit-bg-thumb { width: 34px; height: 34px; border-radius: 8px; background-size: cover; background-position: center; }
+.tg-edit-bg button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; }
+.tg-edit-bg button.danger { color: var(--danger, #d93025); }
+.tg-edit-note { margin: 0; padding: 10px 20px 14px; color: var(--muted); font-size: 12.5px; }
+.tg-edit-actions { display: flex; justify-content: flex-end; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+.tg-edit-actions button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; color: var(--accent); font-weight: 650; font-size: 14px; text-transform: none; }
+.tg-edit-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.tg-edit-actions button.primary { background: var(--accent); color: #fff; }
+.tg-edit-actions button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.tg-edit-actions button:disabled { opacity: .5; }
+.tg-edit-row-label { font-weight: 400; color: var(--text); }
+/* The header's presence dot: the avatar's own clip mustn't hide it. */
+.conversation-header .room-avatar-presence-wrap { overflow: visible !important; border-radius: 0 !important; }
+.conversation-header .room-avatar-presence-wrap > .avatar { width: 44px !important; height: 44px !important; }
+.conversation-header .room-avatar-presence-dot { right: 0; bottom: 0; width: 12px; height: 12px; }
+.conversation-title p { transition: color 160ms ease; }

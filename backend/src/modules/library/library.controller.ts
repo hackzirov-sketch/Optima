@@ -1,7 +1,78 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Put,
+  Query,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import {
+  LibraryService,
+  type LibraryLanguage,
+  type LibrarySubject,
+} from './library.service';
+
+const reviewSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  body: z.string().max(2000).optional().default(''),
+});
+class SaveReviewDto extends createZodDto(reviewSchema) {}
 
 @Controller('library')
 export class LibraryController {
+  constructor(private readonly library: LibraryService) {}
+
+  /** Openly readable books from Internet Archive, every language. */
+  @Get('search')
+  search(
+    @Query('q') q?: string,
+    @Query('lang') lang?: LibraryLanguage,
+    @Query('subject') subject?: LibrarySubject,
+    @Query('page') page?: string,
+  ) {
+    return this.library.search({ q, lang, subject, page: Number(page) || 1 });
+  }
+
+  @Get('books/:key/reviews')
+  reviews(@Param('key') key: string, @CurrentUser('id') userId: string) {
+    return this.library.listReviews(key, userId);
+  }
+
+  @Put('books/:key/reviews')
+  saveReview(
+    @Param('key') key: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: SaveReviewDto,
+  ) {
+    return this.library.saveReview(key, userId, dto.rating, dto.body ?? '');
+  }
+
+  @Delete('books/:key/reviews')
+  deleteReview(@Param('key') key: string, @CurrentUser('id') userId: string) {
+    return this.library.deleteReview(key, userId);
+  }
+
+  /** One attempt; a network failure becomes a 503 instead of a bare 500. */
+  private async fetchOnce(url: URL): Promise<Response> {
+    try {
+      return await fetch(url, {
+        signal: AbortSignal.timeout(20000),
+        redirect: 'manual',
+      });
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'LIBRARY_SOURCE_UNAVAILABLE',
+        message: 'The book source is unreachable right now — try again',
+      });
+    }
+  }
+
   @Get('read')
   async read(@Query('url') source: string) {
     let url: URL;
@@ -10,24 +81,28 @@ export class LibraryController {
     } catch {
       throw new BadRequestException('Invalid book URL');
     }
-    const host = url.hostname.toLowerCase();
-    if (
-      url.protocol !== 'https:' ||
-      (host !== 'gutenberg.org' && host !== 'www.gutenberg.org')
-    )
-      throw new BadRequestException('Book source is not allowed');
-    // `redirect: 'follow'` would let the allowlist be checked once and then
-    // walked away from: any open redirect on gutenberg.org — or a compromised
-    // one — turns this into a fetch of whatever it points at, from inside the
-    // API's own network, where link-local metadata endpoints live. The
-    // allowlist has to hold for the URL we actually retrieve, so a redirect is
-    // a refusal rather than something to chase.
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
-      redirect: 'manual',
-    });
-    if (response.status >= 300 && response.status < 400)
-      throw new BadRequestException('Book source is not allowed');
+    // Redirects are followed by hand, at most three, and every hop has to
+    // pass the allowlist again. Following them blindly would let an open
+    // redirect on the source walk the server to any address (including the
+    // cloud metadata endpoint); refusing them outright broke every Gutenberg
+    // book, whose text URLs all 302 to a cache path.
+    let response: Response | null = null;
+    for (let hop = 0; hop < 4; hop++) {
+      if (url.protocol === 'http:') url.protocol = 'https:';
+      const host = url.hostname.toLowerCase();
+      if (
+        url.protocol !== 'https:' ||
+        (host !== 'gutenberg.org' && host !== 'www.gutenberg.org')
+      )
+        throw new BadRequestException('Book source is not allowed');
+      response = await this.fetchOnce(url).catch(() => this.fetchOnce(url));
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get('location');
+      if (!location || hop === 3)
+        throw new BadRequestException('Book content is unavailable');
+      url = new URL(location, url);
+    }
+    if (!response) throw new BadRequestException('Book content is unavailable');
     if (!response.ok)
       throw new BadRequestException('Book content is unavailable');
     const length = Number(response.headers.get('content-length') || 0);

@@ -1,6 +1,11 @@
 import {
   ArrowDown,
   ArrowLeft,
+  AtSign,
+  ChevronRight,
+  Image as ImageIcon,
+  Info,
+  Music,
   Bell,
   BellOff,
   Bot,
@@ -11,6 +16,7 @@ import {
   Download,
   Eye,
   FileText,
+  Globe,
   Hash,
   ImagePlus,
   Link2,
@@ -31,6 +37,7 @@ import {
   Phone,
   PhoneOff,
   Pin,
+  PinOff,
   Plus,
   RadioTower,
   Reply,
@@ -57,12 +64,15 @@ import {
   type MouseEvent,
   type PointerEvent,
   type TouchEvent,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
 }                                                                           from "react";
 import { useLocation }                                                      from "wouter";
+import { useOutsideClose }                                                  from "../lib/useOutsideClose";
 import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
 import { AudioMessage }                                                     from "../components/AudioMessage";
@@ -76,7 +86,7 @@ import { useConfirm }                                                       from
 import { api }                                                              from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
-import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, roomSafetyCode, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
+import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -127,6 +137,12 @@ function renderMessageContent(content: string) {
     <AnimatedEmoji key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
                    id={part.emojiId} /> :
     <span key={`text-${index}`}>{part.text}</span>);
+}
+
+function MemberPresenceText({ userId }: { userId: string }) {
+  const presence = usePresence(userId);
+  const { t } = useI18n();
+  return <span className={isPresenceActive(presence) ? "online" : ""}>{formatPresenceLabel(presence, t)}</span>;
 }
 
 function MemberPresenceDot({ userId }: { userId: string }) {
@@ -280,6 +296,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  /** Where the open message menu sits, relative to the conversation pane. */
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const conversationRef = useRef<HTMLElement>(null);
+  const [pinned, setPinned] = useState<ChatMessage[]>([]);
+  const [pinnedIndex, setPinnedIndex] = useState(0);
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
@@ -321,7 +343,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [safetyCode, setSafetyCode] = useState<string | null>(null);
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
@@ -336,6 +357,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [uploadingRoomAvatar, setUploadingRoomAvatar] = useState(false);
   const [uploadingRoomBackground, setUploadingRoomBackground] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
+  /** A shared-content list opened from the info panel (Telegram's "44 photos" row), or the overview. */
+  const [detailsSection, setDetailsSection] = useState<"media" | "files" | "links" | "music" | "voice" | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailMemberSearch, setDetailMemberSearch] = useState("");
   const [detailMemberTotal, setDetailMemberTotal] = useState(0);
@@ -395,6 +418,69 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [swipingMessage, setSwipingMessage] = useState<{ id: string; offset: number; armed: boolean } | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || null;
+
+  // ── Message menu (Telegram-style: opens where you clicked, stays inside the
+  // conversation pane, closes on any outside click, Escape or scroll) ──
+  const menuMessage = activeMenu ? messages.find((message) => message.id === activeMenu) ?? null : null;
+  function openMessageMenu(messageId: string, clientX: number, clientY: number) {
+    const pane = conversationRef.current?.getBoundingClientRect();
+    setMenuAt({ x: clientX - (pane?.left ?? 0), y: clientY - (pane?.top ?? 0) });
+    setActiveMenu(messageId);
+  }
+  const closeMessageMenu = useCallback(() => setActiveMenu(null), []);
+  useOutsideClose(menuRef, Boolean(menuMessage), closeMessageMenu);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const pane = conversationRef.current;
+    if (!menu || !pane || !menuAt) return;
+    const margin = 8;
+    const maxX = pane.clientWidth - menu.offsetWidth - margin;
+    const maxY = pane.clientHeight - menu.offsetHeight - margin;
+    // Open downward and to the right of the point, flipping when it would
+    // leave the pane — the menu never crosses the header or the composer.
+    let x = menuAt.x;
+    let y = menuAt.y;
+    if (x > maxX) x = Math.max(margin, menuAt.x - menu.offsetWidth);
+    if (y > maxY) y = Math.max(margin, menuAt.y - menu.offsetHeight);
+    x = Math.min(Math.max(margin, x), Math.max(margin, maxX));
+    y = Math.min(Math.max(margin, y), Math.max(margin, maxY));
+    if (x !== menuAt.x || y !== menuAt.y) setMenuAt({ x, y });
+  }, [menuAt, menuMessage]);
+
+  // ── Pinned messages ──
+  const canPin = (room: ChatRoom | null) =>
+    Boolean(room) && (room!.type === "direct" || room!.createdById === user?.id || ["owner", "admin", "moderator"].includes(room!.myRole ?? ""));
+  const pinnedMessage = pinned[Math.min(pinnedIndex, pinned.length - 1)] ?? null;
+  const loadPins = useCallback((roomId: string) => {
+    api.chat.pins(roomId)
+      .then((items) => { setPinned(items); setPinnedIndex(0); })
+      .catch(() => setPinned([]));
+  }, []);
+  useEffect(() => {
+    setPinned([]);
+    setPinnedIndex(0);
+    if (selectedId && selectedRoom?.memberStatus !== "pending") loadPins(selectedId);
+  }, [selectedId, selectedRoom?.memberStatus, loadPins]);
+  async function togglePin(message: ChatMessage) {
+    setActiveMenu(null);
+    try {
+      if (message.isPinned) await api.chat.unpin(message.id);
+      else await api.chat.pin(message.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.pinFailed"), "error");
+    }
+  }
+  /** Telegram's pinned bar: tap scrolls to the pin shown, then moves on to the next older one. */
+  function jumpToPinned() {
+    if (!pinnedMessage) return;
+    document.getElementById(`message-${pinnedMessage.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPinnedIndex((index) => (index + 1) % Math.max(1, pinned.length));
+  }
+  function previewOf(message: ChatMessage) {
+    if (message.content) return message.content;
+    const file = message.attachments?.[0];
+    return file ? file.fileName : t("chat.repliedMessageFallback");
+  }
   const contextRoom = rooms.find((room) => room.id === roomContext?.roomId) || null;
 
   function formatTime(value: string) {
@@ -434,6 +520,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
   const peerPresence = usePresence(detailPeer?.id);
+  const sectionLabel = (kind: "media" | "files" | "links" | "music" | "voice") => ({
+    media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab"),
+  })[kind];
+  const roomLink = (room: ChatRoom) =>
+    `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}`;
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      show(t("chat.copied"));
+    } catch {
+      show(text);
+    }
+  }
 
   useEffect(() => {
     setUnreadTotal(rooms.reduce((sum, room) => sum + room.unreadCount, 0));
@@ -832,19 +931,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       .catch(() => setReadReceipts(new Map()));
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
-  // E2EE safety code: recomputed whenever the info panel opens, since it
-  // changes with every device members add or remove.
-  useEffect(() => {
-    let cancelled = false;
-    setSafetyCode(null);
-    if (detailsOpen && selectedRoom?.e2ee) {
-      roomSafetyCode(selectedRoom.id)
-        .then((code) => { if (!cancelled) setSafetyCode(code); })
-        .catch(() => undefined);
-    }
-    return () => { cancelled = true; };
-  }, [detailsOpen, selectedRoom?.id, selectedRoom?.e2ee]);
-
   async function loadOlderMessages() {
     if (!selectedId || loadingMessages || loadingOlderMessages || !hasOlderMessages) return;
     const oldestSequence = messages.find((message) => typeof message.sequence === "number")?.sequence;
@@ -1021,6 +1107,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
     // Another member device published a new room key.
     const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
+    const onMessagePinned = (data: { roomId: string; messageId: string; pinned: boolean }) => {
+      if (data.roomId !== selectedId) return;
+      setMessages((current) => current.map((message) => message.id === data.messageId ? { ...message, isPinned: data.pinned } : message));
+      loadPins(data.roomId);
+    };
     const onRoomKeysRequested = (data: { roomId: string }) => serveRoomKeys(data.roomId);
     // Keys for messages this device couldn't open were just shared with it.
     const onRoomKeysShared = (data: { roomId: string }) => {
@@ -1077,6 +1168,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("message_views_updated", onViewsUpdated);
     socket.on("room_key_rotated", onRoomKeyRotated);
     socket.on("room_keys_requested", onRoomKeysRequested);
+    socket.on("message_pinned", onMessagePinned);
     socket.on("room_keys_shared", onRoomKeysShared);
     if (socket.connected) onConnect();
     return () => {
@@ -1095,6 +1187,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("message_views_updated", onViewsUpdated);
       socket.off("room_key_rotated", onRoomKeyRotated);
       socket.off("room_keys_requested", onRoomKeysRequested);
+      socket.off("message_pinned", onMessagePinned);
       socket.off("room_keys_shared", onRoomKeysShared);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2341,6 +2434,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       </aside>
 
       <section
+        ref={conversationRef}
         className={`conversation ${(() => {
           const roomBg = selectedRoom && selectedRoom.type !== "direct" ? selectedRoom.backgroundUrl : null;
           return selectedRoom && (roomBg || user?.backgroundUrl) ? "conversation-has-bg" : "";
@@ -2413,10 +2507,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 window.history.replaceState({}, "", "/chat");
               }} aria-label={t("chat.backToChatsAria")} title={t("chat.chatsTitle")}><ArrowLeft size={20} /></button>
               {selectedRoom.type === "direct" && detailPeer ?
-                <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
-                        size="sm" /> : <RoomAvatar room={selectedRoom} size="sm" />}
+                <DirectRoomAvatar peer={detailPeer} /> : <RoomAvatar room={selectedRoom} size="sm" />}
               <button className="conversation-title" onClick={() => {
-                setDetailsTab(selectedRoom.type === "direct" ? "media" : "members");
+                setDetailsTab("members");
+                setDetailsSection(null);
                 setDetailMemberSearch("");
                 setDetailsOpen(true);
               }} aria-label={t("chat.openInfoAria")}><h2>{roomTitle(selectedRoom)}{selectedRoom.e2ee &&
@@ -2488,6 +2582,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 setMessageSearchOpen(false);
               }} aria-label={t("chat.closeSearchAria")}><X size={17} /></button>
             </div>}
+            {pinnedMessage && <div className="pinned-bar" role="region" aria-label={t("chat.pinnedAria")}>
+              <button type="button" className="pinned-bar-main" onClick={() => jumpToPinned()}>
+                <span className="pinned-bar-ticks" aria-hidden="true">{pinned.slice(0, 4).map((item, index) => <i key={item.id} className={index === Math.min(pinnedIndex, 3) ? "active" : ""} />)}</span>
+                <span className="pinned-bar-copy"><strong>{pinned.length > 1 ? t("chat.pinnedNumbered", { n: pinned.length - pinnedIndex }) : t("chat.pinnedSingle")}</strong><small>{previewOf(pinnedMessage)}</small></span>
+              </button>
+              {canPin(selectedRoom) && <button type="button" className="pinned-bar-close" onClick={() => void togglePin(pinnedMessage)} aria-label={t("chat.unpinAction")} title={t("chat.unpinAction")}><X size={17} /></button>}
+            </div>}
             {selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3>
                 <p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check
@@ -2496,6 +2597,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <>
                 <div ref={messageList} className="message-list" aria-live="polite" onScroll={(event) => {
                   const node = event.currentTarget;
+                  if (activeMenu) setActiveMenu(null);
                   const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
                   shouldStickToMessageBottom.current = distanceFromBottom < 96;
                   setShowScrollButton(distanceFromBottom > 96);
@@ -2555,7 +2657,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           onPointerCancel={(event) => finishPointerReply(event, message)}
                           onContextMenu={(event) => {
                             event.preventDefault();
-                            setActiveMenu(message.id);
+                            openMessageMenu(message.id, event.clientX, event.clientY);
                           }}
                         >
                           <span
@@ -2627,39 +2729,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <button className="discuss-button" onClick={() => void openDiscussion(message.id)}>
                                 <MessageCircle size={15} /> {t("chat.discussLabel")}</button>}
                             <button className="message-menu-trigger"
-                                    onClick={() => setActiveMenu((value) => value === message.id ? null : message.id)}
+                                    onClick={(event) => {
+                                      if (activeMenu === message.id) { setActiveMenu(null); return; }
+                                      const rect = event.currentTarget.getBoundingClientRect();
+                                      openMessageMenu(message.id, rect.left, rect.bottom);
+                                    }}
                                     aria-label={t("chat.messageActionsAria")} aria-expanded={activeMenu === message.id}>
                               <MoreVertical size={16} /></button>
-                            {activeMenu === message.id && <div className="message-context-menu" role="menu"
-                                                               onMouseLeave={() => setActiveMenu(null)}>
-                              <div className="reaction-strip">{quickEmojis.map((emoji) => <button
-                                key={emoji} aria-label="Reaksiya qoldirish" onClick={() => {
-                                  void reactToMessage(message, emoji);
-                                  setActiveMenu(null);
-                                }}>{renderReaction(emoji)}</button>)}</div>
-                              <button onClick={() => {
-                                setReplyingTo(message);
-                                setEditing(null);
-                                setActiveMenu(null);
-                              }}><Reply size={16} />{t("chat.replyAction")}</button>
-                              <button onClick={() => {
-                                setForwardingMessage(message);
-                                setActiveMenu(null);
-                              }}><Send size={16} />{t("chat.forwardAction")}</button>
-                              <button onClick={() => {
-                                void navigator.clipboard.writeText(message.content);
-                                setActiveMenu(null);
-                              }}><Copy size={16} />{t("chat.copyAction")}</button>
-                              {mine && <button onClick={() => {
-                                setEditing(message);
-                                setReplyingTo(null);
-                                setDraft(message.content);
-                                setActiveMenu(null);
-                              }}><Pencil size={16} />{t("chat.editAction")}</button>}
-                              <button disabled><Pin size={16} />{t("chat.pinAction")}
-                                <small>{t("chat.comingSoon")}</small></button>
-                              {mine && <button className="danger" onClick={() => void deleteMessage(message)}><Trash2
-                                size={16} />{t("chat.deleteAction")}</button>}</div>}
+
                           </div>
                         </div>
                       </div>
@@ -2788,6 +2865,35 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             )}
           </>
         )}
+                  {menuMessage && menuAt && <div ref={menuRef} className="message-context-menu message-menu-floating" role="menu" style={{ "--menu-x": `${menuAt.x}px`, "--menu-y": `${menuAt.y}px` } as CSSProperties}>
+                    <div className="reaction-strip">{quickEmojis.map((emoji) => <button
+                      key={emoji} aria-label={t("chat.reactAria")} onClick={() => {
+                        void reactToMessage(menuMessage, emoji);
+                        setActiveMenu(null);
+                      }}>{renderReaction(emoji)}</button>)}</div>
+                    <button role="menuitem" onClick={() => {
+                      setReplyingTo(menuMessage);
+                      setEditing(null);
+                      setActiveMenu(null);
+                    }}><Reply size={16} />{t("chat.replyAction")}</button>
+                    {canPin(selectedRoom) && <button role="menuitem" onClick={() => void togglePin(menuMessage)}>{menuMessage.isPinned ? <PinOff size={16} /> : <Pin size={16} />}{menuMessage.isPinned ? t("chat.unpinAction") : t("chat.pinAction")}</button>}
+                    <button role="menuitem" onClick={() => {
+                      void navigator.clipboard.writeText(menuMessage.content).catch(() => undefined);
+                      setActiveMenu(null);
+                    }}><Copy size={16} />{t("chat.copyAction")}</button>
+                    <button role="menuitem" onClick={() => {
+                      setForwardingMessage(menuMessage);
+                      setActiveMenu(null);
+                    }}><Send size={16} />{t("chat.forwardAction")}</button>
+                    {menuMessage.senderId === user?.id && <button role="menuitem" onClick={() => {
+                      setEditing(menuMessage);
+                      setReplyingTo(null);
+                      setDraft(menuMessage.content);
+                      setActiveMenu(null);
+                    }}><Pencil size={16} />{t("chat.editAction")}</button>}
+                    {menuMessage.senderId === user?.id && <button role="menuitem" className="danger" onClick={() => void deleteMessage(menuMessage)}><Trash2
+                      size={16} />{t("chat.deleteAction")}</button>}
+                  </div>}
       </section>
 
       {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true"
@@ -2817,100 +2923,78 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 <Phone size={23} />}<span>{t("chat.acceptButton")}</span></button>}</div>
           <small><ShieldCheck size={15} /> {t("chat.callSecurityHint")}</small></section>}</div>}
 
-      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)}
-             title={selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")}
-             description={selectedRoom?.type === "direct" ? t("chat.userInfoDesc") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom?.memberCount || 0 }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}
-             width="lg">
-        <div className={`chat-details details-${selectedRoom?.type || "group"}`}>
-          <section className="chat-details-hero">
-            {detailPeer ?
-              <Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl}
-                      size="lg" /> : selectedRoom ? <RoomAvatar room={selectedRoom} /> : null}
-            <div className="details-identity">
-              <strong>{selectedRoom ? roomTitle(selectedRoom) : ""}</strong><small>{detailPeer?.username ? `@${detailPeer.username}` : selectedRoom?.type === "direct" ? t("chat.usernameNotSet") : selectedRoom?.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom?.memberCount || 0 })}</small>{selectedRoom?.description &&
-              <p>{selectedRoom.description}</p>}</div>
-            <span
-              className="details-kind">{selectedRoom?.type === "direct" ? t("chat.dmLabel") : selectedRoom?.type === "channel" ? t("chat.channelLabel") : t("chat.groupLabel")}</span>
-          </section>
-          <div className="chat-details-actions">
-            {selectedRoom?.type === "direct" && <>
-              <button onClick={() => setDetailsOpen(false)}><MessageCircle
-                size={19} /><span>{t("chat.messageActionLabel")}</span></button>
-              <button onClick={() => void startCall("audio")}><Phone
-                size={19} /><span>{t("chat.audioActionLabel")}</span></button>
-              <button onClick={() => void startCall("video")}><Video
-                size={19} /><span>{t("chat.videoActionLabel")}</span></button>
-            </>}
-            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && <button onClick={() => {
-              setDetailsOpen(false);
-              void openRoomInvites();
-            }}><UserPlus size={19} /><span>{t("chat.inviteActionLabel")}</span></button>}
-            {selectedRoom?.type !== "direct" && !selectedRoom?.isSystem && canAdminister(selectedRoom) &&
-              <button onClick={openRoomSettings}><Settings size={19} /><span>{t("chat.configureActionLabel")}</span>
-              </button>}
-            <button onClick={() => {
-              setDetailsOpen(false);
-              setMessageSearchOpen(true);
-            }}><Search size={19} /><span>{t("chat.searchActionLabel")}</span></button>
-            <button onClick={() => void toggleChannelMute()}>{selectedRoom?.isMuted ? <Bell size={19} /> :
-              <BellOff size={19} />}<span>{selectedRoom?.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
-          </div>
-          {selectedRoom?.type === "direct" && <section className="direct-profile-info">
-            <button
-              onClick={() => navigator.clipboard.writeText(detailPeer?.username ? `@${detailPeer.username}` : roomTitle(selectedRoom))}>
-              <UserRound
-                size={19} /><span><strong>{detailPeer?.username ? `@${detailPeer.username}` : t("chat.usernameNotSet")}</strong><small>{t("chat.usernameLabel")}</small></span><Copy
-              size={16} /></button>
-            <div><RadioTower
-              size={19} /><span><strong>{formatPresenceLabel(peerPresence, t)}</strong><small>{t("chat.activityStatusLabel")}</small></span>
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} className="tg-info-modal"
+             title={detailsSection ? sectionLabel(detailsSection) : selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")}
+             width="sm">
+        {selectedRoom && <div className={`tg-info details-${selectedRoom.type}`}>
+          {detailsSection ? <>
+            <button type="button" className="tg-info-back" onClick={() => { setDetailsSection(null); setDetailsTab("members"); }}><ArrowLeft size={18} />{t("chat.backToInfo")}</button>
+            <div className="tg-info-list">
+              {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
+              {!detailsLoading && sharedItems.map((item) => {
+                const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url);
+                const image = detailsSection === "media" && item.mimeType?.startsWith("image/") && href;
+                return <button className="tg-info-row shared-item" key={item.id || item.messageId}
+                               onClick={() => image ? setMediaPreview({ url: href, name: item.fileName || "Media" }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}>
+                  <span className="tg-info-thumb">{image ? <img src={href} alt={item.fileName || "Media"} /> : detailsSection === "links" ? <Link2 size={20} /> : detailsSection === "voice" || detailsSection === "music" ? <Mic size={20} /> : <FileText size={20} />}</span>
+                  <span className="tg-info-text"><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>
+                  {href && <Download size={17} />}
+                </button>;
+              })}
+              {!detailsLoading && sharedItems.length === 0 && <div className="compact-empty"><Search size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span></div>}
             </div>
-          </section>}
-          <nav
-            className="chat-details-tabs">{((selectedRoom?.type === "direct" ? ["media", "files", "links", "music", "voice"] : ["members", "media", "files", "links", "music", "voice"]) as Array<typeof detailsTab>).map((tab) =>
-            <button key={tab} className={detailsTab === tab ? "active" : ""} onClick={() => setDetailsTab(tab)}>{({
-              members: selectedRoom?.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab"),
-              media: t("chat.mediaTab"),
-              files: t("chat.filesTab"),
-              links: t("chat.linksTab"),
-              music: t("chat.musicTab"),
-              voice: t("chat.voiceTab")
-            })[tab]}</button>)}</nav>
-          <div className="chat-details-content">
-            {safetyCode &&
-              <div className="e2ee-safety"><ShieldCheck size={18} /><span><strong>{t("chat.safetyCodeTitle")}</strong><small>{t("chat.safetyCodeDesc")}</small><code>{safetyCode}</code></span></div>}
-            {detailsTab === "members" &&
-              <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch}
-                                                                                  onChange={(event) => setDetailMemberSearch(event.target.value)}
-                                                                                  placeholder={selectedRoom?.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /><span>{detailMemberTotal}</span></label>}
-            {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
-            {!detailsLoading && detailsTab === "members" && detailMembers.map((member) => <div className="detail-member"
-                                                                                               key={member.publicId}>
-              <button className="detail-member-profile"
-                      onClick={() => navigate(`/profile/${member.username || member.publicId}`)}
-                      aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}><Avatar
-                firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
-                size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>{member.username ? `@${member.username}` : `ID: ${member.publicId}`} · {member.role}</small></span><MemberPresenceDot
-                userId={member.id} /></button>
-            </div>)}
-            {!detailsLoading && detailsTab !== "members" && sharedItems.map((item) => {
-              const href = item.storageUrl || (Array.isArray(item.url) ? item.url[0] : item.url);
-              const image = detailsTab === "media" && item.mimeType?.startsWith("image/") && href;
-              return <button className="shared-item" key={item.id || item.messageId}
-                             onClick={() => image ? setMediaPreview({
-                               url: href,
-                               name: item.fileName || "Media"
-                             }) : href ? window.open(href, "_blank", "noopener,noreferrer") : undefined}><span>{image ?
-                <img src={href} alt={item.fileName || "Media"} /> : detailsTab === "links" ?
-                  <Link2 size={20} /> : detailsTab === "voice" || detailsTab === "music" ? <Mic size={20} /> : <FileText
-                    size={20} />}</span><span><strong>{item.fileName || item.content || href || t("chat.sharedContentFallback")}</strong><small>{item.username ? `@${item.username} · ` : ""}{formatDay(item.createdAt)}</small></span>{href &&
-                <Download size={17} />}</button>;
-            })}
-            {!detailsLoading && ((detailsTab === "members" && detailMembers.length === 0) || (detailsTab !== "members" && sharedItems.length === 0)) &&
-              <div className="compact-empty"><Search
-                size={20} /><span><strong>{t("chat.emptyDetailsTitle")}</strong><small>{t("chat.emptyDetailsDesc")}</small></span>
-              </div>}
-          </div>
-        </div>
+          </> : <>
+            <section className="tg-info-hero">
+              {detailPeer
+                ? <span className="tg-info-avatar"><Avatar firstName={detailPeer.firstName} lastName={detailPeer.lastName} url={detailPeer.avatarUrl} size="xl" /></span>
+                : <span className="tg-info-avatar"><RoomAvatar room={selectedRoom} /></span>}
+              <strong>{roomTitle(selectedRoom)}</strong>
+              <small className={selectedRoom.type === "direct" && isPresenceActive(peerPresence) ? "online" : ""}>
+                {selectedRoom.type === "direct" ? formatPresenceLabel(peerPresence, t) : selectedRoom.type === "channel" ? t("chat.subscribersCountDesc", { count: selectedRoom.memberCount }) : t("chat.membersCountDesc", { count: selectedRoom.memberCount || 0 })}
+              </small>
+            </section>
+            <div className="tg-info-actions">
+              {selectedRoom.type === "direct" ? <>
+                <button onClick={() => setDetailsOpen(false)}><MessageCircle size={20} /><span>{t("chat.messageActionLabel")}</span></button>
+                <button onClick={() => void startCall("audio")}><Phone size={20} /><span>{t("chat.audioActionLabel")}</span></button>
+                <button onClick={() => void startCall("video")}><Video size={20} /><span>{t("chat.videoActionLabel")}</span></button>
+              </> : <>
+                {!selectedRoom.isSystem && <button onClick={() => { setDetailsOpen(false); void openRoomInvites(); }}><UserPlus size={20} /><span>{t("chat.inviteActionLabel")}</span></button>}
+                {!selectedRoom.isSystem && canAdminister(selectedRoom) && <button onClick={openRoomSettings}><Settings size={20} /><span>{t("chat.manageActionLabel")}</span></button>}
+              </>}
+              <button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={20} /> : <BellOff size={20} />}<span>{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</span></button>
+              <button onClick={() => { setDetailsOpen(false); setMessageSearchOpen(true); }}><Search size={20} /><span>{t("chat.searchActionLabel")}</span></button>
+            </div>
+            <section className="tg-info-section">
+              {selectedRoom.type === "direct" ? <>
+                {detailPeer?.username && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
+              </> : <>
+                {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
+                <button className="tg-info-row" onClick={() => void copyText(roomLink(selectedRoom))}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{roomLink(selectedRoom).replace(/^https?:\/\//, "")}</strong><small>{t("chat.linkLabel")}</small></span><Copy size={16} /></button>
+              </>}
+            </section>
+            <section className="tg-info-section">
+              {(["media", "files", "links", "voice", "music"] as const).map((kind) => (
+                <button key={kind} className="tg-info-row" onClick={() => { setDetailsSection(kind); setDetailsTab(kind); }}>
+                  {kind === "media" ? <ImageIcon size={20} /> : kind === "files" ? <FileText size={20} /> : kind === "links" ? <Link2 size={20} /> : kind === "voice" ? <Mic size={20} /> : <Music size={20} />}
+                  <span className="tg-info-text"><strong>{sectionLabel(kind)}</strong></span><ChevronRight size={18} />
+                </button>
+              ))}
+            </section>
+            {selectedRoom.type !== "direct" && <section className="tg-info-section tg-info-members">
+              <header><strong>{selectedRoom.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab")}</strong><span>{detailMemberTotal}</span></header>
+              <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /></label>
+              {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
+              {!detailsLoading && detailMembers.map((member) => (
+                <button key={member.publicId} className="tg-info-row tg-info-member" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}>
+                  <span className="tg-info-member-avatar"><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><MemberPresenceDot userId={member.id} /></span>
+                  <span className="tg-info-text"><strong>{member.firstName} {member.lastName}</strong><small><MemberPresenceText userId={member.id} /></small></span>
+                  {member.role !== "member" && <em className="tg-info-role">{t(`chat.role_${member.role}`)}</em>}
+                </button>
+              ))}
+            </section>}
+          </>}
+        </div>}
       </Modal>
 
       {/* The full per-room configuration. Kept separate from the small
@@ -2967,74 +3051,63 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
       <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)}
              title={selectedRoom?.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}
-             description={t("chat.roomSettingsDesc")} width="md">
-        <form className="room-settings-form" onSubmit={saveRoomSettings}>
-          <section className="room-avatar-editor">
-            <button type="button" className="room-avatar-preview" onClick={() => roomAvatarInput.current?.click()}
-                    disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
-              {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt={t("chat.chatPhotoAlt")} /> :
-                <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
-              <span>{uploadingRoomAvatar ? <LoaderCircle className="spin" size={20} /> : <Camera size={20} />}</span>
-            </button>
-            <div>
-              <strong>{selectedRoom?.type === "channel" ? t("chat.channelPhotoLabel") : t("chat.groupPhotoLabel")}</strong><small>{t("chat.photoFormatHint")}</small>
-              <div>
-                <button type="button" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar}>
-                  <ImagePlus size={16} />{roomSettingsAvatar ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>
-                {roomSettingsAvatar &&
-                  <button type="button" className="danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2
-                    size={15} />{t("chat.removePhoto")}</button>}</div>
-            </div>
-            <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
-                   onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
-          </section>
-          <section className="room-background-editor">
-            <div className="room-background-preview"
-                 style={roomSettingsBackground ? { backgroundImage: `url(${roomSettingsBackground})` } : undefined}>
-              {!roomSettingsBackground && <ImagePlus size={20} />}
-            </div>
-            <div><strong>{t("chat.chatBackgroundLabel")}</strong><small>{t("chat.backgroundFormatHint")}</small>
-              <div>
-                <button type="button" onClick={() => roomBackgroundInput.current?.click()}
-                        disabled={uploadingRoomBackground}>{uploadingRoomBackground ?
-                  <LoaderCircle className="spin" size={16} /> : <ImagePlus
-                    size={16} />}{roomSettingsBackground ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>
-                {roomSettingsBackground &&
-                  <button type="button" className="danger" onClick={() => void removeRoomBackground()}
-                          disabled={uploadingRoomBackground}><Trash2 size={15} />{t("chat.removePhoto")}</button>}</div>
-            </div>
-            <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
-                   onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
-          </section>
-          <label>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input
-            value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200}
-            required placeholder={t("chat.namePlaceholder")} /></label>
-          <label>{t("chat.descriptionLabel")}<textarea value={roomSettingsDescription}
-                                                       onChange={(event) => setRoomSettingsDescription(event.target.value)}
-                                                       maxLength={1000} rows={4}
-                                                       placeholder={selectedRoom?.type === "channel" ? t("chat.channelAboutPlaceholder") : t("chat.groupAboutPlaceholder")} /><small>{roomSettingsDescription.length}/1000</small></label>
-          <label>{t("chat.slugLabel")} <small>{t("chat.slugHint")}</small><input value={roomSettingsSlug}
-                                                                                 onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                                                                                 maxLength={60}
-                                                                                 placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /><small>{`${window.location.origin}/${selectedRoom?.type === "channel" ? "ch" : "g"}/${roomSettingsSlug || selectedRoom?.publicId || ""}`}</small></label>
-          {selectedRoom?.scope !== "workspace_only" && <fieldset className="create-scope">
-            <legend>{t("chat.visibilityLegend")}</legend>
-            <label><input type="radio" name="roomScope" value="public" checked={roomSettingsScope === "public"}
-                          onChange={() => setRoomSettingsScope("public")} />
-              <span><strong>{t("chat.visibilityPublicTitle")}</strong><small>{t("chat.visibilityPublicDesc")}</small></span>
+             width="sm" className="tg-edit-modal">
+        <form className="tg-edit" onSubmit={saveRoomSettings}>
+          <div className="tg-edit-scroll">
+            <section className="tg-edit-top">
+              <div className="tg-edit-avatar">
+                <button type="button" className="tg-edit-avatar-pic" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
+                  {roomSettingsAvatar ? <img src={roomSettingsAvatar} alt={t("chat.chatPhotoAlt")} /> :
+                    <strong>{(roomSettingsName || (selectedRoom?.type === "channel" ? "K" : "G")).trim().charAt(0).toUpperCase()}</strong>}
+                </button>
+                <button type="button" className="tg-edit-avatar-cam" onClick={() => roomAvatarInput.current?.click()} disabled={uploadingRoomAvatar} aria-label={t("chat.changeChatPhotoAria")}>
+                  {uploadingRoomAvatar ? <LoaderCircle className="spin" size={16} /> : <Camera size={16} />}
+                </button>
+                <input ref={roomAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomAvatar(event.target.files?.[0])} />
+              </div>
+              <label className="tg-edit-name">
+                <span>{selectedRoom?.type === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}</span>
+                <input value={roomSettingsName} onChange={(event) => setRoomSettingsName(event.target.value)} maxLength={200} required placeholder={t("chat.namePlaceholder")} />
+              </label>
+            </section>
+            <label className="tg-edit-desc">
+              <textarea value={roomSettingsDescription} onChange={(event) => setRoomSettingsDescription(event.target.value)} maxLength={1000} rows={2}
+                        placeholder={t("chat.descriptionOptional")} />
+              <small>{roomSettingsDescription.length}/1000</small>
             </label>
-            <label><input type="radio" name="roomScope" value="private" checked={roomSettingsScope === "private"}
-                          onChange={() => setRoomSettingsScope("private")} />
-              <span><strong>{t("chat.visibilityPrivateTitle")}</strong><small>{t("chat.visibilityPrivateDesc")}</small></span>
-            </label>
-          </fieldset>}
-          <div className="room-settings-note"><ShieldCheck
-            size={18} /><span><strong>{t("chat.adminsOnlyTitle")}</strong><small>{t("chat.adminsOnlyDesc")}</small></span>
+            {roomSettingsAvatar && <button type="button" className="tg-edit-link danger" onClick={() => setRoomSettingsAvatar(null)}><Trash2 size={15} />{t("chat.removePhoto")}</button>}
+
+            <section className="tg-edit-group">
+              {selectedRoom?.scope !== "workspace_only" && <div className="tg-edit-row">
+                <Globe size={20} /><span className="tg-edit-row-label">{selectedRoom?.type === "channel" ? t("chat.channelTypeLabel") : t("chat.groupTypeLabel")}</span>
+                <span className="tg-edit-seg" role="radiogroup">
+                  <button type="button" role="radio" aria-checked={roomSettingsScope === "public"} className={roomSettingsScope === "public" ? "active" : ""} onClick={() => setRoomSettingsScope("public")}>{t("chat.visibilityPublicShort")}</button>
+                  <button type="button" role="radio" aria-checked={roomSettingsScope === "private"} className={roomSettingsScope === "private" ? "active" : ""} onClick={() => setRoomSettingsScope("private")}>{t("chat.visibilityPrivateShort")}</button>
+                </span>
+              </div>}
+              <label className="tg-edit-row tg-edit-row-input">
+                <Link2 size={20} />
+                <span className="tg-edit-row-label">{t("chat.linkLabel")}</span>
+                <span className="tg-edit-slug"><small>/{selectedRoom?.type === "channel" ? "ch" : "g"}/</small><input value={roomSettingsSlug}
+                  onChange={(event) => setRoomSettingsSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} maxLength={60}
+                  placeholder={selectedRoom?.publicId ? String(selectedRoom.publicId) : "backend-team"} /></span>
+              </label>
+              <div className="tg-edit-row">
+                <ImagePlus size={20} /><span className="tg-edit-row-label">{t("chat.chatBackgroundLabel")}</span>
+                <span className="tg-edit-bg">
+                  {roomSettingsBackground && <span className="tg-edit-bg-thumb" style={{ backgroundImage: `url(${roomSettingsBackground})` }} />}
+                  <button type="button" onClick={() => roomBackgroundInput.current?.click()} disabled={uploadingRoomBackground}>{uploadingRoomBackground ? <LoaderCircle className="spin" size={15} /> : roomSettingsBackground ? t("chat.replacePhoto") : t("chat.setPhoto")}</button>
+                  {roomSettingsBackground && <button type="button" className="danger" onClick={() => void removeRoomBackground()} disabled={uploadingRoomBackground} aria-label={t("chat.removePhoto")}><Trash2 size={15} /></button>}
+                </span>
+                <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
+              </div>
+            </section>
+            <p className="tg-edit-note">{t("chat.adminsOnlyDesc")}</p>
           </div>
-          <div className="modal-actions"><Button type="button" variant="ghost"
-                                                 onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</Button><Button
-            type="submit" icon={savingRoomSettings ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}
-            disabled={savingRoomSettings || !roomSettingsName.trim()}>{t("common.save")}</Button></div>
+          <footer className="tg-edit-actions">
+            <button type="button" onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</button>
+            <button type="submit" className="primary" disabled={savingRoomSettings || !roomSettingsName.trim()}>{savingRoomSettings ? <LoaderCircle className="spin" size={16} /> : null}{t("common.save")}</button>
+          </footer>
         </form>
       </Modal>
 

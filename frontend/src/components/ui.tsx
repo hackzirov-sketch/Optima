@@ -83,8 +83,11 @@ export function Modal({ open, title, description, onClose, children, width = "sm
     if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const modal = modalRef.current;
-    const initialFocus = modal?.querySelector<HTMLElement>("[autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled])") || modal?.querySelector<HTMLElement>("button:not([disabled])");
-    window.requestAnimationFrame(() => initialFocus?.focus());
+    // Only a field the dialog asks for (autoFocus) gets focus; otherwise the
+    // dialog itself does. Focusing the first input scrolled long dialogs past
+    // their header and popped the keyboard open on phones for no reason.
+    const initialFocus = modal?.querySelector<HTMLElement>("[autofocus]") || modal;
+    window.requestAnimationFrame(() => initialFocus?.focus({ preventScroll: true }));
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab" || !modal) return;
@@ -112,7 +115,7 @@ export function Modal({ open, title, description, onClose, children, width = "sm
   // app's top bar and dock.
   return createPortal(
     <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-        <section ref={modalRef} className={`modal modal-${width} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
+        <section ref={modalRef} tabIndex={-1} className={`modal modal-${width} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="modal-header">
           <div>
             <h2 id={titleId}>{title}</h2>

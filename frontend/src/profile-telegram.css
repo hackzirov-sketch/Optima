@@ -1,0 +1,114 @@
+/* Profile, Telegram-style. Neutrals and status colours follow Google Meet;
+   the accent stays Optima's indigo. */
+.tgp-page {
+  --tg-red: #ea4335; --tg-blue: #1a73e8; --tg-amber: #f9ab00; --tg-green: #1e8e3e; --tg-violet: var(--accent, #4a58b7);
+  --tg-online: #22c55e;
+  max-width: 1120px; margin: 0 auto; padding-block: 24px 120px;
+}
+.tgp-heading { display: grid; gap: 2px; margin-bottom: 18px; }
+.tgp-heading span { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.tgp-heading h1 { margin: 0; font-size: 26px; }
+.tgp-layout { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 24px; align-items: start; }
+
+/* Left: the info card */
+.tgp-card { position: sticky; top: 16px; display: grid; gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface-muted); box-shadow: 0 1px 2px rgba(60, 64, 67, .08), 0 2px 8px rgba(60, 64, 67, .06); }
+.tgp-hero { display: grid; justify-items: center; gap: 4px; padding: 28px 20px 18px; background: var(--surface); }
+.tgp-avatar { position: relative; width: 120px; height: 120px; margin-bottom: 8px; border-radius: 50%; }
+.tgp-avatar > .avatar { width: 120px !important; height: 120px !important; border-radius: 50% !important; font-size: 40px !important; }
+/* Camera appears over the photo on hover (Telegram), the online dot keeps the corner. */
+.tgp-avatar-cam {
+  position: absolute; inset: 0; z-index: 2; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(15, 20, 35, .48); color: #fff; cursor: pointer;
+  opacity: 0; transition: opacity 160ms ease;
+}
+.tgp-avatar:hover .tgp-avatar-cam, .tgp-avatar-cam:focus-within, .tgp-avatar-cam.is-loading { opacity: 1; }
+.tgp-avatar-cam input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.tgp-avatar-cam svg { transition: transform 160ms ease; }
+.tgp-avatar:hover .tgp-avatar-cam svg { transform: scale(1.06); }
+.tgp-online { position: absolute; z-index: 3; right: 8px; bottom: 8px; width: 20px; height: 20px; border: 3px solid var(--surface); border-radius: 50%; background: var(--tg-online); }
+@media (hover: none) { .tgp-avatar-cam { opacity: 0; } .tgp-avatar:active .tgp-avatar-cam { opacity: 1; } }
+.tgp-name { max-width: 100%; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 21px; font-weight: 650; overflow-wrap: anywhere; cursor: text; }
+.tgp-name:hover { background: var(--surface-muted); }
+.tgp-status { color: var(--accent); font-size: 14px; }
+
+.tgp-group { display: grid; margin-top: 8px; padding: 4px 0; background: var(--surface); }
+.tgp-hint { margin: 0; padding: 8px 20px 4px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.tgp-bio { position: relative; display: block; padding: 6px 20px; }
+.tgp-bio textarea { width: 100%; min-height: 0; padding: 8px 40px 8px 0; border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; resize: none; font-size: 15px; line-height: 1.45; }
+.tgp-bio > span { position: absolute; right: 20px; top: 14px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tgp-bio > span.low { color: var(--tg-red); }
+
+.tgp-row { min-height: 58px; display: flex; align-items: center; gap: 20px; padding: 0 16px 0 20px; transition: background-color 120ms ease; }
+.tgp-row > svg { flex: none; color: var(--muted); }
+.tgp-row-main { flex: 1; min-width: 0; display: grid; gap: 1px; padding: 9px 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.tgp-row-main.static { cursor: default; }
+.tgp-row:has(> button.tgp-row-main):hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tgp-row-main strong { overflow: hidden; font-size: 15px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.tgp-row-main strong.link { color: var(--accent); }
+.tgp-row-main strong em { color: var(--muted); font-style: normal; font-weight: 400; }
+.tgp-row-main small, .tgp-row-edit small { color: var(--muted); font-size: 12.5px; }
+.tgp-row.is-editing { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.tgp-row-edit { flex: 1; min-width: 0; display: grid; gap: 4px; padding: 8px 0; animation: tgp-edit-in 160ms ease-out both; }
+.tgp-row-edit input, .tgp-row-edit select {
+  width: 100%; min-width: 0; min-height: 36px; padding: 4px 0; border: 0 !important; border-bottom: 2px solid var(--accent) !important;
+  border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 15px;
+}
+.tgp-two { display: flex; gap: 12px; align-items: center; }
+.tgp-clear { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.tgp-verified { flex: none; color: var(--tg-green); }
+@keyframes tgp-edit-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+.tgp-savebar {
+  position: sticky; bottom: 0; z-index: 4; display: flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 10px 12px 10px 20px; border-top: 1px solid var(--line); background: var(--surface);
+  animation: tgp-bar-in 200ms cubic-bezier(.2, .9, .3, 1) both;
+}
+.tgp-savebar span { flex: 1; color: var(--muted); font-size: 13.5px; }
+.tgp-savebar button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; color: var(--accent); font-weight: 650; }
+.tgp-savebar button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.tgp-savebar button.primary { background: var(--accent); color: #fff; }
+.tgp-savebar button:disabled { opacity: .55; }
+@keyframes tgp-bar-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.tgp-logout { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; min-height: 52px; border: 0; background: var(--surface); color: var(--tg-red); font-weight: 600; }
+.tgp-logout:hover { background: color-mix(in srgb, var(--tg-red) 7%, var(--surface)); }
+
+/* Right: settings */
+.tgp-settings { display: grid; gap: 16px; min-width: 0; }
+.tgp-nav { display: grid; padding: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(60, 64, 67, .08); }
+.tgp-nav > button { min-height: 60px; display: flex; align-items: center; gap: 14px; padding: 8px 12px; border: 0; border-radius: 12px; background: transparent; color: var(--text); text-align: left; transition: background-color 140ms ease; }
+.tgp-nav > button:hover { background: var(--surface-muted); }
+.tgp-nav > button.active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tgp-nav-icon { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; color: #fff; }
+.tgp-nav-icon.tone-red { background: var(--tg-red); }
+.tgp-nav-icon.tone-blue { background: var(--tg-blue); }
+.tgp-nav-icon.tone-amber { background: var(--tg-amber); }
+.tgp-nav-icon.tone-green { background: var(--tg-green); }
+.tgp-nav-icon.tone-violet { background: var(--tg-violet); }
+.tgp-nav-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.tgp-nav-text strong { font-size: 15px; font-weight: 600; }
+.tgp-nav-text small { color: var(--muted); font-size: 12.5px; }
+.tgp-nav-chevron { flex: none; color: var(--muted); transition: transform 160ms ease; }
+.tgp-nav > button.active .tgp-nav-chevron { color: var(--accent); transform: translateX(2px); }
+.tgp-panel { display: grid; gap: 16px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(60, 64, 67, .08); animation: tgp-panel-in 220ms ease-out both; }
+.tgp-panel > header h2 { margin: 0 0 4px; font-size: 19px; }
+.tgp-panel > header p { margin: 0; color: var(--muted); font-size: 14px; }
+.tgp-panel > header.with-action { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@keyframes tgp-panel-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tgp-password { display: grid; gap: 14px; max-width: 420px; }
+.tgp-password label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tgp-password small { color: var(--muted); font-size: 12.5px; }
+.tgp-password small.warn { color: var(--tg-amber); }
+.tgp-password .button { justify-self: start; }
+.tgp-bg { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.tgp-bg-preview { width: 150px; aspect-ratio: 9 / 16; max-width: 100%; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-muted) center / cover no-repeat; color: var(--muted); }
+.tgp-bg-actions { display: grid; gap: 10px; }
+.tgp-bg-actions label.button { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+
+@media (max-width: 900px) {
+  .tgp-layout { grid-template-columns: minmax(0, 1fr); }
+  .tgp-card { position: static; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tgp-row-edit, .tgp-savebar, .tgp-panel { animation: none; }
+}
+.tgp-bio textarea { font-weight: 400 !important; color: var(--text); min-height: 44px; }

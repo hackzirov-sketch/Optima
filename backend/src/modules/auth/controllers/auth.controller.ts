@@ -33,6 +33,7 @@ import { ResendVerificationDto } from '../schemas/resend-verification.schema';
 import { SetPasswordDto } from '../schemas/set-password.schema';
 import { ForgotPasswordDto } from '../schemas/forgot-password.schema';
 import { ResetPasswordDto } from '../schemas/reset-password.schema';
+import { ChangePasswordDto } from '../schemas/change-password.schema';
 import { VerifyResetOtpDto } from '../schemas/verify-reset-otp.schema';
 import { Public } from '../../../common/decorators/public.decorator';
 
@@ -91,6 +92,25 @@ export class AuthController {
       authHeader,
       req.cookies?.[ACCESS_COOKIE],
     );
+    await req.clearRateLimit?.();
+    return result;
+  }
+
+  @Post('change-password')
+  @AuthRateLimit({
+    action: 'change-password',
+    maxAttempts: 5,
+    windowSeconds: 300,
+    blockSeconds: 900,
+  })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change the password, confirming the current one' })
+  async changePassword(
+    @Req() req,
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const result = await this.authService.changePassword(userId, dto);
     await req.clearRateLimit?.();
     return result;
   }

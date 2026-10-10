@@ -31,6 +31,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { EarningsModule } from './modules/earnings/earnings.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { LibraryModule } from './modules/library/library.module';
+import { YoutubeModule } from './modules/youtube/youtube.module';
 import { EducationModule } from './modules/education/education.module'; // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -105,6 +106,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     EarningsModule,
     NotesModule,
     LibraryModule,
+    YoutubeModule,
     EducationModule,
     LoggerConfigModule,
   ],
