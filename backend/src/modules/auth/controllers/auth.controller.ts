@@ -110,7 +110,11 @@ export class AuthController {
     @CurrentUser('id') userId: string,
     @Body() dto: ChangePasswordDto,
   ) {
-    const result = await this.authService.changePassword(userId, dto);
+    const result = await this.authService.changePassword(userId, dto, {
+      userAgent:
+        String(req.headers?.['user-agent'] ?? '').slice(0, 200) || null,
+      ip: req.ip ?? null,
+    });
     await req.clearRateLimit?.();
     return result;
   }

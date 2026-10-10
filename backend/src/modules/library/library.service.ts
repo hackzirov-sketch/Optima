@@ -31,19 +31,41 @@ export interface LibraryBook {
   downloads: number;
   description: string;
   cover: string;
-  /** Internet Archive's embeddable reader (ia:* books). */
+  /** Embeddable reader for an Open Library book with a public scan. */
   embedUrl: string | null;
   /** Plain text for the built-in reader (gb:* books, via /library/read). */
   textUrl: string | null;
   sourceUrl: string;
-  source: 'internet-archive' | 'gutenberg';
+  source: 'openlibrary' | 'gutenberg';
+  /** Whether it can be read here; Open Library lists many books it has no copy of. */
+  readable: boolean;
 }
 
-const LANGUAGE_QUERY: Record<Exclude<LibraryLanguage, 'en'>, string> = {
-  uz: 'language:(uzb OR Uzbek OR "O\'zbek" OR "Uzbek language")',
-  ru: 'language:(rus OR Russian)',
-  tr: 'language:(tur OR Turkish)',
+/** Open Library language codes (MARC). */
+const OL_LANGUAGE: Record<Exclude<LibraryLanguage, 'en'>, string> = {
+  uz: 'uzb',
+  ru: 'rus',
+  tr: 'tur',
 };
+/** Open Library subject filters for the shelves. */
+const OL_SUBJECT: Record<Exclude<LibrarySubject, 'all'>, string> = {
+  fiction:
+    'subject:(fiction OR novel OR "Uzbek fiction" OR "Russian fiction" OR "Turkish fiction")',
+  history: 'subject:(history)',
+  science:
+    'subject:(science OR mathematics OR physics OR chemistry OR biology)',
+  children: 'subject:(juvenile OR children OR "fairy tales")',
+  poetry: 'subject:(poetry OR "Uzbek poetry" OR verse)',
+  philosophy: 'subject:(philosophy OR ethics)',
+  religion: 'subject:(religion OR islam)',
+};
+/** Uzbek classics and modern writers, as Open Library romanises them. */
+const UZBEK_AUTHORS =
+  'author:(Qodirii OR Oibek OR Navoi OR Chulpon OR "Gafur Gulom" OR Oripov OR Vohidov OR "Said Ahmad" OR "Tohir Malik" OR Hamza OR Qahhor OR "Pirimqul Qodirov" OR Muqimii OR Furqat OR Babur OR "Hamid Olimjon" OR Zulfiia OR Hoshimov)';
+/** Titles in Arabic script are older Chagatai/Persian catalogue entries, not Uzbek literature. */
+const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F]/;
+const OL_FIELDS =
+  'key,title,author_name,cover_i,first_publish_year,ia,ebook_access,language,edition_count,subject';
 /** Gutendex topics for the same shelves. */
 const GUTENBERG_TOPIC: Record<Exclude<LibrarySubject, 'all'>, string> = {
   fiction: 'fiction',
@@ -54,22 +76,8 @@ const GUTENBERG_TOPIC: Record<Exclude<LibrarySubject, 'all'>, string> = {
   philosophy: 'philosophy',
   religion: 'religion',
 };
-const SUBJECT_QUERY: Record<Exclude<LibrarySubject, 'all'>, string> = {
-  fiction: 'subject:(fiction OR novel OR novels OR roman OR stories)',
-  history: 'subject:(history OR tarix)',
-  science:
-    'subject:(science OR mathematics OR physics OR chemistry OR biology)',
-  children: 'subject:(children OR juvenile OR "fairy tales" OR ertak)',
-  poetry: 'subject:(poetry OR poems OR verse OR sheriyat)',
-  philosophy: 'subject:(philosophy OR ethics OR falsafa)',
-  religion: 'subject:(religion OR islam OR theology)',
-};
-// Lending-only scans can't be read without an archive.org loan; only
-// openly readable texts are listed.
-const READABLE =
-  'mediatype:texts AND NOT collection:(inlibrary OR printdisabled OR lendinglibrary) AND NOT access-restricted-item:true';
 const PAGE_SIZE = 24;
-const BOOK_KEY = /^(ia|gb):[A-Za-z0-9._-]{1,120}$/;
+const BOOK_KEY = /^(ol|gb):[A-Za-z0-9._-]{1,120}$/;
 
 /**
  * The library is a window onto open catalogues, plus reader reviews kept here:
@@ -82,6 +90,10 @@ const BOOK_KEY = /^(ia|gb):[A-Za-z0-9._-]{1,120}$/;
 @Injectable()
 export class LibraryService {
   private readonly logger = new Logger(LibraryService.name);
+
+  private readonly userAgent =
+    process.env.OPENLIBRARY_USER_AGENT?.trim() ||
+    'OptimaLibrary/1.0 (+https://optima.honeymedia.uz)';
 
   constructor(
     private readonly db: DatabaseService,
@@ -101,9 +113,7 @@ export class LibraryService {
         ? params.lang
         : 'uz';
     const subject =
-      params.subject && params.subject in SUBJECT_QUERY
-        ? params.subject
-        : 'all';
+      params.subject && params.subject in OL_SUBJECT ? params.subject : 'all';
     // Only letters, digits and spaces reach the search syntax.
     const q = (params.q ?? '')
       .normalize('NFKC')
@@ -114,54 +124,57 @@ export class LibraryService {
 
     if (lang === 'en') return this.searchGutenberg(q, subject, page);
 
-    const clauses = [READABLE, LANGUAGE_QUERY[lang]];
-    if (subject !== 'all') clauses.push(SUBJECT_QUERY[subject]);
+    const clauses = [`language:${OL_LANGUAGE[lang]}`];
+    if (subject !== 'all') clauses.push(OL_SUBJECT[subject]);
+    // The Uzbek shelf, unsearched and unfiltered, opens on Uzbek writers: by
+    // language alone Open Library leads with translations (Shakespeare,
+    // Dreiser) that merely have an Uzbek edition.
+    if (lang === 'uz' && !q && subject === 'all') clauses.push(UZBEK_AUTHORS);
     if (q) {
-      const term = q.replace(/["'’]/g, ' ');
+      // Open Library romanises Uzbek the Library of Congress way (Qodiriĭ,
+      // Ŭtkan kunlar, Oĭbek) and folds diacritics, so "Qodiriy" or
+      // "O'tkan kunlar" only match once y→i, o'→u, g'→g. Free text doesn't
+      // match those records at all — the author and title fields do.
+      const romanised = q
+        .replace(/[oO]['’ʻ`]/g, 'u')
+        .replace(/[gG]['’ʻ`]/g, 'g')
+        .replace(/['’ʻ`]/g, '')
+        .replace(/y/g, 'i')
+        .replace(/Y/g, 'I');
+      const terms = [...new Set([q.replace(/['’ʻ`]/g, ''), romanised])];
       clauses.push(
-        `(title:(${term}) OR creator:(${term}) OR subject:(${term}))`,
+        `(${terms.map((term) => `author:(${term}) OR title:(${term})`).join(' OR ')})`,
       );
     }
-    const url = new URL('https://archive.org/advancedsearch.php');
-    url.searchParams.set('q', clauses.join(' AND '));
-    for (const field of [
-      'identifier',
-      'title',
-      'creator',
-      'language',
-      'downloads',
-      'description',
-      'year',
-      'date',
-    ])
-      url.searchParams.append('fl[]', field);
-    url.searchParams.append('sort[]', 'downloads desc');
-    url.searchParams.set('rows', String(PAGE_SIZE));
+    const url = new URL('https://openlibrary.org/search.json');
+    url.searchParams.set('q', clauses.join(' '));
+    url.searchParams.set('fields', OL_FIELDS);
+    // Most-published first: the classics a reader expects to see.
+    url.searchParams.set('sort', 'editions');
+    url.searchParams.set('limit', String(PAGE_SIZE));
     url.searchParams.set('page', String(page));
-    url.searchParams.set('output', 'json');
 
-    const cacheKey = `library:search:${createHash('sha1').update(url.toString()).digest('hex')}`;
+    const cacheKey = `library:ol:${createHash('sha1').update(url.toString()).digest('hex')}`;
     const cached = await this.cacheGet<{ total: number; items: LibraryBook[] }>(
       cacheKey,
     );
-    const result = cached ?? (await this.fetchSearch(url));
+    const result = cached ?? (await this.fetchOpenLibrary(url));
     if (!cached && result.items.length)
-      await this.cacheSet(cacheKey, result, 1800);
-    return {
-      ...result,
-      page,
-      hasMore: page * PAGE_SIZE < result.total,
-    };
+      await this.cacheSet(cacheKey, result, 3600);
+    return { ...result, page, hasMore: page * PAGE_SIZE < result.total };
   }
 
-  private async fetchSearch(url: URL) {
+  private async fetchOpenLibrary(url: URL) {
     let response: Response;
     try {
-      response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      response = await fetch(url, {
+        signal: AbortSignal.timeout(20000),
+        // Open Library asks API users to identify themselves (and gives
+        // identified clients a higher rate limit).
+        headers: { 'User-Agent': this.userAgent },
+      });
     } catch (error) {
-      this.logger.warn(
-        `Internet Archive unreachable: ${(error as Error).message}`,
-      );
+      this.logger.warn(`Open Library unreachable: ${(error as Error).message}`);
       throw new ServiceUnavailableException({
         code: 'LIBRARY_SOURCE_UNAVAILABLE',
         message: 'The book catalogue is unreachable right now',
@@ -173,44 +186,42 @@ export class LibraryService {
         message: 'The book catalogue is unreachable right now',
       });
     const body = (await response.json()) as {
-      response?: { numFound?: number; docs?: Array<Record<string, unknown>> };
+      numFound?: number;
+      docs?: Array<Record<string, unknown>>;
     };
-    const docs = body.response?.docs ?? [];
     return {
-      total: Number(body.response?.numFound ?? 0),
-      items: docs.map((doc) => this.toBook(doc)).filter((book) => book.title),
+      total: Number(body.numFound ?? 0),
+      items: (body.docs ?? [])
+        .map((doc) => this.fromOpenLibrary(doc))
+        .filter((book) => book.title && !ARABIC_SCRIPT.test(book.title)),
     };
   }
 
-  private toBook(doc: Record<string, unknown>): LibraryBook {
+  private fromOpenLibrary(doc: Record<string, unknown>): LibraryBook {
     const list = (value: unknown) =>
-      (Array.isArray(value) ? value : value == null ? [] : [value]).map(String);
-    const id = String(doc.identifier);
-    const description = list(doc.description)
-      .join(' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 600);
-    const year = doc.year
-      ? String(doc.year)
-      : doc.date
-        ? String(doc.date).slice(0, 4)
-        : null;
+      Array.isArray(value) ? value.map(String) : [];
+    const workKey = String(doc.key ?? '').replace('/works/', '');
+    const scan = doc.ebook_access === 'public' ? list(doc.ia)[0] : undefined;
+    const coverId = doc.cover_i ? Number(doc.cover_i) : null;
     return {
-      key: `ia:${id}`,
-      id,
-      title: list(doc.title)[0]?.trim() ?? '',
-      authors: list(doc.creator).slice(0, 3),
+      key: `ol:${workKey}`,
+      id: workKey,
+      title: String(doc.title ?? '').trim(),
+      authors: list(doc.author_name).slice(0, 3),
       languages: list(doc.language).slice(0, 3),
-      year,
-      downloads: Number(doc.downloads ?? 0),
-      description,
-      cover: `https://archive.org/services/img/${encodeURIComponent(id)}`,
-      embedUrl: `https://archive.org/embed/${encodeURIComponent(id)}`,
+      year: doc.first_publish_year ? String(doc.first_publish_year) : null,
+      downloads: Number(doc.edition_count ?? 0),
+      description: list(doc.subject).slice(0, 6).join(' · '),
+      cover: coverId
+        ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`
+        : '',
+      embedUrl: scan
+        ? `https://archive.org/embed/${encodeURIComponent(scan)}`
+        : null,
       textUrl: null,
-      sourceUrl: `https://archive.org/details/${encodeURIComponent(id)}`,
-      source: 'internet-archive',
+      sourceUrl: `https://openlibrary.org/works/${encodeURIComponent(workKey)}`,
+      source: 'openlibrary',
+      readable: Boolean(scan),
     };
   }
 
@@ -286,6 +297,7 @@ export class LibraryService {
               null,
             sourceUrl: `https://www.gutenberg.org/ebooks/${book.id}`,
             source: 'gutenberg' as const,
+            readable: true,
           })),
       };
       // An empty page is more likely a hiccup than the truth; don't pin it.
@@ -325,9 +337,22 @@ export class LibraryService {
         LIMIT 50`,
       [bookKey, userId],
     );
+    const [state] = await this.db.query<{
+      likes: string;
+      liked: boolean;
+      saved: boolean;
+    }>(
+      `SELECT (SELECT count(*) FROM book_likes WHERE book_key = $1) AS likes,
+              EXISTS (SELECT 1 FROM book_likes WHERE book_key = $1 AND user_id = $2) AS liked,
+              EXISTS (SELECT 1 FROM book_saves WHERE book_key = $1 AND user_id = $2) AS saved`,
+      [bookKey, userId],
+    );
     return {
       count: Number(summary?.count ?? 0),
       average: summary?.average ? Number(summary.average) : null,
+      likes: Number(state?.likes ?? 0),
+      liked: Boolean(state?.liked),
+      saved: Boolean(state?.saved),
       items,
     };
   }
@@ -363,6 +388,118 @@ export class LibraryService {
         message: 'Review not found',
       });
     return this.listReviews(bookKey, userId);
+  }
+
+  // ─── Saves & likes (stored per user, not in the browser) ─────
+
+  async setLiked(bookKey: string, userId: string, liked: boolean) {
+    this.assertKey(bookKey);
+    await this.db.query(
+      liked
+        ? `INSERT INTO book_likes (user_id, book_key) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+        : `DELETE FROM book_likes WHERE user_id = $1 AND book_key = $2`,
+      [userId, bookKey],
+    );
+    const [row] = await this.db.query<{ likes: string }>(
+      `SELECT count(*) AS likes FROM book_likes WHERE book_key = $1`,
+      [bookKey],
+    );
+    return { liked, likes: Number(row?.likes ?? 0) };
+  }
+
+  /** `book` is the card as the client shows it — kept so "My books" needs no catalogue call. */
+  async setSaved(
+    bookKey: string,
+    userId: string,
+    saved: boolean,
+    book?: unknown,
+  ) {
+    this.assertKey(bookKey);
+    if (saved) {
+      const snapshot = this.snapshot(bookKey, book);
+      await this.db.query(
+        `INSERT INTO book_saves (user_id, book_key, book) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, book_key) DO UPDATE SET book = EXCLUDED.book`,
+        [userId, bookKey, snapshot],
+      );
+    } else {
+      await this.db.query(
+        `DELETE FROM book_saves WHERE user_id = $1 AND book_key = $2`,
+        [userId, bookKey],
+      );
+    }
+    return { saved };
+  }
+
+  /** Keys the reader liked or saved — the grid marks its cards from these. */
+  async myMarks(userId: string) {
+    const [liked, saved] = await Promise.all([
+      this.db.query<{ key: string }>(
+        `SELECT book_key AS key FROM book_likes WHERE user_id = $1`,
+        [userId],
+      ),
+      this.db.query<{ key: string }>(
+        `SELECT book_key AS key FROM book_saves WHERE user_id = $1`,
+        [userId],
+      ),
+    ]);
+    return {
+      liked: liked.map((row) => row.key),
+      saved: saved.map((row) => row.key),
+    };
+  }
+
+  async listSaved(userId: string) {
+    const rows = await this.db.query<{ book: LibraryBook }>(
+      `SELECT book FROM book_saves WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200`,
+      [userId],
+    );
+    return rows.map((row) => row.book);
+  }
+
+  /** Only known fields, bounded, and links only to the sources we read from. */
+  private snapshot(bookKey: string, raw: unknown): LibraryBook {
+    const book = (raw ?? {}) as Partial<LibraryBook>;
+    const text = (value: unknown, max: number) =>
+      String(value ?? '').slice(0, max);
+    const strings = (value: unknown) =>
+      Array.isArray(value) ? value.slice(0, 3).map((v) => text(v, 120)) : [];
+    const allowed = (value: unknown, hosts: string[]) => {
+      try {
+        const url = new URL(String(value ?? ''));
+        return url.protocol === 'https:' && hosts.includes(url.hostname)
+          ? url.toString()
+          : null;
+      } catch {
+        return null;
+      }
+    };
+    const [source, id] = bookKey.split(':') as ['ol' | 'gb', string];
+    return {
+      key: bookKey,
+      id,
+      title: text(book.title, 300) || bookKey,
+      authors: strings(book.authors),
+      languages: strings(book.languages),
+      year: book.year ? text(book.year, 10) : null,
+      downloads: Number(book.downloads) || 0,
+      description: text(book.description, 600),
+      cover:
+        allowed(book.cover, [
+          'covers.openlibrary.org',
+          'www.gutenberg.org',
+          'gutenberg.org',
+        ]) ?? '',
+      embedUrl: allowed(book.embedUrl, ['archive.org']),
+      textUrl: allowed(book.textUrl, ['www.gutenberg.org', 'gutenberg.org']),
+      sourceUrl:
+        source === 'gb'
+          ? `https://www.gutenberg.org/ebooks/${encodeURIComponent(id)}`
+          : `https://openlibrary.org/works/${encodeURIComponent(id)}`,
+      source: source === 'gb' ? 'gutenberg' : 'openlibrary',
+      readable:
+        source === 'gb' || Boolean(allowed(book.embedUrl, ['archive.org'])),
+    };
   }
 
   private async cacheGet<T>(key: string): Promise<T | null> {

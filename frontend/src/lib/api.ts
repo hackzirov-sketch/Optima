@@ -19,6 +19,14 @@ import type {
 } from "../types";
 import { session } from "./session";
 
+export interface RoomVoiceChat {
+  meetingId: string;
+  code: string;
+  hostId: string;
+  canEnd: boolean;
+  canSpeak: boolean;
+  participants: Array<{ id: string; firstName: string; lastName: string; avatarUrl: string | null }>;
+}
 export interface LibraryBook {
   key: string;
   id: string;
@@ -32,11 +40,15 @@ export interface LibraryBook {
   embedUrl: string | null;
   textUrl: string | null;
   sourceUrl: string;
-  source: "internet-archive" | "gutenberg";
+  source: "openlibrary" | "gutenberg";
+  readable: boolean;
 }
 export interface LibraryReviews {
   count: number;
   average: number | null;
+  likes?: number;
+  liked?: boolean;
+  saved?: boolean;
   items: Array<{ id: string; rating: number; body: string; createdAt: string; updatedAt: string; mine: boolean; author: { id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null } }>;
 }
 export interface YoutubeVideo {
@@ -491,6 +503,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ content: body.content, e2ee: body.e2ee, mentions: body.mentions, clientMessageId }),
       })).then(decryptMessage),
+    /** Group/channel video chat (Telegram-style). */
+    voiceChat: (roomId: string) => apiFetch<RoomVoiceChat | null>(`/chat/rooms/${roomId}/voice-chat`).then((chat) => (chat && "meetingId" in chat ? chat : null)),
+    voiceChatJoin: (roomId: string) => apiFetch<RoomVoiceChat>(`/chat/rooms/${roomId}/voice-chat/join`, { method: "POST" }),
+    voiceChatEnd: (roomId: string) => apiFetch<{ ended: boolean }>(`/chat/rooms/${roomId}/voice-chat`, { method: "DELETE" }),
     /** Pinned messages of a room, newest pin first (decrypted like the timeline). */
     pins: (roomId: string) => apiFetch<ChatMessage[]>(`/chat/rooms/${roomId}/pins`).then(decryptMessages),
     pin: (messageId: string) => apiFetch(`/chat/messages/${messageId}/pin`, { method: "POST" }),
@@ -640,6 +656,12 @@ export const api = {
     reviews: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`),
     saveReview: (bookKey: string, rating: number, body: string) =>
       apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "PUT", body: JSON.stringify({ rating, body }) }),
+    marks: () => apiFetch<{ liked: string[]; saved: string[] }>("/library/me/marks"),
+    saved: () => apiFetch<LibraryBook[]>("/library/me/saved"),
+    save: (book: LibraryBook) => apiFetch<{ saved: boolean }>(`/library/books/${encodeURIComponent(book.key)}/save`, { method: "PUT", body: JSON.stringify({ book }) }),
+    unsave: (bookKey: string) => apiFetch<{ saved: boolean }>(`/library/books/${encodeURIComponent(bookKey)}/save`, { method: "DELETE" }),
+    like: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "PUT" }),
+    unlike: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "DELETE" }),
     deleteReview: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "DELETE" }),
   },
   youtube: {

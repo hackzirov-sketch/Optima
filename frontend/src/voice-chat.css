@@ -1,0 +1,106 @@
+/* Group / channel video chat — Telegram desktop's compact dark window. */
+.vc-panel {
+  --vc-bg: #1c2433; --vc-card: #252f40; --vc-card-hover: #2c3850; --vc-ink: #e9eef6; --vc-muted: #8d98ab;
+  --vc-blue: #4c9ce2; --vc-green: #4cc073; --vc-red: #e5534b;
+  position: fixed; z-index: 150; right: 20px; bottom: 96px;
+  width: min(380px, calc(100vw - 24px)); height: min(560px, calc(100dvh - 140px));
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  border-radius: 16px; background: var(--vc-bg); color: var(--vc-ink);
+  box-shadow: 0 24px 60px rgba(4, 8, 20, .45), 0 0 0 1px rgba(255, 255, 255, .05);
+  animation: vc-in 240ms cubic-bezier(.2, .9, .3, 1.1) both; overflow: hidden;
+}
+.vc-panel.vc-min { visibility: hidden; height: 0; width: 0; animation: none; }
+@keyframes vc-in { from { opacity: 0; transform: translateY(16px) scale(.97); } to { opacity: 1; transform: none; } }
+.vc-head { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px 36px; align-items: center; gap: 4px; padding: 10px 10px 6px; text-align: center; }
+.vc-head strong { display: block; overflow: hidden; font-size: 15px; white-space: nowrap; text-overflow: ellipsis; }
+.vc-head small { color: var(--vc-muted); font-size: 12.5px; }
+.vc-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--vc-muted); transition: background-color 140ms ease, color 140ms ease; }
+.vc-icon:hover { background: rgba(255, 255, 255, .07); color: var(--vc-ink); }
+.vc-videos { display: grid; gap: 6px; padding: 4px 10px; }
+.vc-videos-2, .vc-videos-3, .vc-videos-4 { grid-template-columns: 1fr 1fr; }
+.vc-video { position: relative; margin: 0; overflow: hidden; aspect-ratio: 16 / 9; border-radius: 10px; background: #0d121c; box-shadow: 0 0 0 2px transparent; transition: box-shadow 160ms ease; }
+.vc-video.talking { box-shadow: 0 0 0 2px var(--vc-green); }
+.vc-video video { width: 100%; height: 100%; object-fit: cover; }
+.vc-video video.mirrored { transform: scaleX(-1); }
+.vc-video figcaption { position: absolute; left: 6px; bottom: 5px; padding: 2px 7px; border-radius: 6px; background: rgba(0, 0, 0, .5); font-size: 11.5px; }
+.vc-list { min-height: 0; overflow-y: auto; margin: 6px 10px; padding: 4px; border-radius: 12px; background: var(--vc-card); align-content: start; display: grid; }
+.vc-person { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px; border-radius: 10px; }
+.vc-avatar { position: relative; flex: none; border-radius: 50%; transition: box-shadow 160ms ease; }
+.vc-avatar .avatar { width: 40px !important; height: 40px !important; }
+.vc-person.talking .vc-avatar { box-shadow: 0 0 0 2px var(--vc-bg), 0 0 0 4px var(--vc-green); animation: vc-talk 1.2s ease-in-out infinite; }
+@keyframes vc-talk { 50% { box-shadow: 0 0 0 2px var(--vc-bg), 0 0 0 6px color-mix(in srgb, var(--vc-green) 55%, transparent); } }
+.vc-person-text { flex: 1; min-width: 0; display: grid; }
+.vc-person-text strong { overflow: hidden; font-size: 14px; font-weight: 550; white-space: nowrap; text-overflow: ellipsis; }
+.vc-person-text small { color: var(--vc-muted); font-size: 12.5px; }
+.vc-person-text small.on { color: var(--vc-green); }
+.vc-person > svg { flex: none; color: var(--vc-muted); }
+.vc-person > svg.on { color: var(--vc-green); }
+.vc-person > svg.off { color: color-mix(in srgb, var(--vc-red) 80%, var(--vc-muted)); }
+.vc-invite { display: flex; align-items: center; gap: 14px; min-height: 46px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--vc-muted); font-size: 14px; text-align: left; }
+.vc-invite:hover { background: var(--vc-card-hover); color: var(--vc-ink); }
+.vc-controls { display: flex; align-items: flex-end; justify-content: center; gap: 22px; padding: 12px 16px 16px; }
+.vc-ctl, .vc-mic { display: grid; justify-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--vc-ink); }
+.vc-ctl > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: var(--vc-card); transition: background-color 160ms ease, transform 140ms ease; }
+.vc-ctl:hover > span { background: var(--vc-card-hover); }
+.vc-ctl:active > span, .vc-mic:active:not(:disabled) > span { transform: scale(.94); }
+.vc-ctl.on > span { background: var(--vc-blue); }
+.vc-ctl small, .vc-mic small { color: var(--vc-muted); font-size: 12px; }
+.vc-leave > span { background: color-mix(in srgb, var(--vc-red) 85%, #000); }
+.vc-leave:hover > span { background: var(--vc-red); }
+.vc-mic > span {
+  position: relative; width: 74px; height: 74px; display: grid; place-items: center; border-radius: 50%;
+  background: linear-gradient(145deg, #3a4a66, #2b374d); transition: background 220ms ease, transform 140ms ease;
+}
+.vc-mic.on > span { background: linear-gradient(145deg, #5fb0ff, var(--vc-blue)); }
+.vc-mic.talking > span { box-shadow: 0 0 0 6px color-mix(in srgb, var(--vc-green) 30%, transparent); }
+.vc-mic.busy > span::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 3px solid transparent; border-top-color: var(--vc-blue); border-right-color: var(--vc-blue);
+  animation: vc-spin 1s linear infinite;
+}
+.vc-mic:disabled { cursor: default; }
+@keyframes vc-spin { to { transform: rotate(360deg); } }
+.vc-settings-layer { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 16px; background: rgba(6, 10, 18, .55); animation: vc-fade 160ms ease both; }
+@keyframes vc-fade { from { opacity: 0; } to { opacity: 1; } }
+.vc-settings { width: 100%; max-width: 340px; display: grid; gap: 2px; padding: 18px 0 10px; border-radius: 14px; background: var(--vc-card); box-shadow: 0 16px 40px rgba(0, 0, 0, .4); animation: vc-in 200ms ease both; }
+.vc-settings h3 { margin: 0 0 8px; padding: 0 20px; font-size: 16px; }
+.vc-row { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px; border: 0; background: transparent; color: var(--vc-ink); font-size: 14px; text-align: left; }
+button.vc-row:hover, label.vc-row:hover { background: rgba(255, 255, 255, .04); }
+.vc-row select { max-width: 55%; min-height: 30px; padding: 0 4px; border: 0 !important; background: transparent !important; color: var(--vc-blue); box-shadow: none !important; text-align: right; }
+.vc-row select option { color: #111; }
+.vc-meter { display: flex; gap: 3px; height: 14px; margin: 4px 20px 6px; }
+.vc-meter i { flex: 1; border-radius: 2px; background: rgba(255, 255, 255, .14); transition: background-color 80ms linear; }
+.vc-meter i.on { background: var(--vc-blue); }
+.vc-switch input { appearance: none; width: 34px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 999px; background: #4a5568; position: relative; cursor: pointer; transition: background-color 160ms ease; }
+.vc-switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 180ms ease; }
+.vc-switch input:checked { background: var(--vc-blue); }
+.vc-switch input:checked::after { transform: translateX(14px); }
+.vc-link { color: var(--vc-ink); }
+.vc-danger { color: var(--vc-red); }
+.vc-settings-actions { display: flex; justify-content: flex-end; padding: 8px 14px 0; }
+.vc-settings-actions button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--vc-blue); font-weight: 650; }
+.vc-settings-actions button:hover { background: rgba(76, 156, 226, .12); }
+
+/* Top call bar inside the chat (Telegram's "Connecting… / Leave" strip). */
+.vc-bar { position: relative; z-index: 6; display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; min-height: 44px; padding: 0 8px; background: linear-gradient(90deg, #2f6aa6, #3a7cc0); color: #fff; animation: tg-pinned-in 200ms ease-out both; }
+.vc-bar-mic, .vc-bar-leave { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; }
+.vc-bar-mic.on { background: rgba(255, 255, 255, .3); }
+.vc-bar-leave:hover { background: #e5534b; }
+.vc-bar-main { min-width: 0; display: grid; justify-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.vc-bar-main strong { overflow: hidden; max-width: 100%; font-size: 13.5px; white-space: nowrap; text-overflow: ellipsis; }
+.vc-bar-main small { opacity: .85; font-size: 12px; }
+.vc-join-banner { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px; border-bottom: 1px solid var(--line); background: var(--surface); animation: tg-pinned-in 200ms ease-out both; }
+.vc-join-faces { display: flex; }
+.vc-join-faces .avatar { width: 30px !important; height: 30px !important; border: 2px solid var(--surface); margin-left: -8px; font-size: 11px; }
+.vc-join-faces .avatar:first-child { margin-left: 0; }
+.vc-join-text { flex: 1; min-width: 0; display: grid; }
+.vc-join-text strong { color: var(--accent); font-size: 14px; }
+.vc-join-text small { color: var(--muted); font-size: 12.5px; }
+.vc-join-banner > button { min-height: 32px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 650; transition: transform 140ms ease; }
+.vc-join-banner > button:hover { transform: translateY(-1px); }
+@media (max-width: 640px) {
+  .vc-panel { right: 12px; left: 12px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-panel, .vc-settings, .vc-settings-layer, .vc-person.talking .vc-avatar, .vc-mic.busy > span::after { animation: none !important; }
+}

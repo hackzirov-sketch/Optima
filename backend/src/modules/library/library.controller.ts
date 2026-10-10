@@ -53,6 +53,41 @@ export class LibraryController {
     return this.library.saveReview(key, userId, dto.rating, dto.body ?? '');
   }
 
+  @Get('me/marks')
+  marks(@CurrentUser('id') userId: string) {
+    return this.library.myMarks(userId);
+  }
+
+  /** The reader's saved shelf. */
+  @Get('me/saved')
+  saved(@CurrentUser('id') userId: string) {
+    return this.library.listSaved(userId);
+  }
+
+  @Put('books/:key/save')
+  save(
+    @Param('key') key: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { book?: unknown },
+  ) {
+    return this.library.setSaved(key, userId, true, body?.book);
+  }
+
+  @Delete('books/:key/save')
+  unsave(@Param('key') key: string, @CurrentUser('id') userId: string) {
+    return this.library.setSaved(key, userId, false);
+  }
+
+  @Put('books/:key/like')
+  like(@Param('key') key: string, @CurrentUser('id') userId: string) {
+    return this.library.setLiked(key, userId, true);
+  }
+
+  @Delete('books/:key/like')
+  unlike(@Param('key') key: string, @CurrentUser('id') userId: string) {
+    return this.library.setLiked(key, userId, false);
+  }
+
   @Delete('books/:key/reviews')
   deleteReview(@Param('key') key: string, @CurrentUser('id') userId: string) {
     return this.library.deleteReview(key, userId);

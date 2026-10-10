@@ -90,7 +90,7 @@ export class MeetingsService {
     const meetings = await this.dataSource.query<any>(
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM (SELECT ${MEETING_COLUMNS_SQL} FROM meetings
-             WHERE group_id = $1
+             WHERE group_id = $1 AND chat_room_id IS NULL
                AND (host_id = $2 OR EXISTS (
                  SELECT 1 FROM meeting_participants mp
                  WHERE mp.meeting_id = meetings.id AND mp.user_id = $2
@@ -135,9 +135,11 @@ export class MeetingsService {
       `SELECT m.*, u.id AS "h_id", u.first_name AS "h_firstName", u.last_name AS "h_lastName", u.avatar_url AS "h_avatarUrl"
        FROM meetings m
        LEFT JOIN users u ON u.id = m.host_id
-       WHERE m.id IN (
+       WHERE (m.id IN (
          SELECT meeting_id FROM meeting_participants WHERE user_id = $1 AND left_at IS NULL
-       ) OR m.host_id = $1
+       ) OR m.host_id = $1)
+         -- Group/channel video chats live in their chat, not on the meetings page.
+         AND m.chat_room_id IS NULL
        ORDER BY m.start_time DESC`,
       [userId],
     );

@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { MeetingLiveKitService } from './services/meeting-livekit.service';
+import { RoomVoiceChatService } from './services/room-voice-chat.service';
 import { transportMaxParticipants } from './meetings.constants';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
@@ -41,7 +42,65 @@ export class MeetingsController {
     private readonly liveKit: MeetingLiveKitService,
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
+    private readonly voiceChats: RoomVoiceChatService,
   ) {}
+
+  // ─── Group / channel video chats (Telegram-style) ─────────────────────
+
+  @Get('chat/rooms/:roomId/voice-chat')
+  @ApiOperation({ summary: "The room's live video chat, or null" })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  voiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.voiceChats.get(roomId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/voice-chat/join')
+  @ApiOperation({ summary: 'Join the room video chat, starting one if needed' })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  async joinVoiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const result = await this.voiceChats.join(roomId, userId);
+    // Every member's banner updates — a new chat, or one more participant.
+    void this.gateway
+      .broadcastToRoomMembers(roomId, 'room_voice_chat', {
+        roomId,
+        meetingId: result.chat.meetingId,
+        participants: result.chat.participants.length,
+        started: result.started,
+        by: userId,
+      })
+      .catch(() => undefined);
+    return result.chat;
+  }
+
+  @Delete('chat/rooms/:roomId/voice-chat')
+  @ApiOperation({ summary: 'End the room video chat for everyone (admins)' })
+  @ApiParam({ name: 'roomId', format: 'uuid' })
+  async endVoiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const { meetingId } = await this.voiceChats.end(roomId, userId);
+    this.gateway.broadcastToMeeting(meetingId, 'meeting:ended', {
+      meetingId,
+      reason: 'host_ended',
+    });
+    await this.gateway.forceEndMeetingRoom(meetingId);
+    await this.liveKit.closeRoom(meetingId);
+    void this.gateway
+      .broadcastToRoomMembers(roomId, 'room_voice_chat', {
+        roomId,
+        meetingId: null,
+        participants: 0,
+      })
+      .catch(() => undefined);
+    return { ended: true };
+  }
 
   // ─── Group-scoped list/create ─────────────────────────────────────────
 

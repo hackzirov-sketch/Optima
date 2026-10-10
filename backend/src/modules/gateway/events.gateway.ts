@@ -1638,7 +1638,16 @@ export class EventsGateway
 
   /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */
   async forceEndMeetingRoom(meetingId: string) {
-    const sockets = await this.server.in(`meeting:${meetingId}`).fetchSockets();
+    // Best-effort: with the Redis adapter this waits on every node, and one
+    // that is slow or gone must not turn "end for everyone" into a 500 — the
+    // meeting is already ended and `meeting:ended` already sent.
+    const sockets = await this.server
+      .in(`meeting:${meetingId}`)
+      .fetchSockets()
+      .catch((err: Error) => {
+        this.logger.warn(`forceEndMeetingRoom(${meetingId}): ${err.message}`);
+        return [];
+      });
     for (const s of sockets) {
       delete s.data.meetingId;
       // RemoteSocket#leave is synchronous, unlike Socket#leave.

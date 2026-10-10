@@ -1,4 +1,4 @@
-import { AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Languages, Laptop, Link2, Lock, LoaderCircle, LogOut, Mail, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
+import { AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { Avatar, Button, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -21,13 +21,12 @@ interface SessionInfo {
 
 const occupationValues = ["developer", "designer", "freelancer", "project_manager", "qa_engineer", "devops_engineer", "product_manager", "student", "other"];
 const timezones = [["Asia/Tashkent", "Tashkent (UTC+5)"], ["Asia/Almaty", "Almaty (UTC+5)"], ["Europe/Istanbul", "Istanbul (UTC+3)"], ["Europe/Moscow", "Moscow (UTC+3)"], ["UTC", "UTC"]];
-const languages = [["uz", "O‘zbekcha"], ["ru", "Русский"], ["en", "English"]];
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
 const BIO_LIMIT = 140;
 const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,32}$/;
 
-type Draft = { firstName: string; lastName: string; username: string; phoneNumber: string; bio: string; birthday: string; occupation: string; language: string; timezone: string };
-type Field = "name" | "phoneNumber" | "username" | "birthday" | "occupation" | "language" | "timezone";
+type Draft = { firstName: string; lastName: string; username: string; phoneNumber: string; bio: string; birthday: string; occupation: string; timezone: string };
+type Field = "name" | "phoneNumber" | "username" | "birthday" | "occupation" | "timezone";
 type Section = "notifications" | "privacy" | "sessions" | "password" | "background";
 
 function draftOf(user: User | null): Draft {
@@ -39,7 +38,6 @@ function draftOf(user: User | null): Draft {
     bio: user?.bio ?? "",
     birthday: user?.birthday ?? "",
     occupation: user?.occupation ?? "other",
-    language: user?.language ?? "uz",
     timezone: user?.timezone ?? "Asia/Tashkent",
   };
 }
@@ -141,7 +139,6 @@ export function ProfilePage() {
       show(t("profile.copyFailed"), "error");
     }
   }
-  const profilePath = `/profile/${user?.username || user?.publicId || ""}`;
 
   async function uploadAvatar(file?: File) {
     if (!file) return;
@@ -317,14 +314,10 @@ export function ProfilePage() {
             <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="occupation" icon={<Briefcase size={20} />} label={t("profile.occupationLabel")} value={t(`common.occupations.${draft.occupation}`)}>
               <select autoFocus value={draft.occupation} onChange={(event) => set("occupation", event.target.value)}>{occupationValues.map((value) => <option key={value} value={value}>{t(`common.occupations.${value}`)}</option>)}</select>
             </Row>
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="language" icon={<Languages size={20} />} label={t("profile.languageLabel")} value={languages.find(([value]) => value === draft.language)?.[1]}>
-              <select autoFocus value={draft.language} onChange={(event) => set("language", event.target.value)}>{languages.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-            </Row>
             <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="timezone" icon={<Clock3 size={20} />} label={t("profile.timezoneLabel")} value={timezones.find(([value]) => value === draft.timezone)?.[1] ?? draft.timezone}>
               <select autoFocus value={draft.timezone} onChange={(event) => set("timezone", event.target.value)}>{timezones.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             </Row>
             <div className="tgp-row"><Mail size={20} /><div className="tgp-row-main static"><strong>{user?.email}</strong><small>{t("profile.email")}</small></div><ShieldCheck size={16} className="tgp-verified" aria-label={t("profile.verified")} /></div>
-            <div className="tgp-row"><Link2 size={20} /><button type="button" className="tgp-row-main" onClick={() => void copy(new URL(profilePath, window.location.origin).toString(), t("profile.profileLinkCopied"))}><strong className="link">{profilePath}</strong><small>{t("profile.profileLinkLabel")}</small></button></div>
           </section>
 
           {changed.length > 0 && <div className="tgp-savebar" role="region" aria-label={t("profile.unsavedChanges")}>

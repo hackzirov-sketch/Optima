@@ -512,7 +512,11 @@ export class AuthService {
    * Every session is revoked afterwards (the caller's too), same as a reset:
    * a password change is usually a response to suspected compromise.
    */
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+    meta?: { userAgent?: string | null; ip?: string | null },
+  ) {
     const user = await this.usersService.findById(userId);
     const valid =
       !!user?.passwordHash &&
@@ -537,6 +541,14 @@ export class AuthService {
     );
     await this.usersService.update(userId, { passwordHash });
     await this.sessionService.revokeAllSessions(userId);
+    // Fire-and-forget: the change already happened; a mail outage must not
+    // turn it into an error.
+    void this.mailService.sendPasswordChangedEmail(user!.email, {
+      firstName: user!.firstName,
+      when: new Date(),
+      device: meta?.userAgent ?? null,
+      ip: meta?.ip ?? null,
+    });
     return { message: 'Password changed', sessionsRevoked: true };
   }
 

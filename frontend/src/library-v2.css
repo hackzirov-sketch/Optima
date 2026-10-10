@@ -56,3 +56,43 @@
 .reader-failed { display: grid; gap: 14px; justify-items: start; font-family: inherit; }
 .reader-failed > div { display: flex; gap: 10px; flex-wrap: wrap; }
 .reader-failed button, .reader-failed a { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; border: 1px solid currentColor; border-radius: 10px; background: transparent; color: inherit; font-size: 15px; text-decoration: none; }
+
+/* Language tabs: equal widths and one thumb that slides between them. */
+.lib2-langs { position: relative; display: inline-grid; grid-template-columns: repeat(4, minmax(0, 1fr)); isolation: isolate; }
+.lib2-langs::before {
+  content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 4);
+  border-radius: 999px; background: var(--surface); box-shadow: 0 1px 3px rgba(60, 64, 67, .18);
+  transition: transform 280ms cubic-bezier(.3, .9, .3, 1);
+}
+.lib2-langs:has(button:nth-child(2).active)::before { transform: translateX(100%); }
+.lib2-langs:has(button:nth-child(3).active)::before { transform: translateX(200%); }
+.lib2-langs:has(button:nth-child(4).active)::before { transform: translateX(300%); }
+.lib2-langs button, .lib2-langs button.active { background: transparent !important; box-shadow: none !important; }
+@media (prefers-reduced-motion: reduce) { .lib2-langs::before { transition: none; } }
+
+.lib2-shelves { display: flex; gap: 8px; margin: 0 0 12px; }
+.lib2-shelves button { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-weight: 600; transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.lib2-shelves button.active { border-color: transparent; background: var(--accent); color: #fff; }
+.lib2-shelves button b { min-width: 20px; height: 20px; display: grid; place-items: center; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .25); font-size: 11.5px; }
+.lib2-shelves button:not(.active) b { background: var(--surface-muted); color: var(--text); }
+.lib2 .book-card button.liked, .lib2-detail .detail-actions button.liked { color: #e53935 !important; }
+.lib2 .book-card button.liked svg, .lib2-detail .detail-actions button.liked svg { fill: #e53935; }
+.lib2 .book-card button svg { transition: transform 180ms cubic-bezier(.3, .9, .3, 1.6); }
+.lib2 .book-card button.active svg { transform: scale(1.12); }
+.lib2 .book-card button.muted { opacity: .75; }
+.lib2 .book-card.not-readable .book-cover::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(transparent 60%, rgba(0, 0, 0, .18)); pointer-events: none; }
+.lib2-detail .detail-actions button small { margin-left: 4px; font-size: 12px; }
+.lib2-source-btn { flex: 1; min-height: 44px; display: inline-flex !important; align-items: center; justify-content: center; gap: 8px; width: auto !important; border-radius: 12px; background: var(--accent) !important; color: #fff !important; font-weight: 650; text-decoration: none; }
+.lib2-source-btn svg { width: 18px; }
+.lib2 .book-cover > span.lib2-gen-cover {
+  display: flex; flex-direction: column; justify-content: space-between; place-items: initial; padding: 18px 14px 34px;
+  color: #fff; text-align: left; border-left: 6px solid rgba(0, 0, 0, .18);
+}
+.lib2-gen-cover b { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; font: 700 17px/1.2 Georgia, "Times New Roman", serif; overflow-wrap: anywhere; }
+.lib2-gen-cover small { opacity: .85; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.lib2-gen-cover.tone-0 { background: linear-gradient(160deg, #1e3a8a, #312e81) !important; }
+.lib2-gen-cover.tone-1 { background: linear-gradient(160deg, #7c2d12, #9a3412) !important; }
+.lib2-gen-cover.tone-2 { background: linear-gradient(160deg, #065f46, #134e4a) !important; }
+.lib2-gen-cover.tone-3 { background: linear-gradient(160deg, #581c87, #6b21a8) !important; }
+.lib2-gen-cover.tone-4 { background: linear-gradient(160deg, #1f2937, #374151) !important; }
+.lib2 .book-card.not-readable .book-cover::after { display: none; }

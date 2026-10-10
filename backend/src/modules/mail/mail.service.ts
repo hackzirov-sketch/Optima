@@ -165,6 +165,56 @@ export class MailService {
   }
 
   /** @deprecated Use sendPasswordResetOtpEmail instead — kept for backward compat. */
+  /**
+   * "Your password was changed" — the owner's only signal if someone else
+   * changed it. Says when and from which device, and what to do if it
+   * wasn't them.
+   */
+  async sendPasswordChangedEmail(
+    email: string,
+    details: {
+      firstName?: string | null;
+      when: Date;
+      device?: string | null;
+      ip?: string | null;
+    },
+  ) {
+    try {
+      if (!this.transporter) {
+        this.logger.warn(
+          'Skipping sendPasswordChangedEmail — transporter not configured',
+        );
+        return;
+      }
+      const when = details.when.toLocaleString('en-GB', {
+        timeZone: 'Asia/Tashkent',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      await this.transporter.sendMail({
+        from: `"Optima" <${this.fromAddress}>`,
+        to: email,
+        subject: 'Parolingiz o‘zgartirildi — Optima',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
+            <h2>Parolingiz o‘zgartirildi</h2>
+            <p>${details.firstName ? `${escapeHtml(details.firstName)}, ` : ''}Optima hisobingiz paroli ${escapeHtml(when)} (Toshkent vaqti) da o‘zgartirildi.</p>
+            ${details.device || details.ip ? `<p style="color:#6b7280;">Qurilma: ${escapeHtml(details.device ?? 'noma’lum')}${details.ip ? ` · IP ${escapeHtml(details.ip)}` : ''}</p>` : ''}
+            <p>Barcha qurilmalardagi sessiyalar yopildi — yangi parol bilan qayta kiring.</p>
+            <p style="background:#fef2f2; padding: 12px 14px; border-radius: 8px;"><strong>Buni siz qilmadingizmi?</strong> Darhol “Parolni unutdim” orqali parolni tiklang va bizga xabar bering.</p>
+            <p style="color: #888; font-size: 12px;">Your Optima password was changed on ${escapeHtml(when)} (Tashkent time). If this wasn't you, reset your password now.</p>
+          </div>
+        `,
+      });
+      this.logger.log(`Password changed email sent to ${email}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send password changed email to ${email}`,
+        error?.stack || String(error),
+      );
+    }
+  }
+
   async sendPasswordResetEmail(email: string, resetUrl: string) {
     try {
       if (!this.transporter) {

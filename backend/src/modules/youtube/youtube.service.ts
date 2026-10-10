@@ -39,12 +39,20 @@ function seconds(duration?: string): number {
 export class YoutubeService {
   private readonly logger = new Logger(YoutubeService.name);
   private readonly key: string;
+  private readonly referer: string;
 
   constructor(
     config: ConfigService,
     private readonly redis: RedisService,
   ) {
     this.key = config.get<string>('YOUTUBE_API_KEY')?.trim() || '';
+    // A key restricted to HTTP referrers (the usual "browser key") rejects
+    // server calls that carry none. Send the site's own address, which has
+    // to be on the key's allowed list — or restrict the key by IP instead.
+    this.referer =
+      config.get<string>('YOUTUBE_API_REFERER')?.trim() ||
+      config.get<string>('FRONTEND_URL')?.trim() ||
+      '';
   }
 
   get enabled() {
@@ -80,21 +88,39 @@ export class YoutubeService {
     });
   }
 
+  /**
+   * "Popular in Uzbekistan": YouTube has no Uzbek trending chart (regionCode
+   * UZ is rejected there), so this is the week's most-viewed Uzbek-language
+   * videos. A search costs 100 units; cached for an hour.
+   */
   async popular(pageToken?: string) {
+    const weekAgo = new Date(Date.now() - 7 * 86400_000);
+    weekAgo.setUTCHours(0, 0, 0, 0);
     const params = new URLSearchParams({
-      part: 'snippet,contentDetails,statistics',
-      chart: 'mostPopular',
-      regionCode: 'UZ',
+      part: 'snippet',
+      type: 'video',
       maxResults: '24',
+      order: 'viewCount',
+      safeSearch: 'moderate',
+      videoEmbeddable: 'true',
+      regionCode: 'UZ',
+      relevanceLanguage: 'uz',
+      // RFC 3339 without milliseconds — with them YouTube silently returns nothing.
+      publishedAfter: weekAgo.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      // Without a query YouTube ignores the language hint entirely.
+      q: "uzbek|o'zbek|узбек",
     });
     if (pageToken) params.set('pageToken', pageToken);
     return this.cached(`popular?${params}`, 3600, async () => {
       const result = await this.call<{
         nextPageToken?: string;
-        items?: unknown[];
-      }>(`videos?${params}`);
+        items?: Array<{ id?: { videoId?: string } }>;
+      }>(`search?${params}`);
+      const ids = (result.items ?? [])
+        .map((item) => item.id?.videoId)
+        .filter((id): id is string => Boolean(id));
       return {
-        items: (result.items ?? []).map((item) => this.toVideo(item)),
+        items: await this.details(ids),
         nextPageToken: result.nextPageToken ?? null,
       };
     });
@@ -157,6 +183,13 @@ export class YoutubeService {
         `https://www.googleapis.com/youtube/v3/${path}${separator}key=${encodeURIComponent(this.key)}`,
         {
           signal: AbortSignal.timeout(12000),
+          headers: this.referer
+            ? {
+                Referer: this.referer.endsWith('/')
+                  ? this.referer
+                  : `${this.referer}/`,
+              }
+            : undefined,
         },
       );
     } catch (error) {
@@ -167,15 +200,25 @@ export class YoutubeService {
       });
     }
     if (!response.ok) {
+      // 403 means several things — tell the quota apart from a key that is
+      // misconfigured (wrong referrer, API not enabled), which never heals.
+      const body = (await response.json().catch(() => null)) as {
+        error?: { message?: string; errors?: Array<{ reason?: string }> };
+      } | null;
+      const reason = body?.error?.errors?.[0]?.reason ?? '';
+      const quota = /quota|rateLimit/i.test(reason);
       this.logger.warn(
-        `YouTube API ${response.status} for ${path.split('?')[0]}`,
+        `YouTube API ${response.status} (${reason}): ${body?.error?.message ?? ''}`,
       );
       throw new ServiceUnavailableException({
-        code: response.status === 403 ? 'YOUTUBE_QUOTA' : 'YOUTUBE_UNAVAILABLE',
-        message:
-          response.status === 403
-            ? 'YouTube search limit reached for today'
-            : 'YouTube is unreachable right now',
+        code: quota
+          ? 'YOUTUBE_QUOTA'
+          : response.status === 403
+            ? 'YOUTUBE_KEY_REJECTED'
+            : 'YOUTUBE_UNAVAILABLE',
+        message: quota
+          ? 'YouTube search limit reached for today'
+          : 'YouTube is unavailable right now',
       });
     }
     return (await response.json()) as T;
@@ -195,8 +238,12 @@ export class YoutubeService {
       /* fall through to the API */
     }
     const value = await load();
+    const empty =
+      Array.isArray((value as { items?: unknown[] }).items) &&
+      !(value as { items: unknown[] }).items.length;
     try {
-      await client?.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+      if (!empty)
+        await client?.set(key, JSON.stringify(value), 'EX', ttlSeconds);
     } catch {
       /* best-effort */
     }

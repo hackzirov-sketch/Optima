@@ -112,3 +112,6 @@
   .tgp-row-edit, .tgp-savebar, .tgp-panel { animation: none; }
 }
 .tgp-bio textarea { font-weight: 400 !important; color: var(--text); min-height: 44px; }
+/* Rows keep their own space so neighbouring highlights never merge. */
+.tgp-nav { gap: 4px; }
+.tgp-nav > button { margin: 0; }

@@ -15,6 +15,8 @@ import "./navigation-ai.css";
 import "./chat-telegram.css";
 import "./profile-telegram.css";
 import "./library-v2.css";
+import "./voice-chat.css";
+import "./auth.css";
 import "./focus.css";
 
 createRoot(document.getElementById("root")!).render(

@@ -1,3 +1,9 @@
+# Own project name: the default comes from the directory ("backend"), which
+# another project on this machine also uses — `docker compose down` there
+# removed these containers too. Volume names stay pinned to the existing
+# backend_* volumes so the data carries over.
+name: upz
+
 services:
 #  app:
 #    build:
@@ -111,6 +117,10 @@ services:
 
 volumes:
   postgres_data:
+    name: backend_postgres_data
   postgres_backup_data:
+    name: backend_postgres_backup_data
   db_backups:
+    name: backend_db_backups
   redis_data:
+    name: backend_redis_data

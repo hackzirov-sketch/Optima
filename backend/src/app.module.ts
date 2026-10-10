@@ -73,7 +73,9 @@ import { CsrfGuard } from './common/guards/csrf.guard';
       useFactory: (config: ConfigService) => ({
         throttlers: [
           // Burst guard — catches request floods within a single second.
-          { name: 'short', ttl: 1000, limit: 20 },
+          // Counted per signed-in user (UserThrottlerGuard): an app load alone
+          // fires ~20 requests, so 20/s throttled ordinary use.
+          { name: 'short', ttl: 1000, limit: 50 },
           // Standard window — the project-wide 90s rate-limit baseline.
           { name: 'standard', ttl: 90000, limit: 450 },
         ],

@@ -11,11 +11,6 @@ type Lang = "uz" | "en" | "ru" | "tr";
 const languages: Array<[Lang, string]> = [["uz", "O‘zbekcha"], ["en", "English"], ["ru", "Русский"], ["tr", "Türkçe"]];
 const subjects = ["all", "fiction", "history", "science", "children", "poetry", "philosophy", "religion"] as const;
 type Subject = typeof subjects[number];
-const SAVED_KEY = "optima-library-saved-v2";
-
-function readSaved(): string[] {
-  try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]") as string[]; } catch { return []; }
-}
 
 function Stars({ value, onChange, size = 18 }: { value: number; onChange?: (value: number) => void; size?: number }) {
   return (
@@ -51,7 +46,11 @@ export function LibraryPage() {
   const [readerFailed, setReaderFailed] = useState(false);
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("sepia");
   const [fontSize, setFontSize] = useState(18);
-  const [saved, setSaved] = useState<string[]>(readSaved);
+  // Saves and likes live on the server (they follow the reader across devices).
+  const [saved, setSaved] = useState<string[]>([]);
+  const [liked, setLiked] = useState<string[]>([]);
+  const [shelf, setShelf] = useState<"browse" | "saved">("browse");
+  const [savedBooks, setSavedBooks] = useState<LibraryBook[]>([]);
   const request = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
   const closePanel = useCallback(() => setSelected(null), []);
@@ -87,12 +86,35 @@ export function LibraryPage() {
     }).catch(() => setReviews({ count: 0, average: null, items: [] }));
   }, [selected]);
 
-  function toggleSaved(key: string) {
-    setSaved((current) => {
-      const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
-      try { localStorage.setItem(SAVED_KEY, JSON.stringify(next)); } catch { /* private window */ }
-      return next;
-    });
+  useEffect(() => {
+    api.library.marks().then((marks) => { setSaved(marks.saved); setLiked(marks.liked); }).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (shelf === "saved") api.library.saved().then(setSavedBooks).catch(() => setSavedBooks([]));
+  }, [shelf, saved.length]);
+
+  async function toggleSaved(book: LibraryBook) {
+    const on = !saved.includes(book.key);
+    setSaved((current) => on ? [...current, book.key] : current.filter((key) => key !== book.key));
+    try {
+      if (on) await api.library.save(book); else await api.library.unsave(book.key);
+      if (reviews && selected?.key === book.key) setReviews({ ...reviews, saved: on });
+      show(on ? t("library.savedToast") : t("library.unsavedToast"));
+    } catch (error) {
+      setSaved((current) => on ? current.filter((key) => key !== book.key) : [...current, book.key]);
+      show(error instanceof Error ? error.message : t("library.saveFailed"), "error");
+    }
+  }
+
+  async function toggleLiked(book: LibraryBook) {
+    const on = !liked.includes(book.key);
+    setLiked((current) => on ? [...current, book.key] : current.filter((key) => key !== book.key));
+    try {
+      const result = on ? await api.library.like(book.key) : await api.library.unlike(book.key);
+      if (reviews && selected?.key === book.key) setReviews({ ...reviews, liked: result.liked, likes: result.likes });
+    } catch {
+      setLiked((current) => on ? current.filter((key) => key !== book.key) : [...current, book.key]);
+    }
   }
   const author = (book: LibraryBook) => book.authors.join(", ") || t("library.unknownAuthor");
 
@@ -100,7 +122,8 @@ export function LibraryPage() {
     setReader(book);
     setReaderText("");
     setReaderFailed(false);
-    if (!book.textUrl) return; // Internet Archive books open in the archive's embedded reader.
+    if (!book.readable) { window.open(book.sourceUrl, "_blank", "noopener,noreferrer"); setReader(null); return; }
+    if (!book.textUrl) return; // Open Library scans open in the embedded reader.
     setReaderLoading(true);
     try {
       const result = await api.library.read(book.textUrl);
@@ -150,7 +173,7 @@ export function LibraryPage() {
             <button onClick={() => setFontSize((value) => Math.min(28, value + 1))} aria-label="A+"><Plus /></button>
             <button onClick={() => setReaderTheme(readerTheme === "light" ? "sepia" : readerTheme === "sepia" ? "dark" : "light")} aria-label={t("library.readerTheme")}>{readerTheme === "dark" ? <Moon /> : <Sun />}</button>
           </>}
-          <button onClick={() => toggleSaved(reader.key)} className={saved.includes(reader.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
+          <button onClick={() => void toggleSaved(reader)} className={saved.includes(reader.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
         </div>
       </header>
       {reader.embedUrl
@@ -169,30 +192,38 @@ export function LibraryPage() {
     <nav className="lib2-langs" aria-label={t("library.languageAria")}>
       {languages.map(([value, label]) => <button key={value} type="button" className={lang === value ? "active" : ""} aria-pressed={lang === value} onClick={() => setLang(value)}>{label}</button>)}
     </nav>
-    <nav className="library-categories">
-      {subjects.map((item) => <button key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
+    <nav className="lib2-shelves" aria-label={t("library.shelvesAria")}>
+      <button type="button" className={shelf === "browse" ? "active" : ""} onClick={() => setShelf("browse")}>{t("library.shelfBrowse")}</button>
+      <button type="button" className={shelf === "saved" ? "active" : ""} onClick={() => setShelf("saved")}><Bookmark size={16} />{t("library.shelfSaved")}{saved.length ? <b>{saved.length}</b> : null}</button>
     </nav>
+    {shelf === "browse" && <nav className="library-categories">
+      {subjects.map((item) => <button key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
+    </nav>}
     <section className="library-section">
-      <header><div><span>{lang === "en" ? "Project Gutenberg" : "Internet Archive"}</span><h2>{debounced ? t("library.searchResultsFor", { query: debounced }) : t("library.openShelfBooks")}</h2></div><small>{total ? t("library.bookCount", { count: total.toLocaleString() }) : ""}</small></header>
-      {failed && !books.length ? <div className="library-empty">{t("library.sourceUnreachable")}</div>
-        : !loading && !books.length ? <div className="library-empty">{t("library.nothingFound")}</div>
-        : <div className="book-grid">{books.map((book) => <article className="book-card" key={book.key}>
+      <header><div><span>{shelf === "saved" ? t("library.shelfSaved") : lang === "en" ? "Project Gutenberg" : "Open Library"}</span><h2>{shelf === "saved" ? t("library.savedTitle") : debounced ? t("library.searchResultsFor", { query: debounced }) : lang === "uz" ? t("library.uzbekLiterature") : t("library.openShelfBooks")}</h2></div><small>{shelf === "saved" ? "" : total ? t("library.bookCount", { count: total.toLocaleString() }) : ""}</small></header>
+      {shelf === "browse" && failed && !books.length ? <div className="library-empty">{t("library.sourceUnreachable")}</div>
+        : !loading && !(shelf === "saved" ? savedBooks : books).length ? <div className="library-empty">{shelf === "saved" ? t("library.savedEmpty") : t("library.nothingFound")}</div>
+        : <div className="book-grid">{(shelf === "saved" ? savedBooks : books).map((book) => <article className={`book-card ${book.readable ? "" : "not-readable"}`} key={book.key}>
           <button className="book-cover" onClick={() => setSelected(book)} aria-label={book.title}>
             {book.cover ? <img loading="lazy" src={book.cover} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
-            <span><BookOpen /></span>
+            {/* No scan cover (most Uzbek titles): a typeset one instead of a blank card. */}
+            <span className={`lib2-gen-cover tone-${(book.title.length + book.authors.join("").length) % 5}`}><b>{book.title}</b><small>{author(book)}</small></span>
             {book.languages[0] && <i>{book.languages[0].slice(0, 3).toUpperCase()}</i>}
           </button>
           <div>
             <h3>{book.title}</h3><p>{author(book)}</p>
             <small>{[book.year, t("library.readTimes", { count: book.downloads.toLocaleString() })].filter(Boolean).join(" · ")}</small>
             <div>
-              <button onClick={() => void openReader(book)}><BookOpen /> {t("library.read")}</button>
-              <button onClick={() => toggleSaved(book.key)} className={saved.includes(book.key) ? "active" : ""} aria-label={t("library.saveAria")}><Heart /></button>
+              {book.readable
+                ? <button onClick={() => void openReader(book)}><BookOpen /> {t("library.read")}</button>
+                : <button onClick={() => setSelected(book)} className="muted"><BookOpen /> {t("library.details")}</button>}
+              <button onClick={() => void toggleLiked(book)} className={liked.includes(book.key) ? "active liked" : ""} aria-label={t("library.likeAria")} aria-pressed={liked.includes(book.key)}><Heart /></button>
+              <button onClick={() => void toggleSaved(book)} className={saved.includes(book.key) ? "active" : ""} aria-label={t("library.saveAria")} aria-pressed={saved.includes(book.key)}><Bookmark /></button>
             </div>
           </div>
         </article>)}</div>}
-      {loading && <div className="library-loading"><LoaderCircle className="spin" /><span>{t("library.loadingBooks")}</span></div>}
-      {hasMore && !loading && <div className="library-pagination"><button onClick={() => setPage((value) => value + 1)}>{t("library.loadMore")}</button></div>}
+      {loading && shelf === "browse" && <div className="library-loading"><LoaderCircle className="spin" /><span>{t("library.loadingBooks")}</span></div>}
+      {hasMore && !loading && shelf === "browse" && <div className="library-pagination"><button onClick={() => setPage((value) => value + 1)}>{t("library.loadMore")}</button></div>}
     </section>
 
     {selected && <div className="book-detail-backdrop">
@@ -201,7 +232,7 @@ export function LibraryPage() {
         <div className="lib2-detail-top">
           {selected.cover && <img src={selected.cover} alt="" />}
           <div>
-            <span>{selected.source === "gutenberg" ? t("library.publicDomain") : "Internet Archive"}</span>
+            <span>{selected.source === "gutenberg" ? t("library.publicDomain") : "Open Library"}</span>
             <h2>{selected.title}</h2>
             <p className="author">{author(selected)}{selected.year ? ` · ${selected.year}` : ""}</p>
             <div className="lib2-rating">{reviews && reviews.average !== null ? <><Stars value={reviews.average} /><strong>{reviews.average.toFixed(1)}</strong><small>{t("library.reviewsCount", { count: reviews.count })}</small></> : <small>{t("library.noReviewsYet")}</small>}</div>
@@ -209,8 +240,11 @@ export function LibraryPage() {
         </div>
         {selected.description && <p className="lib2-desc">{selected.description}</p>}
         <div className="detail-actions">
-          <button onClick={() => void openReader(selected)}><BookOpen /> {t("library.readOnline")}</button>
-          <button onClick={() => toggleSaved(selected.key)} className={saved.includes(selected.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
+          {selected.readable
+            ? <button onClick={() => void openReader(selected)}><BookOpen /> {t("library.readOnline")}</button>
+            : <a className="lib2-source-btn" href={selected.sourceUrl} target="_blank" rel="noopener noreferrer"><ExternalLink /> {t("library.viewOnOpenLibrary")}</a>}
+          <button onClick={() => void toggleLiked(selected)} className={liked.includes(selected.key) ? "active liked" : ""} aria-label={t("library.likeAria")}><Heart />{reviews?.likes ? <small>{reviews.likes}</small> : null}</button>
+          <button onClick={() => void toggleSaved(selected)} className={saved.includes(selected.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
           <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={t("library.openSource")}><ExternalLink /></a>
         </div>
 

@@ -30,6 +30,7 @@ import {
   MessageCircle,
   MessagesSquare,
   Mic,
+  MicOff,
   Minus,
   MoreVertical,
   Paperclip,
@@ -81,9 +82,10 @@ import { EmojiPickerButton }                                                from
 import { AnimatedEmoji }                                                    from "../components/AnimatedEmoji";
 import { RichMessageInput, type RichMessageInputHandle }                   from "../components/RichMessageInput";
 import { MeetingRoomPage }                                                  from "./MeetingRoomPage";
+import { RoomVoiceChat }                                                    from "../components/RoomVoiceChat";
 import { useToast }                                                         from "../components/Toast";
 import { useConfirm }                                                       from "../components/ConfirmDialog";
-import { api }                                                              from "../lib/api";
+import { api, type RoomVoiceChat as RoomVoiceChatInfo }                     from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
 import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
@@ -268,7 +270,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [startingCall, setStartingCall] = useState<"audio" | "video" | null>(null);
   const [directCall, setDirectCall] = useState<{
     meetingId: string;
@@ -302,6 +303,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const conversationRef = useRef<HTMLElement>(null);
   const [pinned, setPinned] = useState<ChatMessage[]>([]);
   const [pinnedIndex, setPinnedIndex] = useState(0);
+  /** The video chat this user is in (any room), and the selected room's live one. */
+  const [voice, setVoice] = useState<{ roomId: string; title: string; inviteLink: string } | null>(null);
+  const [voiceMinimized, setVoiceMinimized] = useState(false);
+  const [voiceBar, setVoiceBar] = useState<{ phase: string; micOn: boolean; canSpeak: boolean; toggleMic: () => void; leave: () => void; count: number } | null>(null);
+  const [roomVoice, setRoomVoice] = useState<RoomVoiceChatInfo | null>(null);
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
@@ -311,6 +317,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
   const [createScope, setCreateScope] = useState<"public" | "private">("public");
   const [creating, setCreating] = useState(false);
+  /** Telegram-style new chat: "+" menu, then a two-step dialog. */
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+  const [createStep, setCreateStep] = useState<"info" | "members">("info");
+  const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createAvatar, setCreateAvatar] = useState<{ file: File; url: string } | null>(null);
+  const createAvatarInput = useRef<HTMLInputElement>(null);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [globalUsers, setGlobalUsers] = useState<Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "avatarUrl">>>([]);
@@ -476,6 +490,27 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     document.getElementById(`message-${pinnedMessage.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     setPinnedIndex((index) => (index + 1) % Math.max(1, pinned.length));
   }
+  // ── Group / channel video chat ──
+  const loadRoomVoice = useCallback((roomId: string) => {
+    api.chat.voiceChat(roomId).then((chat) => setRoomVoice(chat)).catch(() => setRoomVoice(null));
+  }, []);
+  useEffect(() => {
+    setRoomVoice(null);
+    if (!selectedId || !selectedRoom || selectedRoom.type === "direct" || selectedRoom.memberStatus === "pending") return;
+    loadRoomVoice(selectedId);
+    // Participant counts move as people come and go; the banner stays roughly current.
+    const timer = window.setInterval(() => loadRoomVoice(selectedId), 20000);
+    return () => window.clearInterval(timer);
+  }, [selectedId, selectedRoom?.type, selectedRoom?.memberStatus, loadRoomVoice]); // eslint-disable-line react-hooks/exhaustive-deps
+  function joinRoomVoice(room: ChatRoom) {
+    if (voice?.roomId === room.id) { setVoiceMinimized(false); return; }
+    if (voice) voiceBar?.leave();
+    setVoiceMinimized(false);
+    setVoice({ roomId: room.id, title: roomTitle(room), inviteLink: `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}` });
+  }
+  const closeVoice = useCallback(() => { setVoice(null); setVoiceBar(null); if (selectedId) window.setTimeout(() => loadRoomVoice(selectedId), 600); }, [selectedId, loadRoomVoice]);
+  const onVoiceState = useCallback((state: NonNullable<typeof voiceBar>) => setVoiceBar(state), []);
+
   function previewOf(message: ChatMessage) {
     if (message.content) return message.content;
     const file = message.attachments?.[0];
@@ -572,7 +607,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     if (location !== "/chat" || (!selectedRoom && !aiOpen)) return;
-    const anyModalOpen = detailsOpen || roomSettingsOpen || createOpen || workspaceInviteOpen || roomInfoOpen || Boolean(forwardingMessage) || Boolean(mediaPreview);
+    const anyModalOpen = detailsOpen || roomSettingsOpen || channelSettingsOpen || createOpen || workspaceInviteOpen || roomInfoOpen || Boolean(previewRoom) || Boolean(forwardingMessage) || Boolean(mediaPreview);
     if (anyModalOpen) return;
 
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -588,7 +623,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, createOpen, workspaceInviteOpen, roomInfoOpen, forwardingMessage, mediaPreview]);
+  }, [location, selectedRoom, aiOpen, detailsOpen, roomSettingsOpen, channelSettingsOpen, createOpen, workspaceInviteOpen, roomInfoOpen, previewRoom, forwardingMessage, mediaPreview]);
 
   useEffect(() => {
     if (!miniResizing) return;
@@ -769,7 +804,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       await api.chat.deleteRoom(selectedRoom.id);
       const remaining = rooms.filter((room) => room.id !== selectedRoom.id);
       setRooms(remaining);
-      setHeaderMenuOpen(false);
+      setDetailsOpen(false);
       if (remaining[0]) chooseRoom(remaining[0].id);
       else {
         setSelectedId(null);
@@ -827,7 +862,31 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
   }
 
-  async function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }) {
+  /**
+   * Background refreshes (socket events: member changes, keys shared, a
+   * reconnect, a new DM…) arrive in bursts, and each reload is three
+   * requests. Unpinned calls made while one is in flight collapse into a
+   * single follow-up, so a burst costs two reloads instead of hitting the
+   * rate limit — which used to leave the list stale.
+   */
+  const roomsInFlight = useRef<Promise<void> | null>(null);
+  const roomsQueued = useRef<{ keepSelection?: boolean } | null>(null);
+  function loadRooms(preferredId?: string, options?: { keepSelection?: boolean }): Promise<void> {
+    if (!preferredId && roomsInFlight.current) {
+      roomsQueued.current = { keepSelection: Boolean(options?.keepSelection || roomsQueued.current?.keepSelection) };
+      return roomsInFlight.current;
+    }
+    const run = loadRoomsNow(preferredId, options).finally(() => {
+      if (roomsInFlight.current === run) roomsInFlight.current = null;
+      const queued = roomsQueued.current;
+      roomsQueued.current = null;
+      if (queued) void loadRooms(undefined, queued).catch(() => undefined);
+    });
+    roomsInFlight.current = run;
+    return run;
+  }
+
+  async function loadRoomsNow(preferredId?: string, options?: { keepSelection?: boolean }) {
     if (!workspace) return;
     const [nextRooms, nextMembers, community] = await Promise.all([api.chat.rooms(), api.groups.members(workspace.id), api.chat.community()]);
     const systemRooms = [community.channel, community.group].filter(Boolean).map((room) => ({
@@ -1107,6 +1166,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
     // Another member device published a new room key.
     const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
+    const onRoomVoiceChat = (data: { roomId: string }) => {
+      if (data.roomId === selectedId) loadRoomVoice(data.roomId);
+    };
     const onMessagePinned = (data: { roomId: string; messageId: string; pinned: boolean }) => {
       if (data.roomId !== selectedId) return;
       setMessages((current) => current.map((message) => message.id === data.messageId ? { ...message, isPinned: data.pinned } : message));
@@ -1169,6 +1231,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("room_key_rotated", onRoomKeyRotated);
     socket.on("room_keys_requested", onRoomKeysRequested);
     socket.on("message_pinned", onMessagePinned);
+    socket.on("room_voice_chat", onRoomVoiceChat);
     socket.on("room_keys_shared", onRoomKeysShared);
     if (socket.connected) onConnect();
     return () => {
@@ -1188,6 +1251,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("room_key_rotated", onRoomKeyRotated);
       socket.off("room_keys_requested", onRoomKeysRequested);
       socket.off("message_pinned", onMessagePinned);
+      socket.off("room_voice_chat", onRoomVoiceChat);
       socket.off("room_keys_shared", onRoomKeysShared);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1252,7 +1316,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     const query = memberSearch.trim();
-    if (!createOpen || createMode !== "direct" || query.length < 2) {
+    if (!createOpen || query.length < 2) {
       setGlobalUsers([]);
       setSearchingUsers(false);
       return;
@@ -1818,11 +1882,35 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     recordingStream.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
+  const closeNewMenu = useCallback(() => setNewMenuOpen(false), []);
+  useOutsideClose(newMenuRef, newMenuOpen, closeNewMenu);
+  function openCreate(mode: "group" | "channel" | "direct") {
+    setNewMenuOpen(false);
+    setCreateMode(mode);
+    setCreateStep(mode === "direct" ? "members" : "info");
+    setCreateName("");
+    setCreateDescription("");
+    setCreateScope(mode === "channel" ? "public" : "private");
+    setCreateAvatar(null);
+    setSelectedMembers([]);
+    setMemberSearch("");
+    setCreateOpen(true);
+  }
+  function pickCreateAvatar(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { show(t("chat.imageOnlyError"), "error"); return; }
+    if (file.size > 5 * 1024 * 1024) { show(t("chat.imageSizeError"), "error"); return; }
+    setCreateAvatar({ file, url: URL.createObjectURL(file) });
+  }
   async function createConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspace) return;
+    if (createMode !== "direct" && createStep === "info") {
+      if (!createName.trim()) return;
+      setCreateStep("members");
+      return;
+    }
     setCreating(true);
-    const data = new FormData(event.currentTarget);
     try {
       // The field is `scope`, not `visibility`: CreateChatRoomDto declares
       // `scope` and the global ValidationPipe runs with forbidNonWhitelisted,
@@ -1832,10 +1920,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         : await api.chat.createRoom({
           type: createMode,
           scope: createScope,
-          name: String(data.get("name") || "").trim(),
-          description: String(data.get("description") || "").trim() || undefined,
+          name: createName.trim(),
+          description: createDescription.trim() || undefined,
           memberIds: selectedMembers
         });
+      // The photo needs the room to exist first (uploads are per room).
+      if (createAvatar && createMode !== "direct") {
+        try {
+          const uploaded = await api.chat.uploadFile(room.id, createAvatar.file);
+          await api.chat.updateRoomSettings(room.id, { avatarUrl: uploaded.storageUrl });
+        } catch (error) {
+          show(error instanceof Error ? error.message : t("chat.photoUploadFailed"), "error");
+        }
+      }
       await loadRooms(room.id);
       setCreateOpen(false);
       setSelectedMembers([]);
@@ -2176,7 +2273,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const availableMembers = members.map((member) => memberUser(member, t)).filter((member) => member.id !== user?.id);
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const localCandidates = availableMembers.filter((member) => `${member.firstName} ${member.lastName} ${member.username} ${member.email}`.toLowerCase().includes(normalizedMemberSearch));
-  const pickerCandidates = createMode === "direct" && normalizedMemberSearch.length >= 2 ? globalUsers : localCandidates;
+  // Like Telegram, anyone can be added — not only people from this workspace:
+  // with a query, global matches join the local ones (local first, no repeats).
+  const pickerCandidates = normalizedMemberSearch.length >= 2
+    ? (createMode === "direct" ? globalUsers : [...localCandidates, ...globalUsers.filter((person) => !localCandidates.some((member) => member.id === person.id))])
+    : localCandidates;
 
   function openMessageToast(toast: { id: string; roomId: string }) {
     setMessageToasts((current) => current.filter((item) => item.id !== toast.id));
@@ -2350,9 +2451,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           <button className="icon-button chat-home-back" onClick={() => navigate("/")}
                   aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
           <div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div>
-          <button className="icon-button icon-button-dark" onClick={() => setCreateOpen(true)}
-                  aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} />
-          </button>
+          <div className="tg-new-anchor" ref={newMenuRef}>
+            <button className={`icon-button icon-button-dark ${newMenuOpen ? "active" : ""}`} onClick={() => setNewMenuOpen((value) => !value)}
+                    aria-haspopup="menu" aria-expanded={newMenuOpen}
+                    aria-label={t("chat.newConversationAria")} title={t("chat.newConversationAria")}><Plus size={19} className="tg-new-plus" />
+            </button>
+            {newMenuOpen && <div className="tg-new-menu" role="menu">
+              <button role="menuitem" onClick={() => openCreate("group")}><UsersRound size={19} />{t("chat.newGroupItem")}</button>
+              <button role="menuitem" onClick={() => openCreate("channel")}><Megaphone size={19} />{t("chat.newChannelItem")}</button>
+              <button role="menuitem" onClick={() => openCreate("direct")}><UserRound size={19} />{t("chat.newMessageItem")}</button>
+            </div>}
+          </div>
         </header>
         <label className="search-field"><Search size={17} /><input value={search}
                                                                    onChange={(event) => setSearch(event.target.value)}
@@ -2381,7 +2490,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <div className="sidebar-empty">{catalog === "channel" ? <Megaphone size={22} /> :
               <MessageCircle size={22} />}
               <p>{catalog === "channel" ? t("chat.channelNotFound") : t("chat.conversationNotFound")}</p>
-              <button onClick={() => setCreateOpen(true)}>{t("chat.newChatButton")}</button>
+              <button onClick={() => openCreate("direct")}>{t("chat.newChatButton")}</button>
             </div>}
           {filteredRooms.map((room) => {
             const other = room.type === "direct" ? room.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) : null;
@@ -2453,7 +2562,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         </header>}
         {!selectedRoom && !aiOpen && !loadingRooms &&
           <EmptyState icon={<MessageCircle size={27} />} title={t("chat.selectConversationTitle")}
-                      description={t("chat.selectConversationDesc")} action={<Button onClick={() => setCreateOpen(true)}
+                      description={t("chat.selectConversationDesc")} action={<Button onClick={() => openCreate("direct")}
                                                                                      icon={<Plus
                                                                                        size={17} />}>{t("chat.newConversationButton")}</Button>} />}
         {aiOpen && <div className="ai-conversation">
@@ -2527,6 +2636,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   navigate("/");
                 }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} />
                 </button>
+                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (selectedRoom.type === "group" || roomVoice || canAdminister(selectedRoom)) &&
+                  <button className={`icon-button ${voice?.roomId === selectedRoom.id ? "active" : ""}`} onClick={() => joinRoomVoice(selectedRoom)}
+                          aria-label={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")} title={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")}>
+                    <Video size={18} /></button>}
                 {selectedRoom.type === "direct" && <>
                   <button className="icon-button" onClick={() => void startCall("audio")}
                           disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")}
@@ -2537,40 +2650,6 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                           title={t("chat.videoCallAria")}>{startingCall === "video" ?
                     <LoaderCircle className="spin" size={18} /> : <Video size={18} />}</button>
                 </>}
-                {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (!selectedRoom.isSystem || canAdminister(selectedRoom)) &&
-                  <div className="header-more">
-                    <button className={`icon-button ${headerMenuOpen ? "active" : ""}`}
-                            onClick={() => setHeaderMenuOpen((value) => !value)}
-                            aria-label={t("chat.conversationMenuAria")} aria-expanded={headerMenuOpen}><MoreVertical
-                      size={19} /></button>
-                    {headerMenuOpen && <div
-                      className="header-more-menu">{canAdminister(selectedRoom) &&
-                      <><button onClick={() => {
-                        setHeaderMenuOpen(false);
-                        openRoomSettings();
-                      }}><Settings
-                        size={17} /><span><strong>{selectedRoom.type === "channel" ? t("chat.configureChannel") : t("chat.configureGroup")}</strong><small>{t("chat.photoNameDescHint")}</small></span>
-                      </button>
-                      <button onClick={() => {
-                        setHeaderMenuOpen(false);
-                        setChannelSettingsOpen(true);
-                      }}><Sliders
-                        size={17} /><span><strong>{t("channelSettings.title")}</strong><small>{t("channelSettings.entryHint")}</small></span>
-                      </button></>}{!selectedRoom.isSystem && <button onClick={() => {
-                      setHeaderMenuOpen(false);
-                      void openRoomInvites();
-                    }}><UserPlus
-                      size={17} /><span><strong>{t("chat.inviteToGroup")}</strong><small>{t("chat.createManageLinkHint")}</small></span>
-                    </button>}{!selectedRoom.isSystem && !selectedRoom.membershipLocked && <button className="danger"
-                                                                                                 onClick={() => {
-                                                                                                   setHeaderMenuOpen(false);
-                                                                                                   void leaveRoomFromContext(selectedRoom);
-                                                                                                 }}><LogOut
-                      size={17} /><span><strong>{t(selectedRoom.type === "channel" ? "chat.leaveChannel" : "chat.leaveGroup")}</strong><small>{t("chat.membersCountLabel", { count: selectedRoom.memberCount })}</small></span>
-                    </button>}{!selectedRoom.isSystem && selectedRoom.createdById === user?.id &&
-                      <button className="danger" onClick={() => void deleteSelectedRoom()}><Trash2
-                        size={17} /><span><strong>{t("chat.deleteGroup")}</strong><small>{t("chat.deletesAllMessagesHint")}</small></span>
-                      </button>}</div>}</div>}
               </div>
             </header>
             {messageSearchOpen && <div className="conversation-search"><Search size={17} /><input value={messageSearch}
@@ -2581,6 +2660,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 setMessageSearch("");
                 setMessageSearchOpen(false);
               }} aria-label={t("chat.closeSearchAria")}><X size={17} /></button>
+            </div>}
+            {voice && voiceBar && <div className="vc-bar" role="region" aria-label={t("voiceChat.title")}>
+              <button type="button" className={`vc-bar-mic ${voiceBar.micOn ? "on" : ""}`} onClick={voiceBar.toggleMic} disabled={!voiceBar.canSpeak} aria-label={voiceBar.micOn ? t("voiceChat.muteMe") : t("voiceChat.unmuteMe")}>{voiceBar.micOn ? <Mic size={18} /> : <MicOff size={18} />}</button>
+              <button type="button" className="vc-bar-main" onClick={() => setVoiceMinimized(false)}><strong>{voice.title}</strong><small>{voiceBar.phase === "connected" ? t("voiceChat.participants", { count: voiceBar.count }) : t("voiceChat.connecting")}</small></button>
+              <button type="button" className="vc-bar-leave" onClick={voiceBar.leave} aria-label={t("voiceChat.leave")}><PhoneOff size={18} /></button>
+            </div>}
+            {roomVoice && voice?.roomId !== selectedRoom.id && <div className="vc-join-banner">
+              <span className="vc-join-faces">{roomVoice.participants.slice(0, 3).map((p) => <Avatar key={p.id} firstName={p.firstName} lastName={p.lastName} url={p.avatarUrl} size="sm" />)}</span>
+              <span className="vc-join-text"><strong>{selectedRoom.type === "channel" ? t("voiceChat.liveStream") : t("voiceChat.title")}</strong><small>{roomVoice.participants.length ? t("voiceChat.participants", { count: roomVoice.participants.length }) : t("voiceChat.nobodyYet")}</small></span>
+              <button type="button" onClick={() => joinRoomVoice(selectedRoom)}>{t("voiceChat.join")}</button>
             </div>}
             {pinnedMessage && <div className="pinned-bar" role="region" aria-label={t("chat.pinnedAria")}>
               <button type="button" className="pinned-bar-main" onClick={() => jumpToPinned()}>
@@ -2896,6 +2985,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   </div>}
       </section>
 
+      {voice && user && <RoomVoiceChat key={voice.roomId} roomId={voice.roomId} title={voice.title} inviteLink={voice.inviteLink}
+        me={{ id: user.id, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl }}
+        people={memberMap} minimized={voiceMinimized} onMinimize={setVoiceMinimized} onClose={closeVoice} onState={onVoiceState} />}
       {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true"
                           aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ?
         <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> :
@@ -2992,6 +3084,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   {member.role !== "member" && <em className="tg-info-role">{t(`chat.role_${member.role}`)}</em>}
                 </button>
               ))}
+            </section>}
+            {selectedRoom.type !== "direct" && !selectedRoom.isSystem && <section className="tg-info-section tg-info-danger">
+              {!selectedRoom.membershipLocked && <button className="tg-info-row danger" onClick={() => { setDetailsOpen(false); void leaveRoomFromContext(selectedRoom); }}>
+                <LogOut size={20} /><span className="tg-info-text"><strong>{t(selectedRoom.type === "channel" ? "chat.leaveChannel" : "chat.leaveGroup")}</strong></span>
+              </button>}
+              {selectedRoom.createdById === user?.id && <button className="tg-info-row danger" onClick={() => void deleteSelectedRoom()}>
+                <Trash2 size={20} /><span className="tg-info-text"><strong>{selectedRoom.type === "channel" ? t("chat.deleteChannel") : t("chat.deleteGroup")}</strong></span>
+              </button>}
             </section>}
           </>}
         </div>}
@@ -3101,6 +3201,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 </span>
                 <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
               </div>
+              <button type="button" className="tg-edit-row tg-edit-row-link" onClick={() => { setRoomSettingsOpen(false); setChannelSettingsOpen(true); }}>
+                <Sliders size={20} /><span className="tg-edit-row-label"><strong>{t("channelSettings.title")}</strong><small>{t("channelSettings.entryHint")}</small></span><ChevronRight size={18} />
+              </button>
             </section>
             <p className="tg-edit-note">{t("chat.adminsOnlyDesc")}</p>
           </div>
@@ -3124,79 +3227,72 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <LoaderCircle className="spin" size={17} /> : <Send size={17} />}</button>)}</div>
       </Modal>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("chat.newConversationTitle")}
-             description={t("chat.newConversationModalDesc")}>
-        <form className="modal-form" onSubmit={createConversation}>
-          <div className="segmented-control segmented-control-3"><span className="segmented-indicator"
-                                                                      aria-hidden="true"
-                                                                      style={{ transform: `translateX(${createMode === "direct" ? "200%" : createMode === "channel" ? "100%" : "0"})` }} />
-            <button type="button" className={createMode === "group" ? "active" : ""} onClick={() => {
-              setCreateMode("group");
-              setSelectedMembers([]);
-            }}><UsersRound size={17} /> {t("chat.groupWord")}</button>
-            <button type="button" className={createMode === "channel" ? "active" : ""} onClick={() => {
-              setCreateMode("channel");
-              setSelectedMembers([]);
-            }}><RadioTower size={17} /> {t("chat.channelWord")}</button>
-            <button type="button" className={createMode === "direct" ? "active" : ""} onClick={() => {
-              setCreateMode("direct");
-              setSelectedMembers([]);
-            }}><UserRound size={17} /> {t("chat.personalWord")}</button>
-          </div>
-          {createMode !== "direct" && <>
-            <label>{createMode === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}<input name="name"
-                                                                                                           placeholder={createMode === "channel" ? t("chat.channelNamePlaceholder") : t("chat.groupNamePlaceholder")}
-                                                                                                           required
-                                                                                                           maxLength={200} /></label>
-            <label>{t("chat.descriptionLabel")}<input name="description" placeholder={t("chat.descriptionPlaceholder")}
-                                                      maxLength={1000} /></label>
-            {/* Without this every room was created `private`, and a private
-                room is invisible to search — so a "public channel" was not
-                something the UI could actually produce. */}
-            <fieldset className="create-scope">
-              <legend>{t("chat.visibilityLegend")}</legend>
-              <label><input type="radio" name="scope" value="public" checked={createScope === "public"}
-                            onChange={() => setCreateScope("public")} />
-                <span><strong>{t("chat.visibilityPublicTitle")}</strong><small>{t("chat.visibilityPublicDesc")}</small></span>
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} className="tg-new-modal" width="sm"
+             title={createMode === "direct" ? t("chat.newMessageItem") : createMode === "channel" ? t("chat.newChannelItem") : t("chat.newGroupItem")}>
+        <form className="tg-new" onSubmit={createConversation}>
+          {createMode !== "direct" && createStep === "info" ? <div className="tg-new-info">
+            <div className="tg-new-top">
+              <button type="button" className="tg-new-avatar" onClick={() => createAvatarInput.current?.click()} aria-label={t("chat.setPhoto")}>
+                {createAvatar ? <img src={createAvatar.url} alt="" /> : <Camera size={30} />}
+              </button>
+              <input ref={createAvatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => { pickCreateAvatar(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+              <label className="tg-new-field">
+                <span>{createMode === "channel" ? t("chat.channelNameLabel") : t("chat.groupNameLabel")}</span>
+                <input autoFocus value={createName} onChange={(event) => setCreateName(event.target.value)} maxLength={200} required />
               </label>
-              <label><input type="radio" name="scope" value="private" checked={createScope === "private"}
-                            onChange={() => setCreateScope("private")} />
-                <span><strong>{t("chat.visibilityPrivateTitle")}</strong><small>{t("chat.visibilityPrivateDesc")}</small></span>
-              </label>
-            </fieldset>
-          </>}
-          <label className="search-field member-search"><Search size={17} /><input value={memberSearch}
-                                                                                   onChange={(event) => setMemberSearch(event.target.value)}
-                                                                                   placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")}
-                                                                                   aria-label={t("chat.searchUserAria")}
-                                                                                   autoComplete="off"
-                                                                                   name="chat-member-search" />{searchingUsers ?
-            <LoaderCircle className="spin" size={16} /> : memberSearch &&
-            <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X
-              size={15} /></button>}</label>
-          <fieldset className="member-picker">
-            <legend>{createMode === "direct" ? t("chat.whoToChatLegend") : createMode === "channel" ? t("chat.selectSubscribersLegend") : t("chat.selectMembersLegend")}</legend>
-            {pickerCandidates.length === 0 && <p
-              className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}{pickerCandidates.map((member) => {
-            const checked = selectedMembers.includes(member.id);
-            return <label key={member.id} className={checked ? "checked" : ""}><input
-              type={createMode === "direct" ? "radio" : "checkbox"} name="members" value={member.id} checked={checked}
-              onChange={() => setSelectedMembers((current) => createMode === "direct" ? [member.id] : current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} /><Avatar
-              firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl}
-              size="sm" /><span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span><Check
-              size={16} /></label>;
-          })}</fieldset>
-          <button type="button" className="invite-email-prompt" onClick={() => {
-            setCreateOpen(false);
-            setWorkspaceInviteOpen(true);
-          }}><MailPlus
-            size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span>
-          </button>
-          <div className="modal-actions"><Button type="button" variant="secondary"
-                                                 onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button><Button
-            type="submit" loading={creating}
-            disabled={createMode === "direct" && selectedMembers.length !== 1}>{createMode === "group" ? t("chat.createGroupButton") : createMode === "channel" ? t("chat.createChannelButton") : t("chat.openChatButton")}</Button>
-          </div>
+            </div>
+            {createMode === "channel" && <label className="tg-new-field tg-new-desc">
+              <input value={createDescription} onChange={(event) => setCreateDescription(event.target.value)} maxLength={1000} placeholder={t("chat.descriptionOptional")} />
+            </label>}
+            <div className="tg-new-type">
+              <span>{createMode === "channel" ? t("chat.channelTypeLabel") : t("chat.groupTypeLabel")}</span>
+              <span className="tg-edit-seg" role="radiogroup">
+                <button type="button" role="radio" aria-checked={createScope === "public"} className={createScope === "public" ? "active" : ""} onClick={() => setCreateScope("public")}>{t("chat.visibilityPublicShort")}</button>
+                <button type="button" role="radio" aria-checked={createScope === "private"} className={createScope === "private" ? "active" : ""} onClick={() => setCreateScope("private")}>{t("chat.visibilityPrivateShort")}</button>
+              </span>
+            </div>
+            <small className="tg-new-hint">{createScope === "public" ? t("chat.visibilityPublicDesc") : t("chat.visibilityPrivateDesc")}</small>
+          </div> : <div className="tg-new-members">
+            <label className="search-field member-search"><Search size={17} /><input value={memberSearch} autoFocus
+                   onChange={(event) => setMemberSearch(event.target.value)}
+                   placeholder={createMode === "direct" ? t("chat.searchByNamePlaceholder") : t("chat.searchWorkspaceMembersPlaceholder")}
+                   aria-label={t("chat.searchUserAria")} autoComplete="off" name="chat-member-search" />
+              {searchingUsers ? <LoaderCircle className="spin" size={16} /> : memberSearch && <button type="button" onClick={() => setMemberSearch("")} aria-label={t("chat.clearSearchAria")}><X size={15} /></button>}</label>
+            {createMode !== "direct" && selectedMembers.length > 0 && <div className="tg-new-chips">{selectedMembers.map((id) => {
+              const person = pickerCandidates.find((member) => member.id === id) ?? memberMap.get(id);
+              return <button type="button" key={id} onClick={() => setSelectedMembers((current) => current.filter((item) => item !== id))}>
+                <Avatar firstName={person?.firstName} lastName={person?.lastName} url={person?.avatarUrl} size="sm" />{person?.firstName ?? ""}<X size={14} /></button>;
+            })}</div>}
+            <div className="tg-new-list">
+              {pickerCandidates.length === 0 && <p className="field-hint">{createMode === "direct" && normalizedMemberSearch.length < 2 ? t("chat.minCharsHint") : t("chat.userNotFoundHint")}</p>}
+              {pickerCandidates.map((member) => {
+                const checked = selectedMembers.includes(member.id);
+                return createMode === "direct"
+                  ? <button type="button" key={member.id} className="tg-new-person" disabled={Boolean(openingDirect)} onClick={() => { setCreateOpen(false); void openDirectWith(member.id); }}>
+                      <Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" />
+                      <span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span>
+                    </button>
+                  : <label key={member.id} className={`tg-new-person ${checked ? "checked" : ""}`}>
+                      <input type="checkbox" checked={checked} onChange={() => setSelectedMembers((current) => current.includes(member.id) ? current.filter((id) => id !== member.id) : [...current, member.id])} />
+                      <Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" />
+                      <span><strong>{member.firstName} {member.lastName}</strong><small>@{member.username}</small></span>
+                      <i className="tg-new-check" aria-hidden="true"><Check size={13} /></i>
+                    </label>;
+              })}
+            </div>
+            <button type="button" className="invite-email-prompt" onClick={() => { setCreateOpen(false); setWorkspaceInviteOpen(true); }}>
+              <MailPlus size={18} /><span><strong>{t("chat.inviteNewPersonTitle")}</strong><small>{t("chat.inviteNewPersonHint")}</small></span>
+            </button>
+          </div>}
+          <footer className="tg-edit-actions">
+            {createMode !== "direct" && createStep === "members"
+              ? <button type="button" onClick={() => setCreateStep("info")}>{t("chat.backToInfo")}</button>
+              : <button type="button" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>}
+            {createMode !== "direct" && <button type="submit" className="primary" disabled={creating || !createName.trim()}>
+              {creating ? <LoaderCircle className="spin" size={16} /> : null}
+              {createStep === "info" ? t("chat.nextStep") : createMode === "channel" ? t("chat.createChannelButton") : t("chat.createGroupButton")}
+            </button>}
+          </footer>
         </form>
       </Modal>
 
