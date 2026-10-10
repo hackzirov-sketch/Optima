@@ -174,7 +174,18 @@ export interface MeetingHandDto {
 // Emoji reactions are ephemeral fire-and-forget events — capped to a small
 // allow-list (matching the picker in MeetingRoomPage.tsx) so the payload can
 // never carry arbitrary text through what looks like an emoji field.
-const ALLOWED_MEETING_REACTIONS = new Set(['👍', '❤️', '🎉', '👏', '😂', '😮']);
+// Must match the reaction bar in MeetingRoomPage (MEETING_REACTIONS).
+const ALLOWED_MEETING_REACTIONS = new Set([
+  '💖',
+  '👍',
+  '🎉',
+  '👏',
+  '😂',
+  '😮',
+  '😢',
+  '🤔',
+  '👎',
+]);
 
 // A socket drop (network blip, tab refresh) shouldn't immediately count as
 // "left the meeting" — give it a window to reconnect and rejoin before the
@@ -1119,7 +1130,7 @@ export class EventsGateway
   // onReaction already expects — the frontend had this wired up with no
   // server-side handler behind it.
   @SubscribeMessage('meeting:reaction')
-  handleMeetingReaction(
+  async handleMeetingReaction(
     @MessageBody() data: MeetingReactionDto,
     @ConnectedSocket() client: AppSocket,
   ) {
@@ -1129,6 +1140,15 @@ export class EventsGateway
       client.data?.meetingId !== data.meetingId ||
       !client.rooms.has(`meeting:${data.meetingId}`) ||
       !ALLOWED_MEETING_REACTIONS.has(data.emoji)
+    )
+      return;
+    // Host controls: reactions can be turned off for participants.
+    if (
+      !(await this.meetingsService.isActionAllowed(
+        data.meetingId,
+        userId,
+        'reactions',
+      ))
     )
       return;
 
@@ -1658,7 +1678,7 @@ export class EventsGateway
    * chat sockets join `room:<id>`, meeting sockets join `meeting:<id>` (see
    * handleMeetingJoin). Every meeting caller used to reach for broadcastToRoom
    * and pre-format the name as `meeting:<id>`, which that method then prefixed
-   * again — so `meeting:ended`, `locked`, `file-shared` and the recording
+   * again — so `meeting:ended`, `locked`, `permissions` and the recording
    * events were all emitted into `room:meeting:<id>`, a room no socket is ever
    * in, and silently reached nobody.
    */

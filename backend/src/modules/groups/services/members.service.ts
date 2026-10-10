@@ -15,6 +15,7 @@ import { ROLE_LEVEL } from '../../../common/constants/role-levels';
 import { GROUP_MEMBER_COLUMNS_SQL } from '../repositories/groups.sql';
 import { RedisService } from '../../../redis/redis.service';
 import { RedisKeys } from '../../../redis/redis.keys';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 /**
  * What assertMember caches. Only the fields an authorization decision reads —
@@ -40,6 +41,7 @@ export class MembersService {
     private readonly permission: PermissionService,
     private readonly audit: AuditService,
     private readonly redis: RedisService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /**
@@ -327,6 +329,8 @@ export class MembersService {
       [groupId, targetUserId],
     );
     await this.invalidateMember(groupId, targetUserId);
+    // Drops the user's open sockets out of the group channel.
+    this.events.emit('group.member_removed', { groupId, userId: targetUserId });
 
     await this.audit.log({
       groupId,

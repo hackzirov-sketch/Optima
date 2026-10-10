@@ -30,8 +30,8 @@ export const SFU_MAX_PARTICIPANTS = 100;
 export function transportMaxParticipants(): number {
   const sfu = Boolean(
     process.env.LIVEKIT_URL?.trim() &&
-      process.env.LIVEKIT_API_KEY?.trim() &&
-      process.env.LIVEKIT_API_SECRET?.trim(),
+    process.env.LIVEKIT_API_KEY?.trim() &&
+    process.env.LIVEKIT_API_SECRET?.trim(),
   );
   return sfu ? SFU_MAX_PARTICIPANTS : MESH_MAX_PARTICIPANTS;
 }

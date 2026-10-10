@@ -325,12 +325,9 @@ export class MeetingJoinRequestService {
             [normalizedEmails],
           )
         : [];
-    const foundEmails = new Set(
-      emailRows.map((row) => row.email.toLowerCase()),
-    );
-    const notFoundEmails = normalizedEmails.filter(
-      (email) => !foundEmails.has(email),
-    );
+    // Which emails matched an account is deliberately not reported back: the
+    // invite endpoint would otherwise answer "is <email> registered?" for
+    // anyone who can create a meeting.
 
     // Server-side guard: never let the inviter invite themself, and
     // de-duplicate. The frontend also filters the host out of the invite
@@ -371,19 +368,22 @@ export class MeetingJoinRequestService {
     // let invited users join directly, no waiting room. Approving here (rather
     // than inserting a participant row) keeps join() as the single place that
     // actually admits someone (capacity checks, auto-start, etc.).
-    await Promise.all(
-      validUserIds.map((uid) =>
-        this.dataSource.query(
-          `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
-           VALUES ($1, $2, 'approved', now(), $3, now())
-           ON CONFLICT (meeting_id, user_id) DO UPDATE
-             SET status = 'approved', reviewed_by = $3, reviewed_at = now()
-             WHERE meeting_join_requests.status <> 'approved'`,
-          [meetingId, uid, inviterId],
-        ),
-      ),
-    );
-    await this.unmarkWaiting(meetingId, validUserIds);
+    //
+    // Only the host or a co-host may pre-approve. Any group member can send
+    // an invite, but if that also admitted the invitee, a member could wave
+    // anyone past the waiting room the host is moderating — they just get
+    // the notification and knock like everyone else.
+    const inviterIsModerator =
+      meeting.hostId === inviterId ||
+      (
+        await this.dataSource.query<{ role: string }>(
+          `SELECT role FROM meeting_participants
+            WHERE meeting_id = $1 AND user_id = $2 AND left_at IS NULL`,
+          [meetingId, inviterId],
+        )
+      )[0]?.role === MeetingParticipantRole.CO_HOST;
+    if (inviterIsModerator)
+      await this.preApprove(meetingId, inviterId, validUserIds);
 
     const notifications = validUserIds.map((uid) =>
       this.notificationsService.create({
@@ -398,12 +398,32 @@ export class MeetingJoinRequestService {
         // invite that drops the recipient on a list of every meeting makes
         // them hunt for the one they were invited to. `/app/meetings` was not
         // a route at all, so the notification led nowhere.
-        actionUrl: `/meetings/${meeting.id}`,
+        actionUrl: `/meet/${meeting.meetingCode}`,
         metadata: { joinCode: meeting.meetingCode },
       }),
     );
 
     await Promise.all(notifications);
-    return { success: true, invitedCount: validUserIds.length, notFoundEmails };
+    return { success: true };
+  }
+
+  private async preApprove(
+    meetingId: string,
+    reviewerId: string,
+    userIds: string[],
+  ) {
+    await Promise.all(
+      userIds.map((uid) =>
+        this.dataSource.query(
+          `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
+           VALUES ($1, $2, 'approved', now(), $3, now())
+           ON CONFLICT (meeting_id, user_id) DO UPDATE
+             SET status = 'approved', reviewed_by = $3, reviewed_at = now()
+             WHERE meeting_join_requests.status <> 'approved'`,
+          [meetingId, uid, reviewerId],
+        ),
+      ),
+    );
+    await this.unmarkWaiting(meetingId, userIds);
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { LoaderCircle, X } from "lucide-react";
 import { useI18n } from "../lib/i18n/i18n";
 import { AnimatedEmoji } from "./AnimatedEmoji";
@@ -106,7 +107,10 @@ export function Modal({ open, title, description, onClose, children, width = "sm
     };
   }, [open]);
   if (!open) return null;
-  return (
+  // Portalled to <body>: pages render inside an animated (transformed)
+  // container, which traps z-index, so in place the dialog slid under the
+  // app's top bar and dock.
+  return createPortal(
     <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
         <section ref={modalRef} className={`modal modal-${width} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="modal-header">
@@ -118,7 +122,8 @@ export function Modal({ open, title, description, onClose, children, width = "sm
         </header>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

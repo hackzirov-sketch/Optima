@@ -1,8 +1,41 @@
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import {
+  AccessToken,
+  RoomServiceClient,
+  TrackSource,
+} from 'livekit-server-sdk';
 
 import { DatabaseService } from '../../../database/database.service';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
+
+interface MeetingPermissions {
+  allowScreenShare: boolean;
+  allowReactions: boolean;
+  allowMicrophone: boolean;
+  allowVideo: boolean;
+  allowChat: boolean;
+}
+
+/**
+ * What a participant may publish, from the meeting's host controls. Hosts and
+ * co-hosts are never restricted. Reactions travel over the socket, so they
+ * are not a LiveKit concern; chat uses LiveKit data, so allowChat maps to
+ * canPublishData.
+ */
+function publishGrants(permissions: MeetingPermissions, moderator: boolean) {
+  const sources: TrackSource[] = [];
+  if (moderator || permissions.allowMicrophone)
+    sources.push(TrackSource.MICROPHONE);
+  if (moderator || permissions.allowVideo) sources.push(TrackSource.CAMERA);
+  if (moderator || permissions.allowScreenShare)
+    sources.push(TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO);
+  return {
+    canPublish: sources.length > 0,
+    canPublishSources: sources,
+    canPublishData: moderator || permissions.allowChat,
+    canSubscribe: true,
+  };
+}
 
 export type MeetingMediaSession =
   | { provider: 'livekit'; url: string; token: string; room: string }
@@ -31,6 +64,7 @@ export class MeetingLiveKitService {
   private readonly url = process.env.LIVEKIT_URL?.trim() || '';
   private readonly apiKey = process.env.LIVEKIT_API_KEY?.trim() || '';
   private readonly apiSecret = process.env.LIVEKIT_API_SECRET?.trim() || '';
+  private rooms: RoomServiceClient | null = null;
 
   constructor(private readonly dataSource: DatabaseService) {
     if (this.isEnabled()) {
@@ -58,14 +92,21 @@ export class MeetingLiveKitService {
 
     // In the meeting right now: the socket join (with every admission rule)
     // has already happened. A token is never the way in.
-    const rows = await this.dataSource.query<{
-      firstName: string | null;
-      lastName: string | null;
-      username: string | null;
-      avatarUrl: string | null;
-    }>(
+    const rows = await this.dataSource.query<
+      {
+        firstName: string | null;
+        lastName: string | null;
+        username: string | null;
+        avatarUrl: string | null;
+        moderator: boolean;
+      } & MeetingPermissions
+    >(
       `SELECT u.first_name AS "firstName", u.last_name AS "lastName",
-              u.username, u.avatar_url AS "avatarUrl"
+              u.username, u.avatar_url AS "avatarUrl",
+              (m.host_id = $2 OR p.role IN ('host', 'co_host')) AS "moderator",
+              m.allow_screen_share AS "allowScreenShare", m.allow_reactions AS "allowReactions",
+              m.allow_microphone AS "allowMicrophone", m.allow_video AS "allowVideo",
+              m.allow_chat AS "allowChat"
          FROM meetings m
          JOIN users u ON u.id = $2
          LEFT JOIN meeting_participants p
@@ -98,15 +139,7 @@ export class MeetingLiveKitService {
     token.addGrant({
       room,
       roomJoin: true,
-      canSubscribe: true,
-      canPublish: true,
-      canPublishData: true,
-      canPublishSources: [
-        TrackSource.CAMERA,
-        TrackSource.MICROPHONE,
-        TrackSource.SCREEN_SHARE,
-        TrackSource.SCREEN_SHARE_AUDIO,
-      ],
+      ...publishGrants(profile, Boolean(profile.moderator)),
     });
 
     return {
@@ -115,5 +148,61 @@ export class MeetingLiveKitService {
       token: await token.toJwt(),
       room,
     };
+  }
+
+  /**
+   * Re-applies host controls to everyone already in the LiveKit room, so a
+   * change takes effect mid-call: LiveKit unpublishes tracks a participant is
+   * no longer allowed to send. Best-effort — the socket-side gates still hold
+   * if the SFU can't be reached.
+   */
+  async applyPermissions(meetingId: string): Promise<void> {
+    if (!this.isEnabled()) return;
+    try {
+      this.rooms ??= new RoomServiceClient(
+        this.url.replace(/^ws/, 'http'),
+        this.apiKey,
+        this.apiSecret,
+      );
+      const room = MeetingLiveKitService.roomName(meetingId);
+      const [meeting] = await this.dataSource.query<
+        MeetingPermissions & { hostId: string }
+      >(
+        `SELECT host_id AS "hostId",
+                allow_screen_share AS "allowScreenShare", allow_reactions AS "allowReactions",
+                allow_microphone AS "allowMicrophone", allow_video AS "allowVideo",
+                allow_chat AS "allowChat"
+           FROM meetings WHERE id = $1`,
+        [meetingId],
+      );
+      if (!meeting) return;
+      const moderators = new Set(
+        (
+          await this.dataSource.query<{ userId: string }>(
+            `SELECT user_id AS "userId" FROM meeting_participants
+              WHERE meeting_id = $1 AND left_at IS NULL AND role IN ('host', 'co_host')`,
+            [meetingId],
+          )
+        ).map((row) => row.userId),
+      );
+      moderators.add(meeting.hostId);
+      const participants = await this.rooms.listParticipants(room);
+      await Promise.all(
+        participants
+          .filter((participant) => !moderators.has(participant.identity))
+          .map((participant) =>
+            this.rooms!.updateParticipant(
+              room,
+              participant.identity,
+              undefined,
+              publishGrants(meeting, false),
+            ),
+          ),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not apply host controls in LiveKit for ${meetingId}: ${(err as Error).message}`,
+      );
+    }
   }
 }

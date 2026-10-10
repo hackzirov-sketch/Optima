@@ -28,19 +28,20 @@ import {
   PARTICIPANT_COLUMNS_SQL,
   generateMeetingCode,
   defaultJoinPolicy,
+  MEETING_ACTION_COLUMNS,
+  type MeetingAction,
 } from './meetings.sql';
 import {
   MEETING_LIFECYCLE_QUEUE,
   MEETING_AUTO_END_GRACE_SECONDS,
   MEETING_INACTIVE_RETENTION_DAYS,
-  MESH_MAX_PARTICIPANTS,
+  transportMaxParticipants,
   effectiveCapacity,
 } from './meetings.constants';
 import { MeetingsRepository } from './repositories/meetings.repository';
 import { MeetingAccessService } from './services/meeting-access.service';
 import { MeetingRecordingService } from './services/meeting-recording.service';
 import { MeetingJoinRequestService } from './services/meeting-join-request.service';
-import { MeetingFilesService } from './services/meeting-files.service';
 import { RedisService } from '../../redis/redis.service';
 import { RedisKeys } from '../../redis/redis.keys';
 
@@ -74,7 +75,6 @@ export class MeetingsService {
     // closes a cycle; forwardRef required here to avoid undefined at runtime.
     @Inject(forwardRef(() => MeetingJoinRequestService))
     private readonly joinRequestService: MeetingJoinRequestService,
-    private readonly filesService: MeetingFilesService,
     @Inject(forwardRef(() => MembersService))
     private readonly membersService: MembersService,
     @Inject(forwardRef(() => ReminderSchedulerService))
@@ -214,7 +214,7 @@ export class MeetingsService {
     for (let attempts = 0; attempts < 10 && !code; attempts++) {
       const candidate = generateMeetingCode();
       const existing = await this.dataSource.query(
-        `SELECT id FROM meetings WHERE meeting_code = $1`,
+        `SELECT id FROM meetings WHERE lower(meeting_code) = $1`,
         [candidate],
       );
       if (!existing[0]) code = candidate;
@@ -249,12 +249,15 @@ export class MeetingsService {
           code,
           new Date(dto.startTime),
           dto.endTime ? new Date(dto.endTime) : null,
-          dto.maxParticipants ?? null,
+          // Never more than the transport can carry (8 on the mesh).
+          dto.maxParticipants
+            ? Math.min(dto.maxParticipants, transportMaxParticipants())
+            : null,
           dto.isRecurring ?? null,
           dto.agenda ?? null,
           scope,
           joinPolicy,
-          MESH_MAX_PARTICIPANTS,
+          transportMaxParticipants(),
         ],
       );
       saved = rows[0];
@@ -358,6 +361,11 @@ export class MeetingsService {
     }
 
     const patch: Record<string, unknown> = { ...dto };
+    if (dto.maxParticipants !== undefined)
+      patch.maxParticipants = Math.min(
+        dto.maxParticipants,
+        transportMaxParticipants(),
+      );
     if (dto.startTime !== undefined) patch.startTime = new Date(dto.startTime);
     if (dto.endTime !== undefined) patch.endTime = new Date(dto.endTime);
 
@@ -634,6 +642,28 @@ export class MeetingsService {
    * Screen share is exclusive: one sharer at a time, claimed atomically so two
    * simultaneous requests can't both win.
    */
+  /**
+   * Host controls: may this participant do `action` right now? Hosts and
+   * co-hosts always may; everyone else follows the meeting's allow_* flags.
+   */
+  async isActionAllowed(
+    meetingId: string,
+    userId: string,
+    action: MeetingAction,
+  ): Promise<boolean> {
+    const rows = await this.dataSource.query<{ allowed: boolean }>(
+      `SELECT m.${MEETING_ACTION_COLUMNS[action]}
+              OR m.host_id = $2
+              OR EXISTS (SELECT 1 FROM meeting_participants p
+                          WHERE p.meeting_id = m.id AND p.user_id = $2
+                            AND p.left_at IS NULL
+                            AND p.role IN ('host', 'co_host')) AS allowed
+         FROM meetings m WHERE m.id = $1`,
+      [meetingId, userId],
+    );
+    return Boolean(rows[0]?.allowed);
+  }
+
   async setParticipantMedia(
     meetingId: string,
     userId: string,
@@ -648,6 +678,20 @@ export class MeetingsService {
 
     // `audio` is expressed as is_muted, i.e. the inverse of "enabled".
     const value = kind === 'audio' ? !enabled : enabled;
+
+    // Host controls: turning something *on* needs the meeting to allow it.
+    // Turning off is always allowed.
+    if (enabled) {
+      const action = (
+        { audio: 'microphone', video: 'video', screen: 'screenShare' } as const
+      )[kind];
+      if (!(await this.isActionAllowed(meetingId, userId, action))) {
+        throw new ForbiddenException({
+          code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+          message: 'The host has turned this off for participants',
+        });
+      }
+    }
 
     if (kind === 'screen' && enabled) {
       const claimed = await this.dataSource.query<{ id: string }>(
@@ -847,6 +891,10 @@ export class MeetingsService {
       {
         delay: MEETING_AUTO_END_GRACE_SECONDS * 1000,
         jobId: `auto-end_${meetingId}`,
+        // A kept completed job would make BullMQ silently drop every later
+        // add with the same jobId — the meeting would never auto-end again.
+        removeOnComplete: true,
+        removeOnFail: true,
       },
     );
   }
@@ -870,7 +918,7 @@ export class MeetingsService {
     await this.lifecycleQueue.add(
       'check-leave-grace',
       { meetingId, userId },
-      { delay: delayMs, jobId },
+      { delay: delayMs, jobId, removeOnComplete: true, removeOnFail: true },
     );
   }
 
@@ -1082,40 +1130,6 @@ export class MeetingsService {
       targetUserIds,
       targetEmails,
     );
-  }
-
-  presignSharedFile(
-    meetingId: string,
-    userId: string,
-    fileName: string,
-    mimeType: string,
-    fileSize: number,
-  ) {
-    return this.filesService.presignSharedFile(
-      meetingId,
-      userId,
-      fileName,
-      mimeType,
-      fileSize,
-    );
-  }
-
-  shareFile(
-    meetingId: string,
-    userId: string,
-    file: {
-      fileName: string;
-      mimeType: string;
-      fileSize: number;
-      storageKey: string;
-      storageUrl: string;
-    },
-  ) {
-    return this.filesService.shareFile(meetingId, userId, file);
-  }
-
-  listSharedFiles(meetingId: string, userId: string) {
-    return this.filesService.listSharedFiles(meetingId, userId);
   }
 
   startRecording(meetingId: string, userId: string) {

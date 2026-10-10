@@ -54,3 +54,13 @@ export function defaultJoinPolicy(scope: RoomScope): MeetingJoinPolicy {
     ? MeetingJoinPolicy.REQUEST_APPROVAL
     : MeetingJoinPolicy.AUTO;
 }
+
+/** Host-controllable participant actions → their meetings.allow_* column. */
+export const MEETING_ACTION_COLUMNS = {
+  screenShare: 'allow_screen_share',
+  reactions: 'allow_reactions',
+  microphone: 'allow_microphone',
+  video: 'allow_video',
+  chat: 'allow_chat',
+} as const;
+export type MeetingAction = keyof typeof MEETING_ACTION_COLUMNS;

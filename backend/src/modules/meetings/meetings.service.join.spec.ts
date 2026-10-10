@@ -61,7 +61,6 @@ describe('MeetingsService.join — a returning participant is re-vetted', () => 
       accessService as never,
       {} as never, // recording
       {} as never, // join requests
-      {} as never, // files
       {} as never, // members
       {} as never, // reminders
       {} as never, // lifecycle queue

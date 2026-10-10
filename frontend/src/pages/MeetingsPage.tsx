@@ -26,8 +26,9 @@ function startOfDay(date: Date) {
   return copy;
 }
 
-function meetingLink(meeting: Pick<Meeting, "id">) {
-  return `${window.location.origin}/meetings/${meeting.id}`;
+/** The shareable Google Meet–style link: /meet/abc-defg-hij */
+function meetingLink(meeting: Pick<Meeting, "code">) {
+  return `${window.location.origin}/meet/${meeting.code}`;
 }
 
 /**
@@ -49,7 +50,10 @@ export function MeetingsPage() {
   const [joining, setJoining] = useState(false);
   const [newOpen, setNewOpen] = useState<"bar" | "empty" | null>(null);
   const [creating, setCreating] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  /** Which "New" action the create dialog is for (null = closed). */
+  const [createMode, setCreateMode] = useState<"instant" | "later" | "schedule" | null>(null);
+  /** Participant ceiling of the media transport (8 peer-to-peer, more on the SFU). */
+  const [maxAllowed, setMaxAllowed] = useState(MESH_MAX_PARTICIPANTS);
   const [laterMeeting, setLaterMeeting] = useState<Meeting | null>(null);
   const [copied, setCopied] = useState(false);
   const [visibility, setVisibility] = useState<MeetingVisibility>("group_only");
@@ -70,6 +74,9 @@ export function MeetingsPage() {
     }
   }
   useEffect(() => { void load(); }, [group?.id]);
+  useEffect(() => {
+    api.meetings.mediaConfig().then((config) => setMaxAllowed(config.maxParticipants || MESH_MAX_PARTICIPANTS)).catch(() => undefined);
+  }, []);
 
   // /meetings?code=XYZ (shared links from older invites) prefills the bar.
   useEffect(() => {
@@ -92,7 +99,11 @@ export function MeetingsPage() {
   }, [selectedDay, locale]);
 
   const todayKey = dayKey(new Date());
-  const live = useMemo(() => meetings.filter((meeting) => meeting.status === "live"), [meetings]);
+  // "Happening now" belongs to today (or to the day the call started) — not
+  // to every day the week strip lands on.
+  const live = useMemo(() => meetings
+    .filter((meeting) => meeting.status === "live" && (dayKey(selectedDay) === todayKey || dayKey(new Date(meeting.startTime)) === dayKey(selectedDay)))
+    .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)), [meetings, selectedDay, todayKey]);
   const dayMeetings = useMemo(() => meetings
     .filter((meeting) => meeting.status !== "live" && meeting.status !== "ended" && meeting.status !== "cancelled" && dayKey(new Date(meeting.startTime)) === dayKey(selectedDay))
     .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime)), [meetings, selectedDay]);
@@ -106,63 +117,40 @@ export function MeetingsPage() {
     setSelectedDay(startOfDay(next));
   }
 
-  async function createMeeting(extra: Record<string, unknown> = {}) {
-    if (!group) throw new Error(t("meetings.createFailed"));
-    return api.meetings.create(group.id, {
-      title: t("meet.instantTitle"),
-      startTime: new Date().toISOString(),
-      scope: "group_only",
-      joinPolicy: "auto",
-      maxParticipants: MESH_MAX_PARTICIPANTS,
-      ...extra,
-    });
-  }
-
-  async function startInstant() {
-    setCreating(true);
-    try {
-      const meeting = await createMeeting();
-      navigate(`/meetings/${meeting.id}`);
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function createForLater() {
-    setCreating(true);
-    try {
-      const meeting = await createMeeting();
-      setCopied(false);
-      setLaterMeeting(meeting);
-      setMeetings((current) => [meeting, ...current]);
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function schedule(event: FormEvent<HTMLFormElement>) {
+  /**
+   * One dialog for all three "New" actions — Google Meet starts with no
+   * questions, but a meeting here has an audience and a size, so they are
+   * asked up front. Instant opens it, "later" hands back the link, schedule
+   * puts it on the chosen day.
+   */
+  async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCreating(true);
+    if (!group || !createMode) return;
+    const mode = createMode;
     const form = new FormData(event.currentTarget);
+    setCreating(true);
     try {
-      const meeting = await createMeeting({
-        title: String(form.get("title") || "").trim(),
+      const meeting = await api.meetings.create(group.id, {
+        title: String(form.get("title") || "").trim() || t("meet.instantTitle"),
         description: String(form.get("description") || "").trim() || undefined,
-        startTime: new Date(String(form.get("startTime"))).toISOString(),
-        maxParticipants: clampParticipants(Number(form.get("maxParticipants"))),
+        startTime: mode === "schedule" ? new Date(String(form.get("startTime"))).toISOString() : new Date().toISOString(),
+        maxParticipants: Math.min(maxAllowed, Math.max(2, Number(form.get("maxParticipants")) || maxAllowed)),
         scope: visibility,
-        joinPolicy: visibility === "invite_only" ? undefined : joinPolicy,
+        joinPolicy: visibility === "invite_only" || visibility === "private" ? undefined : joinPolicy,
       });
-      setScheduleOpen(false);
+      setCreateMode(null);
       setVisibility("group_only");
       setJoinPolicy("auto");
       setMeetings((current) => [meeting, ...current]);
-      setSelectedDay(startOfDay(new Date(meeting.startTime)));
-      show(t("meetings.meetingCreated"));
+      if (mode === "instant") {
+        navigate(`/meet/${meeting.code}`);
+      } else if (mode === "later") {
+        setCopied(false);
+        setLaterMeeting(meeting);
+      } else {
+        setSelectedDay(startOfDay(new Date(meeting.startTime)));
+        show(t("meetings.meetingCreated"));
+      }
     } catch (error) {
       show(error instanceof Error ? error.message : t("meetings.createFailed"), "error");
     } finally {
@@ -180,12 +168,13 @@ export function MeetingsPage() {
       navigate(`/meetings/${id}`);
       return;
     }
-    let lookup = value;
-    try { lookup = new URL(value).searchParams.get("code") || value; } catch { /* not a URL */ }
+    // .../meet/abc-defg-hij, ?code=..., or the bare code.
+    let lookup = value.match(/\/meet\/([a-z0-9-]+)/i)?.[1] ?? value;
+    try { lookup = new URL(value).searchParams.get("code") || lookup; } catch { /* not a URL */ }
     setJoining(true);
     try {
-      const meeting = await api.meetings.resolveByCode(lookup.toUpperCase());
-      navigate(`/meetings/${meeting.id}`);
+      const meeting = await api.meetings.resolveByCode(lookup.trim());
+      navigate(`/meet/${meeting.code}`);
     } catch {
       show(t("meet.invalidCode"), "error");
     } finally {
@@ -216,9 +205,9 @@ export function MeetingsPage() {
   }
 
   const newItems = [
-    { key: "later", label: t("meet.createLater"), icon: <Link2 size={20} />, onSelect: () => void createForLater() },
-    { key: "instant", label: t("meet.startInstant"), icon: <Plus size={20} />, onSelect: () => void startInstant() },
-    { key: "schedule", label: t("meet.schedule"), icon: <CalendarPlus size={20} />, onSelect: () => setScheduleOpen(true) },
+    { key: "later", label: t("meet.createLater"), icon: <Link2 size={20} />, onSelect: () => setCreateMode("later") },
+    { key: "instant", label: t("meet.startInstant"), icon: <Plus size={20} />, onSelect: () => setCreateMode("instant") },
+    { key: "schedule", label: t("meet.schedule"), icon: <CalendarPlus size={20} />, onSelect: () => setCreateMode("schedule") },
   ];
 
   const defaultStart = new Date(Date.now() + 30 * 60_000);
@@ -228,7 +217,7 @@ export function MeetingsPage() {
 
   const item = (meeting: Meeting) => (
     <MeetingRow key={meeting.id} meeting={meeting} locale={locale} canDelete={meeting.hostId === user?.id}
-      onOpen={() => navigate(`/meetings/${meeting.id}`)}
+      onOpen={() => navigate(`/meet/${meeting.code}`)}
       onCopyLink={() => void copy(meetingLink(meeting), t("meetings.linkCopied"))}
       onCopyCode={() => void copy(meeting.code, t("meetings.codeCopied"))}
       onDelete={() => void removeMeeting(meeting)} />
@@ -324,17 +313,26 @@ export function MeetingsPage() {
         </div>}
       </Modal>
 
-      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title={t("meetings.newMeetingTitle")} description={t("meetings.newMeetingDesc")} width="md">
-        <form className="modal-form" onSubmit={(event) => void schedule(event)}>
-          <label>{t("meetings.meetingNameLabel")}<input name="title" placeholder={t("meetings.meetingNamePlaceholder")} maxLength={200} autoFocus required /></label>
+      <Modal open={createMode !== null} onClose={() => setCreateMode(null)}
+        title={createMode === "schedule" ? t("meet.schedule") : createMode === "later" ? t("meet.createLater") : t("meet.startInstant")}
+        description={t("meet.createDesc")} width="md">
+        <form className="modal-form meet-create-form" onSubmit={(event) => void submitCreate(event)}>
+          <label>{t("meetings.meetingNameLabel")}<input name="title" placeholder={t("meet.instantTitle")} maxLength={200} autoFocus /></label>
           <label>{t("meetings.shortNoteLabel")}<textarea name="description" placeholder={t("meetings.shortNotePlaceholder")} rows={2} /></label>
-          <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={localInput(defaultStart)} required /></label>
-          <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={MESH_MAX_PARTICIPANTS} defaultValue={MESH_MAX_PARTICIPANTS} /></label>
-          <label>{t("meetings.visibilityLabel")}
-            <select value={visibility} onChange={(event) => setVisibility(event.target.value as MeetingVisibility)}>
-              {VISIBILITY_OPTIONS.map((option) => <option key={option} value={option}>{({ group_only: t("meetings.visibilityWorkspace"), private: t("meetings.visibilityPrivate"), public: t("meetings.visibilityPublic"), invite_only: t("meetings.visibilityInviteOnly") })[option]}</option>)}
-            </select>
-          </label>
+          <div className="meet-create-grid">
+            {createMode === "schedule" && <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={localInput(defaultStart)} required /></label>}
+            <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={maxAllowed} defaultValue={Math.min(maxAllowed, 25)} required /><small className="field-hint">{t("meet.maxHint", { max: maxAllowed })}</small></label>
+          </div>
+          <fieldset className="meet-visibility">
+            <legend>{t("meetings.visibilityLabel")}</legend>
+            {VISIBILITY_OPTIONS.map((option) => (
+              <label key={option} className={visibility === option ? "selected" : ""}>
+                <input type="radio" name="visibility" value={option} checked={visibility === option} onChange={() => setVisibility(option)} />
+                <span><strong>{({ group_only: t("meetings.visibilityWorkspace"), private: t("meetings.visibilityPrivate"), public: t("meetings.visibilityPublic"), invite_only: t("meetings.visibilityInviteOnly") })[option]}</strong>
+                  <small>{({ group_only: t("meetings.visibilityWorkspaceHint"), private: t("meetings.visibilityPrivateHint"), public: t("meetings.visibilityPublicHint"), invite_only: t("meetings.visibilityInviteOnlyHint") })[option]}</small></span>
+              </label>
+            ))}
+          </fieldset>
           {visibility !== "invite_only" && visibility !== "private" && (
             <label>{t("meetings.joinPolicyLabel")}
               <select value={joinPolicy} onChange={(event) => setJoinPolicy(event.target.value as "auto" | "request_approval")}>
@@ -343,7 +341,10 @@ export function MeetingsPage() {
               </select>
             </label>
           )}
-          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setScheduleOpen(false)}>{t("meetings.cancel")}</Button><Button type="submit" loading={creating} icon={<CalendarPlus size={17} />}>{t("meetings.create")}</Button></div>
+          <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setCreateMode(null)}>{t("meetings.cancel")}</Button>
+            <Button type="submit" loading={creating} icon={createMode === "schedule" ? <CalendarPlus size={17} /> : createMode === "later" ? <Link2 size={17} /> : <Video size={17} />}>
+              {createMode === "schedule" ? t("meet.scheduleAction") : createMode === "later" ? t("meet.createLinkAction") : t("meet.startAction")}
+            </Button></div>
         </form>
       </Modal>
     </div>

@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { MeetingLiveKitService } from './services/meeting-livekit.service';
+import { transportMaxParticipants } from './meetings.constants';
 import { MeetingsService } from './meetings.service';
 import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
@@ -27,10 +28,6 @@ import { InviteMembersDto } from './dto/invite-members.dto';
 import { SetParticipantRoleDto } from './dto/set-participant-role.dto';
 import { PresignRecordingDto } from './dto/presign-recording.dto';
 import { StopRecordingDto } from './dto/stop-recording.dto';
-import {
-  PresignMeetingFileDto,
-  ShareMeetingFileDto,
-} from './dto/share-meeting-file.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { EventsGateway } from '../gateway/events.gateway';
 import { Inject, forwardRef } from '@nestjs/common';
@@ -88,7 +85,11 @@ export class MeetingsController {
     summary: 'Which media transport meetings use (decided before joining)',
   })
   mediaConfig() {
-    return { provider: this.liveKit.isEnabled() ? 'livekit' : 'p2p' };
+    return {
+      provider: this.liveKit.isEnabled() ? 'livekit' : 'p2p',
+      // What a meeting may be created with on this transport (8 on the mesh).
+      maxParticipants: transportMaxParticipants(),
+    };
   }
 
   @Post('meetings/:meetingId/media-session')
@@ -144,12 +145,30 @@ export class MeetingsController {
   @Patch('meetings/:meetingId')
   @ApiOperation({ summary: 'Update meeting (host only)' })
   @ApiParam({ name: 'meetingId', format: 'uuid' })
-  update(
+  async update(
     @Param('meetingId', ParseUUIDPipe) meetingId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateMeetingDto,
   ) {
-    return this.meetingsService.update(meetingId, userId, dto);
+    const meeting = await this.meetingsService.update(meetingId, userId, dto);
+    // Host controls take effect for everyone already in the call: the socket
+    // tells clients (buttons disable, a muted mic stays muted) and LiveKit
+    // stops accepting the media that was just turned off.
+    const hostControls = [
+      dto.allowScreenShare,
+      dto.allowReactions,
+      dto.allowMicrophone,
+      dto.allowVideo,
+      dto.allowChat,
+    ].some((value) => value !== undefined);
+    if (hostControls) {
+      this.gateway.broadcastToMeeting(meetingId, 'meeting:permissions', {
+        meetingId,
+        permissions: meeting.permissions,
+      });
+      await this.liveKit.applyPermissions(meetingId);
+    }
+    return meeting;
   }
 
   @Delete('meetings/:meetingId')
@@ -440,45 +459,6 @@ export class MeetingsController {
       changedBy: actorId,
     });
     return participant;
-  }
-
-  // ─── Shared files (ported from main) ───────────────────────────────────────
-
-  @Get('meetings/:meetingId/files')
-  @ApiOperation({ summary: 'List files shared in a meeting' })
-  listFiles(
-    @Param('meetingId', ParseUUIDPipe) meetingId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.meetingsService.listSharedFiles(meetingId, userId);
-  }
-
-  @Post('meetings/:meetingId/files/presign')
-  @ApiOperation({ summary: 'Get a direct upload URL for a meeting file' })
-  presignFile(
-    @Param('meetingId', ParseUUIDPipe) meetingId: string,
-    @CurrentUser('id') userId: string,
-    @Body() dto: PresignMeetingFileDto,
-  ) {
-    return this.meetingsService.presignSharedFile(
-      meetingId,
-      userId,
-      dto.fileName,
-      dto.mimeType,
-      dto.fileSize,
-    );
-  }
-
-  @Post('meetings/:meetingId/files')
-  @ApiOperation({ summary: 'Publish an uploaded file to meeting participants' })
-  async shareFile(
-    @Param('meetingId', ParseUUIDPipe) meetingId: string,
-    @CurrentUser('id') userId: string,
-    @Body() dto: ShareMeetingFileDto,
-  ) {
-    const file = await this.meetingsService.shareFile(meetingId, userId, dto);
-    this.gateway.broadcastToMeeting(meetingId, 'meeting:file-shared', { file });
-    return file;
   }
 
   // ─── Recording (host/co-host only, hard 1-hour server-side cap) ───────────

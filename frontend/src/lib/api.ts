@@ -6,7 +6,6 @@ import type {
   ChatRoom,
   GlobalSearchResult,
   Meeting,
-  MeetingFile,
   MeetingJoinRequest,
   MeetingRecording,
   Note,
@@ -536,7 +535,8 @@ export const api = {
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
     /** Which media transport meetings use: LiveKit (SFU) when the server has it configured. */
-    mediaConfig: () => apiFetch<{ provider: "livekit" | "p2p" }>("/meetings/media-config"),
+    /** Media transport (LiveKit SFU or p2p) and the participant ceiling it supports. */
+    mediaConfig: () => apiFetch<{ provider: "livekit" | "p2p"; maxParticipants: number }>("/meetings/media-config"),
     /** LiveKit token for a participant already in the meeting (after the socket join). */
     mediaSession: (meetingId: string) =>
       apiFetch<{ provider: "livekit"; url: string; token: string; room: string } | { provider: "p2p" }>(`/meetings/${meetingId}/media-session`, { method: "POST" }),
@@ -552,7 +552,7 @@ export const api = {
     lock: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/lock`, { method: "POST" }),
     unlock: (meetingId: string) => apiFetch<Meeting>(`/meetings/${meetingId}/unlock`, { method: "POST" }),
     invite: (meetingId: string, data: { userIds?: string[]; emails?: string[] }) =>
-      apiFetch<{ success: boolean; invitedCount: number; notFoundEmails: string[] }>(`/meetings/${meetingId}/invite`, {
+      apiFetch<{ success: boolean }>(`/meetings/${meetingId}/invite`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
@@ -596,19 +596,6 @@ export const api = {
         return directUpload(signed, blob, mimeType, "Yozuv bulutga yuklanmadi");
       },
     },
-    files: (meetingId: string) => apiFetch<MeetingFile[]>(`/meetings/${meetingId}/files`),
-    shareFile: async (meetingId: string, file: File) => {
-      const mimeType = file.type || "application/octet-stream";
-      const signed = await apiFetch<DirectUploadTicket>(`/meetings/${meetingId}/files/presign`, {
-        method: "POST",
-        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size }),
-      });
-      const stored = await directUpload(signed, file, mimeType, "Fayl bulutga yuklanmadi");
-      return apiFetch<MeetingFile>(`/meetings/${meetingId}/files`, {
-        method: "POST",
-        body: JSON.stringify({ fileName: file.name, mimeType, fileSize: file.size, storageKey: stored.storageKey, storageUrl: stored.storageUrl }),
-      });
-    },
   },
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
@@ -633,14 +620,6 @@ export const api = {
       apiFetch(`/education/videos/${encodeURIComponent(id)}/notes`, { method: "POST", body: JSON.stringify({ content, timestampSeconds }) }),
     mentor: (videoId: string, message: string) =>
       apiFetch<{ reply: string; provider: string; contextSources: string[] }>("/education/mentor/chat", { method: "POST", body: JSON.stringify({ videoId, message }) }),
-  },
-  notes: {
-    /** Notes for one meeting. The backend allows this only for people who were in the call. */
-    forMeeting: (meetingId: string) =>
-      apiFetch<Note[]>(`/notes?meetingId=${encodeURIComponent(meetingId)}`),
-    createForMeeting: (meetingId: string, title: string, content: string) =>
-      apiFetch<Note>("/notes", { method: "POST", body: JSON.stringify({ meetingId, title, content }) }),
-    remove: (noteId: string) => apiFetch<void>(`/notes/${noteId}`, { method: "DELETE" }),
   },
 
   notifications: {

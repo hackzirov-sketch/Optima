@@ -45,6 +45,7 @@ describe('MembersService — membership cache', () => {
       new PermissionService(),
       { log: jest.fn().mockResolvedValue(undefined) } as never,
       redis as never,
+      { emit: jest.fn() } as never,
     );
   });
 

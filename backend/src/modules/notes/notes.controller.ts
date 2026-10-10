@@ -32,29 +32,21 @@ export class NotesController {
   @Get()
   @ApiOperation({
     summary:
-      'List notes for a scope. Pass exactly the narrowest filter you have — meetingId, or taskId, or projectId, or groupId. No filter lists your own global notes.',
+      'List notes for a scope. Pass exactly the narrowest filter you have — taskId, or projectId, or groupId. No filter lists your own global notes.',
   })
   @ApiQuery({ name: 'groupId', required: false })
   @ApiQuery({ name: 'projectId', required: false })
   @ApiQuery({ name: 'taskId', required: false })
-  @ApiQuery({
-    name: 'meetingId',
-    required: false,
-    description:
-      "Notes taken during a meeting. Readable by anyone who was in the call, including after they've left.",
-  })
   list(
     @CurrentUser('id') userId: string,
     @Query('groupId') groupId?: string,
     @Query('projectId') projectId?: string,
     @Query('taskId') taskId?: string,
-    @Query('meetingId') meetingId?: string,
   ) {
     return this.notesService.list(userId, {
       groupId,
       projectId,
       taskId,
-      meetingId,
     });
   }
 

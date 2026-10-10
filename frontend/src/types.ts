@@ -328,6 +328,8 @@ export interface Meeting {
   scope: MeetingVisibility;
   joinPolicy: MeetingJoinPolicyValue;
   locked: boolean;
+  /** Host controls: what participants other than hosts/co-hosts may do. */
+  permissions?: MeetingPermissions;
   startTime: string;
   endTime?: string | null;
   maxParticipants: number;
@@ -338,6 +340,14 @@ export interface Meeting {
   access?: MeetingAccess;
   /** Fast Redis-backed count, only present when the caller can manage the waiting room (host/co-host). */
   waitingCount?: number | null;
+}
+
+export interface MeetingPermissions {
+  screenShare: boolean;
+  reactions: boolean;
+  microphone: boolean;
+  video: boolean;
+  chat: boolean;
 }
 
 export interface MeetingRecording {
@@ -353,19 +363,6 @@ export interface MeetingRecording {
   storageUrl?: string | null;
   fileSize?: number | null;
   createdAt: string;
-}
-
-export interface MeetingFile {
-  id: string;
-  meetingId: string;
-  sharedBy: string;
-  fileName: string;
-  mimeType: string;
-  fileSize: string;
-  storageUrl: string;
-  createdAt: string;
-  firstName?: string;
-  lastName?: string;
 }
 
 export interface NotificationItem {

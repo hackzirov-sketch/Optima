@@ -109,6 +109,20 @@ export class ChatRealtimeBridge {
     this.gateway.server
       ?.to(`user:${payload.userId}`)
       .emit('room_member_changed', payload);
+    // A removed or banned member must stop receiving the room's broadcasts on
+    // sockets that joined the channel while they were still a member.
+    if (payload.action === 'left') {
+      this.gateway.server
+        ?.in(`user:${payload.userId}`)
+        .socketsLeave(`room:${payload.roomId}`);
+    }
+  }
+
+  @OnEvent('group.member_removed')
+  onGroupMemberRemoved(payload: { groupId: string; userId: string }) {
+    this.gateway.server
+      ?.in(`user:${payload.userId}`)
+      .socketsLeave(`group:${payload.groupId}`);
   }
 
   @OnEvent('chat.settings_updated')

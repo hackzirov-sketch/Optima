@@ -22,8 +22,7 @@ export type UploadFolder =
   | 'attachments'
   | 'group'
   | 'pushes'
-  | 'meeting-recordings'
-  | 'meeting-files';
+  | 'meeting-recordings';
 
 /**
  * `formats`, where set, is folded into the *signature* as Cloudinary's
@@ -96,7 +95,6 @@ const FOLDER_LIMITS: Record<
     ],
   },
   pushes: { maxBytes: 50 * 1024 * 1024, mimeTypes: null },
-  'meeting-files': { maxBytes: 100 * 1024 * 1024, mimeTypes: null },
   'meeting-recordings': {
     // 1-hour hard cap is enforced server-side on duration (see MeetingsService),
     // this is just a generous byte ceiling so a runaway/misbehaving client
@@ -292,7 +290,7 @@ export class StorageService {
     // rendered is the *URL* — and nothing tied the two together. Presenting
     // your own key alongside somebody else's URL satisfied both checks and
     // attached their file to your message. Same tie
-    // MeetingFilesService.shareFile makes, adjusted for how each provider
+    // the meeting-recording stop path makes, adjusted for how each provider
     // builds its URLs: R2 serves the object key verbatim, while Cloudinary
     // appends a delivery format to the public_id (`.../upz/audio/<id>/x.webm`
     // for the key `upz/audio/<id>/x`), so the extension is stripped before

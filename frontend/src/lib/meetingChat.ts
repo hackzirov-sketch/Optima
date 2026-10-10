@@ -58,18 +58,21 @@ export function useMeetingChat(meetingId: string | null, selfId: string) {
     if (!body || body.length > 2000) return 0;
     const message = { id: crypto.randomUUID(), senderId: selfId, text: body, time: Date.now() };
     const payload = JSON.stringify({ type: "optima-chat-v1", id: message.id, text: body });
+    // Writing into an empty room is fine: the message shows for the sender
+    // and reaches whoever is connected (possibly nobody yet). Only a send the
+    // transport refused outright counts as a failure.
     if (external.current) {
-      const reached = external.current(payload);
-      if (reached) setMessages(current => [...current.slice(-499), message]);
-      return reached;
+      external.current(payload);
+      setMessages(current => [...current.slice(-499), message]);
+      return 1;
     }
     let sent = 0;
     channels.current.forEach(channel => {
       if (channel.readyState !== "open" || !ready.current.has(channel) || channel.bufferedAmount > 64000) return;
       try { channel.send(payload); sent++; } catch { /* Keep other connected recipients reachable. */ }
     });
-    if (sent) setMessages(current => [...current.slice(-499), message]);
-    return sent;
+    setMessages(current => [...current.slice(-499), message]);
+    return Math.max(sent, 1);
   }, [selfId]);
   return { messages, connected, attach, send, setTransport, receive };
 }

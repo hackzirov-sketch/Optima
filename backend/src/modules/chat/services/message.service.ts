@@ -307,17 +307,7 @@ export class ChatMessageService {
       });
     }
 
-    const redisClient = this.redisService.getClient();
-    let sequence = 1;
-    if (redisClient) {
-      sequence = await redisClient.incr(`room:${roomId}:seq`);
-    } else {
-      const maxRes = await this.dataSource.query<{ max: number | null }>(
-        `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
-        [roomId],
-      );
-      sequence = (maxRes[0]?.max || 0) + 1;
-    }
+    const sequence = await this.nextSequence(roomId);
 
     const savedRows = await this.dataSource.query<ChatMessage>(
       `INSERT INTO chat_messages
@@ -632,19 +622,8 @@ export class ChatMessageService {
       }
     }
 
-    // 2. Redis Sequence (Atomic)
-    const redisClient = this.redisService.getClient();
-    let sequence = 1;
-    if (redisClient) {
-      sequence = await redisClient.incr(`room:${roomId}:seq`);
-    } else {
-      // Fallback if Redis is down
-      const maxRes = await this.dataSource.query<{ max: number | null }>(
-        `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
-        [roomId],
-      );
-      sequence = (maxRes[0]?.max || 0) + 1;
-    }
+    // 2. Room sequence (atomic)
+    const sequence = await this.nextSequence(roomId);
 
     const plainText = (dto.content ?? '').trim();
     let contentToSave = plainText;
@@ -1158,5 +1137,44 @@ export class ChatMessageService {
       [userId, roomId, content],
     );
     return { content: rows[0].content };
+  }
+
+  /**
+   * Next per-room message sequence. Redis INCR keeps it atomic, but the key
+   * may be missing (Redis flushed/evicted, or the room predates it) — then a
+   * bare INCR restarts at 1 and the insert hits the unique (room_id, sequence)
+   * index. A missing key is seeded from the database's MAX, and the seeding
+   * INCR is bumped past it inside one Lua call so concurrent seeders can't
+   * hand out the same number.
+   */
+  private async nextSequence(roomId: string): Promise<number> {
+    const key = `room:${roomId}:seq`;
+    const redisClient = this.redisService.getClient();
+    if (redisClient) {
+      const fast = (await redisClient.eval(
+        `if redis.call('EXISTS', KEYS[1]) == 1 then return redis.call('INCR', KEYS[1]) end return false`,
+        1,
+        key,
+      )) as number | null;
+      if (fast) return Number(fast);
+    }
+
+    const maxRes = await this.dataSource.query<{ max: number | null }>(
+      `SELECT MAX(sequence) AS max FROM chat_messages WHERE room_id = $1`,
+      [roomId],
+    );
+    const floor = Number(maxRes[0]?.max || 0);
+    if (!redisClient) return floor + 1;
+
+    const seeded = await redisClient.eval(
+      `local v = redis.call('INCR', KEYS[1])
+       local floor = tonumber(ARGV[1])
+       if v <= floor then v = redis.call('INCRBY', KEYS[1], floor - v + 1) end
+       return v`,
+      1,
+      key,
+      String(floor),
+    );
+    return Number(seeded);
   }
 }

@@ -1,6 +1,5 @@
-import { ArrowLeft, Camera, CameraOff, Check, ChevronUp, Copy, Download, FileText, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, MessageSquareText, Mic, MicOff, Minus, MonitorUp, MoreVertical, NotebookPen, Paperclip, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Smile, Unlock, UserPlus, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, ChevronUp, Copy, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, MessageSquareText, Mic, MicOff, Minus, MonitorUp, MoreVertical, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Smile, Unlock, UserPlus, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { FormEvent } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
 import { DirectCallSurface } from "../components/DirectCallSurface";
@@ -15,9 +14,14 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
-import type { Meeting, MeetingFile, MeetingUser, Note, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
+import type { Meeting, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
 const localeTag: Record<string, string> = { uz: "uz-UZ", ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+/** Host controls default to "everything allowed" (older meetings, before 022). */
+const ALL_ALLOWED: MeetingPermissions = { screenShare: true, reactions: true, microphone: true, video: true, chat: true };
+/** Must match ALLOWED_MEETING_REACTIONS in the gateway. */
+const MEETING_REACTIONS = ["💖", "👍", "🎉", "👏", "😂", "😮", "😢", "🤔", "👎"];
+
 const RTC_CONFIG: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 const SECURITY_EMOJIS = ["🍏", "🐳", "🌙", "⭐", "🍀", "🌊", "🎈", "🎧", "🚀", "🔑", "🧊", "☕", "🌻", "🎸", "🧩", "💎", "🦋", "🍒", "🏀", "🛡️", "📚", "🎯", "🪐", "🌈", "⚡", "🎲", "🍉", "🧭", "🎨", "🏔️", "🕊️", "🔔"];
 
@@ -37,7 +41,15 @@ function dtlsFingerprints(peer: RTCPeerConnection) {
 function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, videoOn = true, pinned = false, speaking = false, handRaised = false, pipEnabled = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; videoOn?: boolean; pinned?: boolean; speaking?: boolean; handRaised?: boolean; pipEnabled?: boolean; onPin?: () => void }) {
   const { t } = useI18n();
   const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    // Firefox doesn't always resume autoplay after srcObject is swapped (a
+    // screen share replacing the camera): the element sat on its first,
+    // empty frame. Ask explicitly; a rejected play() just means "not yet".
+    void video.play().catch(() => undefined);
+  }, [stream]);
   /**
    * A remote MediaStream is a live object: renegotiation adds tracks to it,
    * and the sender muting or removing a track flips the existing one — all
@@ -54,6 +66,8 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
   // nothing was listening for that unmute the tile stayed on the avatar for
   // good.
   const videoTrackKey = stream?.getVideoTracks().map((track) => track.id).join("|") ?? "";
+  // A video track that appears on an already-playing stream needs the same nudge.
+  useEffect(() => { if (videoTrackKey) void ref.current?.play().catch(() => undefined); }, [videoTrackKey]);
   useEffect(() => {
     if (!stream) return;
     const tracks = stream.getVideoTracks();
@@ -89,6 +103,16 @@ function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneO
       {onPin && <button className={`tile-pin ${pinned ? "active" : ""}`} onClick={onPin} title={pinned ? t("meetingRoom.releaseVideoAria") : t("meetingRoom.pinVideoAria")} aria-label={pinned ? t("meetingRoom.releaseVideoAria") : t("meetingRoom.pinVideoAria")}><Pin size={15} /></button>}
       {!microphoneOn && <span className="tile-muted" aria-label={t("meetingRoom.micOffTileAria")}><MicOff size={15} /></span>}
     </article>
+  );
+}
+
+/** One row of Meet's host controls: a label (and optional hint) with a switch. */
+function HostSwitch({ label, hint, checked, disabled = false, onChange }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="gm-switch-row">
+      <span><strong>{label}</strong>{hint && <small>{hint}</small>}</span>
+      <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+    </label>
   );
 }
 
@@ -153,13 +177,26 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const { show } = useToast();
   const { t, locale } = useI18n();
   const [location, navigate] = useLocation();
-  const routeMatch = !directMode ? location.match(/^\/meetings\/([^/]+)$/) : null;
+  // Two ways in: the shareable /meet/<code> link (Google Meet style) and the
+  // older /meetings/<id>, which is rewritten to /meet/<code> once loaded.
+  const routeMatch = !directMode ? location.match(/^\/(?:meetings\/([0-9a-f-]{36})|meet\/([a-z0-9-]{3,20}))\/?$/i) : null;
+  const routeId = routeMatch?.[1] ?? null;
+  const routeCode = routeMatch?.[2]?.toLowerCase() ?? null;
   const [standaloneMeetingId, setStandaloneMeetingId] = useState<string | null>(null);
+  const [codeNotFound, setCodeNotFound] = useState(false);
   useEffect(() => {
-    if (!directMode && routeMatch) setStandaloneMeetingId(routeMatch[1]);
     // Route match only ever needs to set the id, never clear it — leaving
     // the route is exactly the "keep running as a widget" case.
-  }, [directMode, routeMatch?.[1]]);
+    if (directMode) return;
+    if (routeId) { setCodeNotFound(false); setStandaloneMeetingId(routeId); return; }
+    if (!routeCode) return;
+    let cancelled = false;
+    setCodeNotFound(false);
+    api.meetings.resolveByCode(routeCode)
+      .then((found) => { if (!cancelled) setStandaloneMeetingId(found.id); })
+      .catch(() => { if (!cancelled) setCodeNotFound(true); });
+    return () => { cancelled = true; };
+  }, [directMode, routeId, routeCode]);
   const meetingId = directMode ? meetingIdProp! : standaloneMeetingId;
   // True only while this instance actually owns the screen (its own
   // /meetings/:id route, or the direct-call overlay). Off the route it is at
@@ -200,9 +237,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   /** The browser is showing its camera/microphone prompt right now (drives the "Click Allow" overlay). */
   const [permissionPrompt, setPermissionPrompt] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [savingNote, setSavingNote] = useState(false);
-  const [sidePanel, setSidePanel] = useState<"participants" | "info" | "files" | "notes" | "waiting" | "settings" | null>(null);
+  const [sidePanel, setSidePanel] = useState<"participants" | "info" | "waiting" | "settings" | null>(null);
   const [meetingChatOpen, setMeetingChatOpen] = useState(false);
   const meetingChat = useMeetingChat(meetingId, user?.id || "");
   const attachMeetingChat = meetingChat.attach;
@@ -218,9 +253,6 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [lockBusy, setLockBusy] = useState(false);
   const [inviteEmailsInput, setInviteEmailsInput] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [files, setFiles] = useState<MeetingFile[]>([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const meetingFileInput = useRef<HTMLInputElement>(null);
   const [handRaised, setHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
   const [reactionOpen, setReactionOpen] = useState(false);
@@ -388,6 +420,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       .then(([nextMeeting, nextMembers]) => {
         setMeeting(nextMeeting);
         setMembers(nextMembers);
+        // Old /meetings/<id> links settle on the shareable /meet/<code> form.
+        if (!directMode && window.location.pathname.startsWith("/meetings/") && /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(nextMeeting.code)) {
+          navigate(`/meet/${nextMeeting.code}`, { replace: true });
+        }
         setSettingsVisibility(nextMeeting.scope);
         setSettingsJoinPolicy(nextMeeting.joinPolicy);
         if (typeof nextMeeting.waitingCount === "number") setWaitingCount(nextMeeting.waitingCount);
@@ -402,7 +438,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         show(error instanceof Error ? error.message : t("meetingRoom.loadFailed"), "error");
       })
       .finally(() => setLoading(false));
-  }, [meetingId, group?.id, show, t]);
+  }, [meetingId, group?.id, show, t, directMode, navigate]);
 
   /**
    * Identities for everyone on screen.
@@ -525,9 +561,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     }
     setInviting(true);
     try {
-      const result = await api.meetings.invite(meetingId!, { emails });
-      if (result.invitedCount > 0) show(t("meetingRoom.inviteSentToast", { count: result.invitedCount }));
-      if (result.notFoundEmails.length > 0) show(t("meetingRoom.inviteNotFoundToast", { emails: result.notFoundEmails.join(", ") }), "error");
+      await api.meetings.invite(meetingId!, { emails });
+      show(t("meetingRoom.inviteSentToast"));
       setInviteEmailsInput("");
     } catch (error) {
       show(error instanceof Error ? error.message : t("meetingRoom.inviteFailed"), "error");
@@ -606,7 +641,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   async function shareMeetingLink() {
     if (!meeting) return;
-    const url = `${window.location.origin}/meetings/${meeting.id}`;
+    const url = `${window.location.origin}/meet/${meeting.code}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: meeting.title, text: t("meetingRoom.shareTextTemplate", { code: meeting.code }), url });
@@ -909,6 +944,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       setReactions((current) => [...current, reaction]);
       window.setTimeout(() => setReactions((current) => current.filter((item) => item.id !== reaction.id)), 3200);
     };
+    // Host controls changed mid-call (see the enforcement effect below).
+    const onPermissions = ({ permissions }: { permissions: MeetingPermissions }) =>
+      setMeeting((current) => current ? { ...current, permissions } : current);
     const onToggle = ({ userId: remoteUserId, kind, enabled }: { userId: string; kind: "audio" | "video" | "screen"; enabled: boolean }) => {
       setRemoteMedia((current) => ({
         ...current,
@@ -918,9 +956,6 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           screen: kind === "screen" ? enabled : current[remoteUserId]?.screen ?? false,
         },
       }));
-    };
-    const onFileShared = ({ file }: { file: MeetingFile }) => {
-      setFiles((current) => current.some((item) => item.id === file.id) ? current : [file, ...current]);
     };
     // Only a failed *join* means there is no call to stay in. Everything else
     // (a screen share already claimed by someone else, a rejected moderation
@@ -943,7 +978,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     socket.on("meeting:hands-snapshot", onHandsSnapshot);
     socket.on("meeting:reaction", onReaction);
     socket.on("meeting:toggled", onToggle);
-    socket.on("meeting:file-shared", onFileShared);
+    socket.on("meeting:permissions", onPermissions);
     socket.on("meeting:error", onMeetingError);
     if (socket.connected) onConnect();
     return () => {
@@ -960,7 +995,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:hands-snapshot", onHandsSnapshot);
       socket.off("meeting:reaction", onReaction);
       socket.off("meeting:toggled", onToggle);
-      socket.off("meeting:file-shared", onFileShared);
+      socket.off("meeting:permissions", onPermissions);
       socket.off("meeting:error", onMeetingError);
     };
   }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, startLiveKit, show, user?.id]);
@@ -1261,68 +1296,6 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     });
   }
 
-  useEffect(() => {
-    if (sidePanel !== "notes" || !entered) return;
-    void api.notes.forMeeting(meetingId!)
-      .then(setNotes)
-      .catch((error) => show(error instanceof Error ? error.message : t("meetingRoom.notesLoadFailed"), "error"));
-  }, [sidePanel, entered, meetingId, show]);
-
-  async function saveNote(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const title = String(data.get("title") || "").trim();
-    if (!title) return;
-    setSavingNote(true);
-    try {
-      // Prepended rather than refetched: the list is ordered newest-first, so
-      // the note lands exactly where a reload would put it.
-      const note = await api.notes.createForMeeting(meetingId!, title, String(data.get("content") || "").trim());
-      setNotes((current) => [note, ...current]);
-      form.reset();
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("meetingRoom.noteSaveFailed"), "error");
-    } finally {
-      setSavingNote(false);
-    }
-  }
-
-  async function removeNote(noteId: string) {
-    try {
-      await api.notes.remove(noteId);
-      setNotes((current) => current.filter((note) => note.id !== noteId));
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("meetingRoom.noteDeleteFailed"), "error");
-    }
-  }
-
-  useEffect(() => {
-    if (sidePanel !== "files" || !entered) return;
-    void api.meetings.files(meetingId!)
-      .then(setFiles)
-      .catch((error) => show(error instanceof Error ? error.message : t("meetingRoom.filesLoadFailed"), "error"));
-  }, [sidePanel, entered, meetingId, show]);
-
-  async function uploadMeetingFile(file: File) {
-    if (file.size > 100 * 1024 * 1024) {
-      show(t("meetingRoom.fileTooLarge"), "error");
-      return;
-    }
-    setUploadingFile(true);
-    try {
-      const shared = await api.meetings.shareFile(meetingId!, file);
-      setFiles((current) => current.some((item) => item.id === shared.id) ? current : [shared, ...current]);
-      setSidePanel("files");
-      show(t("meetingRoom.fileShared"));
-    } catch (error) {
-      show(error instanceof Error ? error.message : t("meetingRoom.fileShareFailed"), "error");
-    } finally {
-      setUploadingFile(false);
-      if (meetingFileInput.current) meetingFileInput.current.value = "";
-    }
-  }
-
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
 
   // Last-resort release of the camera/mic: on unmount, and when the page is
@@ -1524,6 +1497,40 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (deviceMenu) void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => undefined);
   }, [deviceMenu]);
 
+  // ── Host controls ─────────────────────────────────────────────────────────
+  const permissions = meeting?.permissions ?? ALL_ALLOWED;
+  const isModerator = canManageWaitingRoom;
+  const allowed = (key: keyof MeetingPermissions) => isModerator || permissions[key] !== false;
+  // When the host turns something off, it goes off here too (LiveKit also
+  // unpublishes it server-side; on the mesh this is the only enforcement).
+  useEffect(() => {
+    if (!entered || isModerator) return;
+    if (!permissions.microphone && microphone) void toggleTrack("audio");
+    if (!permissions.video && camera) void toggleTrack("video");
+    if (!permissions.screenShare && screenSharing) void stopScreenShare();
+    if (!permissions.reactions) setReactionOpen(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entered, isModerator, permissions.microphone, permissions.video, permissions.screenShare, permissions.reactions]);
+
+  async function setPermission(key: keyof MeetingPermissions, value: boolean) {
+    if (!meeting) return;
+    const field = ({ screenShare: "allowScreenShare", reactions: "allowReactions", microphone: "allowMicrophone", video: "allowVideo", chat: "allowChat" } as const)[key];
+    const previous = meeting.permissions;
+    setMeeting((current) => current ? { ...current, permissions: { ...(current.permissions ?? ALL_ALLOWED), [key]: value } } : current);
+    try {
+      await api.meetings.update(meeting.id, { [field]: value });
+    } catch (error) {
+      setMeeting((current) => current ? { ...current, permissions: previous } : current);
+      show(error instanceof Error ? error.message : t("meetingRoom.settingsSaveFailed"), "error");
+    }
+  }
+
+  // /meet/<code> while the code is being looked up (or wasn't found).
+  if (isFullMode && !meetingId && !directMode) {
+    return codeNotFound
+      ? <div className="meeting-room-loading meeting-standalone-overlay"><p><strong>{t("meetingRoom.meetingNotFound")}</strong></p><Button onClick={() => navigate("/meetings")}>{t("meetingRoom.back")}</Button></div>
+      : <div className="meeting-room-loading meeting-standalone-overlay"><LoaderCircle className="spin" size={26} /><p>{t("meetingRoom.preparing")}</p></div>;
+  }
   if (!meetingId && !isWidgetMode) return null;
 
   if (isWidgetMode) {
@@ -1535,7 +1542,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         camera={camera}
         onToggleMic={() => void toggleTrack("audio")}
         onToggleCamera={() => void toggleTrack("video")}
-        onExpand={() => navigate(`/meetings/${meetingId}`)}
+        onExpand={() => navigate(meeting?.code ? `/meet/${meeting.code}` : `/meetings/${meetingId}`)}
         onLeave={leave}
       />
     );
@@ -1633,19 +1640,17 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const participantCount = remoteEntries.length + 1;
   const panelOpen = Boolean(sidePanel) || meetingChatOpen;
   const presenterName = screenSharingUserId && screenSharingUserId !== selfId ? personName(users.get(screenSharingUserId)) : null;
-  const link = `${window.location.origin}/meetings/${meeting.id}`;
+  const link = `${window.location.origin}/meet/${meeting.code}`;
   const copyLink = () => { void navigator.clipboard.writeText(link).then(() => show(t("meet.copied")), () => show(t("meetings.shareFailed"), "error")); };
 
   const moreItems: MeetMenuItem[] = [
-    { key: "present", mobileOnly: true, label: screenSharing ? t("meet.stopPresenting") : t("meet.present"), icon: <MonitorUp size={20} />, onSelect: () => void toggleScreen() },
-    { key: "react", mobileOnly: true, label: t("meet.reactions"), icon: <Smile size={20} />, onSelect: () => setReactionOpen(true) },
+    { key: "present", mobileOnly: true, disabled: !screenSharing && !allowed("screenShare"), label: screenSharing ? t("meet.stopPresenting") : t("meet.present"), icon: <MonitorUp size={20} />, onSelect: () => void toggleScreen() },
+    { key: "react", mobileOnly: true, disabled: !allowed("reactions"), label: t("meet.reactions"), icon: <Smile size={20} />, onSelect: () => setReactionOpen(true) },
     { key: "hand", mobileOnly: true, label: handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria"), icon: <Hand size={20} />, onSelect: toggleHand },
     { key: "people", mobileOnly: true, label: `${t("meet.people")} (${participantCount})`, icon: <UsersRound size={20} />, onSelect: () => togglePanel("participants") },
     { key: "chat", mobileOnly: true, label: chatUnread ? `${t("meet.chat")} (${chatUnread})` : t("meet.chat"), icon: <MessageSquareText size={20} />, onSelect: () => togglePanel("chat") },
     ...(isHost ? [{ key: "host", mobileOnly: true, label: t("meet.hostControls"), icon: <ShieldCheck size={20} />, onSelect: () => togglePanel("settings") }] : []),
     { key: "details", label: t("meet.details"), icon: <Info size={20} />, onSelect: () => togglePanel("info") },
-    { key: "files", label: t("meet.files"), icon: <Paperclip size={20} />, onSelect: () => togglePanel("files") },
-    { key: "notes", label: t("meet.notes"), icon: <NotebookPen size={20} />, onSelect: () => togglePanel("notes") },
     { key: "layout", label: gridViewForced ? t("meet.layoutAuto") : t("meet.layoutGrid"), icon: <LayoutGrid size={20} />, onSelect: () => setGridViewForced((value) => !value) },
     { key: "link", label: t("meet.copyLink"), icon: <Link2 size={20} />, onSelect: copyLink },
     { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/") },
@@ -1656,7 +1661,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf && !screenSharing} label={tile.isSelf ? (screenSharing ? t("meetingRoom.youSharingScreen") : t("meet.you")) : tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={extra.speaking ?? tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} pipEnabled={!tile.isSelf} onPin={() => togglePin(tile.id)} />
   );
 
-  const panelTitle = sidePanel === "participants" ? t("meet.people") : sidePanel === "files" ? t("meet.files") : sidePanel === "notes" ? t("meet.notes") : sidePanel === "settings" ? t("meet.hostControls") : sidePanel === "waiting" ? t("meet.waitingSection") : t("meet.details");
+  const panelTitle = sidePanel === "participants" ? t("meet.people") : sidePanel === "settings" ? t("meet.hostControls") : sidePanel === "waiting" ? t("meet.waitingSection") : t("meet.details");
 
   return (
     <div className={`gm-room ${overlayClass} ${panelOpen ? "gm-panel-open" : ""} ${gridViewForced ? "grid-forced" : ""}`}>
@@ -1693,7 +1698,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
                   {waitingRequests.map((request) => (
                     <div className="gm-person" key={request.id}>
                       <Avatar firstName={request.firstName} lastName={request.lastName} url={request.avatarUrl} size="sm" />
-                      <span><strong>{`${request.firstName || ""} ${request.lastName || ""}`.trim() || t("meetingRoom.participantFallback")}</strong></span>
+                      <span className="gm-person-name"><strong>{`${request.firstName || ""} ${request.lastName || ""}`.trim() || t("meetingRoom.participantFallback")}</strong></span>
                       <button type="button" className="gm-text-btn" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "reject")}>{t("meet.deny")}</button>
                       <button type="button" className="gm-text-btn strong" disabled={waitingBusy === request.id} onClick={() => void reviewRequest(request, "approve")}>{waitingBusy === request.id ? <LoaderCircle className="spin" size={16} /> : t("meet.admit")}</button>
                     </div>
@@ -1701,51 +1706,53 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
                 </section>}
                 <section className="gm-people-section">
                   <h3>{t("meet.inCall")} <span>{participantCount}</span></h3>
-                  <div className="gm-person"><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span><strong>{personName(user)} ({t("meet.you")})</strong><small>{isHost ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{handRaised && <Hand size={18} />}{microphone ? <Mic size={18} /> : <MicOff size={18} className="gm-muted-icon" />}</div>
+                  <div className="gm-person"><Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" /><span className="gm-person-name"><strong>{personName(user)} ({t("meet.you")})</strong><small>{isHost ? t("meetingRoom.hostLabel") : t("meetingRoom.participantLabel")}</small></span>{handRaised && <Hand size={18} />}{microphone ? <Mic size={18} /> : <MicOff size={18} className="gm-muted-icon" />}</div>
                   {remoteEntries.map(([id]) => { const remote = users.get(id); const media = remoteMedia[id]; return (
-                    <div className="gm-person" key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span><strong>{personName(remote)}</strong><small>{id === meeting.hostId ? t("meetingRoom.hostLabel") : media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.participantLabel")}</small></span>{raisedHands.has(id) && <Hand size={18} />}{media?.audio === false ? <MicOff size={18} className="gm-muted-icon" /> : <Mic size={18} />}</div>
+                    <div className="gm-person" key={id}><Avatar firstName={remote?.firstName} lastName={remote?.lastName} url={remote?.avatarUrl} size="sm" /><span className="gm-person-name"><strong>{personName(remote)}</strong><small>{id === meeting.hostId ? t("meetingRoom.hostLabel") : media?.screen ? t("meetingRoom.sharingScreenLabel") : t("meetingRoom.participantLabel")}</small></span>{raisedHands.has(id) && <Hand size={18} />}{media?.audio === false ? <MicOff size={18} className="gm-muted-icon" /> : <Mic size={18} />}</div>
                   ); })}
                 </section>
               </> : sidePanel === "settings" ? <>
+                <p className="gm-panel-intro">{t("meet.hostIntro")}</p>
                 <section className="gm-host-section">
-                  <label className="gm-switch-row">
-                    <span><strong>{t("meet.lockTitle")}</strong><small>{t("meet.lockHint")}</small></span>
-                    <input type="checkbox" role="switch" checked={Boolean(meeting.locked)} disabled={lockBusy} onChange={() => void toggleLock()} />
-                  </label>
+                  <h3>{t("meet.moderationTitle")}</h3>
+                  <HostSwitch label={t("meet.lockTitle")} hint={t("meet.lockHint")} checked={Boolean(meeting.locked)} disabled={lockBusy} onChange={() => void toggleLock()} />
+                  <h4>{t("meet.letParticipants")}</h4>
+                  <HostSwitch label={t("meet.allowScreenShare")} checked={permissions.screenShare} onChange={(value) => void setPermission("screenShare", value)} />
+                  <HostSwitch label={t("meet.allowReactions")} checked={permissions.reactions} onChange={(value) => void setPermission("reactions", value)} />
+                  <HostSwitch label={t("meet.allowMicrophone")} hint={t("meet.allowMicrophoneHint")} checked={permissions.microphone} onChange={(value) => void setPermission("microphone", value)} />
+                  <HostSwitch label={t("meet.allowVideo")} hint={t("meet.allowVideoHint")} checked={permissions.video} onChange={(value) => void setPermission("video", value)} />
+                </section>
+                <section className="gm-host-section">
+                  <h3>{t("meet.chatModeration")}</h3>
+                  <HostSwitch label={t("meet.allowChat")} hint={t("meet.allowChatHint")} checked={permissions.chat} onChange={(value) => void setPermission("chat", value)} />
                 </section>
                 <section className="gm-host-section">
                   <h3>{t("meet.accessTitle")}</h3>
-                  <label>{t("meetings.visibilityLabel")}
+                  <label className="gm-field">{t("meetings.visibilityLabel")}
                     <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
                       {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
                     </select>
                   </label>
                   {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (
-                    <label>{t("meetings.joinPolicyLabel")}
+                    <label className="gm-field">{t("meetings.joinPolicyLabel")}
                       <select value={settingsJoinPolicy} onChange={(event) => setSettingsJoinPolicy(event.target.value as MeetingJoinPolicyValue)}>
                         <option value="auto">{t("meetings.joinPolicyAuto")}</option>
                         <option value="request_approval">{t("meetings.joinPolicyApproval")}</option>
                       </select>
                     </label>
                   )}
-                  <Button loading={settingsSaving} onClick={() => void saveMeetingSettings()} icon={<Check size={17} />}>{t("meetingRoom.settingsSaveButton")}</Button>
+                  <button type="button" className="gm-pill-btn gm-pill-blue" disabled={settingsSaving} onClick={() => void saveMeetingSettings()}>{settingsSaving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />} {t("meetingRoom.settingsSaveButton")}</button>
                 </section>
                 <section className="gm-host-section">
                   <h3>{t("meet.addOthers")}</h3>
                   <div className="gm-link-field"><span>{link.replace(/^https?:\/\//, "")}</span><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={copyLink} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}><Copy size={18} /></button></div>
-                  <label>{t("meetingRoom.inviteSectionTitle")}
+                  <label className="gm-field">{t("meetingRoom.inviteSectionTitle")}
                     <textarea rows={3} value={inviteEmailsInput} onChange={(event) => setInviteEmailsInput(event.target.value)} placeholder={t("meetingRoom.inviteEmailPlaceholder")} />
                   </label>
                   <p className="field-hint">{t("meetingRoom.inviteEmailHint")}</p>
-                  <Button loading={inviting} onClick={() => void sendInvite()} icon={<UserPlus size={17} />}>{t("meetingRoom.inviteButton")}</Button>
+                  <button type="button" className="gm-pill-btn gm-pill-blue" disabled={inviting} onClick={() => void sendInvite()}>{inviting ? <LoaderCircle className="spin" size={16} /> : <UserPlus size={16} />} {t("meetingRoom.inviteButton")}</button>
                 </section>
-              </> : sidePanel === "files" ? <div className="meeting-files-panel">
-                <button type="button" className="meeting-file-upload" onClick={() => meetingFileInput.current?.click()} disabled={uploadingFile}>{uploadingFile ? <LoaderCircle className="spin" size={18} /> : <Paperclip size={18} />}<span><strong>{uploadingFile ? t("meetingRoom.uploadingLabel") : t("meetingRoom.shareFileTitle")}</strong><small>{t("meetingRoom.fileFormatsHint")}</small></span></button>
-                {files.length === 0 ? <div className="meeting-files-empty"><FileText size={26} /><strong>{t("meetingRoom.noFilesTitle")}</strong><small>{t("meetingRoom.noFilesDesc")}</small></div> : <div className="meeting-file-list">{files.map((file) => <a key={file.id} href={file.storageUrl} target="_blank" rel="noreferrer"><span><FileText size={19} /></span><span><strong>{file.fileName}</strong><small>{fileSize(file.fileSize)} · {file.firstName || t("meetingRoom.participantFallback")}</small></span><Download size={17} /></a>)}</div>}
-              </div> : sidePanel === "notes" ? <div className="meeting-notes-panel">
-                <form onSubmit={(event) => void saveNote(event)}><input name="title" maxLength={200} placeholder={t("meetingRoom.noteTitlePlaceholder")} required /><textarea name="content" rows={3} placeholder={t("meetingRoom.noteContentPlaceholder")} /><button type="submit" disabled={savingNote}>{savingNote ? <LoaderCircle className="spin" size={16} /> : <NotebookPen size={16} />} {t("meetingRoom.noteSaveButton")}</button></form>
-                {notes.length === 0 ? <div className="meeting-files-empty"><NotebookPen size={26} /><strong>{t("meetingRoom.noNotesTitle")}</strong><small>{t("meetingRoom.noNotesDesc")}</small></div> : <div className="meeting-note-list">{notes.map((note) => <article key={note.id}><header><strong>{note.title}</strong>{note.creatorId === user?.id && <button type="button" onClick={() => void removeNote(note.id)} aria-label={t("meetingRoom.noteDeleteAria")}><X size={15} /></button>}</header>{note.content && <p>{note.content}</p>}<time>{new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(new Date(note.createdAt))}</time></article>)}</div>}
-              </div> : <div className="gm-info">
+              </> : <div className="gm-info">
                 <h3>{meeting.title}</h3>
                 {meeting.description && <p>{meeting.description}</p>}
                 <div className="gm-link-field"><span>{link.replace(/^https?:\/\//, "")}</span><button type="button" className="gm-icon-btn gm-icon-btn-light" onClick={copyLink} aria-label={t("meet.copyLink")} title={t("meet.copyLink")}><Copy size={18} /></button></div>
@@ -1756,7 +1763,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           </aside>
         )}
 
-        <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => personName(id === user?.id ? user : users.get(id))} open={meetingChatOpen} onOpen={(open) => togglePanel(open ? "chat" : "chat")} onSend={meetingChat.send} showToggle={false} onUnreadChange={setChatUnread} />
+        <MeetingChat messages={meetingChat.messages} connected={meetingChat.connected} selfId={user?.id || ""} nameFor={(id) => personName(id === user?.id ? user : users.get(id))} open={meetingChatOpen} onOpen={(open) => togglePanel(open ? "chat" : "chat")} onSend={meetingChat.send} showToggle={false} onUnreadChange={setChatUnread} disabledReason={allowed("chat") ? undefined : t("meet.chatDisabled")} />
       </div>
 
       {showReady && (
@@ -1782,27 +1789,26 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       )}
 
       <div className="meeting-reaction-layer" aria-live="polite">{reactions.map((reaction) => <span key={reaction.id}>{reaction.emoji}</span>)}</div>
-      <input ref={meetingFileInput} className="sr-only" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadMeetingFile(file); }} />
 
       <footer className="gm-bar">
         <div className="gm-bar-left" />
         <div className="gm-bar-center">
           <div className={`gm-split ${microphone ? "" : "off"}`}>
             <button ref={micMenuRef} type="button" className="gm-split-more gm-desktop-only" aria-haspopup="dialog" aria-expanded={deviceMenu === "audio"} aria-label={t("meet.micOptions")} title={t("meet.micOptions")} onClick={() => setDeviceMenu((open) => open === "audio" ? null : "audio")}><ChevronUp size={18} /></button>
-            <button type="button" className="gm-ctl" onClick={() => void toggleTrack("audio")} aria-pressed={!microphone} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={22} /> : <MicOff size={22} />}</button>
+            <button type="button" className="gm-ctl" disabled={!microphone && !allowed("microphone")} onClick={() => void toggleTrack("audio")} aria-pressed={!microphone} aria-label={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")} title={microphone ? t("meetingRoom.turnOffMicAria") : t("meetingRoom.turnOnMicAria")}>{microphone ? <Mic size={22} /> : <MicOff size={22} />}</button>
             <MeetPopover open={deviceMenu === "audio"} onClose={() => setDeviceMenu(null)} triggerRef={micMenuRef} label={t("meet.micOptions")} align="start" className="gm-device-popover">
               {(audioInputs.length ? audioInputs : [{ deviceId: "", label: t("meet.defaultDevice") } as MediaDeviceInfo]).map((device) => <button type="button" key={device.deviceId || "default"} aria-pressed={(microphoneDevice || "") === device.deviceId} onClick={() => void switchDevice("audio", device.deviceId)}>{(microphoneDevice || "") === device.deviceId && <Check size={18} />}<span>{device.label || t("meetingRoom.microphoneFallback")}</span></button>)}
             </MeetPopover>
           </div>
           <div className={`gm-split ${camera ? "" : "off"}`}>
             <button ref={camMenuRef} type="button" className="gm-split-more gm-desktop-only" aria-haspopup="dialog" aria-expanded={deviceMenu === "video"} aria-label={t("meet.cameraOptions")} title={t("meet.cameraOptions")} onClick={() => setDeviceMenu((open) => open === "video" ? null : "video")}><ChevronUp size={18} /></button>
-            <button type="button" className="gm-ctl" onClick={() => void toggleTrack("video")} aria-pressed={!camera} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Video size={22} /> : <CameraOff size={22} />}</button>
+            <button type="button" className="gm-ctl" disabled={!camera && !allowed("video")} onClick={() => void toggleTrack("video")} aria-pressed={!camera} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Video size={22} /> : <CameraOff size={22} />}</button>
             <MeetPopover open={deviceMenu === "video"} onClose={() => setDeviceMenu(null)} triggerRef={camMenuRef} label={t("meet.cameraOptions")} align="start" className="gm-device-popover">
               {(videoInputs.length ? videoInputs : [{ deviceId: "", label: t("meet.defaultDevice") } as MediaDeviceInfo]).map((device) => <button type="button" key={device.deviceId || "default"} aria-pressed={(cameraDevice || "") === device.deviceId} onClick={() => void switchDevice("video", device.deviceId)}>{(cameraDevice || "") === device.deviceId && <Check size={18} />}<span>{device.label || t("meetingRoom.cameraFallback")}</span></button>)}
             </MeetPopover>
           </div>
-          <button type="button" className={`gm-ctl gm-desktop-only ${screenSharing ? "active" : ""}`} onClick={() => void toggleScreen()} aria-pressed={screenSharing} aria-label={screenSharing ? t("meet.stopPresenting") : t("meet.present")} title={screenSharing ? t("meet.stopPresenting") : t("meet.present")}><MonitorUp size={22} /></button>
-          <button ref={reactRef} type="button" className={`gm-ctl gm-desktop-only ${reactionOpen ? "active" : ""}`} aria-haspopup="dialog" aria-expanded={reactionOpen} onClick={() => setReactionOpen((value) => !value)} aria-label={t("meet.reactions")} title={t("meet.reactions")}><Smile size={22} /></button>
+          <button type="button" className={`gm-ctl gm-desktop-only ${screenSharing ? "active" : ""}`} disabled={!screenSharing && !allowed("screenShare")} onClick={() => void toggleScreen()} aria-pressed={screenSharing} aria-label={screenSharing ? t("meet.stopPresenting") : t("meet.present")} title={screenSharing ? t("meet.stopPresenting") : t("meet.present")}><MonitorUp size={22} /></button>
+          <button ref={reactRef} type="button" className={`gm-ctl gm-desktop-only ${reactionOpen ? "active" : ""}`} disabled={!allowed("reactions")} aria-haspopup="dialog" aria-expanded={reactionOpen} onClick={() => setReactionOpen((value) => !value)} aria-label={t("meet.reactions")} title={t("meet.reactions")}><Smile size={22} /></button>
           <button type="button" className={`gm-ctl gm-desktop-only ${handRaised ? "active" : ""}`} onClick={toggleHand} aria-pressed={handRaised} aria-label={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")} title={handRaised ? t("meetingRoom.lowerHandAria") : t("meetingRoom.raiseHandAria")}><Hand size={22} /></button>
           <span className="meet-anchor">
             <button ref={moreRef} type="button" data-shot="more" className={`gm-ctl gm-ctl-narrow ${moreMenuOpen ? "active" : ""}`} aria-haspopup="menu" aria-expanded={moreMenuOpen} onClick={() => setMoreMenuOpen((value) => !value)} aria-label={t("meet.moreOptions")} title={t("meet.moreOptions")}><MoreVertical size={22} />{chatUnread > 0 && <b className="gm-dot gm-mobile-only" aria-label={t("meet.unreadCount", { count: chatUnread })} />}</button>
@@ -1810,13 +1816,13 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           </span>
           <button type="button" className="gm-ctl gm-hangup" onClick={leave} aria-label={t("meet.leave")} title={t("meet.leave")}><PhoneOff size={24} /></button>
           <MeetPopover open={reactionOpen} onClose={() => setReactionOpen(false)} triggerRef={reactRef} label={t("meet.reactions")} className="gm-reaction-bar">
-            {["💖", "👍", "🎉", "👏", "😂", "😮", "😢", "🤔", "👎"].map((emoji) => <button type="button" key={emoji} onClick={() => sendReaction(emoji)} aria-label={emoji}>{emoji}</button>)}
+            {MEETING_REACTIONS.map((emoji) => <button type="button" key={emoji} onClick={() => sendReaction(emoji)} aria-label={emoji}>{emoji}</button>)}
           </MeetPopover>
         </div>
         <div className="gm-bar-right gm-desktop-only">
-          <button type="button" className={`gm-icon-btn ${sidePanel === "participants" ? "active" : ""}`} onClick={() => togglePanel("participants")} aria-expanded={sidePanel === "participants"} aria-label={t("meet.people")} title={t("meet.people")}><UsersRound size={22} /><span className="gm-count">{participantCount}</span>{canManageWaitingRoom && waitingRequests.length > 0 && <b className="gm-dot" />}</button>
-          <button type="button" data-shot="chat" className={`gm-icon-btn ${meetingChatOpen ? "active" : ""}`} onClick={() => togglePanel("chat")} aria-expanded={meetingChatOpen} aria-label={chatUnread ? `${t("meet.chat")} — ${t("meet.unreadCount", { count: chatUnread })}` : t("meet.chat")} title={t("meet.chat")}><MessageSquareText size={22} />{chatUnread > 0 && <b className="gm-dot" />}</button>
-          {isHost && <button type="button" className={`gm-icon-btn ${sidePanel === "settings" ? "active" : ""}`} onClick={() => togglePanel("settings")} aria-expanded={sidePanel === "settings"} aria-label={t("meet.hostControls")} title={t("meet.hostControls")}>{meeting.locked ? <Lock size={22} /> : <ShieldCheck size={22} />}</button>}
+          <button type="button" className={`gm-icon-btn ${sidePanel === "participants" ? "active" : ""}`} onClick={() => togglePanel("participants")} aria-expanded={sidePanel === "participants"} aria-label={t("meet.people")} title={t("meet.people")}><UsersRound size={22} /><span className="gm-count">{participantCount}</span>{canManageWaitingRoom && waitingRequests.length > 0 && <b className="gm-dot" />}<span className="gm-btn-label">{t("meet.people")}</span></button>
+          <button type="button" data-shot="chat" className={`gm-icon-btn ${meetingChatOpen ? "active" : ""}`} onClick={() => togglePanel("chat")} aria-expanded={meetingChatOpen} aria-label={chatUnread ? `${t("meet.chat")} — ${t("meet.unreadCount", { count: chatUnread })}` : t("meet.chat")} title={t("meet.chat")}><MessageSquareText size={22} />{chatUnread > 0 && <b className="gm-dot" />}<span className="gm-btn-label">{t("meetingRoom.chatTitle")}</span></button>
+          {isHost && <button type="button" className={`gm-icon-btn ${sidePanel === "settings" ? "active" : ""}`} onClick={() => togglePanel("settings")} aria-expanded={sidePanel === "settings"} aria-label={t("meet.hostControls")} title={t("meet.hostControls")}>{meeting.locked ? <Lock size={22} /> : <ShieldCheck size={22} />}<span className="gm-btn-label">{t("meet.hostControls")}</span></button>}
         </div>
       </footer>
     </div>

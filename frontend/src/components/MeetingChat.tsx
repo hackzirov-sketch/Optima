@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n/i18n";
 import type { MeetingChatMessage } from "../lib/meetingChat";
 
-export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen, onSend, showToggle = true, onUnreadChange }: {
+export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen, onSend, showToggle = true, onUnreadChange, disabledReason }: {
   messages: MeetingChatMessage[]; connected: number; selfId: string; nameFor: (id: string) => string;
   open: boolean; onOpen: (open: boolean) => void; onSend: (text: string) => number;
   /** False when the host page renders its own chat button (Meet's bottom-right toolbar). */
   showToggle?: boolean;
   onUnreadChange?: (count: number) => void;
+  /** Set when the host has turned chat off for participants. */
+  disabledReason?: string;
 }) {
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState("");
@@ -45,9 +47,9 @@ export function MeetingChat({ messages, connected, selfId, nameFor, open, onOpen
         {!messages.length && <div className="meeting-chat-empty"><MessageCircle size={32} /><strong>{t("meetingRoom.chatEmpty")}</strong></div>}
         {messages.map(message => <article key={`${message.senderId}:${message.id}`} className={message.senderId === selfId ? "is-self" : ""}><div><strong>{nameFor(message.senderId)}</strong><time>{time(message.time)}</time></div><p>{message.text}</p></article>)}
       </div>
-      <form onSubmit={event => { event.preventDefault(); if (onSend(draft)) { setDraft(""); setError(false); } else setError(true); }}>
-        {error && <small role="alert">{t("meetingRoom.chatSendFailed")}</small>}
-        <div><textarea rows={1} maxLength={2000} value={draft} onChange={event => setDraft(event.target.value)} placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><button type="submit" disabled={!draft.trim() || !connected} title={t("chat.sendMessageAria")} aria-label={t("chat.sendMessageAria")}><Send size={19} /></button></div>
+      <form onSubmit={event => { event.preventDefault(); if (disabledReason) return; if (onSend(draft)) { setDraft(""); setError(false); } else setError(true); }}>
+        {disabledReason ? <small role="status">{disabledReason}</small> : error && <small role="alert">{t("meetingRoom.chatSendFailed")}</small>}
+        <div><textarea rows={1} maxLength={2000} value={draft} disabled={Boolean(disabledReason)} onChange={event => setDraft(event.target.value)} placeholder={t("chat.messagePlaceholder")} aria-label={t("chat.messageTextAria")} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><button type="submit" disabled={!draft.trim() || Boolean(disabledReason)} title={t("chat.sendMessageAria")} aria-label={t("chat.sendMessageAria")}><Send size={19} /></button></div>
       </form>
     </section>}
   </>;
