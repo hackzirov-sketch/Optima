@@ -862,6 +862,7 @@
     "microphoneWord": "Mikrofon",
     "cameraMicOpenFailed": "Kamera veya mikrofon açılamadı. Aşağıdaki düğmeyle tekrar deneyebilirsiniz.",
     "screenShareCancelled": "Ekran paylaşımı iptal edildi",
+    "screenShareFailed": "Ekran paylaşılamadı",
     "filesLoadFailed": "Dosyalar açılamadı",
     "fileTooLarge": "Dosya boyutu 100 MB’ı geçmemeli",
     "fileShared": "Dosya katılımcılarla paylaşıldı",

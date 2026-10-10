@@ -862,6 +862,7 @@
     "microphoneWord": "Mikrofon",
     "cameraMicOpenFailed": "Kamera yoki mikrofon ochilmadi. Pastdagi tugma orqali qayta urinishingiz mumkin.",
     "screenShareCancelled": "Ekran ulash bekor qilindi",
+    "screenShareFailed": "Ekranni ulashib bo'lmadi",
     "filesLoadFailed": "Fayllar ochilmadi",
     "fileTooLarge": "Fayl hajmi 100 MB dan oshmasligi kerak",
     "fileShared": "Fayl qatnashchilarga ulashildi",

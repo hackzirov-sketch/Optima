@@ -862,6 +862,7 @@
     "microphoneWord": "Microphone",
     "cameraMicOpenFailed": "Couldn’t turn on the camera or microphone. Try again using the button below.",
     "screenShareCancelled": "Screen share cancelled",
+    "screenShareFailed": "Couldn't share your screen",
     "filesLoadFailed": "Couldn’t load files",
     "fileTooLarge": "File must be under 100 MB",
     "fileShared": "File shared with participants",

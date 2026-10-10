@@ -4572,3 +4572,18 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 /* Create-meeting dialog: keep Cancel / Create visible while the form scrolls */
 .meet-create-form .modal-actions { position: sticky; bottom: -14px; z-index: 1; margin: 0 -18px -14px; padding: 12px 18px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .meet-create-form { overflow-x: clip; }
+
+/* Alone in the call: the single tile fills the stage. With an auto-sized row
+   the tile's height:100% resolved against its content, so a camera-off tile
+   collapsed to a thin strip around the avatar. */
+.gm-grid-1 { grid-template-rows: minmax(0, 1fr); align-content: stretch; }
+.gm-grid-1 { padding: 0; }
+/* The split pill paints its own hover/off state; the inner button must not
+   paint a second, square-cornered one on top of it. */
+.gm-split .gm-ctl:hover:not(:disabled) { background: transparent; }
+@media (max-width: 720px) {
+  /* The device-menu caret is hidden here, so the button is the whole pill. */
+  .gm-split-more + .gm-ctl { width: 56px; border-radius: 24px; }
+}
+/* Focus view with nobody else in the call (e.g. presenting alone): no filmstrip column. */
+.gm-stage-focus.gm-stage-solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }

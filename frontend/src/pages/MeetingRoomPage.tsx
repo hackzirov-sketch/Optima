@@ -1150,8 +1150,11 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       display = await navigator.mediaDevices.getDisplayMedia({ video: true });
       track = display.getVideoTracks()[0];
       if (!track) throw new Error("Screen track unavailable");
-    } catch {
-      show(t("meetingRoom.screenShareCancelled"), "error");
+    } catch (error) {
+      // Closing the browser's picker rejects with NotAllowedError — the user
+      // changed their mind, nothing to report.
+      if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "AbortError")) return;
+      show(t("meetingRoom.screenShareFailed"), "error");
       return;
     }
     screenTrack.current = track;
@@ -1405,7 +1408,10 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return entry ? entry[0] : null;
   }, [screenSharing, remoteMedia, selfId]);
 
-  const focusedUserId = gridViewForced ? null : (screenSharingUserId || activeSpeakerId || pinnedUserId || null);
+  // Your own voice never pulls you into the main stage (Google Meet does the
+  // same) — otherwise talking while alone flips the room into focus view.
+  const speakerFocusId = activeSpeakerId !== selfId ? activeSpeakerId : null;
+  const focusedUserId = gridViewForced ? null : (screenSharingUserId || speakerFocusId || pinnedUserId || null);
 
   /**
    * What the header actually reports. The socket being up only means
@@ -1678,9 +1684,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
       <div className="gm-body">
         {focusedTile ? (
-          <main className="gm-stage gm-stage-focus">
+          <main className={`gm-stage gm-stage-focus ${allTiles.length > 1 ? "" : "gm-stage-solo"}`}>
             <div className="gm-stage-main">{tileFor(focusedTile, { speaking: false })}</div>
-            <div className="gm-filmstrip">{allTiles.filter((tile) => tile.id !== focusedTile.id).map((tile) => tileFor(tile))}</div>
+            {allTiles.length > 1 && <div className="gm-filmstrip">{allTiles.filter((tile) => tile.id !== focusedTile.id).map((tile) => tileFor(tile))}</div>}
           </main>
         ) : (
           <main className={`gm-stage gm-grid gm-grid-${Math.min(allTiles.length, 9)}`}>{allTiles.map((tile) => tileFor(tile))}</main>
