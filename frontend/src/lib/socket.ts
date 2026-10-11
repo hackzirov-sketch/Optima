@@ -19,6 +19,10 @@ export function getSocket(): Socket {
       // any other same-site request. Nothing for JS to read or hand over.
       withCredentials: true,
       transports: ["websocket", "polling"],
+      // If the WebSocket upgrade is refused (a proxy that drops the Upgrade
+      // header answers 400), fall back to long-polling instead of retrying the
+      // same failing WebSocket forever — chat and calls keep working.
+      tryAllTransports: true,
       autoConnect: false,
       reconnection: true,
       // Never give up: a capped number of attempts (it was 8, ~40s) left chat

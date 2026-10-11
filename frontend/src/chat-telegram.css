@@ -258,3 +258,9 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .tg-new-check { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 2px solid var(--line); border-radius: 50%; color: transparent; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
 .tg-new-person.checked .tg-new-check { border-color: var(--accent); background: var(--accent); color: #fff; }
 .tg-new .tg-edit-actions { margin: 0; }
+
+/* Staged files / AI assist sit on their own row above the input row; without
+   wrapping they shared the row and squeezed the text field to a sliver. */
+.chat-page .composer { flex-wrap: wrap; }
+.chat-page .composer > :is(.composer-staged, .composer-ai-assist) { flex: 1 1 100%; order: -1; min-width: 0; }
+.chat-page .composer > .rich-message-input { flex: 1 1 0; min-width: 120px; }
