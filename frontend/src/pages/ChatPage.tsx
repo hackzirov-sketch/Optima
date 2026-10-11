@@ -73,6 +73,7 @@ import {
   useState
 }                                                                           from "react";
 import { useLocation, useSearch }                                           from "wouter";
+import { linkify } from "../lib/linkify";
 import { useOutsideClose }                                                  from "../lib/useOutsideClose";
 import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
@@ -125,7 +126,18 @@ function isTelegramEmoji(content: string) {
   return TELEGRAM_EMOJI_PATTERN.test(content);
 }
 
-function renderMessageContent(content: string) {
+/** Message text with its links as blue, new-tab anchors (Telegram-style). */
+function renderLinkedText(text: string, key: string) {
+  const pieces = linkify(text);
+  if (pieces.length === 1 && !pieces[0].href) return <span key={key}>{text}</span>;
+  return <span key={key}>{pieces.map((piece, index) => piece.href
+    ? <a key={index} className="message-link" href={piece.href} target="_blank" rel="noopener noreferrer"
+         onClick={(event) => event.stopPropagation()}>{piece.text}</a>
+    : piece.text)}</span>;
+}
+
+/** `links`: only inside a message — room-list previews sit in a button. */
+function renderMessageContent(content: string, links = false) {
   const parts: Array<{ text?: string; emojiId?: string }> = [];
   let cursor = 0;
   for (const match of content.matchAll(TELEGRAM_EMOJI_GLOBAL_PATTERN)) {
@@ -134,11 +146,11 @@ function renderMessageContent(content: string) {
     cursor = match.index + match[0].length;
   }
   if (cursor < content.length) parts.push({ text: content.slice(cursor) });
-  if (!parts.length) return content;
+  if (!parts.length) return links ? renderLinkedText(content, "text") : content;
   return parts.map((part, index) => part.emojiId ?
     <AnimatedEmoji key={`${part.emojiId}-${index}`} className="message-inline-custom-emoji"
                    id={part.emojiId} /> :
-    <span key={`text-${index}`}>{part.text}</span>);
+    links ? renderLinkedText(part.text || "", `text-${index}`) : <span key={`text-${index}`}>{part.text}</span>);
 }
 
 function MemberPresenceText({ userId }: { userId: string }) {
@@ -2777,7 +2789,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
                               <AnimatedEmoji className="message-custom-emoji" id={telegramEmojiId(message.content)} /> :
-                              <p>{renderMessageContent(message.content)}</p>)}
+                              <p>{renderMessageContent(message.content, true)}</p>)}
                             {message.attachments?.map((attachment) => attachment.mimeType.startsWith("audio/") ?
                               <AudioMessage key={attachment.id || attachment.url} src={attachment.url}
                                             fileName={attachment.fileName}
