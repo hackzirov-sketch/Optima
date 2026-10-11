@@ -2927,7 +2927,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       if (fileInput.current) fileInput.current.value = "";
                     }} />
                     {!recording &&
-                      <button className="icon-button" onClick={() => fileInput.current?.click()}
+                      <button className="icon-button composer-attach" onClick={() => fileInput.current?.click()}
                               disabled={staged.length >= MAX_ATTACHMENTS}
                               aria-label={t("chat.attachFileAria")}><Paperclip size={20} /></button>}
                     {recording ? <div className="recording-status"><i /><strong>{t("chat.recordingInProgress")}</strong>

@@ -264,3 +264,39 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .chat-page .composer { flex-wrap: wrap; }
 .chat-page .composer > :is(.composer-staged, .composer-ai-assist) { flex: 1 1 100%; order: -1; min-width: 0; }
 .chat-page .composer > .rich-message-input { flex: 1 1 0; min-width: 120px; }
+
+/* Telegram-style composer: one flat full-width bar — attach on the left, a
+   borderless text field filling the middle, AI / emoji / send on the right.
+   No pill around the field, no circles behind the icons. */
+.chat-page .composer:not(.ai-composer) {
+  min-height: 56px; padding: 6px 10px; gap: 2px; align-items: flex-end;
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+.chat-page .composer:not(.ai-composer) > .composer-attach { order: 0; }
+.chat-page .composer:not(.ai-composer) > :is(.rich-message-input, .recording-status) { order: 1; }
+.chat-page .composer:not(.ai-composer) > .composer-ai-trigger { order: 2; }
+.chat-page .composer:not(.ai-composer) > .emoji-menu-wrap { order: 3; }
+.chat-page .composer:not(.ai-composer) > .send-button { order: 4; }
+.chat-page .composer:not(.ai-composer) > :is(.icon-button, .send-button),
+.chat-page .composer:not(.ai-composer) > .emoji-menu-wrap > .icon-button {
+  flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; margin: 0;
+  border: 0; border-radius: 50%; background: transparent; box-shadow: none; color: var(--muted);
+  transition: color .15s ease, background-color .15s ease;
+}
+.chat-page .composer:not(.ai-composer) > :is(.icon-button, .send-button):hover:not(:disabled),
+.chat-page .composer:not(.ai-composer) > .emoji-menu-wrap > .icon-button:hover {
+  background: var(--surface-muted); color: var(--accent);
+}
+.chat-page .composer:not(.ai-composer) > .composer-ai-trigger.active { background: transparent; color: var(--accent); box-shadow: none; }
+.chat-page .composer:not(.ai-composer) > .send-button { color: var(--accent); }
+.chat-page .composer:not(.ai-composer) > .send-button.voice-button.recording { color: var(--danger, #d64545); }
+.chat-page .composer:not(.ai-composer) > .rich-message-input {
+  flex: 1 1 0; min-width: 120px; min-height: 44px; padding: 11px 8px;
+  border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; outline: none;
+}
+@media (max-width: 720px) {
+  .chat-page .composer:not(.ai-composer) { padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .chat-page .composer:not(.ai-composer) > :is(.icon-button, .send-button),
+  .chat-page .composer:not(.ai-composer) > .emoji-menu-wrap > .icon-button { flex-basis: 40px; width: 40px; min-width: 40px; height: 40px; }
+  .chat-page .composer:not(.ai-composer) > .rich-message-input { min-width: 80px; padding-inline: 4px; }
+}

@@ -46,3 +46,11 @@
   box-shadow: none !important;
 }
 :root[data-theme] body .tg-edit-desc textarea:is(:focus, :focus-visible) { border-bottom-color: var(--accent, #4a58b7) !important; }
+
+/* The chat composer is a flat Telegram-style bar: its field shows no ring. */
+/* (class repeated: the generic rule above is weighted by its input:not()×4 branch) */
+:root[data-theme] body .chat-page .composer:not(.ai-composer) > .rich-message-input.rich-message-input.rich-message-input:is(:focus, :focus-visible, :focus-within) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}

@@ -2,11 +2,13 @@ import { io, type Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
+// Only the origin: socket.io reads a URL's path as the namespace, so
+// "https://api.example.com/api/v1" would connect to namespace "/api/v1",
+// which the server refuses ("Invalid namespace") — realtime silently dead.
 function socketServerUrl(): string {
-  if (import.meta.env.VITE_SERVER_URL) return import.meta.env.VITE_SERVER_URL;
-  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
-  if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
-    return apiUrl.replace(/\/api\/v1\/?$/i, "");
+  for (const candidate of [import.meta.env.VITE_SERVER_URL, import.meta.env.VITE_API_URL] as Array<string | undefined>) {
+    if (!candidate || !/^https?:\/\//i.test(candidate)) continue;
+    try { return new URL(candidate).origin; } catch { /* malformed — try the next one */ }
   }
   return window.location.origin;
 }
