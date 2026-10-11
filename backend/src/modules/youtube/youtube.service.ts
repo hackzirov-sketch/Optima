@@ -15,6 +15,11 @@ export interface YoutubeVideo {
   publishedAt: string | null;
   durationSeconds: number;
   views: number | null;
+  /** For the classifier (video-classifier.ts); not all are always present. */
+  likes?: number | null;
+  categoryId?: string | null;
+  tags?: string[];
+  description?: string;
 }
 
 /** ISO-8601 duration (PT1H2M3S) to seconds. */
@@ -73,7 +78,7 @@ export class YoutubeService {
       q,
     });
     if (pageToken) params.set('pageToken', pageToken);
-    return this.cached(`search?${params}`, 6 * 3600, async () => {
+    return this.cached(`v2:search?${params}`, 6 * 3600, async () => {
       const result = await this.call<{
         nextPageToken?: string;
         items?: Array<{ id?: { videoId?: string } }>;
@@ -111,7 +116,7 @@ export class YoutubeService {
       q: "uzbek|o'zbek|узбек",
     });
     if (pageToken) params.set('pageToken', pageToken);
-    return this.cached(`popular?${params}`, 3600, async () => {
+    return this.cached(`v2:popular?${params}`, 3600, async () => {
       const result = await this.call<{
         nextPageToken?: string;
         items?: Array<{ id?: { videoId?: string } }>;
@@ -124,6 +129,15 @@ export class YoutubeService {
         nextPageToken: result.nextPageToken ?? null,
       };
     });
+  }
+
+  /** One video's details (title, channel, duration), cached for a day. Needs the API key. */
+  async video(id: string): Promise<YoutubeVideo | null> {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+    const found = await this.cached(`v2:video?${id}`, 24 * 3600, async () => ({
+      items: await this.details([id]),
+    }));
+    return found.items[0] ?? null;
   }
 
   /** Durations and view counts — search results carry neither. 1 unit per call. */
@@ -153,9 +167,12 @@ export class YoutubeService {
         channelTitle?: string;
         channelId?: string;
         publishedAt?: string;
+        categoryId?: string;
+        tags?: string[];
+        description?: string;
       };
       contentDetails?: { duration?: string };
-      statistics?: { viewCount?: string };
+      statistics?: { viewCount?: string; likeCount?: string };
     };
     return {
       youtubeVideoId: item.id,
@@ -167,6 +184,10 @@ export class YoutubeService {
       views: item.statistics?.viewCount
         ? Number(item.statistics.viewCount)
         : null,
+      likes: item.statistics?.likeCount ? Number(item.statistics.likeCount) : null,
+      categoryId: item.snippet?.categoryId ?? null,
+      tags: (item.snippet?.tags ?? []).slice(0, 30),
+      description: (item.snippet?.description ?? '').slice(0, 1500),
     };
   }
 

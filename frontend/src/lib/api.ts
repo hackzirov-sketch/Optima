@@ -61,10 +61,38 @@ export interface YoutubeVideo {
   views: number | null;
 }
 import { envUrl } from "./env-url";
-import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type OutgoingAttachment } from "./e2ee";
+import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = envUrl(import.meta.env.VITE_API_URL) || "/api/v1";
 export type OAuthProvider = "google" | "github";
+
+export interface ChatDraftRecord {
+  roomId: string;
+  content: string | null;
+  e2ee: E2eeEnvelope | null;
+  updatedAt: string | null;
+  clientId?: string | null;
+}
+
+/** A YouTube video or library book under our own slug, with live counts. */
+export interface MediaPage {
+  slug: string;
+  provider: "youtube" | "library";
+  externalId: string;
+  title: string;
+  subtitle: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number;
+  meta: { youtubeViews?: number; book?: LibraryBook };
+  views: number;
+  likes: number;
+  liked: boolean;
+  myViews: number;
+  /** Books: where I stopped reading (position is a 0..1 fraction of the text). */
+  progress: ReadingProgress | null;
+}
+
+export interface ReadingProgress { position: number; page: number; totalPages: number; updatedAt?: string }
 
 /**
  * Sent on every request. The backend's CsrfGuard requires it on any
@@ -446,8 +474,10 @@ export const api = {
     resolveRoute: (groupId: string, type: "direct" | "group" | "channel", identifier: string) =>
       apiFetch<{ roomId: string; type: string; slug: string | null; publicId: number } | { redirectSlug: string }>(`/groups/${groupId}/chat/resolve/${type}/${encodeURIComponent(identifier)}`),
     getAppearance: (roomId: string) => apiFetch<UserChatSettings | null>(`/chat/rooms/${roomId}/appearance`),
-    getDraft: (roomId: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`),
-    saveDraft: (roomId: string, content: string) => apiFetch<{ content: string }>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify({ content }) }),
+    /** My unsent drafts (one per chat); E2EE chats carry an envelope instead of text. */
+    drafts: () => apiFetch<ChatDraftRecord[]>("/chat/drafts"),
+    saveDraft: (roomId: string, body: { content?: string; e2ee?: E2eeEnvelope; clientId: string }) =>
+      apiFetch<ChatDraftRecord>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify(body) }),
     updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
       apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
     roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; nickname?: string | null; nameEmoji?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
@@ -659,14 +689,33 @@ export const api = {
       apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "PUT", body: JSON.stringify({ rating, body }) }),
     marks: () => apiFetch<{ liked: string[]; saved: string[] }>("/library/me/marks"),
     saved: () => apiFetch<LibraryBook[]>("/library/me/saved"),
+    reading: () => apiFetch<Array<{ slug: string; book: LibraryBook; position: number; updatedAt: string }>>("/library/me/reading"),
     save: (book: LibraryBook) => apiFetch<{ saved: boolean }>(`/library/books/${encodeURIComponent(book.key)}/save`, { method: "PUT", body: JSON.stringify({ book }) }),
     unsave: (bookKey: string) => apiFetch<{ saved: boolean }>(`/library/books/${encodeURIComponent(bookKey)}/save`, { method: "DELETE" }),
-    like: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "PUT" }),
+    /** Opening a book's page: registers it and returns its slug and counts. */
+    open: (book: LibraryBook) => apiFetch<MediaPage>(`/library/books/${encodeURIComponent(book.key)}/open`, { method: "POST", body: JSON.stringify({ book }) }),
+    like: (bookKey: string, book?: LibraryBook) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "PUT", body: JSON.stringify({ book }) }),
     unlike: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "DELETE" }),
     deleteReview: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "DELETE" }),
   },
+  /** Our own pages for YouTube videos and library books (/youtube/:slug, /library/:slug). */
+  media: {
+    youtube: (videoId: string) => apiFetch<MediaPage>("/media/youtube", { method: "POST", body: JSON.stringify({ videoId }) }),
+    get: (slug: string) => apiFetch<MediaPage>(`/media/${encodeURIComponent(slug)}`),
+    view: (slug: string) => apiFetch<{ views: number }>(`/media/${encodeURIComponent(slug)}/view`, { method: "POST" }),
+    like: (slug: string) => apiFetch<{ liked: boolean; likes: number }>(`/media/${encodeURIComponent(slug)}/like`, { method: "PUT" }),
+    unlike: (slug: string) => apiFetch<{ liked: boolean; likes: number }>(`/media/${encodeURIComponent(slug)}/like`, { method: "DELETE" }),
+    /** Seconds the player actually played (Spend Time). keepalive: also sent while closing. */
+    watch: (slug: string, seconds: number) =>
+      apiFetch<void>(`/media/${encodeURIComponent(slug)}/watch`, { method: "POST", body: JSON.stringify({ seconds }), keepalive: true }),
+    /** keepalive: also sent while the page is closing. */
+    progress: (slug: string, progress: ReadingProgress) =>
+      apiFetch<{ position: number }>(`/media/${encodeURIComponent(slug)}/progress`, { method: "PUT", body: JSON.stringify(progress), keepalive: true }),
+  },
   youtube: {
     status: () => apiFetch<{ enabled: boolean }>("/youtube/status"),
+    /** "For you": vetted (nothing off-topic for Optima) and ranked for me. */
+    feed: (page = 1) => apiFetch<{ items: YoutubeVideo[]; hasMore: boolean }>(`/youtube/feed?page=${page}`),
     search: (q: string, pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/search?${new URLSearchParams({ q, ...(pageToken ? { pageToken } : {}) })}`),
     popular: (pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/popular${pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : ""}`),
   },

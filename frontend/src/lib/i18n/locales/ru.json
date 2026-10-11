@@ -11,7 +11,25 @@
     "resultsFor": "Результаты по запросу «{{query}}»",
     "popularUz": "Популярное в Узбекистане",
     "views": "{{count}} просмотров",
-    "loadFailed": "Не удалось загрузить видео"
+    "loadFailed": "Не удалось загрузить видео",
+    "openOnYoutube": "Открыть на YouTube",
+    "copyLink": "Копировать ссылку",
+    "linkCopied": "Скопировано",
+    "back": "Назад",
+    "upNext": "Далее",
+    "subtitle": "Видеоуроки и лучший контент — прямо здесь",
+    "topics": "Темы",
+    "topicPopular": "Популярное",
+    "topicEducation": "Обучение",
+    "topicCoding": "Программирование",
+    "topicEnglish": "Английский",
+    "topicMovies": "Кино",
+    "topicMusic": "Музыка",
+    "topicSport": "Спорт",
+    "like": "Нравится",
+    "optimaViews": "{{count}} в Optima",
+    "topicForYou": "Для вас",
+    "forYou": "Полезные видео, подобранные для вас"
   },
   "common": {
     "next": "Далее",
@@ -484,7 +502,21 @@
     "savedToast": "Книга сохранена",
     "unsavedToast": "Удалено из сохранённых",
     "saveFailed": "Не удалось сохранить",
-    "viewOnOpenLibrary": "Открыть в Open Library"
+    "viewOnOpenLibrary": "Открыть в Open Library",
+    "optimaViews": "Открыта в Optima {{count}} раз",
+    "loadFailed": "Не удалось открыть книгу",
+    "prevPage": "Предыдущая страница",
+    "nextPage": "Следующая страница",
+    "paginating": "Вёрстка книги…",
+    "pageOf": "{{page}} / {{total}}",
+    "continueReading": "Продолжить · {{percent}}%",
+    "fromStart": "С начала",
+    "shelfReading": "Читаю",
+    "shelfFinished": "Прочитано",
+    "readingTitle": "Продолжите чтение",
+    "finishedTitle": "Прочитанные книги",
+    "readingEmpty": "Вы ещё не начали ни одной книги",
+    "finishedEmpty": "Прочитанных книг пока нет"
   },
   "education": {
     "openLessonAria": "Открыть урок {{title}}",
@@ -887,7 +919,8 @@
     "callMute": "Выкл. звук",
     "callUnmute": "Микрофон",
     "callWaiting": "ожидание...",
-    "incomingVideoCall": "видеозвонок..."
+    "incomingVideoCall": "видеозвонок...",
+    "draftLabel": "Черновик:"
   },
   "presence": {
     "online": "В сети",

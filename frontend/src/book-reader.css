@@ -1,0 +1,83 @@
+/*
+ * Book-like reader: facing pages on a desk, a spine shadow down the middle,
+ * and a leaf that turns in 3D as it's dragged. Page colours follow the
+ * reader theme (light / sepia / dark).
+ */
+.book-reader { --bk-desk: #e9e4da; --bk-paper: #fffdf8; --bk-ink: #22201c; --bk-muted: #8a8378; --bk-edge: rgba(60, 45, 20, .12); }
+.book-reader.reader-light { --bk-desk: #eef0f3; --bk-paper: #ffffff; --bk-ink: #182238; --bk-muted: #7b8496; --bk-edge: rgba(24, 34, 56, .1); }
+.book-reader.reader-sepia { --bk-desk: #e8dcc6; --bk-paper: #fbf3e4; --bk-ink: #332d27; --bk-muted: #8b7d6a; --bk-edge: rgba(80, 60, 30, .14); }
+.book-reader.reader-dark { --bk-desk: #0b0f17; --bk-paper: #1b2130; --bk-ink: #e3e6ee; --bk-muted: #8790a3; --bk-edge: rgba(0, 0, 0, .4); }
+
+/* The reader fills the screen under its header; the book sits on a "desk". */
+.book-reader main:has(.bk-reader) { overflow: hidden; padding: 0; display: flex; background: var(--bk-desk); }
+.bk-reader { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.bk-stage {
+  position: relative; min-height: 0; display: grid; place-items: center; padding: 12px;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab;
+}
+.bk-stage:active { cursor: grabbing; }
+.bk-status { display: flex; align-items: center; gap: 10px; color: var(--bk-muted); font-weight: 600; }
+
+/* No filter/overflow on the book: either flattens 3D, and the turning page
+   then squashes flat instead of swinging out toward the reader. */
+.bk-book { position: relative; transform-style: preserve-3d; perspective: 3400px; }
+.bk-book::before { content: ""; position: absolute; inset: 6px 4px -4px; border-radius: 8px; box-shadow: 0 20px 44px rgba(0, 0, 0, .24); pointer-events: none; }
+.bk-book-single { border-radius: 6px; }
+.bk-page {
+  position: absolute; top: 0; height: 100%; width: 50%; overflow: hidden;
+  background: var(--bk-paper); color: var(--bk-ink);
+}
+.bk-left { left: 0; border-radius: 6px 0 0 6px; box-shadow: inset -26px 0 30px -24px var(--bk-edge); }
+.bk-right { right: 0; border-radius: 0 6px 6px 0; box-shadow: inset 26px 0 30px -24px var(--bk-edge); }
+.bk-single { left: 0; width: 100%; border-radius: 6px; box-shadow: inset 18px 0 24px -22px var(--bk-edge); }
+.bk-spine { position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(50% - 1px); width: 2px; background: var(--bk-edge); pointer-events: none; }
+
+/* Text box — the off-screen .bk-measure must match it exactly. */
+.bk-page-inner, .bk-measure {
+  box-sizing: border-box; padding: 44px 46px 0; font: 400 1em/1.62 Georgia, "Times New Roman", serif; color: var(--bk-ink);
+  text-align: justify; overflow-wrap: break-word;
+}
+.bk-page-inner p, .bk-measure p { margin: 0 0 .35em; text-indent: 1.4em; }
+.bk-page-inner p.cont, .bk-measure p.cont { text-indent: 0; }
+.bk-measure { position: absolute; left: -99999px; top: 0; visibility: hidden; pointer-events: none; padding-bottom: 44px; }
+.bk-folio { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; font: 600 12px/1 Georgia, serif; color: var(--bk-muted); }
+
+/* The turning leaf: two faces back to back, hinged on the spine. */
+.bk-leaf { position: absolute; z-index: 3; top: 0; height: 100%; transform-style: preserve-3d; will-change: transform; }
+.bk-leaf-right { left: 50%; transform-origin: left center; }
+.bk-leaf-left { left: 0; transform-origin: right center; }
+.bk-book-single .bk-leaf-right { left: 0; }
+.bk-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.bk-face .bk-page { width: 100%; left: 0; right: auto; }
+.bk-back { transform: rotateY(180deg); }
+.bk-paper-back { background: var(--bk-paper); border-radius: 6px; }
+/* Shading on the turning leaf: darkest near the fold, like a curving page. */
+.bk-face > i { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(0, 0, 0, .5), rgba(0, 0, 0, .12) 18%, transparent 45%, rgba(255, 255, 255, .08) 80%, transparent); }
+.bk-back > i { background: linear-gradient(270deg, rgba(0, 0, 0, .5), rgba(0, 0, 0, .12) 18%, transparent 45%, rgba(255, 255, 255, .08) 80%, transparent); }
+.bk-leaf { filter: none; box-shadow: 0 0 24px rgba(0, 0, 0, .12); }
+
+/* Footer: page n / N, arrows, a thin progress line. */
+.bk-controls {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom)); color: var(--bk-muted); font-weight: 700; font-size: 13px;
+}
+.bk-controls button {
+  width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: color-mix(in srgb, var(--bk-paper) 80%, transparent); color: var(--bk-ink); cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+}
+.bk-controls button:disabled { opacity: .35; cursor: default; }
+.bk-controls progress { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 3px; appearance: none; border: 0; background: transparent; }
+.bk-controls progress::-webkit-progress-bar { background: transparent; }
+.bk-controls progress::-webkit-progress-value { background: var(--accent, #45429a); }
+.bk-controls progress::-moz-progress-bar { background: var(--accent, #45429a); }
+
+/* "Continue · 37%" next to a small "From the start". */
+.lib2-detail .detail-actions .lib2-from-start { flex: 0 0 auto; width: auto; padding: 0 14px; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .bk-stage { padding: 8px; }
+  .bk-page-inner, .bk-measure { padding: 26px 22px 0; }
+  .bk-measure { padding-bottom: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .bk-leaf { will-change: auto; } }

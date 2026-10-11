@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { MediaModule } from '../media/media.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { LibraryController } from './library.controller';
 import { LibraryService } from './library.service';
 
 @Module({
-  imports: [ModerationModule],
+  imports: [ModerationModule, MediaModule],
   controllers: [LibraryController],
   providers: [LibraryService],
 })

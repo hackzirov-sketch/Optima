@@ -9,6 +9,8 @@ import { createHash } from 'crypto';
 import { DatabaseService } from '../../database/database.service';
 import { RedisService } from '../../redis/redis.service';
 import { ContentFilterService } from '../moderation/services/content-filter.service';
+import { MediaCountersService } from '../media/media-counters.service';
+import { MediaItem, MediaService } from '../media/media.service';
 
 export type LibraryLanguage = 'uz' | 'en' | 'ru' | 'tr';
 export type LibrarySubject =
@@ -99,7 +101,39 @@ export class LibraryService {
     private readonly db: DatabaseService,
     private readonly redis: RedisService,
     private readonly contentFilter: ContentFilterService,
+    private readonly media: MediaService,
+    private readonly counters: MediaCountersService,
   ) {}
+
+  /** The book's media record, created from the client's card (vetted by snapshot()). */
+  private async mediaFor(bookKey: string, raw?: unknown): Promise<MediaItem> {
+    if (!raw) {
+      const existing = await this.media.byExternal('library', bookKey);
+      if (existing) return existing;
+      // Liked straight from a card nobody has opened yet: fall back to a saved copy, if any.
+      const [saved] = await this.db.query<{ book: unknown }>(
+        `SELECT book FROM book_saves WHERE book_key = $1 LIMIT 1`,
+        [bookKey],
+      );
+      raw = saved?.book;
+    }
+    const book = this.snapshot(bookKey, raw);
+    return this.media.upsert({
+      provider: 'library',
+      externalId: bookKey,
+      title: book.title,
+      subtitle: book.authors[0] ?? null,
+      thumbnailUrl: book.cover || null,
+      meta: book.title !== bookKey ? { book } : {},
+    });
+  }
+
+  /** Opening a book: its page slug, the vetted book, and live counts. */
+  async open(bookKey: string, userId: string, raw: unknown) {
+    this.assertKey(bookKey);
+    const item = await this.mediaFor(bookKey, raw);
+    return this.media.describe(item, userId);
+  }
 
   async search(params: {
     q?: string;
@@ -337,21 +371,19 @@ export class LibraryService {
         LIMIT 50`,
       [bookKey, userId],
     );
-    const [state] = await this.db.query<{
-      likes: string;
-      liked: boolean;
-      saved: boolean;
-    }>(
-      `SELECT (SELECT count(*) FROM book_likes WHERE book_key = $1) AS likes,
-              EXISTS (SELECT 1 FROM book_likes WHERE book_key = $1 AND user_id = $2) AS liked,
-              EXISTS (SELECT 1 FROM book_saves WHERE book_key = $1 AND user_id = $2) AS saved`,
+    const [state] = await this.db.query<{ saved: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM book_saves WHERE book_key = $1 AND user_id = $2) AS saved`,
       [bookKey, userId],
     );
+    const item = await this.media.byExternal('library', bookKey);
+    const [likes, liked] = item
+      ? await Promise.all([this.counters.likeCount(item), this.counters.isLiked(item.id, userId)])
+      : [0, false];
     return {
       count: Number(summary?.count ?? 0),
       average: summary?.average ? Number(summary.average) : null,
-      likes: Number(state?.likes ?? 0),
-      liked: Boolean(state?.liked),
+      likes,
+      liked,
       saved: Boolean(state?.saved),
       items,
     };
@@ -392,19 +424,10 @@ export class LibraryService {
 
   // ─── Saves & likes (stored per user, not in the browser) ─────
 
-  async setLiked(bookKey: string, userId: string, liked: boolean) {
+  /** Likes go through the media counters (batched in Redis, see MediaCountersService). */
+  async setLiked(bookKey: string, userId: string, liked: boolean, raw?: unknown) {
     this.assertKey(bookKey);
-    await this.db.query(
-      liked
-        ? `INSERT INTO book_likes (user_id, book_key) VALUES ($1, $2) ON CONFLICT DO NOTHING`
-        : `DELETE FROM book_likes WHERE user_id = $1 AND book_key = $2`,
-      [userId, bookKey],
-    );
-    const [row] = await this.db.query<{ likes: string }>(
-      `SELECT count(*) AS likes FROM book_likes WHERE book_key = $1`,
-      [bookKey],
-    );
-    return { liked, likes: Number(row?.likes ?? 0) };
+    return this.counters.setLike(await this.mediaFor(bookKey, raw), userId, liked);
   }
 
   /** `book` is the card as the client shows it — kept so "My books" needs no catalogue call. */
@@ -433,20 +456,30 @@ export class LibraryService {
 
   /** Keys the reader liked or saved — the grid marks its cards from these. */
   async myMarks(userId: string) {
-    const [liked, saved] = await Promise.all([
-      this.db.query<{ key: string }>(
-        `SELECT book_key AS key FROM book_likes WHERE user_id = $1`,
-        [userId],
-      ),
+    const [likedIds, saved] = await Promise.all([
+      this.counters.likedIds(userId, 'library'),
       this.db.query<{ key: string }>(
         `SELECT book_key AS key FROM book_saves WHERE user_id = $1`,
         [userId],
       ),
     ]);
+    const liked = await this.media.byIds(likedIds);
     return {
-      liked: liked.map((row) => row.key),
+      liked: liked.map((item) => item.externalId),
       saved: saved.map((row) => row.key),
     };
+  }
+
+  /** Books with a reading position, latest first — the "Reading" and "Finished" shelves. */
+  async listReading(userId: string) {
+    return this.db.query<{ slug: string; book: LibraryBook; position: number; updatedAt: Date }>(
+      `SELECT m.slug, m.meta->'book' AS book, p.position, p.updated_at AS "updatedAt"
+         FROM media_progress p JOIN media_items m ON m.id = p.media_id
+        WHERE p.user_id = $1 AND m.provider = 'library' AND m.meta ? 'book'
+        ORDER BY p.updated_at DESC
+        LIMIT 200`,
+      [userId],
+    );
   }
 
   async listSaved(userId: string) {
@@ -458,7 +491,7 @@ export class LibraryService {
   }
 
   /** Only known fields, bounded, and links only to the sources we read from. */
-  private snapshot(bookKey: string, raw: unknown): LibraryBook {
+  snapshot(bookKey: string, raw: unknown): LibraryBook {
     const book = (raw ?? {}) as Partial<LibraryBook>;
     const text = (value: unknown, max: number) =>
       String(value ?? '').slice(0, max);

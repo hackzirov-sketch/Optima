@@ -10,7 +10,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Queue } from 'bullmq';
 
 import { ChatMessage } from '../../../database/entities/chat-message.entity';
-import { MessageDraft } from '../../../database/entities/message-draft.entity';
 import { ChatReaction } from '../../../database/entities/chat-reaction.entity';
 import { MessageAttachment } from '../../../database/entities/message-attachment.entity';
 import { ErrorCode } from '../../../common/enums/error-code.enum';
@@ -1030,38 +1029,6 @@ export class ChatMessageService {
       replyToId: rootMessageId,
       isThreadReply: true,
     });
-  }
-
-  /** Telegram-style unsent-message text for a room, restored when the user comes back. */
-  async getDraft(roomId: string, userId: string): Promise<{ content: string }> {
-    const rows = await this.dataSource.query<MessageDraft>(
-      `SELECT content FROM message_drafts WHERE user_id = $1 AND room_id = $2`,
-      [userId, roomId],
-    );
-    return { content: rows[0]?.content ?? '' };
-  }
-
-  async saveDraft(
-    roomId: string,
-    userId: string,
-    content: string,
-  ): Promise<{ content: string }> {
-    await this.chatMemberService.assertRoomMember(roomId, userId);
-    if (!content.trim()) {
-      await this.dataSource.query(
-        `DELETE FROM message_drafts WHERE user_id = $1 AND room_id = $2`,
-        [userId, roomId],
-      );
-      return { content: '' };
-    }
-    const rows = await this.dataSource.query<MessageDraft>(
-      `INSERT INTO message_drafts (user_id, room_id, content)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, room_id) DO UPDATE SET content = $3, updated_at = now()
-       RETURNING content`,
-      [userId, roomId, content],
-    );
-    return { content: rows[0].content };
   }
 
   /**

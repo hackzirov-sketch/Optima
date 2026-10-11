@@ -11,7 +11,25 @@
     "resultsFor": "“{{query}}” bo‘yicha natijalar",
     "popularUz": "O‘zbekistonda mashhur",
     "views": "{{count}} marta ko‘rilgan",
-    "loadFailed": "Videolarni yuklab bo‘lmadi"
+    "loadFailed": "Videolarni yuklab bo‘lmadi",
+    "openOnYoutube": "YouTube’da ochish",
+    "copyLink": "Havolani nusxalash",
+    "linkCopied": "Nusxalandi",
+    "back": "Orqaga",
+    "upNext": "Keyingi videolar",
+    "subtitle": "Video darslar va eng sara kontent — shu yerning o‘zida",
+    "topics": "Mavzular",
+    "topicPopular": "Mashhur",
+    "topicEducation": "Ta’lim",
+    "topicCoding": "Dasturlash",
+    "topicEnglish": "Ingliz tili",
+    "topicMovies": "Kino",
+    "topicMusic": "Musiqa",
+    "topicSport": "Sport",
+    "like": "Yoqdi",
+    "optimaViews": "Optimada {{count}} marta",
+    "topicForYou": "Siz uchun",
+    "forYou": "Siz uchun tanlangan foydali videolar"
   },
   "common": {
     "next": "Keyingi",
@@ -484,7 +502,21 @@
     "savedToast": "Kitob saqlandi",
     "unsavedToast": "Saqlanganlardan olib tashlandi",
     "saveFailed": "Saqlab bo‘lmadi",
-    "viewOnOpenLibrary": "Open Library’da ko‘rish"
+    "viewOnOpenLibrary": "Open Library’da ko‘rish",
+    "optimaViews": "Optimada {{count}} marta ochilgan",
+    "loadFailed": "Kitobni ochib bo‘lmadi",
+    "prevPage": "Oldingi sahifa",
+    "nextPage": "Keyingi sahifa",
+    "paginating": "Kitob sahifalanmoqda…",
+    "pageOf": "{{page}} / {{total}}",
+    "continueReading": "Davom etish · {{percent}}%",
+    "fromStart": "Boshidan",
+    "shelfReading": "O‘qilmoqda",
+    "shelfFinished": "O‘qilgan",
+    "readingTitle": "Davom ettiring",
+    "finishedTitle": "O‘qib tugatilgan kitoblar",
+    "readingEmpty": "Hali o‘qishni boshlagan kitobingiz yo‘q",
+    "finishedEmpty": "Hali tugatilgan kitob yo‘q"
   },
   "education": {
     "openLessonAria": "{{title}} darsini ochish",
@@ -887,7 +919,8 @@
     "callMute": "Ovozsiz",
     "callUnmute": "Mikrofon",
     "callWaiting": "kutilmoqda...",
-    "incomingVideoCall": "Video qo‘ng‘iroq qilmoqda..."
+    "incomingVideoCall": "Video qo‘ng‘iroq qilmoqda...",
+    "draftLabel": "Qoralama:"
   },
   "presence": {
     "online": "Onlayn",

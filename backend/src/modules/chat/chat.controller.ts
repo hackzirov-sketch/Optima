@@ -61,6 +61,7 @@ import { IpRateLimitGuard } from '../moderation/guards/ip-rate-limit.guard';
 import { ChatRoomType } from '../../common/enums';
 import { RedisService } from '../../redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { DraftService, type DraftBody } from './services/draft.service';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -81,6 +82,7 @@ export class ChatController {
     private readonly channelSettings: ChannelSettingsService,
     private readonly viewService: MessageViewService,
     private readonly events: EventEmitter2,
+    private readonly drafts: DraftService,
   ) {}
 
   /** Per-user (not per-IP) message send limit — mirrors the socket path's check in EventsGateway. */
@@ -383,6 +385,22 @@ export class ChatController {
     @CurrentUser('id') userId: string,
   ) {
     await this.messageService.deleteMessage(messageId, userId);
+  }
+
+  @Get('chat/drafts')
+  @ApiOperation({ summary: 'My unsent drafts, one per chat' })
+  listDrafts(@CurrentUser('id') userId: string) {
+    return this.drafts.list(userId);
+  }
+
+  @Patch('chat/rooms/:roomId/draft')
+  @ApiOperation({ summary: 'Save (or, when empty, clear) my draft in a chat' })
+  saveDraft(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: DraftBody,
+  ) {
+    return this.drafts.save(userId, roomId, body);
   }
 
   @Get('chat/rooms/:roomId/pins')
@@ -806,29 +824,6 @@ export class ChatController {
     },
   ) {
     return this.roomService.upsertUserChatSettings(roomId, userId, dto);
-  }
-
-  @Get('chat/rooms/:roomId/draft')
-  @ApiOperation({
-    summary: 'Get the caller’s unsent draft text for a room (Telegram-style)',
-  })
-  getDraft(
-    @Param('roomId', ParseUUIDPipe) roomId: string,
-    @CurrentUser('id') userId: string,
-  ) {
-    return this.messageService.getDraft(roomId, userId);
-  }
-
-  @Patch('chat/rooms/:roomId/draft')
-  @ApiOperation({
-    summary: 'Save (or, if empty, clear) the caller’s draft text for a room',
-  })
-  saveDraft(
-    @Param('roomId', ParseUUIDPipe) roomId: string,
-    @CurrentUser('id') userId: string,
-    @Body('content') content: string,
-  ) {
-    return this.messageService.saveDraft(roomId, userId, content ?? '');
   }
 
   @Patch('chat/rooms/:roomId/mute')

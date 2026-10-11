@@ -79,18 +79,21 @@ export function App() {
     ? { type: "channel" as const, identifier: decodeURIComponent(chatChannelMatch[1]) }
     : null;
   const isChat = location === "/chat" || Boolean(chatRouteTarget);
+  // A page and its item routes (/youtube ↔ /youtube/:slug) are one screen:
+  // keyed by section, the list stays mounted when an item opens or closes.
+  const section = /^\/(youtube|library)(\/|$)/.test(location) ? `/${location.split("/")[1]}` : location;
 
   const mainContent = (
     <AppShell>
-      <div className="route-transition" key={isEducation ? "/education" : location}>
+      <div className="route-transition" key={isEducation ? "/education" : section}>
         {isEducation ? <EducationPage /> : isChat ? null : (
           <Switch>
             <Route path="/ai" component={AiPage} />
-            <Route path="/youtube" component={YoutubePage} />
+            <Route path="/youtube/:slug?" component={YoutubePage} />
             <Route path="/statistics" component={StatisticsPage} />
             <Route path="/" component={DashboardPage} />
             <Route path="/meetings" component={MeetingsPage} />
-            <Route path="/library" component={LibraryPage} />
+            <Route path="/library/:slug?/:mode?" component={LibraryPage} />
             <Route path="/profile" component={ProfilePage} />
             <Route><DashboardPage /></Route>
           </Switch>

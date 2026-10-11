@@ -133,8 +133,22 @@ interface MeetingTile {
  * (screen share / active speaker / self) plus the bare minimum controls —
  * expanding takes them back to the full room.
  */
-function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, onToggleCamera, onExpand, onLeave }: {
+/** Plays one participant's audio while their tile isn't on screen. */
+function RemoteAudio({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    if (audio.srcObject !== stream) audio.srcObject = stream;
+    void audio.play().catch(() => undefined);
+  }, [stream]);
+  return <audio ref={ref} autoPlay />;
+}
+
+function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onToggleMic, onToggleCamera, onExpand, onLeave }: {
   tile: MeetingTile | null;
+  /** Everyone else in the call: the widget shows one tile but must play all of their audio. */
+  remotes: MeetingTile[];
   title: string;
   microphone: boolean;
   camera: boolean;
@@ -147,8 +161,10 @@ function FloatingMeetingWidget({ tile, title, microphone, camera, onToggleMic, o
   return (
     <div className="meeting-floating-widget" role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}>
       <div className="floating-widget-video" onClick={onExpand}>
-        {tile ? <VideoTile stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} /> : <div className="video-placeholder"><LoaderCircle className="spin" size={22} /></div>}
+        {/* Muted: the audio comes from the <audio> elements below, one per person. */}
+        {tile ? <VideoTile stream={tile.stream} muted mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} /> : <div className="video-placeholder"><LoaderCircle className="spin" size={22} /></div>}
       </div>
+      {remotes.map((remote) => remote.stream && <RemoteAudio key={remote.id} stream={remote.stream} />)}
       <header>
         <strong>{title}</strong>
         <button onClick={onExpand} title={t("meetingRoom.expandWidgetAria")} aria-label={t("meetingRoom.expandWidgetAria")}><Maximize2 size={15} /></button>
@@ -1601,6 +1617,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return (
       <FloatingMeetingWidget
         tile={focusedTile}
+        remotes={allTiles.filter((tile) => !tile.isSelf)}
         title={meeting?.title || ""}
         microphone={microphone}
         camera={camera}

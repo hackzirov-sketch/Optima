@@ -104,3 +104,11 @@
 .lib2 .book-card button.active:not(.liked) svg, .lib2-detail .detail-actions button.active:not(.liked) svg,
 .reader-tools button.active:not(.liked) svg { fill: currentColor; }
 .lib2-detail .detail-actions button.active:not(.liked) { background: var(--accent-soft, color-mix(in srgb, var(--accent) 14%, transparent)); border-radius: 12px; }
+
+/* Times the book was opened on Optima. */
+.lib2-detail .lib2-views { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Reading progress on a book card. */
+.lib2 .book-cover { position: relative; }
+.lib2 .lib2-card-progress { position: absolute; z-index: 2; left: 8px; right: 8px; bottom: 8px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .55); overflow: hidden; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
+.lib2 .lib2-card-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent, #45429a); }

@@ -4,12 +4,17 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
+  Post,
   Put,
   Query,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createZodDto } from 'nestjs-zod';
+import { createHash } from 'crypto';
+import { gunzipSync, gzipSync } from 'zlib';
+import { RedisService } from '../../redis/redis.service';
 import { z } from 'zod';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -26,7 +31,10 @@ class SaveReviewDto extends createZodDto(reviewSchema) {}
 
 @Controller('library')
 export class LibraryController {
-  constructor(private readonly library: LibraryService) {}
+  constructor(
+    private readonly library: LibraryService,
+    private readonly redis: RedisService,
+  ) {}
 
   /** Openly readable books from Internet Archive, every language. */
   @Get('search')
@@ -59,6 +67,11 @@ export class LibraryController {
   }
 
   /** The reader's saved shelf. */
+  @Get('me/reading')
+  reading(@CurrentUser('id') userId: string) {
+    return this.library.listReading(userId);
+  }
+
   @Get('me/saved')
   saved(@CurrentUser('id') userId: string) {
     return this.library.listSaved(userId);
@@ -78,9 +91,24 @@ export class LibraryController {
     return this.library.setSaved(key, userId, false);
   }
 
+  /** Opening a book's page: registers it and returns its slug and counts. */
+  @Post('books/:key/open')
+  @HttpCode(200)
+  open(
+    @Param('key') key: string,
+    @Body() body: { book?: unknown },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.library.open(key, userId, body?.book);
+  }
+
   @Put('books/:key/like')
-  like(@Param('key') key: string, @CurrentUser('id') userId: string) {
-    return this.library.setLiked(key, userId, true);
+  like(
+    @Param('key') key: string,
+    @Body() body: { book?: unknown },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.library.setLiked(key, userId, true, body?.book);
   }
 
   @Delete('books/:key/like')
@@ -108,8 +136,31 @@ export class LibraryController {
     }
   }
 
+  /**
+   * A book's text. Kept in Redis (gzipped, a week) after the first read:
+   * Gutenberg is slow and now and then doesn't answer, and a book being read
+   * is opened again and again — on every device the reader uses.
+   */
   @Get('read')
   async read(@Query('url') source: string) {
+    const cacheKey = `library:text:${createHash('sha1').update(String(source)).digest('hex')}`;
+    const client = this.redis.getClient();
+    try {
+      const hit = await client?.getBuffer(cacheKey);
+      if (hit) return JSON.parse(gunzipSync(hit).toString('utf8')) as { content: string; contentType: string };
+    } catch {
+      /* fall through to the source */
+    }
+    const result = await this.readFromSource(source);
+    try {
+      await client?.set(cacheKey, gzipSync(Buffer.from(JSON.stringify(result))), 'EX', 7 * 24 * 3600);
+    } catch {
+      /* best-effort */
+    }
+    return result;
+  }
+
+  private async readFromSource(source: string) {
     let url: URL;
     try {
       url = new URL(source);

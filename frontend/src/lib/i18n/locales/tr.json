@@ -11,7 +11,25 @@
     "resultsFor": "“{{query}}” için sonuçlar",
     "popularUz": "Özbekistan’da popüler",
     "views": "{{count}} görüntülenme",
-    "loadFailed": "Videolar yüklenemedi"
+    "loadFailed": "Videolar yüklenemedi",
+    "openOnYoutube": "YouTube’da aç",
+    "copyLink": "Bağlantıyı kopyala",
+    "linkCopied": "Kopyalandı",
+    "back": "Geri",
+    "upNext": "Sıradaki",
+    "subtitle": "Video dersler ve en iyi içerik — tam burada",
+    "topics": "Konular",
+    "topicPopular": "Popüler",
+    "topicEducation": "Eğitim",
+    "topicCoding": "Kodlama",
+    "topicEnglish": "İngilizce",
+    "topicMovies": "Film",
+    "topicMusic": "Müzik",
+    "topicSport": "Spor",
+    "like": "Beğen",
+    "optimaViews": "Optima'da {{count}}",
+    "topicForYou": "Senin için",
+    "forYou": "Senin için seçilen faydalı videolar"
   },
   "common": {
     "next": "İleri",
@@ -484,7 +502,21 @@
     "savedToast": "Kitap kaydedildi",
     "unsavedToast": "Kaydedilenlerden çıkarıldı",
     "saveFailed": "Kaydedilemedi",
-    "viewOnOpenLibrary": "Open Library’de gör"
+    "viewOnOpenLibrary": "Open Library’de gör",
+    "optimaViews": "Optima'da {{count}} kez açıldı",
+    "loadFailed": "Kitap açılamadı",
+    "prevPage": "Önceki sayfa",
+    "nextPage": "Sonraki sayfa",
+    "paginating": "Kitap sayfalanıyor…",
+    "pageOf": "{{page}} / {{total}}",
+    "continueReading": "Devam et · %{{percent}}",
+    "fromStart": "Baştan",
+    "shelfReading": "Okuyorum",
+    "shelfFinished": "Bitti",
+    "readingTitle": "Kaldığın yerden devam et",
+    "finishedTitle": "Bitirdiğin kitaplar",
+    "readingEmpty": "Henüz bir kitaba başlamadın",
+    "finishedEmpty": "Henüz biten kitap yok"
   },
   "education": {
     "openLessonAria": "{{title}} dersini aç",
@@ -887,7 +919,8 @@
     "callMute": "Sessiz",
     "callUnmute": "Mikrofon",
     "callWaiting": "bekleniyor...",
-    "incomingVideoCall": "görüntülü arıyor..."
+    "incomingVideoCall": "görüntülü arıyor...",
+    "draftLabel": "Taslak:"
   },
   "presence": {
     "online": "Çevrimiçi",

@@ -125,6 +125,13 @@ export class ChatRealtimeBridge {
       );
   }
 
+  /** A draft changed: tell every device of its owner (only them). */
+  @OnEvent('chat.draft_updated')
+  onDraftUpdated(payload: { userId: string; roomId: string }) {
+    const { userId, ...draft } = payload;
+    this.gateway.server?.to(`user:${userId}`).emit('draft_updated', draft);
+  }
+
   @OnEvent('chat.message_pinned')
   onMessagePinned(payload: {
     roomId: string;

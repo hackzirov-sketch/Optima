@@ -11,7 +11,25 @@
     "resultsFor": "Results for “{{query}}”",
     "popularUz": "Popular in Uzbekistan",
     "views": "{{count}} views",
-    "loadFailed": "Couldn’t load videos"
+    "loadFailed": "Couldn’t load videos",
+    "openOnYoutube": "Open on YouTube",
+    "copyLink": "Copy link",
+    "linkCopied": "Copied",
+    "back": "Back",
+    "upNext": "Up next",
+    "subtitle": "Video lessons and the best content — right here",
+    "topics": "Topics",
+    "topicPopular": "Popular",
+    "topicEducation": "Education",
+    "topicCoding": "Coding",
+    "topicEnglish": "English",
+    "topicMovies": "Movies",
+    "topicMusic": "Music",
+    "topicSport": "Sport",
+    "like": "Like",
+    "optimaViews": "{{count}} on Optima",
+    "topicForYou": "For you",
+    "forYou": "Useful videos picked for you"
   },
   "common": {
     "next": "Next",
@@ -484,7 +502,21 @@
     "savedToast": "Book saved",
     "unsavedToast": "Removed from saved",
     "saveFailed": "Couldn’t save",
-    "viewOnOpenLibrary": "View on Open Library"
+    "viewOnOpenLibrary": "View on Open Library",
+    "optimaViews": "Opened {{count}} times on Optima",
+    "loadFailed": "Couldn’t open the book",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "paginating": "Laying out the book…",
+    "pageOf": "{{page}} / {{total}}",
+    "continueReading": "Continue · {{percent}}%",
+    "fromStart": "From the start",
+    "shelfReading": "Reading",
+    "shelfFinished": "Finished",
+    "readingTitle": "Pick up where you left off",
+    "finishedTitle": "Books you finished",
+    "readingEmpty": "You haven’t started a book yet",
+    "finishedEmpty": "No finished books yet"
   },
   "education": {
     "openLessonAria": "Open lesson {{title}}",
@@ -887,7 +919,8 @@
     "callMute": "Mute",
     "callUnmute": "Unmute",
     "callWaiting": "waiting...",
-    "incomingVideoCall": "is video calling you..."
+    "incomingVideoCall": "is video calling you...",
+    "draftLabel": "Draft:"
   },
   "presence": {
     "online": "Online",

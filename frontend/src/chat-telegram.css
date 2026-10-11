@@ -306,3 +306,7 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .chat-page .message-link:hover { text-decoration: underline; }
 .chat-page .message-mine .message-link { color: #1c6fc4; }
 :root[data-theme="dark"] .chat-page .message-link { color: #6ab3f3; }
+
+/* "Draft:" in the room list, Telegram red. */
+.chat-page .room-draft { color: #e53935; font-weight: 600; }
+:root[data-theme="dark"] .chat-page .room-draft { color: #ff6b6b; }

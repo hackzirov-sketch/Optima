@@ -19,6 +19,8 @@ import "./voice-chat.css";
 import "./auth.css";
 import "./meet-polish.css";
 import "./call-telegram.css";
+import "./youtube-watch.css";
+import "./book-reader.css";
 import "./mobile-shell.css";
 import "./focus.css";
 

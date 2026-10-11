@@ -1,0 +1,164 @@
+/*
+ * YouTube page — YouTube's layout in Duolingo's clothes: chunky rounded
+ * cards with a 2px border and a heavier bottom edge, "pressable" 3D buttons
+ * (solid bottom shadow that collapses on press), bold type, bright accents.
+ * Every card is closed on all sides — nothing trails off at the bottom.
+ */
+.youtube-page {
+  /* Duolingo's shapes, Optima's colours: indigo for the main actions, mist
+     for the secondary ones, each with a deeper "pressed" edge underneath. */
+  --duo-green: var(--op-indigo, #45429a); --duo-green-edge: var(--op-indigo-deep, #292760);
+  --duo-blue: var(--op-mist-strong, #8296d3); --duo-blue-edge: #5d70ad;
+  --duo-red: var(--op-indigo, #45429a); --duo-red-edge: var(--op-indigo-deep, #292760);
+  --duo-line: var(--op-line, #dde3e8); --duo-edge: #cfd6de;
+  --duo-card: var(--surface, #fff); --duo-ink: var(--text, #171827); --duo-soft: var(--muted, #64707d);
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+:root[data-theme="dark"] .youtube-page {
+  --duo-green: #6f6bd8; --duo-green-edge: #3d3a8f;
+  --duo-blue: var(--op-mist, #bac6ea); --duo-blue-edge: #7d8fc4;
+  --duo-red: #6f6bd8; --duo-red-edge: #3d3a8f;
+  --duo-line: #2e3446; --duo-edge: #252a3a;
+}
+.youtube-page .yt-topics button.active { color: var(--op-indigo, #45429a); }
+:root[data-theme="dark"] .youtube-page .yt-topics button.active { color: var(--op-mist, #bac6ea); }
+
+/* Like: filled when on. */
+.yt-pill.yt-like.is-liked { border-color: var(--duo-green); color: var(--duo-green); box-shadow: 0 3px 0 var(--duo-green); }
+.yt-pill.yt-like.is-liked svg { fill: currentColor; }
+:root[data-theme="dark"] .yt-pill.yt-like.is-liked { color: #b6b9f4; }
+.youtube-page .youtube-video.is-opening { opacity: .6; }
+
+/* ── header ── */
+.youtube-page .youtube-heading { gap: 14px; margin-bottom: 18px; }
+.youtube-page .yt-badge {
+  flex: 0 0 52px; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px;
+  background: var(--duo-red); color: #fff; box-shadow: 0 4px 0 var(--duo-red-edge);
+}
+.youtube-page .youtube-heading h1 { font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+.youtube-page .youtube-heading p { margin: 2px 0 0; font-size: 14px; color: var(--duo-soft); }
+
+/* ── search ── */
+:root[data-theme] body .youtube-page .youtube-search {
+  padding: 4px 6px 4px 16px; border: 2px solid var(--duo-line); border-bottom-width: 4px; border-radius: 16px; background: var(--duo-card);
+}
+:root[data-theme] body .youtube-page .youtube-search:focus-within { border-color: var(--duo-blue); box-shadow: none !important; outline: none; }
+.youtube-page .youtube-search input { font-size: 16px; font-weight: 600; }
+.youtube-page .youtube-search .icon-button:last-child {
+  width: 44px; height: 40px; border-radius: 12px; background: var(--duo-blue); color: #fff; box-shadow: 0 3px 0 var(--duo-blue-edge);
+}
+
+/* ── topic chips ── */
+.yt-topics { display: flex; gap: 10px; margin: 16px 0 4px; padding: 2px 2px 6px; overflow-x: auto; scrollbar-width: none; }
+.yt-topics::-webkit-scrollbar { display: none; }
+.yt-topics button {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 16px;
+  border: 2px solid var(--duo-line); border-radius: 14px; background: var(--duo-card); color: var(--duo-ink);
+  font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 var(--duo-line);
+  transition: transform .08s ease, box-shadow .08s ease, background-color .15s ease;
+}
+.yt-topics button:hover { background: color-mix(in srgb, var(--duo-blue) 6%, var(--duo-card)); }
+.yt-topics button:active { transform: translateY(3px); box-shadow: 0 0 0 var(--duo-line); }
+.yt-topics button.active { border-color: var(--duo-blue); background: color-mix(in srgb, var(--duo-blue) 12%, var(--duo-card)); color: var(--duo-blue-edge); box-shadow: 0 3px 0 var(--duo-blue); }
+:root[data-theme="dark"] .yt-topics button.active { color: var(--duo-blue); }
+.youtube-page .youtube-catalog-label { margin: 12px 0 14px; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--duo-soft); }
+
+/* ── video cards (grid) ── */
+.youtube-page .youtube-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.youtube-page .youtube-video {
+  gap: 0; overflow: hidden; border: 2px solid var(--duo-line); border-bottom-width: 5px; border-radius: 18px; background: var(--duo-card);
+  transition: transform .12s ease, border-color .15s ease;
+}
+.youtube-page .youtube-video:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--duo-blue) 45%, var(--duo-line)); }
+.youtube-page .youtube-video:active { transform: translateY(2px); border-bottom-width: 2px; margin-bottom: 3px; }
+.youtube-page .youtube-video:focus-visible { outline: 3px solid var(--duo-blue); outline-offset: 2px; }
+.youtube-page .youtube-thumbnail { border-radius: 0; background: #111; }
+.youtube-page .youtube-thumbnail svg { width: 48px; height: 48px; padding: 12px; background: var(--duo-green); box-shadow: 0 3px 0 var(--duo-green-edge); opacity: 0; transform: scale(.85); transition: opacity .15s ease, transform .15s ease; }
+.youtube-page .youtube-video:hover .youtube-thumbnail svg, .youtube-page .youtube-video:focus-visible .youtube-thumbnail svg { opacity: 1; transform: none; }
+.youtube-page .youtube-thumbnail small { border-radius: 8px; font-weight: 700; }
+.youtube-page .youtube-video > strong {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin: 12px 14px 4px; font-size: 15px; font-weight: 800; line-height: 1.35; color: var(--duo-ink);
+}
+.youtube-page .youtube-video > span:last-child { margin: 0 14px 14px; font-size: 13px; font-weight: 600; color: var(--duo-soft); }
+
+/* ── 3D buttons ── */
+.youtube-page .yt-more-main, .youtube-page .yt-more {
+  display: flex; align-items: center; justify-content: center; height: 48px; padding: 0 28px; margin: 22px auto 0;
+  border: 0; border-radius: 16px; background: var(--duo-blue); color: #fff; font-size: 15px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+  box-shadow: 0 4px 0 var(--duo-blue-edge); cursor: pointer; transition: transform .08s ease, box-shadow .08s ease;
+}
+.youtube-page .yt-more-main:active, .youtube-page .yt-more:active { transform: translateY(4px); box-shadow: 0 0 0 var(--duo-blue-edge); }
+.youtube-page .youtube-loading, .youtube-page .youtube-empty { font-weight: 700; }
+
+/* ── watch view ── */
+.yt-watch { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 22px; align-items: start; margin-top: 18px; scroll-margin-top: 100px; }
+.yt-watch-main { min-width: 0; display: grid; gap: 14px; }
+/* Sized from the viewport so the title and actions stay visible above the
+   floating dock instead of being cut off below it. */
+.yt-player-frame {
+  position: relative; justify-self: center; width: min(100%, calc((100dvh - 390px) * 16 / 9)); min-width: min(100%, 480px);
+  aspect-ratio: 16 / 9; overflow: hidden; border: 2px solid var(--duo-line); border-bottom-width: 5px; border-radius: 20px; background: #000;
+}
+.yt-player-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.yt-watch-info { display: grid; gap: 14px; padding: 16px 18px 18px; border: 2px solid var(--duo-line); border-bottom-width: 5px; border-radius: 20px; background: var(--duo-card); }
+.yt-watch-title { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 800; color: var(--duo-ink); overflow-wrap: anywhere; }
+.yt-watch-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.yt-channel { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.yt-channel > b { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: var(--duo-red); color: #fff; font-size: 18px; font-weight: 800; box-shadow: 0 3px 0 var(--duo-red-edge); }
+.yt-channel > span { display: grid; gap: 2px; min-width: 0; }
+.yt-channel strong { font-size: 15px; font-weight: 800; color: var(--duo-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-channel small { font-size: 13px; font-weight: 600; color: var(--duo-soft); }
+.yt-watch-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.yt-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 16px;
+  border: 2px solid var(--duo-line); border-radius: 14px; background: var(--duo-card); color: var(--duo-ink);
+  font-size: 14px; font-weight: 800; text-decoration: none; cursor: pointer; box-shadow: 0 3px 0 var(--duo-line);
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.yt-pill:active { transform: translateY(3px); box-shadow: 0 0 0 var(--duo-line); }
+.yt-pill:focus-visible { outline: 3px solid var(--duo-blue); outline-offset: 2px; }
+.yt-pill.yt-pill-primary { border-color: transparent; background: var(--duo-green); color: #fff; box-shadow: 0 3px 0 var(--duo-green-edge); }
+.yt-pill.yt-pill-primary:active { box-shadow: 0 0 0 var(--duo-green-edge); }
+.yt-pill.yt-pill-done { border-color: var(--duo-green); color: var(--duo-green-edge); }
+
+.yt-up-next { display: grid; gap: 6px; min-width: 0; padding: 14px; border: 2px solid var(--duo-line); border-bottom-width: 5px; border-radius: 20px; background: var(--duo-card); }
+.yt-up-next h3 { margin: 2px 4px 6px; font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--duo-soft); }
+.yt-next { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: start; padding: 6px; border: 2px solid transparent; border-radius: 14px; background: transparent; color: inherit; text-align: left; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.yt-next:hover { border-color: var(--duo-line); background: color-mix(in srgb, var(--duo-blue) 5%, var(--duo-card)); }
+.yt-next:focus-visible { outline: 3px solid var(--duo-blue); outline-offset: 1px; }
+.yt-next-thumb { position: relative; overflow: hidden; border-radius: 12px; aspect-ratio: 16 / 9; background: #111; }
+.yt-next-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yt-next-thumb small { position: absolute; right: 5px; bottom: 5px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, .8); color: #fff; font-size: 11px; font-weight: 700; }
+.yt-next-text { display: grid; gap: 3px; min-width: 0; padding-top: 2px; }
+.yt-next-text strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 1.35; font-weight: 800; color: var(--duo-ink); }
+.yt-next-text small { font-size: 12px; font-weight: 600; color: var(--duo-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-up-next .yt-more { margin-top: 10px; width: 100%; }
+
+@media (max-width: 1100px) {
+  .yt-watch { grid-template-columns: minmax(0, 1fr); }
+  .yt-player-frame { width: 100%; min-width: 0; }
+}
+@media (max-width: 640px) {
+  .youtube-page .youtube-heading h1 { font-size: 24px; }
+  .youtube-page .youtube-heading p { font-size: 13px; }
+  .youtube-page .yt-badge { flex-basis: 46px; width: 46px; height: 46px; border-radius: 14px; }
+  .youtube-page .youtube-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .yt-watch { gap: 14px; }
+  .yt-player-frame { border-radius: 16px; }
+  .yt-watch-info { padding: 14px; }
+  .yt-watch-title { font-size: 17px; }
+  .yt-watch-actions { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; scrollbar-width: none; }
+  .yt-pill { flex: 0 0 auto; height: 40px; font-size: 13px; }
+  .yt-next { grid-template-columns: 128px minmax(0, 1fr); gap: 10px; }
+  .yt-up-next { padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yt-topics button, .yt-pill, .youtube-page .youtube-video, .youtube-page .yt-more-main, .youtube-page .yt-more { transition: none; }
+}
+
+/* YouTube's hqdefault thumbnails are 4:3 with black bands baked in; filling
+   the 16:9 frame edge to edge crops exactly those bands away. */
+.youtube-page .youtube-thumbnail { position: relative; }
+.youtube-page .youtube-thumbnail img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.youtube-page .youtube-thumbnail :is(svg, small) { z-index: 1; }

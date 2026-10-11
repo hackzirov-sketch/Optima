@@ -10,6 +10,7 @@ import { ChatController } from './chat.controller';
 import { ChatEncryptionService } from './chat-encryption.service';
 import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
+import { DraftService } from './services/draft.service';
 import { ChatMemberService } from './services/member.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatPresenceService } from './services/presence.service';
@@ -35,6 +36,7 @@ import { ChatE2eeController } from './e2ee/e2ee.controller';
   ],
   controllers: [ChatController, ChatE2eeController],
   providers: [
+    DraftService,
     ChatEncryptionService,
     ChatRoomService,
     ChatMessageService,

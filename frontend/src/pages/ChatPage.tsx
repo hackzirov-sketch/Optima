@@ -86,9 +86,10 @@ import { MeetingRoomPage }                                                  from
 import { RoomVoiceChat }                                                    from "../components/RoomVoiceChat";
 import { useToast }                                                         from "../components/Toast";
 import { useConfirm }                                                       from "../components/ConfirmDialog";
-import { api, type RoomVoiceChat as RoomVoiceChatInfo }                     from "../lib/api";
+import { api, type ChatDraftRecord, type RoomVoiceChat as RoomVoiceChatInfo } from "../lib/api";
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
+import { DRAFT_CLIENT_ID, openDraft, saveDraft } from "../lib/drafts";
 import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
@@ -1420,6 +1421,85 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
   }
 
+  // ── Drafts, Telegram-style: written when typing pauses (or the chat changes),
+  // and shared with my other devices over the socket. ──
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const savedDrafts = useRef<Record<string, string>>({});
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const draftRoom = useRef<string | null>(null);
+
+  const persistDraft = useCallback((roomId: string, text: string) => {
+    const value = text.trim() ? text : "";
+    if ((savedDrafts.current[roomId] ?? "") === value) return;
+    savedDrafts.current[roomId] = value;
+    setDrafts((current) => {
+      const next = { ...current };
+      if (value) next[roomId] = value; else delete next[roomId];
+      return next;
+    });
+    void saveDraft(roomId, value).catch(() => { delete savedDrafts.current[roomId]; });
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    api.chat.drafts().then(async (records) => {
+      const opened = await Promise.all(records.map(async (record) => [record.roomId, await openDraft(record, user.id)] as const));
+      if (cancelled) return;
+      const found: Record<string, string> = {};
+      for (const [roomId, text] of opened) if (text) found[roomId] = text;
+      savedDrafts.current = { ...found, ...savedDrafts.current };
+      setDrafts((current) => ({ ...found, ...current }));
+      const open = draftRoom.current;
+      if (open && found[open] && !draftRef.current && !editingRef.current) setDraft(found[open]);
+    }).catch(() => undefined);
+    const socket = getSocket();
+    const onDraft = async (record: ChatDraftRecord) => {
+      if (record.clientId === DRAFT_CLIENT_ID) return;
+      const text = record.e2ee || record.content ? await openDraft(record, user.id) : "";
+      if (text === null) return;
+      savedDrafts.current[record.roomId] = text;
+      setDrafts((current) => {
+        const next = { ...current };
+        if (text) next[record.roomId] = text; else delete next[record.roomId];
+        return next;
+      });
+      // Typing here right now wins over another device's draft.
+      const typingHere = Boolean(document.activeElement?.closest(".composer"));
+      if (record.roomId === draftRoom.current && !typingHere && !editingRef.current) setDraft(text);
+    };
+    socket.on("draft_updated", onDraft);
+    return () => { cancelled = true; socket.off("draft_updated", onDraft); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Switching chats: keep what was typed in the one we leave, restore the one we open.
+  useEffect(() => {
+    const previous = draftRoom.current;
+    if (previous === selectedId) return;
+    if (previous && !editingRef.current) persistDraft(previous, draftRef.current);
+    draftRoom.current = selectedId;
+    setDraft(selectedId ? drafts[selectedId] ?? "" : "");
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Typing paused for 1.5s → write it (sending empties the composer, which clears it).
+  useEffect(() => {
+    if (!selectedId || editing || draftRoom.current !== selectedId) return;
+    const timer = window.setTimeout(() => persistDraft(selectedId, draft), 1500);
+    return () => window.clearTimeout(timer);
+  }, [draft, selectedId, editing, persistDraft]);
+
+  // Leaving the page mid-sentence still saves it.
+  useEffect(() => {
+    const flush = () => { if (draftRoom.current && !editingRef.current) persistDraft(draftRoom.current, draftRef.current); };
+    const onHidden = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", onHidden); flush(); };
+  }, [persistDraft]);
+
   function announceTyping(value: string) {
     setDraft(value);
     if (!selectedId) return;
@@ -2413,7 +2493,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                     <b>{room.unreadCount}</b>}</span>
                 </span>
                 </button>
@@ -2520,7 +2600,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
