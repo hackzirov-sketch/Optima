@@ -919,7 +919,11 @@
     "callWaiting": "waiting...",
     "incomingVideoCall": "is video calling you...",
     "draftLabel": "Draft:",
-    "fileTooLarge": "“{{name}}” is too large — the limit for this kind of file is {{limit}} MB"
+    "fileTooLarge": "“{{name}}” is too large — the limit for this kind of file is {{limit}} MB",
+    "aiAttachImage": "Add an image",
+    "aiRemoveImage": "Remove the image",
+    "aiImageOnly": "Only images can be attached",
+    "aiImageTooLarge": "The image must be 8 MB or smaller"
   },
   "presence": {
     "online": "Online",
@@ -1085,7 +1089,9 @@
     "noteDeleteAria": "Delete note",
     "notesLoadFailed": "Could not load notes",
     "noteSaveFailed": "Could not save the note",
-    "noteDeleteFailed": "Could not delete the note"
+    "noteDeleteFailed": "Could not delete the note",
+    "dragToMove": "Drag to move",
+    "dragToResize": "Drag to resize"
   },
   "channelSettings": {
     "title": "Channel settings",

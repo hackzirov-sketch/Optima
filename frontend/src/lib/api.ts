@@ -615,6 +615,14 @@ export const api = {
       apiFetch<{ count: number; viewers: Array<{ id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; viewedAt: string }> | null }>(`/chat/messages/${messageId}/views`),
     leaveRoom: (roomId: string) =>
       apiFetch<{ left: boolean }>(`/chat/rooms/${roomId}/leave`, { method: "POST" }),
+    /** The AI with a picture (multipart: an image is too big for a JSON body). */
+    aiImage: (image: File, message: string, history: Array<{ role: "user" | "model"; text: string }>) => {
+      const form = new FormData();
+      form.append("image", image);
+      form.append("message", message);
+      form.append("history", JSON.stringify(history));
+      return apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai/image", { method: "POST", body: form });
+    },
     ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>
       apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history }) }),
   },

@@ -3,6 +3,10 @@ import { Job } from 'bullmq';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { MeetingsService, MEETING_LIFECYCLE_QUEUE } from '../meetings.service';
 import { EventsGateway } from '../../gateway/events.gateway';
+import { MeetingLiveKitService } from '../services/meeting-livekit.service';
+
+/** How often to look again while someone is on media but off the socket. */
+const MEDIA_PRESENCE_RECHECK_MS = 30_000;
 
 interface AutoEndJobData {
   meetingId: string;
@@ -28,6 +32,7 @@ export class MeetingLifecycleProcessor extends WorkerHost {
     private readonly meetingsService: MeetingsService,
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
+    private readonly liveKit: MeetingLiveKitService,
   ) {
     super();
   }
@@ -39,6 +44,13 @@ export class MeetingLifecycleProcessor extends WorkerHost {
     if (job.name === 'check-leave-grace') {
       const { meetingId, userId } = job.data;
       if (!userId) return;
+      // Socket gone but still in the media room (a phone with the browser in
+      // the background): they're in the call — look again later instead of
+      // telling everyone they left.
+      if (await this.liveKit.isInRoom(meetingId, userId)) {
+        await this.meetingsService.scheduleMeetingLeaveGrace(meetingId, userId, MEDIA_PRESENCE_RECHECK_MS);
+        return;
+      }
       await this.gateway.finalizeMeetingLeaveAfterGrace(meetingId, userId);
       return;
     }

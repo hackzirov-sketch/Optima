@@ -32,6 +32,13 @@ export function installSocketAuth() {
     );
   });
 
+  // Back from another app / a locked phone: the socket may have died while
+  // the page was frozen — reconnect right away instead of waiting for backoff.
+  document.addEventListener("visibilitychange", () => {
+    const socket = currentSocket();
+    if (document.visibilityState === "visible" && socket && !socket.connected && session.isActive()) socket.connect();
+  });
+
   let reconnecting = false;
   window.addEventListener("optima:socket-kicked", () => {
     if (reconnecting || !session.isActive()) return;

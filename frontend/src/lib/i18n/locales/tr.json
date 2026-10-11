@@ -919,7 +919,11 @@
     "callWaiting": "bekleniyor...",
     "incomingVideoCall": "görüntülü arıyor...",
     "draftLabel": "Taslak:",
-    "fileTooLarge": "“{{name}}” çok büyük — bu tür dosyalar için sınır {{limit}} MB"
+    "fileTooLarge": "“{{name}}” çok büyük — bu tür dosyalar için sınır {{limit}} MB",
+    "aiAttachImage": "Görsel ekle",
+    "aiRemoveImage": "Görseli kaldır",
+    "aiImageOnly": "Yalnızca görsel eklenebilir",
+    "aiImageTooLarge": "Görsel en fazla 8 MB olmalı"
   },
   "presence": {
     "online": "Çevrimiçi",
@@ -1085,7 +1089,9 @@
     "noteDeleteAria": "Notu sil",
     "notesLoadFailed": "Notlar yüklenemedi",
     "noteSaveFailed": "Not kaydedilemedi",
-    "noteDeleteFailed": "Not silinemedi"
+    "noteDeleteFailed": "Not silinemedi",
+    "dragToMove": "Taşımak için sürükleyin",
+    "dragToResize": "Boyutlandırmak için sürükleyin"
   },
   "channelSettings": {
     "title": "Channel settings",

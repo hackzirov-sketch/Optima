@@ -19,6 +19,12 @@ Masalan, "Sen kimsan?" savoliga: "Men Optima AI yordamchisiman. OPTIMA ichida sa
 Texnik model yoki provayder so'ralsa, mahsulot nomi Optima AI ekanini va u tashqi AI modellaridan foydalanishini tushuntir. Aniq model versiyasi yoki yaratuvchisini bilmasang, taxmin qilma; OPTIMA o'z bazaviy modelini yaratgan deb aytma.
 Foydalanuvchining akkaunti, fayllari, chatlari yoki meetinglariga kirishing bor deb da'vo qilma. Amalda bajarilmagan amalni bajarildi dema. Ishonching komil bo'lmagan faktni uydirma.`;
 
+/** An image sent with a question (AI vision). */
+export interface AiImage {
+  mimeType: string;
+  data: Buffer;
+}
+
 @Injectable()
 export class ChatAiService {
   private readonly logger = new Logger(ChatAiService.name);
@@ -31,8 +37,19 @@ export class ChatAiService {
         baseURL: 'https://api.groq.com/openai/v1',
       })
     : null;
-  private readonly geminiModel =
-    process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  /**
+   * Tried in order: Google retires models for new keys (gemini-2.5-flash now
+   * answers 404) and the "latest" alias is often overloaded (503), so one
+   * name is not enough. GEMINI_MODEL, if set, goes first.
+   */
+  private readonly geminiModels = [
+    ...new Set([
+      process.env.GEMINI_MODEL?.trim(),
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.5-flash-lite',
+    ].filter((model): model is string => Boolean(model))),
+  ];
   private readonly groqModel =
     process.env.GROQ_MODEL?.trim() || 'llama-3.3-70b-versatile';
 
@@ -90,10 +107,32 @@ export class ChatAiService {
     message: string,
     history: History,
     grounded: boolean,
+    images: AiImage[] = [],
   ): Promise<AiReply> {
     if (!this.gemini) throw new Error('GEMINI_NOT_CONFIGURED');
-    const model = this.gemini.getGenerativeModel({
-      model: this.geminiModel,
+    let lastError: unknown;
+    for (const name of this.geminiModels) {
+      try {
+        return await this.askGeminiModel(name, message, history, grounded, images);
+      } catch (error) {
+        lastError = error;
+        // Retired, overloaded or rate-limited: the next model may answer.
+        if (!/\b(404|429|500|503)\b|not found|no longer available|high demand|overloaded/i.test(String((error as Error)?.message))) throw error;
+        this.logger.warn(`Gemini ${name} unavailable, trying the next model: ${(error as Error)?.message?.slice(0, 160)}`);
+      }
+    }
+    throw lastError;
+  }
+
+  private async askGeminiModel(
+    modelName: string,
+    message: string,
+    history: History,
+    grounded: boolean,
+    images: AiImage[],
+  ): Promise<AiReply> {
+    const model = this.gemini!.getGenerativeModel({
+      model: modelName,
       systemInstruction: SYSTEM,
       ...(grounded ? { tools: [{ googleSearch: {} }] as any } : {}),
     });
@@ -105,7 +144,13 @@ export class ChatAiService {
         })),
       ],
     });
-    const result = await this.withTimeout(chat.sendMessage(message));
+    const result = await this.withTimeout(
+      chat.sendMessage([
+        ...images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data.toString('base64') } })),
+        { text: message },
+      ]),
+      images.length ? 40000 : 18000,
+    );
     const reply = result.response.text().trim();
     if (!reply) throw new Error('GEMINI_EMPTY');
     const metadata = (result.response.candidates?.[0] as any)
@@ -127,8 +172,19 @@ export class ChatAiService {
     message: string,
     history: History,
     userId: string,
+    images: AiImage[] = [],
   ): Promise<AiReply> {
-    const text = message.trim();
+    // A picture with no words still deserves an answer.
+    const text = message.trim() || (images.length ? 'Bu rasmda nima borligini tushuntirib ber.' : '');
+    if (images.length) {
+      // Only Gemini sees images (the Groq model is text-only).
+      try {
+        return await this.askGemini(text, history, false, images);
+      } catch (error) {
+        this.logger.warn(`AI image request failed for user ${userId}: ${error instanceof Error ? error.message : 'unknown'}`);
+        throw new ServiceUnavailableException('AI xizmatlari vaqtincha band. Birozdan keyin qayta urinib ko‘ring.');
+      }
+    }
     if (!text)
       return {
         reply: 'Savolingizni yozing — yordam beraman.',

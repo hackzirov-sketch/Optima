@@ -115,3 +115,11 @@
 /* Rows keep their own space so neighbouring highlights never merge. */
 .tgp-nav { gap: 4px; }
 .tgp-nav > button { margin: 0; }
+
+/* Settings toggle rows (Notifications, Privacy…): the hover was --gray-100,
+   which this theme renders beige, edge to edge. A soft Optima tint in a
+   rounded row with breathing room instead. */
+:root[data-theme] body .toggle-list > button { padding-inline: 12px; border-radius: 12px; transition: background-color .15s ease; }
+:root[data-theme] body .toggle-list > button:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+:root[data-theme] body .toggle-list > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -2px; }
+:root[data-theme="dark"] body .toggle-list > button:hover { background: rgba(255, 255, 255, .05); }

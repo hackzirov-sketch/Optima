@@ -38,6 +38,9 @@ function dtlsFingerprints(peer: RTCPeerConnection) {
   return values.sort().join("|");
 }
 
+/** Voice processing for the microphone: echo, noise and level handled by the browser, mono 48 kHz. */
+const VOICE_CAPTURE: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000 };
+
 function VideoTile({ stream, muted, mirrored = false, label, avatar, microphoneOn = true, videoOn = true, pinned = false, speaking = false, handRaised = false, pipEnabled = false, onPin }: { stream?: MediaStream; muted?: boolean; mirrored?: boolean; label: string; avatar?: Pick<User, "firstName" | "lastName" | "avatarUrl">; microphoneOn?: boolean; videoOn?: boolean; pinned?: boolean; speaking?: boolean; handRaised?: boolean; pipEnabled?: boolean; onPin?: () => void }) {
   const { t } = useI18n();
   const ref = useRef<HTMLVideoElement>(null);
@@ -158,14 +161,92 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   onLeave: () => void;
 }) {
   const { t } = useI18n();
+  // Movable (drag the title bar) and resizable (drag the corner); both are
+  // remembered. Kept inside the window whatever its size.
+  const [box, setBox] = useState<{ x: number; y: number; w: number }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("optima-call-widget") ?? "null");
+      if (saved && typeof saved.x === "number") return saved;
+    } catch { /* default */ }
+    return { x: -1, y: -1, w: 300 };
+  });
+  // mode "move", or the edge/corner being dragged to resize: n, s, e, w, ne, nw, se, sw.
+  const drag = useRef<{ mode: string; startX: number; startY: number; box: { x: number; y: number; w: number }; height: number } | null>(null);
+  // A drag that started on the video must not also count as "tap to expand".
+  const dragged = useRef(false);
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const clamp = useCallback((next: { x: number; y: number; w: number }) => {
+    const w = Math.max(220, Math.min(next.w, window.innerWidth - 16, 720));
+    const h = widgetRef.current?.offsetHeight ?? w * 0.75;
+    return { w, x: Math.max(8, Math.min(next.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(next.y, window.innerHeight - h - 8)) };
+  }, []);
+  // First show: bottom-right corner.
+  useEffect(() => {
+    if (box.x >= 0) return;
+    const h = widgetRef.current?.offsetHeight ?? 220;
+    setBox((current) => clamp({ ...current, x: window.innerWidth - current.w - 20, y: window.innerHeight - h - 96 }));
+  }, [box.x, clamp]);
+  useEffect(() => {
+    const onResize = () => setBox((current) => clamp(current));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clamp]);
+  const start = (mode: string) => (event: React.PointerEvent) => {
+    // Grab anywhere — except the buttons and (for moving) the resize edges.
+    if (mode === "move" && (event.target as HTMLElement).closest("button, .floating-widget-resize")) return;
+    if (event.button > 0) return;
+    dragged.current = false;
+    drag.current = { mode, startX: event.clientX, startY: event.clientY, box, height: widgetRef.current?.offsetHeight ?? box.w * 0.75 };
+    if (mode !== "move") {
+      // An edge is a thin strip the pointer leaves on its first move: keep
+      // following it from the start (moving waits 5px so a tap still expands).
+      event.stopPropagation();
+      dragged.current = true;
+      widgetRef.current?.setPointerCapture(event.pointerId);
+    }
+  };
+  const move = (event: React.PointerEvent) => {
+    const state = drag.current;
+    if (!state) return;
+    const dx = event.clientX - state.startX, dy = event.clientY - state.startY;
+    if (!dragged.current) {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return; // still a tap
+      dragged.current = true;
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
+    if (state.mode === "move") { setBox(clamp({ ...state.box, x: state.box.x + dx, y: state.box.y + dy })); return; }
+    // Resizing keeps the shape: width follows the dragged edge(s); the opposite
+    // side stays put, so a left/top edge moves x/y by what the width/height gained.
+    const ratio = state.height / state.box.w;
+    let grow = 0;
+    if (state.mode.includes("e")) grow += dx;
+    if (state.mode.includes("w")) grow -= dx;
+    if (state.mode.includes("s")) grow += dy / ratio;
+    if (state.mode.includes("n")) grow -= dy / ratio;
+    if (state.mode.length === 2) grow /= 2; // a corner moves along both axes at once
+    const w = Math.max(220, Math.min(state.box.w + grow, window.innerWidth - 16, 720));
+    const gained = w - state.box.w;
+    setBox(clamp({
+      w,
+      x: state.mode.includes("w") ? state.box.x - gained : state.box.x,
+      y: state.mode.includes("n") ? state.box.y - gained * ratio : state.box.y,
+    }));
+  };
+  const end = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    setBox((current) => { try { localStorage.setItem("optima-call-widget", JSON.stringify(current)); } catch { /* storage off */ } return current; });
+  };
   return (
-    <div className="meeting-floating-widget" role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}>
-      <div className="floating-widget-video" onClick={onExpand}>
+    <div ref={widgetRef} className="meeting-floating-widget" role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
+         style={box.x >= 0 ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}
+         onPointerDown={start("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+      <div className="floating-widget-video" onClick={() => { if (!dragged.current) onExpand(); }}>
         {/* Muted: the audio comes from the <audio> elements below, one per person. */}
         {tile ? <VideoTile stream={tile.stream} muted mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} /> : <div className="video-placeholder"><LoaderCircle className="spin" size={22} /></div>}
       </div>
       {remotes.map((remote) => remote.stream && <RemoteAudio key={remote.id} stream={remote.stream} />)}
-      <header>
+      <header className="floating-widget-handle" title={t("meetingRoom.dragToMove")}>
         <strong>{title}</strong>
         <button onClick={onExpand} title={t("meetingRoom.expandWidgetAria")} aria-label={t("meetingRoom.expandWidgetAria")}><Maximize2 size={15} /></button>
       </header>
@@ -174,6 +255,9 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
         <button className={camera ? "" : "off"} onClick={onToggleCamera} title={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")} aria-label={camera ? t("meetingRoom.turnOffCameraAria") : t("meetingRoom.turnOnCameraAria")}>{camera ? <Camera size={17} /> : <CameraOff size={17} />}</button>
         <button className="leave-control" onClick={onLeave} title={t("meetingRoom.leaveMeetingAria")} aria-label={t("meetingRoom.leaveMeetingAria")}><PhoneOff size={17} /></button>
       </div>
+      {(["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const).map((edge) => (
+        <span key={edge} className={`floating-widget-resize resize-${edge}`} onPointerDown={start(edge)} role="separator" aria-label={t("meetingRoom.dragToResize")} title={t("meetingRoom.dragToResize")} />
+      ))}
     </div>
   );
 }
@@ -695,8 +779,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           setRemoteMedia((current) => ({ ...current, [userId]: media }));
           // The speaking indicator's analyser is bound to one audio track; let
           // it rebind to whatever this user publishes now.
-          const node = audioAnalysers.current.get(userId);
-          if (node) { node.ctx.close().catch(() => {}); audioAnalysers.current.delete(userId); }
+          audioAnalysers.current.delete(userId);
           setMeetingChatTransport((payload) => session_.sendChat(payload), session_.remoteCount);
         },
         onState: (state) => {
@@ -704,6 +787,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
           setMeetingChatTransport((payload) => session_.sendChat(payload), session_.remoteCount);
         },
         onData: receiveMeetingChat,
+        onSpeakers: (ids) => { if (ids[0]) setActiveSpeakerId(ids[0]); },
       });
       liveKit.current = session_;
       await session_.connect(session.url, session.token, currentStream.current?.getTracks() ?? []);
@@ -729,7 +813,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     setRemoteStreams((current) => { const next = { ...current }; delete next[userId]; return next; });
     setRemoteMedia((current) => { const next = { ...current }; delete next[userId]; return next; });
     const node = audioAnalysers.current.get(userId);
-    if (node) { node.ctx.close().catch(() => {}); audioAnalysers.current.delete(userId); }
+    // The AudioContext is shared — only drop this person's analyser.
+    if (node) audioAnalysers.current.delete(userId);
     speakerStableTicks.current.delete(userId);
     setActiveSpeakerId((current) => (current === userId ? null : current));
   }, []);
@@ -1073,7 +1158,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   async function requestTrack(kind: "audio" | "video") {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: kind === "audio" ? { deviceId: microphoneDevice ? { exact: microphoneDevice } : undefined } : false,
+      audio: kind === "audio" ? { deviceId: microphoneDevice ? { exact: microphoneDevice } : undefined, ...VOICE_CAPTURE } : false,
       video: kind === "video" ? { deviceId: cameraDevice ? { exact: cameraDevice } : undefined } : false,
     });
     return stream.getTracks().find((track) => track.kind === kind);
@@ -1157,6 +1242,18 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
         }
       }
       void liveKit.current?.publish(track);
+    } else if (kind === "video" && !enabled && existing) {
+      // Camera off means the camera is released — a disabled track keeps the
+      // device (and its light) on. Turning it back on goes through the branch
+      // above and asks for a fresh track.
+      currentStream.current?.removeTrack(existing);
+      for (const peer of peers.current.values()) {
+        const sender = peer.getSenders().find((item) => item.track === existing);
+        if (sender) try { peer.removeTrack(sender); } catch { /* connection already gone */ }
+      }
+      void liveKit.current?.unpublish(existing);
+      existing.stop();
+      setLocalStream(new MediaStream(currentStream.current?.getTracks() ?? []));
     } else {
       existing && (existing.enabled = enabled);
       // Muting through LiveKit also stops the bytes and tells everyone else.
@@ -1310,7 +1407,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (!old || !navigator.mediaDevices || !currentStream.current) return;
     try {
       const constraint = { deviceId: deviceId ? { exact: deviceId } : undefined };
-      const fresh = await navigator.mediaDevices.getUserMedia(kind === "audio" ? { audio: constraint } : { video: constraint });
+      const fresh = await navigator.mediaDevices.getUserMedia(kind === "audio" ? { audio: { ...constraint, ...VOICE_CAPTURE } } : { video: constraint });
       const track = fresh.getTracks()[0];
       track.enabled = old.enabled;
       for (const peer of peers.current.values()) {
@@ -1373,14 +1470,20 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     };
   }, []);
 
-  /** Lazily creates (or reuses) a Web Audio analyser for one participant's audio track. */
+  /**
+   * Lazily creates (or reuses) a Web Audio analyser for one participant's
+   * audio track — peer-to-peer calls only (LiveKit reports speakers itself).
+   * All analysers share one AudioContext: each context is its own audio
+   * thread, and one per person competed with playback and crackled.
+   */
+  const sharedAudioContext = useRef<AudioContext | null>(null);
   const ensureAudioAnalyser = useCallback((id: string, stream: MediaStream) => {
     const existing = audioAnalysers.current.get(id);
     if (existing) return existing;
     const audioTrack = stream.getAudioTracks()[0];
     if (!audioTrack) return null;
     try {
-      const ctx = new AudioContext();
+      const ctx = (sharedAudioContext.current ??= new AudioContext());
       const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
@@ -1397,7 +1500,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // already receive over WebRTC. Requires 2 consecutive above-threshold
   // ticks before switching, so a brief cough/click doesn't steal focus.
   useEffect(() => {
-    if (!entered) return;
+    if (!entered || mediaProvider.current === "livekit") return;
     const SPEAKING_THRESHOLD = 14;
     const STABLE_TICKS_REQUIRED = 2;
     const interval = window.setInterval(() => {
@@ -1434,8 +1537,9 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   // Close every analyser's AudioContext on unmount — AudioContext instances
   // are a limited browser resource, never leave them dangling.
   useEffect(() => () => {
-    audioAnalysers.current.forEach((node) => node.ctx.close().catch(() => {}));
     audioAnalysers.current.clear();
+    void sharedAudioContext.current?.close().catch(() => {});
+    sharedAudioContext.current = null;
   }, []);
 
   // One entry per person in the room; `stream` stays undefined until (or
@@ -1463,13 +1567,24 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     return entry ? entry[0] : null;
   }, [screenSharing, remoteMedia, selfId]);
 
-  // Your own voice never pulls you into the main stage (Google Meet does the
-  // same) — otherwise talking while alone flips the room into focus view.
-  // Up to four people stay in the tiled grid (the speaker gets the ring);
-  // switching the whole layout every time someone else spoke made small
-  // calls jump around constantly.
-  const speakerFocusId = activeSpeakerId !== selfId && remoteEntries.length + 1 > 4 ? activeSpeakerId : null;
-  const focusedUserId = gridViewForced ? null : (screenSharingUserId || speakerFocusId || pinnedUserId || null);
+  // Main stage: a screen share, else whoever is pinned, else the person who
+  // spoke last. Your own voice never pulls you there (Google Meet does the
+  // same). The speaker is "sticky" — silence keeps the last one on stage —
+  // and a new speaker only takes over after the current one has had the
+  // stage for 1.5s, so short interjections don't make the layout jump.
+  const [stageSpeakerId, setStageSpeakerId] = useState<string | null>(null);
+  const stageSince = useRef(0);
+  useEffect(() => {
+    if (!activeSpeakerId || activeSpeakerId === selfId || activeSpeakerId === stageSpeakerId) return;
+    const wait = Math.max(0, stageSince.current + 1500 - Date.now());
+    const timer = window.setTimeout(() => { stageSince.current = Date.now(); setStageSpeakerId(activeSpeakerId); }, wait);
+    return () => window.clearTimeout(timer);
+  }, [activeSpeakerId, selfId, stageSpeakerId]);
+  const remoteIds = remoteEntries.map(([id]) => id);
+  const speakerFocusId = remoteIds.length
+    ? (stageSpeakerId && remoteIds.includes(stageSpeakerId) ? stageSpeakerId : remoteIds[0])
+    : null;
+  const focusedUserId = gridViewForced ? null : (screenSharingUserId || pinnedUserId || speakerFocusId || null);
 
   /**
    * What the header actually reports. The socket being up only means
@@ -1616,7 +1731,12 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   if (isWidgetMode) {
     return (
       <FloatingMeetingWidget
-        tile={focusedTile}
+        tile={focusedTile
+          ?? allTiles.find((tile) => !tile.isSelf && tile.id === stageSpeakerId)
+          ?? allTiles.find((tile) => !tile.isSelf && tile.video && tile.stream)
+          ?? allTiles.find((tile) => !tile.isSelf)
+          ?? allTiles[0]
+          ?? null}
         remotes={allTiles.filter((tile) => !tile.isSelf)}
         title={meeting?.title || ""}
         microphone={microphone}
@@ -1639,7 +1759,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     const hasVideo = directKind === "video" || camera || screenSharing || Boolean(peer?.video && peer?.stream?.getVideoTracks().length);
     const status = accessDenied || (!loading && !meeting ? t("meetingRoom.callNotFound") : callState === "failed" ? t("meetingRoom.mediaFailed") : callState === "offline" ? t("meetingRoom.reconnecting") : entered && peer ? t("meetingRoom.connectionStable") : t("chat.connectingText"));
     return <DirectCallSurface name={name} peer={profile} remoteVideo={Boolean(peer?.video && peer?.stream?.getVideoTracks().length)} video={hasVideo} status={status} ready={entered && !loading && !accessDenied} microphone={microphone} camera={camera} screenSharing={screenSharing} securityCode={securityCode}
-      remote={<VideoTile stream={peer?.stream} label={name} avatar={profile} microphoneOn={peer?.mic ?? true} videoOn={peer?.video ?? false} pipEnabled />}
+      remote={<>{peer?.stream && <RemoteAudio stream={peer.stream} />}<VideoTile stream={peer?.stream} muted label={name} avatar={profile} microphoneOn={peer?.mic ?? true} videoOn={peer?.video ?? false} pipEnabled /></>}
       local={camera || screenSharing ? <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} videoOn={camera || screenSharing} /> : null}
       onMic={() => void toggleTrack("audio")} onCamera={() => void toggleTrack("video")} onScreen={() => void toggleScreen()} onLeave={leave} />;
   }
@@ -1739,13 +1859,17 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   ];
 
   const tileFor = (tile: MeetingTile, extra: { speaking?: boolean } = {}) => (
-    <VideoTile key={tile.id} stream={tile.stream} muted={tile.isSelf} mirrored={tile.isSelf && !screenSharing} label={tile.isSelf ? (screenSharing ? t("meetingRoom.youSharingScreen") : t("meet.you")) : tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={extra.speaking ?? tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} pipEnabled={!tile.isSelf} onPin={() => togglePin(tile.id)} />
+    <VideoTile key={tile.id} stream={tile.stream} muted mirrored={tile.isSelf && !screenSharing} label={tile.isSelf ? (screenSharing ? t("meetingRoom.youSharingScreen") : t("meet.you")) : tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} pinned={pinnedUserId === tile.id} speaking={extra.speaking ?? tile.id === activeSpeakerId} handRaised={raisedHands.has(tile.id)} pipEnabled={!tile.isSelf} onPin={() => togglePin(tile.id)} />
   );
 
   const panelTitle = sidePanel === "participants" ? t("meet.people") : sidePanel === "settings" ? t("meet.hostControls") : sidePanel === "waiting" ? t("meet.waitingSection") : t("meet.details");
 
   return (
     <div className={`gm-room ${overlayClass} ${panelOpen ? "gm-panel-open" : ""} ${gridViewForced ? "grid-forced" : ""}`}>
+      {/* Everyone's audio, in elements that never move: a tile changing place
+          (speaker to the stage, pin, screen share) re-creates its <video>,
+          and when that element carried the sound the audio dropped each time. */}
+      <div className="gm-audio" hidden>{allTiles.filter((tile) => !tile.isSelf && tile.stream).map((tile) => <RemoteAudio key={tile.id} stream={tile.stream!} />)}</div>
       <header className="gm-top">
         <span className="gm-clock">{timeLabel}</span>
         <span className="gm-sep" aria-hidden="true" />

@@ -17,12 +17,12 @@
 }
 
 /* Composite fields: the wrapper is the visible control. */
-:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label):focus-within {
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form):focus-within {
   outline: none !important;
   border-color: color-mix(in srgb, var(--accent, #4a58b7) 70%, transparent) !important;
   box-shadow: var(--focus-ring) !important;
 }
-:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label) :is(input, textarea):is(:focus, :focus-visible) {
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form) :is(input, textarea):is(:focus, :focus-visible) {
   outline: none !important;
   border-color: transparent !important;
   box-shadow: none !important;

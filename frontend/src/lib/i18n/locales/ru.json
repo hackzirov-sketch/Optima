@@ -919,7 +919,11 @@
     "callWaiting": "ожидание...",
     "incomingVideoCall": "видеозвонок...",
     "draftLabel": "Черновик:",
-    "fileTooLarge": "«{{name}}» слишком большой — для таких файлов лимит {{limit}} МБ"
+    "fileTooLarge": "«{{name}}» слишком большой — для таких файлов лимит {{limit}} МБ",
+    "aiAttachImage": "Добавить изображение",
+    "aiRemoveImage": "Убрать изображение",
+    "aiImageOnly": "Можно прикрепить только изображение",
+    "aiImageTooLarge": "Изображение должно быть не больше 8 МБ"
   },
   "presence": {
     "online": "В сети",
@@ -1085,7 +1089,9 @@
     "noteDeleteAria": "Удалить заметку",
     "notesLoadFailed": "Не удалось загрузить заметки",
     "noteSaveFailed": "Не удалось сохранить заметку",
-    "noteDeleteFailed": "Не удалось удалить заметку"
+    "noteDeleteFailed": "Не удалось удалить заметку",
+    "dragToMove": "Перетащите, чтобы переместить",
+    "dragToResize": "Потяните, чтобы изменить размер"
   },
   "channelSettings": {
     "title": "Channel settings",

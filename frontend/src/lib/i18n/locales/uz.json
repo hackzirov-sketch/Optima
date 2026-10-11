@@ -919,7 +919,11 @@
     "callWaiting": "kutilmoqda...",
     "incomingVideoCall": "Video qo‘ng‘iroq qilmoqda...",
     "draftLabel": "Qoralama:",
-    "fileTooLarge": "«{{name}}» juda katta — bu turdagi fayllar uchun chegara {{limit}} MB"
+    "fileTooLarge": "«{{name}}» juda katta — bu turdagi fayllar uchun chegara {{limit}} MB",
+    "aiAttachImage": "Rasm qo‘shish",
+    "aiRemoveImage": "Rasmni olib tashlash",
+    "aiImageOnly": "Faqat rasm yuklash mumkin",
+    "aiImageTooLarge": "Rasm 8 MB dan oshmasligi kerak"
   },
   "presence": {
     "online": "Onlayn",
@@ -1085,7 +1089,9 @@
     "noteDeleteAria": "Eslatmani o‘chirish",
     "notesLoadFailed": "Eslatmalarni yuklab bo‘lmadi",
     "noteSaveFailed": "Eslatmani saqlab bo‘lmadi",
-    "noteDeleteFailed": "Eslatmani o‘chirib bo‘lmadi"
+    "noteDeleteFailed": "Eslatmani o‘chirib bo‘lmadi",
+    "dragToMove": "Surish uchun ushlang",
+    "dragToResize": "O‘lchamini o‘zgartirish"
   },
   "channelSettings": {
     "title": "Kanal sozlamalari",

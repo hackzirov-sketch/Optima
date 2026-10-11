@@ -859,6 +859,35 @@ export class ChatController {
     await this.roomService.deleteRoom(roomId, userId);
   }
 
+  /** The AI with a picture: multipart (an image is far over the JSON body limit). */
+  @Post('chat/ai/image')
+  @Throttle({
+    short: { limit: 1, ttl: 1000 },
+    standard: { limit: 10, ttl: 90000 },
+  })
+  @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 8 * 1024 * 1024, files: 1 } }))
+  async aiImageReply(
+    @UploadedFile() image: { buffer: Buffer; mimetype: string; size: number } | undefined,
+    @Body() body: { message?: string; history?: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    if (!image?.buffer || !/^image\/(png|jpe?g|webp|heic|heif|gif)$/.test(image.mimetype))
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Send a PNG, JPEG, WebP, HEIC or GIF image (up to 8 MB)' });
+    const message = String(body?.message ?? '').slice(0, 6000);
+    let history: Array<{ role: 'user' | 'model'; text: string }> = [];
+    try {
+      const parsed = JSON.parse(body?.history || '[]');
+      if (Array.isArray(parsed))
+        history = parsed
+          .filter((item) => (item?.role === 'user' || item?.role === 'model') && typeof item?.text === 'string')
+          .slice(-20)
+          .map((item) => ({ role: item.role, text: item.text.slice(0, 4000) }));
+    } catch {
+      /* no history */
+    }
+    return this.aiService.generateAiReply(message, history, userId, [{ mimeType: image.mimetype, data: image.buffer }]);
+  }
+
   @Post('chat/ai')
   @Throttle({
     short: { limit: 2, ttl: 1000 },
