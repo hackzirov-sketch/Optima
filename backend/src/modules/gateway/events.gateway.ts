@@ -1304,12 +1304,19 @@ export class EventsGateway
     // The call's meeting lives in the caller's workspace, which the callee
     // usually isn't in (every account has its own) — so the caller, as the
     // meeting's host, pre-approves exactly the person being called. Only the
-    // host can do this, and only for someone they share this DM with.
+    // host can do this, and only for someone they share this DM with. The
+    // meeting is made invite-only here too: a group-only meeting ignores the
+    // approval, and an older client (a tab opened before the update) still
+    // creates call meetings with the default group-only scope.
     const invited = await this.dataSource.query<{ id: string }>(
-      `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
+      `WITH m AS (
+         UPDATE meetings SET scope = 'invite_only'
+          WHERE id = $1 AND host_id = $3
+          RETURNING id
+       )
+       INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
        SELECT m.id, $2, 'approved', now(), $3, now()
-         FROM meetings m
-        WHERE m.id = $1 AND m.host_id = $3
+         FROM m
        ON CONFLICT (meeting_id, user_id) DO UPDATE SET status = 'approved', reviewed_by = EXCLUDED.reviewed_by, reviewed_at = now()
        RETURNING meeting_id AS id`,
       [data.meetingId, data.targetUserId, userId],
