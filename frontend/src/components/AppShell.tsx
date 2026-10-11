@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         : location.startsWith(href);
   const dockItems = nav.map((item) => {
     const Icon = item.icon;
-    return <Link key={item.href} href={item.href}
+    return <Link key={item.href} href={item.href} data-nav={item.key}
       className={`${active(item.href) ? "active" : ""} ${item.key === "ai" ? "dock-ai" : ""}`}
       aria-label={t(`shell.${item.key}`)} title={t(`shell.${item.key}`)}
       aria-current={active(item.href) ? "page" : undefined}>

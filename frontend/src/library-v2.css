@@ -96,3 +96,11 @@
 .lib2-gen-cover.tone-3 { background: linear-gradient(160deg, #581c87, #6b21a8) !important; }
 .lib2-gen-cover.tone-4 { background: linear-gradient(160deg, #1f2937, #374151) !important; }
 .lib2 .book-card.not-readable .book-cover::after { display: none; }
+
+/* Saved state must be visible: the bookmark had no "on" look, so a save that
+   worked looked like a dead button — and the second tap un-saved it again. */
+.lib2 .book-card button.active:not(.liked), .lib2-detail .detail-actions button.active:not(.liked),
+.reader-tools button.active:not(.liked) { color: var(--accent) !important; }
+.lib2 .book-card button.active:not(.liked) svg, .lib2-detail .detail-actions button.active:not(.liked) svg,
+.reader-tools button.active:not(.liked) svg { fill: currentColor; }
+.lib2-detail .detail-actions button.active:not(.liked) { background: var(--accent-soft, color-mix(in srgb, var(--accent) 14%, transparent)); border-radius: 12px; }

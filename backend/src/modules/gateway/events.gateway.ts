@@ -48,6 +48,8 @@ export interface WsSocketData {
   authTimer?: NodeJS.Timeout;
   /** Groups this socket joined rooms for, kept for disconnect cleanup. */
   groupIds?: string[];
+  /** People this user chats with (DMs, group chats) — presence goes to them too. */
+  presencePeers?: string[];
   /** The meeting this socket is currently in, if any. */
   meetingId?: string;
 }
@@ -437,21 +439,17 @@ export class EventsGateway
     // Redis presence: per-socket freshness tracking (self-healing against
     // orphaned entries from a dead process) - only the 0->1+ transition
     // actually flips status to online (see ChatPresenceService).
+    client.data.presencePeers = await this.chatPresencePeers(user.id);
     const { status, isNewlyOnline } = await this.presenceService.connect(
       user.id,
       client.id,
     );
     if (isNewlyOnline) {
-      groupIds.forEach((groupId) =>
-        this.server.to(`group:${groupId}`).emit('presence_update', {
-          userId: user.id,
-          status: this.presenceService.maskForOthers(status),
-        }),
-      );
+      this.emitPresence(client, user.id, this.presenceService.maskForOthers(status));
     }
 
-    // Bulk presence snapshot for everyone in my groups, in one shot.
-    const peerIds = new Set<string>();
+    // Bulk presence snapshot for everyone in my groups and chats, in one shot.
+    const peerIds = new Set<string>(client.data.presencePeers);
     await Promise.all(
       groupIds.map(async (groupId) => {
         const sockets = await this.server.in(`group:${groupId}`).fetchSockets();
@@ -490,13 +488,7 @@ export class EventsGateway
     if (!Object.values(PresenceStatus).includes(status)) return;
     if (status === PresenceStatus.OFFLINE) return; // offline is derived, never set directly
     await this.presenceService.setStatus(userId, status);
-    const groupIds: string[] = client.data?.groupIds || [];
-    const masked = this.presenceService.maskForOthers(status);
-    groupIds.forEach((groupId) =>
-      this.server
-        .to(`group:${groupId}`)
-        .emit('presence_update', { userId, status: masked }),
-    );
+    this.emitPresence(client, userId, this.presenceService.maskForOthers(status));
   }
 
   async handleDisconnect(client: AppSocket) {
@@ -522,13 +514,7 @@ export class EventsGateway
       );
       if (isNowOffline) {
         void this.usersService.updateLastSeen(userId);
-        const groupIds: string[] = client.data?.groupIds || [];
-        for (const groupId of groupIds) {
-          this.server.to(`group:${groupId}`).emit('presence_update', {
-            userId,
-            status: PresenceStatus.OFFLINE,
-          });
-        }
+        this.emitPresence(client, userId, PresenceStatus.OFFLINE);
       }
     } catch (err) {
       this.logger.error(
@@ -1122,12 +1108,7 @@ export class EventsGateway
     // Auto-presence: joining a call is a strong, unambiguous "in a meeting"
     // signal - no reason to make the user set this by hand.
     await this.presenceService.setStatus(userId, PresenceStatus.IN_MEETING);
-    const groupIds: string[] = client.data?.groupIds || [];
-    groupIds.forEach((groupId) =>
-      this.server
-        .to(`group:${groupId}`)
-        .emit('presence_update', { userId, status: PresenceStatus.IN_MEETING }),
-    );
+    this.emitPresence(client, userId, PresenceStatus.IN_MEETING);
 
     this.logger.log(`User ${userId} joined meeting ${meetingId}`);
   }
@@ -1628,12 +1609,36 @@ export class EventsGateway
     if (current !== PresenceStatus.IN_MEETING) return;
 
     await this.presenceService.setStatus(userId, PresenceStatus.ONLINE);
-    const groupIds: string[] = client.data?.groupIds || [];
-    groupIds.forEach((groupId) =>
-      this.server
-        .to(`group:${groupId}`)
-        .emit('presence_update', { userId, status: PresenceStatus.ONLINE }),
+    this.emitPresence(client, userId, PresenceStatus.ONLINE);
+  }
+
+  /**
+   * Everyone who shares a DM or group chat with the user. Workspaces alone
+   * aren't enough: every account now has its own personal workspace, so two
+   * people chatting usually share no group and never saw each other online.
+   * Channels are left out — their subscribers aren't contacts.
+   */
+  private async chatPresencePeers(userId: string): Promise<string[]> {
+    const rows = await this.dataSource.query<{ userId: string }>(
+      `SELECT DISTINCT o.user_id AS "userId"
+         FROM chat_members me
+         JOIN chat_rooms r ON r.id = me.room_id AND r.type IN ('direct', 'group')
+         JOIN chat_members o ON o.room_id = me.room_id AND o.user_id <> me.user_id
+                            AND o.left_at IS NULL
+        WHERE me.user_id = $1 AND me.left_at IS NULL
+        LIMIT 1000`,
+      [userId],
     );
+    return rows.map((row) => row.userId);
+  }
+
+  /** One presence change to the user's groups and chat partners (each socket once). */
+  private emitPresence(client: AppSocket, userId: string, status: PresenceStatus) {
+    const rooms = [
+      ...(client.data?.groupIds ?? []).map((groupId) => `group:${groupId}`),
+      ...(client.data?.presencePeers ?? []).map((peerId) => `user:${peerId}`),
+    ];
+    if (rooms.length) this.server.to(rooms).emit('presence_update', { userId, status });
   }
 
   /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */

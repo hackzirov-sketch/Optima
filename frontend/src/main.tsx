@@ -17,6 +17,8 @@ import "./profile-telegram.css";
 import "./library-v2.css";
 import "./voice-chat.css";
 import "./auth.css";
+import "./meet-polish.css";
+import "./mobile-shell.css";
 import "./focus.css";
 
 createRoot(document.getElementById("root")!).render(

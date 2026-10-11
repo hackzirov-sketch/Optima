@@ -173,7 +173,7 @@ export function LibraryPage() {
             <button onClick={() => setFontSize((value) => Math.min(28, value + 1))} aria-label="A+"><Plus /></button>
             <button onClick={() => setReaderTheme(readerTheme === "light" ? "sepia" : readerTheme === "sepia" ? "dark" : "light")} aria-label={t("library.readerTheme")}>{readerTheme === "dark" ? <Moon /> : <Sun />}</button>
           </>}
-          <button onClick={() => void toggleSaved(reader)} className={saved.includes(reader.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
+          <button onClick={() => void toggleSaved(reader)} className={saved.includes(reader.key) ? "active" : ""} aria-label={t("library.saveAria")} aria-pressed={saved.includes(reader.key)}><Bookmark /></button>
         </div>
       </header>
       {reader.embedUrl
@@ -244,7 +244,7 @@ export function LibraryPage() {
             ? <button onClick={() => void openReader(selected)}><BookOpen /> {t("library.readOnline")}</button>
             : <a className="lib2-source-btn" href={selected.sourceUrl} target="_blank" rel="noopener noreferrer"><ExternalLink /> {t("library.viewOnOpenLibrary")}</a>}
           <button onClick={() => void toggleLiked(selected)} className={liked.includes(selected.key) ? "active liked" : ""} aria-label={t("library.likeAria")}><Heart />{reviews?.likes ? <small>{reviews.likes}</small> : null}</button>
-          <button onClick={() => void toggleSaved(selected)} className={saved.includes(selected.key) ? "active" : ""} aria-label={t("library.saveAria")}><Bookmark /></button>
+          <button onClick={() => void toggleSaved(selected)} className={saved.includes(selected.key) ? "active" : ""} aria-label={t("library.saveAria")} aria-pressed={saved.includes(selected.key)}><Bookmark /></button>
           <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={t("library.openSource")}><ExternalLink /></a>
         </div>
 

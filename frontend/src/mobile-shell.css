@@ -1,0 +1,70 @@
+/*
+ * Phone layout (≤ 820px).
+ *  - Sign-in / sign-up: the form alone — no story banner pushing it down.
+ *  - A menu button at the top left opens the full navigation as a drawer.
+ *  - The bottom bar keeps five destinations (Home, Chat, AI in the middle,
+ *    Meetings, Profile); everything else lives in the drawer.
+ * Earlier layers hid the menu button and the sidebar with !important, hence
+ * the weighty selectors here.
+ */
+@media (max-width: 820px) {
+  /* ── Auth: just the form ── */
+  :root[data-theme] body .auth-story { display: none; }
+  :root[data-theme] body .auth-page { grid-template-columns: minmax(0, 1fr); background: var(--canvas, #f6f7f9); }
+  :root[data-theme] body .auth-panel { min-height: 100dvh; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); place-items: center; }
+  :root[data-theme] body .auth-card { width: 100%; max-width: 440px; margin: 0; padding: 26px 20px; border-radius: 20px; }
+
+  /* ── Top bar: menu button on the left ── */
+  :root[data-theme] body .app-shell .topbar > .mobile-only {
+    display: grid !important; place-items: center; width: 40px; height: 40px; min-width: 40px;
+    margin-right: 4px; border: 0; border-radius: 12px; background: var(--surface-muted); color: var(--text);
+  }
+  :root[data-theme] body .app-shell .topbar { gap: 6px; padding-inline: 12px; }
+  :root[data-theme] body .app-shell .topbar-context { min-width: 0; }
+  :root[data-theme] body .app-shell .topbar-context > :is(.logo, .topbar-divider, small) { display: none; }
+  :root[data-theme] body .app-shell .topbar-context strong { font-size: 17px; color: var(--text); }
+
+  /* ── Drawer ── */
+  :root[data-theme] body .app-shell > .sidebar {
+    display: flex !important; position: fixed; z-index: 1000; inset: 0 auto 0 0;
+    width: min(84vw, 300px); height: 100dvh; padding: 16px 12px calc(14px + env(safe-area-inset-bottom));
+    background: var(--surface); border-right: 1px solid var(--line);
+    box-shadow: 16px 0 40px rgba(15, 23, 42, .18);
+    transform: translateX(-105%); visibility: hidden;
+    transition: transform .26s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .26s;
+  }
+  :root[data-theme] body .app-shell > .sidebar.sidebar-open {
+    transform: none; visibility: visible; transition: transform .26s cubic-bezier(.2, .8, .2, 1), visibility 0s;
+  }
+  :root[data-theme] body .app-shell > .sidebar::before { display: none; }
+  :root[data-theme] body .app-shell > .sidebar .sidebar-brand { position: relative; z-index: 1; height: 44px; padding: 0 4px 0 8px; }
+  :root[data-theme] body .app-shell > .sidebar .sidebar-brand .mobile-only {
+    display: grid !important; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 12px;
+    background: var(--surface-muted); color: var(--text);
+  }
+  /* Every account has one personal workspace now — no switcher to show. */
+  :root[data-theme] body .app-shell > .sidebar .group-switcher { display: none; }
+  :root[data-theme] body .app-shell > .sidebar .main-nav { margin-top: 14px; }
+  :root[data-theme] body .app-shell > .sidebar .main-nav a { min-height: 46px; border-radius: 12px; }
+  :root[data-theme] body .app-shell > .sidebar-scrim {
+    display: block !important; position: fixed; z-index: 999; inset: 0; border: 0;
+    background: rgba(15, 23, 42, .42); backdrop-filter: blur(2px);
+  }
+
+  /* ── Bottom bar: five destinations ── */
+  :root[data-theme] body .mobile-nav.reference-dock { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  :root[data-theme] body .mobile-nav.reference-dock a:is([data-nav="statistics"], [data-nav="youtube"], [data-nav="library"], [data-nav="education"]) { display: none; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="home"] { order: 1; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="chat"] { order: 2; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="ai"] { order: 3; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="meetings"] { order: 4; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="profile"] { order: 5; }
+  :root[data-theme] body .mobile-nav.reference-dock .dock-label { font-size: 10.5px; line-height: 13px; }
+  :root[data-theme] body .mobile-nav.reference-dock a:not(.dock-ai) .dock-icon { width: 52px; }
+}
+
+/* Library on phones: two books per row (premium.css stacked them one per
+   row, each cover filling the whole screen). */
+@media (max-width: 820px) {
+  :root[data-theme] body .lib2 .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+}

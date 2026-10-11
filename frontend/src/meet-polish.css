@@ -1,0 +1,25 @@
+/*
+ * Meet room — visual fixes only (no behaviour changes).
+ */
+
+/* New-message notice: feedback-polish.css centres it with translateX(-50%),
+   while the room pins it at left: 24px — together half of it hung off the
+   left edge. One placement: 50px in from the left, a compact card. */
+.gm-room .meeting-chat-notice {
+  left: 50px; right: auto; bottom: 100px; transform: none;
+  width: min(340px, calc(100vw - 100px)); padding: 6px; z-index: 999;
+  border-radius: 12px;
+}
+.gm-room .meeting-chat-notice > button:first-child { gap: 10px; padding: 4px 6px; }
+.gm-room .meeting-chat-notice strong { font-size: 12px; }
+.gm-room .meeting-chat-notice span > span { font-size: 13px; }
+
+/* Reactions float above everything — the chat, people and host-controls
+   panels used to cover them for everyone else in the call. */
+.meeting-reaction-layer { z-index: 999; }
+.gm-reaction-bar, .meeting-reaction-menu { z-index: 999; }
+
+@media (max-width: 720px) {
+  .gm-room .meeting-chat-notice { left: 16px; right: 16px; width: auto; bottom: 92px; }
+  .meeting-reaction-layer { right: 16px; bottom: 96px; }
+}
