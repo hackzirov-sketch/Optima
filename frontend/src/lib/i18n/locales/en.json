@@ -19,17 +19,15 @@
     "upNext": "Up next",
     "subtitle": "Video lessons and the best content — right here",
     "topics": "Topics",
-    "topicPopular": "Popular",
     "topicEducation": "Education",
     "topicCoding": "Coding",
     "topicEnglish": "English",
-    "topicMovies": "Movies",
-    "topicMusic": "Music",
-    "topicSport": "Sport",
     "like": "Like",
     "optimaViews": "{{count}} on Optima",
     "topicForYou": "For you",
-    "forYou": "Useful videos picked for you"
+    "forYou": "Useful videos picked for you",
+    "topicScience": "Science",
+    "topicBusiness": "Business"
   },
   "common": {
     "next": "Next",
@@ -920,7 +918,8 @@
     "callUnmute": "Unmute",
     "callWaiting": "waiting...",
     "incomingVideoCall": "is video calling you...",
-    "draftLabel": "Draft:"
+    "draftLabel": "Draft:",
+    "fileTooLarge": "“{{name}}” is too large — the limit for this kind of file is {{limit}} MB"
   },
   "presence": {
     "online": "Online",

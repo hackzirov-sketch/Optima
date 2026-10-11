@@ -19,17 +19,15 @@
     "upNext": "Keyingi videolar",
     "subtitle": "Video darslar va eng sara kontent — shu yerning o‘zida",
     "topics": "Mavzular",
-    "topicPopular": "Mashhur",
     "topicEducation": "Ta’lim",
     "topicCoding": "Dasturlash",
     "topicEnglish": "Ingliz tili",
-    "topicMovies": "Kino",
-    "topicMusic": "Musiqa",
-    "topicSport": "Sport",
     "like": "Yoqdi",
     "optimaViews": "Optimada {{count}} marta",
     "topicForYou": "Siz uchun",
-    "forYou": "Siz uchun tanlangan foydali videolar"
+    "forYou": "Siz uchun tanlangan foydali videolar",
+    "topicScience": "Ilm-fan",
+    "topicBusiness": "Biznes"
   },
   "common": {
     "next": "Keyingi",
@@ -920,7 +918,8 @@
     "callUnmute": "Mikrofon",
     "callWaiting": "kutilmoqda...",
     "incomingVideoCall": "Video qo‘ng‘iroq qilmoqda...",
-    "draftLabel": "Qoralama:"
+    "draftLabel": "Qoralama:",
+    "fileTooLarge": "«{{name}}» juda katta — bu turdagi fayllar uchun chegara {{limit}} MB"
   },
   "presence": {
     "online": "Onlayn",

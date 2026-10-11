@@ -64,7 +64,7 @@ import { envUrl } from "./env-url";
 import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = envUrl(import.meta.env.VITE_API_URL) || "/api/v1";
-export type OAuthProvider = "google" | "github";
+export type OAuthProvider = "google";
 
 export interface ChatDraftRecord {
   roomId: string;

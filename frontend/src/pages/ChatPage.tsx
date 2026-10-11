@@ -90,7 +90,7 @@ import { api, type ChatDraftRecord, type RoomVoiceChat as RoomVoiceChatInfo } fr
 import { useAuth }                                                          from "../lib/auth";
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
 import { DRAFT_CLIENT_ID, openDraft, saveDraft } from "../lib/drafts";
-import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
+import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, isRoomE2ee, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -1738,7 +1738,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     if (files.length > free) show(t("chat.attachmentLimit", { count: MAX_ATTACHMENTS }), "error");
 
-    const accepted = files.slice(0, free).map((file) => ({
+    // The file host's per-file limit: 100 MB for video/audio, 10 MB for the
+    // rest — and for everything in encrypted chats, whose uploads are opaque
+    // blobs. Refused here, before minutes of uploading end in an error.
+    const encrypted = await isRoomE2ee(room.id).catch(() => false);
+    const limitFor = (file: File) => (!encrypted && /^(video|audio)\//.test(file.type) ? 100 : 10) * 1024 * 1024;
+    const tooBig = files.slice(0, free).filter((file) => file.size > limitFor(file));
+    for (const file of tooBig) show(t("chat.fileTooLarge", { name: file.name, limit: Math.round(limitFor(file) / 1024 / 1024) }), "error");
+
+    const accepted = files.slice(0, free).filter((file) => !tooBig.includes(file)).map((file) => ({
       id: crypto.randomUUID(),
       file,
       // Local preview so the thumbnail appears instantly rather than after the
@@ -1748,6 +1756,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       error: false
     } satisfies StagedAttachment));
 
+    if (!accepted.length) return;
     setStaged((current) => [...current, ...accepted]);
 
     await Promise.all(accepted.map(async (item) => {

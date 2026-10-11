@@ -41,6 +41,24 @@ describe('classifyVideo', () => {
     expect(verdict('Coding challenge: build a REST API in Node.js', { categoryId: '28' }).rejected).toBe(false);
   });
 
+  it('films, music and sport are out — even when they look educational', () => {
+    for (const [title, category] of [
+      ['Film analysis: how Nolan builds tension — lecture', '27'],
+      ['Music theory lesson for beginners', '27'],
+      ['Football tactics explained', '27'],
+      ["O'zbek qo'shiqlari 2026", '22'],
+      ['UFC 300 full fight breakdown', '17'],
+      ['Basketbol darslari', '27'],
+      ['Yangi multfilm', '1'],
+    ] as const) expect({ title, rejected: verdict(title, { categoryId: category }).rejected }).toEqual({ title, rejected: true });
+  });
+
+  it('…without tripping lessons that only look similar', () => {
+    for (const title of ['Pattern matching in Rust explained', 'Matematika olimpiadasi masalalari', 'Tech podcast episode 12: system design', 'Docker compose tutorial']) {
+      expect({ title, rejected: verdict(title, { categoryId: '27' }).rejected }).toEqual({ title, rejected: false });
+    }
+  });
+
   it('a plain vlog with no teaching signal is not enough', () => {
     expect(verdict('My weekend vlog in Tashkent', { categoryId: '22' }).rejected).toBe(true);
   });

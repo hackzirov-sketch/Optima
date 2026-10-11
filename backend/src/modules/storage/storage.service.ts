@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ErrorCode } from '../../common/enums/error-code.enum';
@@ -580,6 +581,25 @@ export class StorageService {
     return 'raw';
   }
 
+  /** Per-file limit of the Cloudinary plan (env-tunable for paid plans). */
+  private cloudinaryMaxBytes(resourceType: 'image' | 'video' | 'raw'): number {
+    const mb = Number(
+      resourceType === 'video'
+        ? this.config.get<string>('CLOUDINARY_MAX_VIDEO_MB') ?? 100
+        : this.config.get<string>('CLOUDINARY_MAX_FILE_MB') ?? 10,
+    );
+    return (Number.isFinite(mb) && mb > 0 ? mb : 10) * 1024 * 1024;
+  }
+
+  private tooLarge(maxBytes: number) {
+    const mb = Math.floor(maxBytes / 1024 / 1024);
+    return new PayloadTooLargeException({
+      code: ErrorCode.STORAGE_FILE_TOO_LARGE,
+      message: `File is too large — the limit for this type is ${mb} MB`,
+      maxBytes,
+    });
+  }
+
   private uploadBufferToCloudinary(
     buffer: Buffer,
     publicId: string,
@@ -597,6 +617,11 @@ export class StorageService {
           'File storage is not configured on this server — uploads are unavailable',
       });
     }
+    // Cloudinary's own per-file ceiling (plan-dependent: 10 MB for images and
+    // other files, 100 MB for video/audio on the free plan). Checked up front
+    // so a too-big file gets a clear 413 instead of an "Unhandled Exception".
+    const ceiling = this.cloudinaryMaxBytes(resourceType);
+    if (buffer.length > ceiling) throw this.tooLarge(ceiling);
     // Each attempt gets a fresh stream — a stream that already failed cannot
     // be re-ended, so the retry has to build its own.
     return this.callCloudinary(
@@ -607,6 +632,9 @@ export class StorageService {
             { public_id: publicId, resource_type: resourceType, type },
             (err, result) => {
               if (!err && result) return resolve(result);
+              // The plan's limit is lower than configured: still a clear 413.
+              const limit = /File size too large\. Got \d+\. Maximum is (\d+)/.exec((err as { message?: string })?.message ?? '');
+              if (limit) return reject(this.tooLarge(Number(limit[1])));
               if (err instanceof Error) return reject(err);
               // Cloudinary reports transport failures as a plain object, so
               // rejecting with a bare Error would drop the `code` that

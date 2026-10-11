@@ -19,17 +19,15 @@
     "upNext": "Sıradaki",
     "subtitle": "Video dersler ve en iyi içerik — tam burada",
     "topics": "Konular",
-    "topicPopular": "Popüler",
     "topicEducation": "Eğitim",
     "topicCoding": "Kodlama",
     "topicEnglish": "İngilizce",
-    "topicMovies": "Film",
-    "topicMusic": "Müzik",
-    "topicSport": "Spor",
     "like": "Beğen",
     "optimaViews": "Optima'da {{count}}",
     "topicForYou": "Senin için",
-    "forYou": "Senin için seçilen faydalı videolar"
+    "forYou": "Senin için seçilen faydalı videolar",
+    "topicScience": "Bilim",
+    "topicBusiness": "İş"
   },
   "common": {
     "next": "İleri",
@@ -920,7 +918,8 @@
     "callUnmute": "Mikrofon",
     "callWaiting": "bekleniyor...",
     "incomingVideoCall": "görüntülü arıyor...",
-    "draftLabel": "Taslak:"
+    "draftLabel": "Taslak:",
+    "fileTooLarge": "“{{name}}” çok büyük — bu tür dosyalar için sınır {{limit}} MB"
   },
   "presence": {
     "online": "Çevrimiçi",

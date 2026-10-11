@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Github, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UsersRound, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck, UsersRound, Video } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, oauthStartUrl, type OAuthProvider } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -18,10 +18,6 @@ function SocialAuthButtons({ disabled }: { disabled: boolean }) {
       <button type="button" onClick={() => start("google")} disabled={disabled}>
         <span className="google-mark" aria-hidden="true">G</span>
         {t("auth.googleContinue")}
-      </button>
-      <button type="button" onClick={() => start("github")} disabled={disabled}>
-        <Github size={18} aria-hidden="true" />
-        {t("auth.githubContinue")}
       </button>
     </div>
   );

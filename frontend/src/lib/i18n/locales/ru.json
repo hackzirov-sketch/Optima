@@ -19,17 +19,15 @@
     "upNext": "Далее",
     "subtitle": "Видеоуроки и лучший контент — прямо здесь",
     "topics": "Темы",
-    "topicPopular": "Популярное",
     "topicEducation": "Обучение",
     "topicCoding": "Программирование",
     "topicEnglish": "Английский",
-    "topicMovies": "Кино",
-    "topicMusic": "Музыка",
-    "topicSport": "Спорт",
     "like": "Нравится",
     "optimaViews": "{{count}} в Optima",
     "topicForYou": "Для вас",
-    "forYou": "Полезные видео, подобранные для вас"
+    "forYou": "Полезные видео, подобранные для вас",
+    "topicScience": "Наука",
+    "topicBusiness": "Бизнес"
   },
   "common": {
     "next": "Далее",
@@ -920,7 +918,8 @@
     "callUnmute": "Микрофон",
     "callWaiting": "ожидание...",
     "incomingVideoCall": "видеозвонок...",
-    "draftLabel": "Черновик:"
+    "draftLabel": "Черновик:",
+    "fileTooLarge": "«{{name}}» слишком большой — для таких файлов лимит {{limit}} МБ"
   },
   "presence": {
     "online": "В сети",

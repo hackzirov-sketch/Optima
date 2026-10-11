@@ -23,9 +23,8 @@ const TOPICS: Array<{ key: string; query: string; emoji: string }> = [
   { key: "topicEducation", query: "ta'lim darslari", emoji: "🎓" },
   { key: "topicCoding", query: "dasturlash darslari", emoji: "💻" },
   { key: "topicEnglish", query: "ingliz tili darslari", emoji: "🗣️" },
-  { key: "topicMovies", query: "o'zbek kino", emoji: "🎬" },
-  { key: "topicMusic", query: "o'zbek musiqa", emoji: "🎵" },
-  { key: "topicSport", query: "sport", emoji: "⚽" },
+  { key: "topicScience", query: "science explained", emoji: "🔬" },
+  { key: "topicBusiness", query: "biznes darslari", emoji: "📈" },
 ];
 
 function duration(seconds: number) {

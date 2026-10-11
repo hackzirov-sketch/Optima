@@ -44,6 +44,19 @@ const HARD_BLOCK = [
   'horoscope', 'гороскоп', 'fol ochish', 'гадание', '18+', 'stand up', 'стендап', 'comedy show', 'юмор', 'hazil', 'qiziqchilar',
 ];
 
+/**
+ * Films, music and sport: not on Optima at all — no "it's educational" exception.
+ * Words are chosen not to trip lessons ("pattern matching", school olympiads, podcast episodes).
+ */
+const STRICT_BLOCK = [
+  // film / cinema / series / cartoons
+  'kino', 'кино', 'film', 'фильм', 'movie', 'сериал', 'multfilm', 'мультфильм', 'мультик', 'cartoon', 'anime', 'аниме', 'trailer', 'трейлер', 'treyler', 'premyera', 'премьера',
+  // music
+  'music', 'музык', 'musiqa', "qo'shiq", 'qoshiq', 'песня', 'песни', ' song', 'songs', 'concert', 'konsert', 'концерт', 'remix', 'ремикс', 'karaoke', 'караоке', ' album', 'альбом', ' dj ', ' rap ', ' реп ', 'клип', 'klip', 'official video', 'official audio', 'lyrics', 'текст песни',
+  // sport
+  'sport', 'спорт', 'football', 'futbol', 'футбол', 'soccer', 'basketball', 'basketbol', 'баскетбол', 'boxing', 'boks', 'бокс', ' ufc', ' mma', 'tennis', 'tennis', 'теннис', ' match ', ' матч', ' o\'yin ', 'chempionat', 'чемпионат', 'champions league', 'premier league', 'la liga', 'olympic games', 'олимпийск', 'kurash', 'wrestling', 'борьба', 'fifa', 'uefa', 'highlights', 'хайлайты', 'goal compilation',
+];
+
 /** Weak negatives: they lower the score but a strong lesson can outweigh them. */
 const SOFT_NEGATIVE: Array<[string, number]> = [
   ['comedy', 18], ['funny', 15], ['vlog', 12], ['влог', 12], ['reaction', 14], ['реакция', 14], ['gaming', 18], ['game', 6],
@@ -102,7 +115,8 @@ const CATEGORY_POINTS: Record<string, number> = {
   '20': -40, // Gaming
   '43': -30, // Shows
 };
-const REJECTED_CATEGORIES = new Set(['10', '44', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42']); // music, trailers, movie categories
+// Film & Animation, Music, Sports, Trailers and the movie categories: never on Optima.
+const REJECTED_CATEGORIES = new Set(['1', '10', '17', '44', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42']);
 
 const has = (text: string, word: string) => text.includes(word);
 
@@ -179,6 +193,8 @@ export function classifyVideo(input: ClassifierInput): Classification {
   // A hard-blocked word in the title/tags rejects — unless the video is plainly
   // a lesson *about* it ("psychology of comedy", "how trailers are edited").
   if (blocked && !(positive >= 24 && topics.length > 0)) { rejected = true; reasons.push(`blocked "${blocked}"`); }
+  const strict = STRICT_BLOCK.find((word) => has(head, word));
+  if (strict) { rejected = true; reasons.push(`film/music/sport "${strict.trim()}"`); }
   if (duration > 0 && duration < 61) { rejected = true; reasons.push('youtube short'); }
   if (educational < 40) { rejected = true; reasons.push(`educational ${educational} < 40`); }
 
