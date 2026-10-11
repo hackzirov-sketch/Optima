@@ -15,6 +15,8 @@ interface RichMessageInputProps {
   maxLength?: number;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** Ctrl+V of images / files (a screenshot, a file copied in the file manager). */
+  onPasteFiles?: (files: File[]) => void;
 }
 
 function appendValue(node: Node, output: string[]): void {
@@ -65,7 +67,8 @@ export const RichMessageInput = forwardRef<RichMessageInputHandle, RichMessageIn
   ariaLabel,
   maxLength = 1500,
   onChange,
-  onSubmit
+  onSubmit,
+  onPasteFiles
 }, forwardedRef) {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastRange = useRef<Range | null>(null);
@@ -130,6 +133,11 @@ export const RichMessageInput = forwardRef<RichMessageInputHandle, RichMessageIn
       onBlur={rememberSelection}
       onPaste={(event) => {
         event.preventDefault();
+        const files = Array.from(event.clipboardData.files);
+        if (files.length && onPasteFiles) {
+          onPasteFiles(files);
+          return;
+        }
         const text = event.clipboardData.getData("text/plain").slice(0, maxLength);
         document.execCommand("insertText", false, text);
       }}

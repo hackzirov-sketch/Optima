@@ -2958,6 +2958,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     </div> : <RichMessageInput ref={richMessageInput} value={draft}
                                                onChange={announceTyping}
                                                onSubmit={() => void sendMessage()}
+                                               onPasteFiles={(files) => void stageFiles(files)}
                                                placeholder={t("chat.messagePlaceholder")}
                                                maxLength={1500} ariaLabel={t("chat.messageTextAria")} />}
                     {(draft.trim() || staged.length > 0) && !recording ?
