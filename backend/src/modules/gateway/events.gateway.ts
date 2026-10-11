@@ -299,7 +299,11 @@ export class EventsGateway
     // browser attaches it automatically on the handshake request as long as
     // the client connects with withCredentials:true, so there's nothing for
     // frontend JS to read or hand us explicitly anymore.
-    const rawCookie = client.handshake.headers?.cookie;
+    return this.userFromCookieHeader(client.handshake.headers?.cookie);
+  }
+
+  /** The access-token cookie in a Cookie header → the socket's auth, or null. */
+  userFromCookieHeader(rawCookie: string | undefined): WsUser | null {
     const token = rawCookie ? parseCookie(rawCookie)[ACCESS_COOKIE] : undefined;
 
     if (!token) return null;
@@ -380,6 +384,30 @@ export class EventsGateway
       return false;
     }
 
+    return true;
+  }
+
+  /**
+   * Moves a live socket onto a freshly refreshed access token. The socket
+   * authenticated with the cookie it had at handshake and is cut off when that
+   * token expires; the client refreshes its cookie every few minutes and then
+   * calls POST /realtime/renew, which arrives here with the new cookie. The
+   * socket stays open (no meeting/chat blip), and from now on its checks —
+   * expiry, logout blacklist, session cutoff — run against the new token.
+   * Only the socket's own user can renew it.
+   */
+  async renewSocketAuth(socketId: string, cookieHeader: string | undefined): Promise<boolean> {
+    const fresh = this.userFromCookieHeader(cookieHeader);
+    if (!fresh) return false;
+    // Nest hands the gateway the root Namespace (its `sockets` is the Map);
+    // a Server's would be one level down. Handle both.
+    const holder = this.server as unknown as { sockets?: Map<string, AppSocket> | { sockets?: Map<string, AppSocket> } };
+    const sockets = holder?.sockets instanceof Map ? holder.sockets : holder?.sockets?.sockets;
+    const client = sockets?.get(socketId);
+    if (!client || client.data?.userId !== fresh.id) return false;
+    const previous = client.data.auth;
+    client.data.auth = { ...fresh, groupIds: previous?.groupIds ?? fresh.groupIds };
+    if (!(await this.revalidateSocket(client))) return false;
     return true;
   }
 

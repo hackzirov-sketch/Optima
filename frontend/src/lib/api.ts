@@ -196,6 +196,8 @@ async function renewSession(): Promise<RefreshResult> {
   if (response.ok) {
     // The rotated pair arrives as Set-Cookie; the body carries no tokens.
     session.markActive();
+    // The open socket still runs on the old token — lib/socketAuth.ts moves it over.
+    window.dispatchEvent(new Event("optima:session-refreshed"));
     return { ok: true, networkError: false };
   }
 
@@ -697,6 +699,10 @@ export const api = {
     like: (bookKey: string, book?: LibraryBook) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "PUT", body: JSON.stringify({ book }) }),
     unlike: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "DELETE" }),
     deleteReview: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "DELETE" }),
+  },
+  realtime: {
+    /** Moves this tab's open socket onto the freshly refreshed session cookie. */
+    renew: (socketId: string) => apiFetch<{ renewed: boolean }>("/realtime/renew", { method: "POST", body: JSON.stringify({ socketId }) }),
   },
   /** Our own pages for YouTube videos and library books (/youtube/:slug, /library/:slug). */
   media: {

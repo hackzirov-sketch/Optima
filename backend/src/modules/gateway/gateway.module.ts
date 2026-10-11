@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventsGateway } from './events.gateway';
+import { RealtimeController } from './realtime.controller';
 import { ChatRealtimeBridge } from './chat-realtime.bridge';
 import { ChatModule } from '../chat/chat.module';
 import { ModerationModule } from '../moderation/moderation.module';
@@ -24,6 +25,7 @@ import { UsersModule } from '../users/users.module';
     // so this edge must be wrapped in forwardRef() to defer resolution.
     forwardRef(() => MeetingsModule),
   ],
+  controllers: [RealtimeController],
   providers: [EventsGateway, ChatRealtimeBridge],
   exports: [EventsGateway],
 })
