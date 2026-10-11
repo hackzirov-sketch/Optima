@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, BrainCircuit, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Sun, UserRound, Video, X, Youtube } from "lucide-react";
+import { BarChart3, BookOpen, BrainCircuit, Check, ChevronDown, Crown, Globe2, GraduationCap, LayoutDashboard, LogOut, Megaphone, Menu, MessageCircle, Moon, Settings, Sun, UserRound, UsersRound, Video, X, Youtube } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -29,6 +29,22 @@ const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
   { href: "/library", key: "library", icon: BookOpen },
   { href: "/education", key: "education", icon: GraduationCap },
   { href: "/profile", key: "profile", icon: UserRound },
+];
+
+/** The phone drawer: the destinations people reach from the menu button. */
+type DrawerKey = TextKey | "channels" | "groups" | "settings";
+const drawerNav: { href: string; key: DrawerKey; icon: typeof LayoutDashboard; activeKey?: TextKey }[] = [
+  { href: "/", key: "home", icon: LayoutDashboard },
+  { href: "/chat", key: "chat", icon: MessageCircle },
+  { href: "/chat?tab=channel", key: "channels", icon: Megaphone },
+  { href: "/chat?tab=group", key: "groups", icon: UsersRound },
+  { href: "/meetings", key: "meetings", icon: Video },
+  { href: "/ai", key: "ai", icon: BrainCircuit },
+  { href: "/statistics", key: "statistics", icon: BarChart3 },
+  { href: "/youtube", key: "youtube", icon: Youtube },
+  { href: "/library", key: "library", icon: BookOpen },
+  { href: "/education", key: "education", icon: GraduationCap },
+  { href: "/profile", key: "settings", icon: Settings, activeKey: "profile" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -85,7 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={`app-shell ${/^\/(chat|u|g|ch)(\/|$)/.test(location) ? "app-shell-chat" : ""}`}>
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
-          <Logo />
+          <Logo compact />
+          <span className="drawer-brand-copy"><strong>Optima</strong><span>{t("shell.brandLine")}</span><small>{t("shell.brandTagline")}</small></span>
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X size={20} /></button>
         </div>
         <div className="group-switcher">
@@ -106,16 +123,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </div>
         <nav className="main-nav" aria-label={t("shell.mainNav")}>
-          {nav.map((item) => {
+          {drawerNav.map((item) => {
             const Icon = item.icon;
+            const isTab = item.href.includes("?tab=");
+            const on = isTab ? false : active(item.href.split("?")[0]);
             return (
-              <Link key={item.href} href={item.href} className={active(item.href) ? "active" : ""} onClick={() => setMobileOpen(false)}>
+              <Link key={item.href} href={item.href} className={on ? "active" : ""} aria-current={on ? "page" : undefined} onClick={() => setMobileOpen(false)}>
                 <Icon size={19} strokeWidth={1.8} />
                 <span>{t(`shell.${item.key}`)}</span>
+                {item.key === "chat" && unreadTotal > 0 && <b className="drawer-badge">{unreadTotal > 99 ? "99+" : unreadTotal}</b>}
               </Link>
             );
           })}
         </nav>
+        <div className="drawer-promo" aria-label="Honey IT Club">
+          <strong><Crown size={18} /> Honey IT Club</strong>
+          <span>{t("shell.promoText")}</span>
+          <Globe2 className="drawer-promo-art" size={64} strokeWidth={1.2} aria-hidden="true" />
+        </div>
         <div className="sidebar-status">
           <span className="live-dot" />
           <div><strong>{t("shell.systemOnline")}</strong><small>{t("shell.realtime")}</small></div>

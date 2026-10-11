@@ -72,7 +72,7 @@ import {
   useRef,
   useState
 }                                                                           from "react";
-import { useLocation }                                                      from "wouter";
+import { useLocation, useSearch }                                           from "wouter";
 import { useOutsideClose }                                                  from "../lib/useOutsideClose";
 import { Avatar, Button, EmptyState, Modal }                                from "../components/ui";
 import { StarfieldBackground }                                              from "../components/StarfieldBackground";
@@ -279,6 +279,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     phase: "incoming" | "outgoing" | "active"
   } | null>(null);
   const [catalog, setCatalog] = useState<"all" | "direct" | "group" | "channel" | "bot">("all");
+  // /chat?tab=channel|group|direct (the phone menu's Channels / Groups) opens on that tab.
+  const searchString = useSearch();
+  useEffect(() => {
+    const tab = new URLSearchParams(searchString).get("tab");
+    if (tab === "channel" || tab === "group" || tab === "direct") setCatalog(tab);
+  }, [searchString]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
@@ -1756,7 +1762,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         title: roomTitle(selectedRoom),
         description: `${roomTitle(selectedRoom)} suhbati`,
         startTime: new Date().toISOString(),
-        maxParticipants: clampParticipants(selectedRoom.memberCount + 2)
+        maxParticipants: clampParticipants(selectedRoom.memberCount + 2),
+        // Invite-only: the person being called is let in by the call invite
+        // itself, not by sharing the caller's workspace.
+        scope: "invite_only"
       });
       sessionStorage.setItem(`optima:meeting-camera:${meeting.id}`, kind === "video" ? "on" : "off");
       const call = {
@@ -2990,30 +2999,26 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         people={memberMap} minimized={voiceMinimized} onMinimize={setVoiceMinimized} onClose={closeVoice} onState={onVoiceState} />}
       {directCall && <div className="direct-call-overlay" role="dialog" aria-modal="true"
                           aria-label={t("chat.directCallAria")}>{directCall.phase === "active" ?
-        <MeetingRoomPage meetingId={directCall.meetingId} directMode onDirectClose={closeDirectCall} /> :
-        <section className="direct-call-ringing">
-          <div className="direct-call-backdrop" aria-hidden="true" />
-          <span className="direct-call-type">
-            {directCall.kind === "video" ? <Video size={16} /> : <Phone size={16} />}
-            {directCall.kind === "video" ? t("chat.videoCallAria") : t("chat.audioCallAria")}
-          </span>
+        <MeetingRoomPage meetingId={directCall.meetingId} directMode directKind={directCall.kind} directPeer={memberMap.get(directCall.peerId)} onDirectClose={closeDirectCall} /> :
+        <section className={`direct-call-ringing tg-call ${directCall.phase}`}>
           <div className={`direct-call-avatar-wrap ${directCall.phase}`}>
             <i aria-hidden="true" /><i aria-hidden="true" />
             <Avatar firstName={memberMap.get(directCall.peerId)?.firstName || t("chat.userFallback")}
                     lastName={memberMap.get(directCall.peerId)?.lastName}
                     url={memberMap.get(directCall.peerId)?.avatarUrl} size="xl" />
-          </div><span
-          className="direct-call-status-dot" aria-hidden="true" />
+          </div>
           <h2>{memberMap.get(directCall.peerId) ? `${memberMap.get(directCall.peerId)?.firstName} ${memberMap.get(directCall.peerId)?.lastName}`.trim() : t("chat.userFallback")}</h2>
-          <p>{directCall.phase === "incoming" ? t("chat.incomingCallText") : t("chat.connectingText")}</p>
+          <p role="status">{directCall.phase === "incoming"
+            ? t(directCall.kind === "video" ? "chat.incomingVideoCall" : "chat.incomingCallText")
+            : t("chat.callWaiting")}</p>
           <div className="direct-call-ringing-actions">
-            <button className="decline" onClick={closeDirectCall}><PhoneOff
-              size={23} /><span>{directCall.phase === "incoming" ? t("chat.declineLabel") : t("chat.cancelCallLabel")}</span>
-            </button>
+            {directCall.phase === "incoming"
+              ? <button className="decline" onClick={closeDirectCall}><span className="tg-call-ic"><PhoneOff size={22} /></span><small>{t("chat.declineLabel")}</small></button>
+              : <button className="cancel" onClick={closeDirectCall}><span className="tg-call-ic"><X size={22} /></span><small>{t("chat.cancelCallLabel")}</small></button>}
             {directCall.phase === "incoming" &&
-              <button className="accept" onClick={acceptDirectCall}>{directCall.kind === "video" ? <Video size={23} /> :
-                <Phone size={23} />}<span>{t("chat.acceptButton")}</span></button>}</div>
-          <small><ShieldCheck size={15} /> {t("chat.callSecurityHint")}</small></section>}</div>}
+              <button className="accept" onClick={acceptDirectCall}><span className="tg-call-ic">{directCall.kind === "video" ? <Video size={22} /> :
+                <Phone size={22} />}</span><small>{t("chat.acceptButton")}</small></button>}</div>
+        </section>}</div>}
 
       <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} className="tg-info-modal"
              title={detailsSection ? sectionLabel(detailsSection) : selectedRoom?.type === "direct" ? t("chat.profileTitle") : selectedRoom?.type === "channel" ? t("chat.channelInfoTitle") : t("chat.groupInfoTitle")}

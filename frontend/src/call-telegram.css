@@ -1,0 +1,82 @@
+/*
+ * 1:1 calls, Telegram style: one dark full window, the other person large in
+ * the centre (video, or a big avatar), name + state under it, and a short row
+ * of 44px round buttons with small labels at the bottom.
+ */
+:root { --tgc-bg: #1e2024; --tgc-text: #f4f5f7; --tgc-muted: #8d929b; --tgc-blue: #3d8fd6; --tgc-red: #e5484d; --tgc-green: #3fb950; --tgc-dark: #3a3d44; }
+
+.direct-call-overlay:has(.tg-call) { padding: 0; place-items: stretch; background: var(--tgc-bg); backdrop-filter: none; }
+
+/* ── shared pieces ── */
+.direct-call-overlay .tg-call {
+  position: relative; width: 100%; height: 100dvh; max-height: none; min-height: 0; margin: 0;
+  border: 0; border-radius: 0; box-shadow: none; background: var(--tgc-bg); color: var(--tgc-text);
+}
+.direct-call-overlay .tg-call .tg-call-ic {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: #fff; color: #1e2024; transition: transform .15s ease, background-color .15s ease, filter .15s ease;
+}
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button {
+  display: grid; justify-items: center; gap: 7px; width: auto; height: auto; flex: 0 0 auto; min-width: 60px;
+  padding: 0; border: 0; border-radius: 0; background: transparent !important; color: var(--tgc-text); cursor: pointer;
+}
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button small { font-size: 11px; line-height: 1; color: #c9ccd2; white-space: nowrap; }
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button:hover:not(:disabled) .tg-call-ic { filter: brightness(1.08); transform: scale(1.06); }
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button:disabled { opacity: .45; cursor: default; }
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button:focus-visible { outline: none; }
+.direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) button:focus-visible .tg-call-ic { outline: 2px solid var(--tgc-blue); outline-offset: 3px; }
+.direct-call-overlay .tg-call h2 { margin: 0; font-size: 22px; font-weight: 600; color: var(--tgc-text); }
+.direct-call-overlay .tg-call p[role="status"] { margin: 6px 0 0; font-size: 14px; color: var(--tgc-muted); }
+.direct-call-overlay .tg-call .avatar { width: 160px; height: 160px; font-size: 56px; border: 0; box-shadow: none; }
+
+/* ── ringing (before the call connects) ── */
+.direct-call-overlay .direct-call-ringing.tg-call { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px calc(28px + env(safe-area-inset-bottom)); overflow: hidden; }
+.direct-call-overlay .direct-call-ringing.tg-call::before, .direct-call-overlay .direct-call-ringing.tg-call::after { display: none; }
+.direct-call-overlay .direct-call-ringing.tg-call .direct-call-avatar-wrap { width: 200px; height: 200px; margin: auto 0 22px; }
+.direct-call-overlay .direct-call-ringing.tg-call .direct-call-avatar-wrap > i { inset: 14px; border-color: rgba(255, 255, 255, .14); }
+.direct-call-overlay .direct-call-ringing.tg-call .direct-call-avatar-wrap > .avatar { width: 160px; height: 160px; border: 0; box-shadow: none; }
+.direct-call-overlay .direct-call-ringing.tg-call > p { margin-bottom: auto; }
+.direct-call-overlay .direct-call-ringing.tg-call .direct-call-ringing-actions { display: flex; justify-content: center; gap: 22px; margin: 0; padding: 0; }
+.direct-call-overlay .direct-call-ringing-actions .cancel .tg-call-ic { background: #fff; color: #1e2024; }
+.direct-call-overlay .direct-call-ringing-actions .decline .tg-call-ic { background: var(--tgc-red); color: #fff; }
+.direct-call-overlay .direct-call-ringing-actions .accept .tg-call-ic { background: var(--tgc-green); color: #fff; animation: tgc-accept 1.6s ease-in-out infinite; }
+@keyframes tgc-accept { 0%, 100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, .45); } 50% { box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); } }
+
+/* ── in call ── */
+.direct-call-overlay > .direct-call-surface.tg-call { display: grid; grid-template-rows: minmax(0, 1fr) auto; width: 100%; height: 100dvh; overflow: hidden; }
+.direct-call-overlay .tg-call .direct-surface-header { position: absolute; z-index: 3; top: 14px; left: 0; right: 0; display: flex; justify-content: center; padding: 0; border: 0; background: none; }
+.direct-call-overlay .tg-call .direct-surface-key { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: var(--tgc-muted); font-size: 13px; }
+/* The remote tile stays mounted (it plays the audio); with no video it is
+   simply not shown and the big avatar takes the centre. */
+.direct-call-overlay .tg-call .direct-surface-stage { grid-row: 1 / -1; grid-column: 1; margin: 0; border-radius: 0; }
+.direct-call-overlay .tg-call:not(.has-remote-video) .direct-surface-remote { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.direct-call-overlay .tg-call.has-remote-video .direct-surface-remote, .direct-call-overlay .tg-call.has-remote-video .direct-surface-remote .video-tile { border-radius: 0; background: #000; }
+.direct-call-overlay .tg-call.has-remote-video .direct-surface-remote video { object-fit: contain; }
+.direct-call-overlay .tg-call .direct-surface-self { z-index: 3; right: 16px; bottom: 104px; width: min(22vw, 200px); aspect-ratio: 4 / 3; border: 0; border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
+.direct-call-overlay .tg-call .direct-surface-identity {
+  grid-row: 1; grid-column: 1; z-index: 2; align-self: center; display: grid; justify-items: center; gap: 0;
+  padding: 0 16px; text-align: center; pointer-events: none;
+}
+.direct-call-overlay .tg-call .tg-call-avatar { margin-bottom: 22px; }
+.direct-call-overlay .tg-call.has-remote-video .direct-surface-identity { align-self: start; padding-top: 22px; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+.direct-call-overlay .tg-call.has-remote-video .direct-surface-identity h2 { font-size: 17px; }
+.direct-call-overlay .tg-call .direct-surface-controls {
+  grid-row: 2; grid-column: 1; z-index: 3; display: flex; justify-content: center; gap: 22px;
+  padding: 16px 16px calc(22px + env(safe-area-inset-bottom));
+}
+.direct-call-overlay .tg-call.has-remote-video .direct-surface-controls { background: linear-gradient(to top, rgba(0, 0, 0, .55), transparent); }
+/* Button states as in Telegram: white = off/idle, blue = sending, dark = mic live, red = end. */
+.direct-call-overlay .tg-call .direct-surface-controls button.is-on .tg-call-ic { background: var(--tgc-blue); color: #fff; }
+.direct-call-overlay .tg-call .direct-surface-controls button:last-child:not(.is-off) .tg-call-ic { background: var(--tgc-dark); color: #fff; }
+.direct-call-overlay .tg-call .direct-surface-controls .direct-surface-end .tg-call-ic { background: var(--tgc-red); color: #fff; }
+
+@media (max-width: 640px) {
+  .direct-call-overlay .tg-call .avatar, .direct-call-overlay .direct-call-ringing.tg-call .direct-call-avatar-wrap > .avatar { width: 128px; height: 128px; font-size: 44px; }
+  .direct-call-overlay .direct-call-ringing.tg-call .direct-call-avatar-wrap { width: 168px; height: 168px; }
+  .direct-call-overlay .tg-call :is(.direct-surface-controls, .direct-call-ringing-actions) { gap: 14px; }
+  .direct-call-overlay .tg-call .direct-surface-self { width: 30vw; aspect-ratio: 3 / 4; bottom: 110px; }
+}
+@media (prefers-reduced-motion: reduce) { .direct-call-overlay .direct-call-ringing-actions .accept .tg-call-ic { animation: none; } }
+
+/* Telegram's call avatar: violet gradient, white initials (a photo still wins). */
+.direct-call-overlay .tg-call .avatar:not(:has(img)) { background: linear-gradient(160deg, #b591ff 0%, #7a63e6 100%); color: #fff; }

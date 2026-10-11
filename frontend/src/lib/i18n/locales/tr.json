@@ -80,7 +80,12 @@
     "themeToDark": "Koyu temaya geç",
     "themeToLight": "Açık temaya geç",
     "themeDark": "Koyu tema",
-    "themeLight": "Açık tema"
+    "themeLight": "Açık tema",
+    "channels": "Kanallar",
+    "groups": "Gruplar",
+    "brandLine": "Aloqa",
+    "brandTagline": "Birlikte büyüyoruz",
+    "promoText": "Orta Asya'dan küresel pazara"
   },
   "dashboard": {
     "greetingMorning": "Günaydın",
@@ -874,7 +879,15 @@
     "newGroupItem": "Yeni grup",
     "newChannelItem": "Yeni kanal",
     "newMessageItem": "Yeni mesaj",
-    "nextStep": "İleri"
+    "nextStep": "İleri",
+    "callScreen": "Ekran",
+    "callStartVideo": "Video",
+    "callStopVideo": "Videoyu kapat",
+    "callEnd": "Bitir",
+    "callMute": "Sessiz",
+    "callUnmute": "Mikrofon",
+    "callWaiting": "bekleniyor...",
+    "incomingVideoCall": "görüntülü arıyor..."
   },
   "presence": {
     "online": "Çevrimiçi",

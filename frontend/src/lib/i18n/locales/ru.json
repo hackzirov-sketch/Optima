@@ -80,7 +80,12 @@
     "themeToDark": "Включить тёмную тему",
     "themeToLight": "Включить светлую тему",
     "themeDark": "Тёмная тема",
-    "themeLight": "Светлая тема"
+    "themeLight": "Светлая тема",
+    "channels": "Каналы",
+    "groups": "Группы",
+    "brandLine": "Aloqa",
+    "brandTagline": "Растём вместе",
+    "promoText": "Из Центральной Азии на мировой рынок"
   },
   "dashboard": {
     "greetingMorning": "Доброе утро",
@@ -874,7 +879,15 @@
     "newGroupItem": "Новая группа",
     "newChannelItem": "Новый канал",
     "newMessageItem": "Новое сообщение",
-    "nextStep": "Далее"
+    "nextStep": "Далее",
+    "callScreen": "Экран",
+    "callStartVideo": "Видео",
+    "callStopVideo": "Выкл. видео",
+    "callEnd": "Завершить",
+    "callMute": "Выкл. звук",
+    "callUnmute": "Микрофон",
+    "callWaiting": "ожидание...",
+    "incomingVideoCall": "видеозвонок..."
   },
   "presence": {
     "online": "В сети",

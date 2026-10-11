@@ -1301,6 +1301,27 @@ export class EventsGateway
       return;
     }
 
+    // The call's meeting lives in the caller's workspace, which the callee
+    // usually isn't in (every account has its own) — so the caller, as the
+    // meeting's host, pre-approves exactly the person being called. Only the
+    // host can do this, and only for someone they share this DM with.
+    const invited = await this.dataSource.query<{ id: string }>(
+      `INSERT INTO meeting_join_requests (meeting_id, user_id, status, requested_at, reviewed_by, reviewed_at)
+       SELECT m.id, $2, 'approved', now(), $3, now()
+         FROM meetings m
+        WHERE m.id = $1 AND m.host_id = $3
+       ON CONFLICT (meeting_id, user_id) DO UPDATE SET status = 'approved', reviewed_by = EXCLUDED.reviewed_by, reviewed_at = now()
+       RETURNING meeting_id AS id`,
+      [data.meetingId, data.targetUserId, userId],
+    );
+    if (!invited[0]) {
+      client.emit('call:error', {
+        code: 'CALL_NOT_HOST',
+        message: 'Only the meeting host can place this call',
+      });
+      return;
+    }
+
     const redis = this.redisService.getClient();
     if (redis) {
       // NX: a meetingId already backing a live call belongs to whoever claimed

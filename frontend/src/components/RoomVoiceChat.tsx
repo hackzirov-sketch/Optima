@@ -114,7 +114,12 @@ export function RoomVoiceChat({ roomId, title, me, people, inviteLink, minimized
         live.room
           .on(RoomEvent.ActiveSpeakersChanged, (list) => setSpeaking(new Set(list.map((p) => p.identity))))
           .on(RoomEvent.ParticipantConnected, (p) => setNames((current) => ({ ...current, [p.identity]: p.name || "" })))
-          .on(RoomEvent.ParticipantDisconnected, (p) => setRemotes((current) => { const next = { ...current }; delete next[p.identity]; return next; }));
+          // Drop the leaver from both maps — the list is built from the two,
+          // so leaving them in `names` kept them listed after they'd gone.
+          .on(RoomEvent.ParticipantDisconnected, (p) => {
+            setRemotes((current) => { const next = { ...current }; delete next[p.identity]; return next; });
+            setNames((current) => { const next = { ...current }; delete next[p.identity]; return next; });
+          });
         const tracks: MediaStreamTrack[] = [];
         if (chat.canSpeak) {
           try { tracks.push(await openMic("", true, false)); } catch { show(t("voiceChat.micBlocked"), "error"); }

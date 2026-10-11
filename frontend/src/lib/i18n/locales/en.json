@@ -80,7 +80,12 @@
     "themeToDark": "Switch to dark theme",
     "themeToLight": "Switch to light theme",
     "themeDark": "Dark theme",
-    "themeLight": "Light theme"
+    "themeLight": "Light theme",
+    "channels": "Channels",
+    "groups": "Groups",
+    "brandLine": "Aloqa",
+    "brandTagline": "Growing together",
+    "promoText": "From Central Asia to the global market"
   },
   "dashboard": {
     "greetingMorning": "Good morning",
@@ -874,7 +879,15 @@
     "newGroupItem": "New group",
     "newChannelItem": "New channel",
     "newMessageItem": "New message",
-    "nextStep": "Next"
+    "nextStep": "Next",
+    "callScreen": "Screencast",
+    "callStartVideo": "Start Video",
+    "callStopVideo": "Stop Video",
+    "callEnd": "End Call",
+    "callMute": "Mute",
+    "callUnmute": "Unmute",
+    "callWaiting": "waiting...",
+    "incomingVideoCall": "is video calling you..."
   },
   "presence": {
     "online": "Online",

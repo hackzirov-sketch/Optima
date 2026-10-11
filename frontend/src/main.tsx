@@ -18,6 +18,7 @@ import "./library-v2.css";
 import "./voice-chat.css";
 import "./auth.css";
 import "./meet-polish.css";
+import "./call-telegram.css";
 import "./mobile-shell.css";
 import "./focus.css";
 

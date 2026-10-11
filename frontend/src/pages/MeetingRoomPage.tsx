@@ -1621,7 +1621,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     const name = profile ? `${profile.firstName} ${profile.lastName || ""}`.trim() : t("chat.userFallback");
     const hasVideo = directKind === "video" || camera || screenSharing || Boolean(peer?.video && peer?.stream?.getVideoTracks().length);
     const status = accessDenied || (!loading && !meeting ? t("meetingRoom.callNotFound") : callState === "failed" ? t("meetingRoom.mediaFailed") : callState === "offline" ? t("meetingRoom.reconnecting") : entered && peer ? t("meetingRoom.connectionStable") : t("chat.connectingText"));
-    return <DirectCallSurface name={name} video={hasVideo} status={status} ready={entered && !loading && !accessDenied} microphone={microphone} camera={camera} screenSharing={screenSharing} securityCode={securityCode}
+    return <DirectCallSurface name={name} peer={profile} remoteVideo={Boolean(peer?.video && peer?.stream?.getVideoTracks().length)} video={hasVideo} status={status} ready={entered && !loading && !accessDenied} microphone={microphone} camera={camera} screenSharing={screenSharing} securityCode={securityCode}
       remote={<VideoTile stream={peer?.stream} label={name} avatar={profile} microphoneOn={peer?.mic ?? true} videoOn={peer?.video ?? false} pipEnabled />}
       local={camera || screenSharing ? <VideoTile stream={screenStream || localStream} muted mirrored={!screenSharing} label={t("meetingRoom.you")} avatar={user || undefined} microphoneOn={microphone} videoOn={camera || screenSharing} /> : null}
       onMic={() => void toggleTrack("audio")} onCamera={() => void toggleTrack("video")} onScreen={() => void toggleScreen()} onLeave={leave} />;

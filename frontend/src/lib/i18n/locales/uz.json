@@ -80,7 +80,12 @@
     "themeToDark": "Dark theme’ga o‘tish",
     "themeToLight": "Light theme’ga o‘tish",
     "themeDark": "Dark theme",
-    "themeLight": "Light theme"
+    "themeLight": "Light theme",
+    "channels": "Kanallar",
+    "groups": "Guruhlar",
+    "brandLine": "Aloqa",
+    "brandTagline": "Birlikda o‘sish",
+    "promoText": "Markaziy Osiyodan global bozorga"
   },
   "dashboard": {
     "greetingMorning": "Xayrli tong",
@@ -874,7 +879,15 @@
     "newGroupItem": "Yangi guruh",
     "newChannelItem": "Yangi kanal",
     "newMessageItem": "Yangi xabar",
-    "nextStep": "Keyingi"
+    "nextStep": "Keyingi",
+    "callScreen": "Ekran",
+    "callStartVideo": "Video",
+    "callStopVideo": "Videoni o‘chirish",
+    "callEnd": "Tugatish",
+    "callMute": "Ovozsiz",
+    "callUnmute": "Mikrofon",
+    "callWaiting": "kutilmoqda...",
+    "incomingVideoCall": "Video qo‘ng‘iroq qilmoqda..."
   },
   "presence": {
     "online": "Onlayn",
