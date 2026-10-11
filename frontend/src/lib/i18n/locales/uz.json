@@ -325,24 +325,6 @@
     "passwordChanged": "Parol o‘zgartirildi. Qayta kiring.",
     "passwordChangeFailed": "Parolni o‘zgartirib bo‘lmadi"
   },
-  "groupSetup": {
-    "switchAccount": "Boshqa hisob",
-    "greeting": "Salom, {{name}}",
-    "heading": "Birinchi group’ingizni yarating.",
-    "description": "Jamoa a’zolari, chatlar va meetinglar shu joyda birlashadi.",
-    "bulletGeneralChat": "`general` chat avtomatik yaratiladi",
-    "bulletConversations": "Guruh va shaxsiy suhbatlar",
-    "bulletMeetings": "Kamera va mikrofonli meeting",
-    "formTitle": "Group ma’lumoti",
-    "formDescription": "Keyinroq sozlamalardan o‘zgartira olasiz.",
-    "nameLabel": "Nomi",
-    "namePlaceholder": "Masalan: Optima Team",
-    "addressLabel": "Manzil",
-    "addressPlaceholder": "optima-team",
-    "createButton": "Group yaratish",
-    "nameRequired": "Group nomini kiriting",
-    "createFailed": "Group yaratilmadi"
-  },
   "invite": {
     "eyebrow": "OPTIMA TAKLIFI",
     "chatTitle": "Guruhga qo‘shiling",

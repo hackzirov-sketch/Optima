@@ -16,7 +16,6 @@ interface AuthContextValue {
   refreshUser: () => Promise<User>;
   refreshWorkspaces: () => Promise<Group[]>;
   selectWorkspace: (group: Group) => Promise<void>;
-  createWorkspace: (data: { name: string; slug: string; description?: string }) => Promise<Group>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -238,14 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setWorkspace(item);
   }, []);
 
-  const createWorkspace = useCallback(async (data: { name: string; slug: string; description?: string }) => {
-    const created = await api.groups.create(data);
-    const items = await refreshWorkspaces();
-    const next = items.find((item) => item.id === created.id) || created;
-    await selectWorkspace(next);
-    return next;
-  }, [refreshWorkspaces, selectWorkspace]);
-
   const value = useMemo<AuthContextValue>(() => ({
     ready,
     user,
@@ -258,8 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser,
     refreshWorkspaces,
     selectWorkspace,
-    createWorkspace,
-  }), [ready, user, groups, group, login, completeAuth, completeOAuth, logout, refreshUser, refreshWorkspaces, selectWorkspace, createWorkspace]);
+  }), [ready, user, groups, group, login, completeAuth, completeOAuth, logout, refreshUser, refreshWorkspaces, selectWorkspace]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -325,24 +325,6 @@
     "passwordChanged": "Şifre değiştirildi. Tekrar giriş yapın.",
     "passwordChangeFailed": "Şifre değiştirilemedi"
   },
-  "groupSetup": {
-    "switchAccount": "Başka hesap",
-    "greeting": "Merhaba, {{name}}",
-    "heading": "İlk çalışma alanınızı oluşturun.",
-    "description": "Ekip üyeleri, sohbetler ve toplantılar burada bir araya gelir.",
-    "bulletGeneralChat": "`general` sohbeti otomatik oluşturulur",
-    "bulletConversations": "Grup ve kişisel görüşmeler",
-    "bulletMeetings": "Kamera ve mikrofonlu toplantı",
-    "formTitle": "Çalışma alanı bilgisi",
-    "formDescription": "Daha sonra ayarlardan değiştirebilirsiniz.",
-    "nameLabel": "Adı",
-    "namePlaceholder": "Örneğin: Optima Team",
-    "addressLabel": "Adres",
-    "addressPlaceholder": "optima-team",
-    "createButton": "Çalışma alanı oluştur",
-    "nameRequired": "Çalışma alanı adını girin",
-    "createFailed": "Çalışma alanı oluşturulamadı"
-  },
   "invite": {
     "eyebrow": "OPTIMA DAVETİ",
     "chatTitle": "Gruba katılın",

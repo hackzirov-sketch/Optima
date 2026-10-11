@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
   Injectable,
   ConflictException,
@@ -123,6 +124,42 @@ export class GroupsService {
         message: 'Failed to create group',
       });
     }
+  }
+
+  /**
+   * The user's groups — and if they have none, a personal one made on the
+   * spot. There is no "create your first group" step: the app's chat, meetings
+   * and statistics are all scoped to a group, so every account simply has one.
+   * The advisory lock keeps two concurrent first loads (two tabs, login + a
+   * refresh) from each creating a group.
+   */
+  async listOrProvision(userId: string): Promise<Group[]> {
+    const groups = await this.findAllForUser(userId);
+    if (groups.length) return groups;
+    await this.dataSource.withTransaction(async (query) => {
+      await query(`SELECT pg_advisory_xact_lock(hashtext('personal-group:' || $1))`, [userId]);
+      const member = await query(
+        `SELECT 1 FROM group_members wm JOIN groups w ON w.id = wm.group_id
+          WHERE wm.user_id = $1 AND w.deleted_at IS NULL LIMIT 1`,
+        [userId],
+      );
+      if (member[0]) return;
+      const users: Array<{ name: string }> = await query(
+        `SELECT trim(concat_ws(' ', first_name, last_name)) AS name FROM users WHERE id = $1`,
+        [userId],
+      );
+      const rows: Array<{ id: string }> = await query(
+        `INSERT INTO groups (owner_id, name, slug, visibility, max_members, max_projects, created_by)
+         VALUES ($1, $2, $3, 'private'::groups_visibility_enum, 10, 20, $1)
+         RETURNING id`,
+        [userId, (users[0]?.name || 'Optima').slice(0, 100), `u-${randomBytes(6).toString('hex')}`],
+      );
+      await query(
+        `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, $3)`,
+        [rows[0].id, userId, MemberRole.OWNER],
+      );
+    });
+    return this.findAllForUser(userId);
   }
 
   async findAllForUser(userId: string): Promise<Group[]> {

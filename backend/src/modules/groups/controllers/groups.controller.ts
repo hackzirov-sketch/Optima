@@ -117,7 +117,7 @@ export class GroupsController {
   @Get()
   @ApiOperation({ summary: 'Get all groups for current user' })
   getGroups(@CurrentUser('id') userId: string) {
-    return this.groupsService.findAllForUser(userId);
+    return this.groupsService.listOrProvision(userId);
   }
 
   @Get(':slug')

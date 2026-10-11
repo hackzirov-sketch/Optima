@@ -325,24 +325,6 @@
     "passwordChanged": "Пароль изменён. Войдите снова.",
     "passwordChangeFailed": "Не удалось сменить пароль"
   },
-  "groupSetup": {
-    "switchAccount": "Другой аккаунт",
-    "greeting": "Привет, {{name}}",
-    "heading": "Создайте своё первое пространство.",
-    "description": "Участники команды, чаты и встречи собираются здесь.",
-    "bulletGeneralChat": "Чат `general` создаётся автоматически",
-    "bulletConversations": "Групповые и личные беседы",
-    "bulletMeetings": "Встречи с камерой и микрофоном",
-    "formTitle": "Данные пространства",
-    "formDescription": "Позже вы сможете изменить их в настройках.",
-    "nameLabel": "Название",
-    "namePlaceholder": "Например: Optima Team",
-    "addressLabel": "Адрес",
-    "addressPlaceholder": "optima-team",
-    "createButton": "Создать пространство",
-    "nameRequired": "Введите название пространства",
-    "createFailed": "Не удалось создать пространство"
-  },
   "invite": {
     "eyebrow": "ПРИГЛАШЕНИЕ OPTIMA",
     "chatTitle": "Присоединиться к группе",

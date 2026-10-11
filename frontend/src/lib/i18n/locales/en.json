@@ -325,24 +325,6 @@
     "passwordChanged": "Password changed. Please sign in again.",
     "passwordChangeFailed": "Couldn’t change the password"
   },
-  "groupSetup": {
-    "switchAccount": "Switch account",
-    "greeting": "Hi, {{name}}",
-    "heading": "Create your first group.",
-    "description": "Team members, chats and meetings all come together here.",
-    "bulletGeneralChat": "A `general` chat is created automatically",
-    "bulletConversations": "Group and personal conversations",
-    "bulletMeetings": "Meetings with camera and microphone",
-    "formTitle": "Group details",
-    "formDescription": "You can change this later in settings.",
-    "nameLabel": "Name",
-    "namePlaceholder": "e.g. Optima Team",
-    "addressLabel": "Address",
-    "addressPlaceholder": "optima-team",
-    "createButton": "Create group",
-    "nameRequired": "Enter a group name",
-    "createFailed": "Couldn’t create group"
-  },
   "invite": {
     "eyebrow": "OPTIMA INVITE",
     "chatTitle": "Join the group",

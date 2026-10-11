@@ -1,5 +1,5 @@
 import { LoaderCircle } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/ui";
@@ -15,13 +15,26 @@ import { MeetingRoomPage } from "./pages/MeetingRoomPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
-import { GroupSetupPage } from "./pages/GroupSetupPage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
 
 function LoadingScreen() {
   return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Group yuklanmoqda</span></div>;
+}
+
+function WorkspaceLoading() {
+  const { refreshWorkspaces, logout } = useAuth();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    refreshWorkspaces().then((items) => { if (!cancelled && !items.length) setFailed(true); }, () => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [refreshWorkspaces]);
+  if (!failed) return <LoadingScreen />;
+  return <div className="app-loading"><Logo /><span>Yuklab bo‘lmadi</span>
+    <button className="button" onClick={() => window.location.reload()}>Qayta urinish</button>
+    <button className="text-button" onClick={() => void logout()}>Chiqish</button></div>;
 }
 
 export function App() {
@@ -48,7 +61,9 @@ export function App() {
     if (token) return <InvitePage kind="group" token={token} />;
   }
 
-  if (!group) return <GroupSetupPage />;
+  // Every account has a group — the server makes a personal one on first
+  // load — so a missing one means the list call failed: retry, never ask.
+  if (!group) return <WorkspaceLoading />;
 
   const isEducation = location === "/education" || location.startsWith("/education/");
   // Chat route redesign: /u/:id (DM), /g/:slug-or-publicId (group), /ch/:slug-or-publicId
