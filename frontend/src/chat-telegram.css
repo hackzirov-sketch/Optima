@@ -409,3 +409,10 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 @keyframes room-tab-next { from { opacity: .4; transform: translateX(28px); } to { opacity: 1; transform: none; } }
 @keyframes room-tab-prev { from { opacity: .4; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .room-list[data-swipe] { animation: none; } }
+
+/* The emoji button now sits at the right end of the composer: open the
+   picker leftwards from it, never past the window edge. */
+@media (min-width: 821px) {
+  .chat-page .composer .emoji-menu-wrap > .emoji-picker,
+  .chat-page .composer .emoji-menu-wrap > .telegram-emoji-picker { left: auto !important; right: 0 !important; max-width: calc(100vw - 24px); }
+}
