@@ -193,7 +193,7 @@ const ALLOWED_MEETING_REACTIONS = new Set([
 // "left the meeting" — give it a window to reconnect and rejoin before the
 // participant is marked as having left in the DB (which can in turn trigger
 // meeting auto-end if they were the last one present).
-const MEETING_RECONNECT_GRACE_MS = 30_000;
+const MEETING_RECONNECT_GRACE_MS = 12_000;
 
 // How often a live socket's handshake token is re-checked (expiry, logout
 // blacklist, session block, account status). Short enough that a revoked
@@ -472,9 +472,22 @@ export class EventsGateway
       user.id,
       client.id,
     );
+    // The client may already be gone (a tab closed mid-handshake): its
+    // disconnect handler ran before the entry above was written, so remove it
+    // here or it keeps the user "online" until the TTL runs out.
+    if (client.disconnected) {
+      await this.presenceService.disconnect(user.id, client.id).catch(() => undefined);
+      return;
+    }
     if (isNewlyOnline) {
       this.emitPresence(client, user.id, this.presenceService.maskForOthers(status));
     }
+    // Engine.io's ping/pong keeps flowing while a background tab's timers
+    // (and so the app-level heartbeat) are throttled — a minimized window
+    // stays online as long as its connection does.
+    client.conn.on('heartbeat', () => {
+      void this.presenceService.refresh(user.id, client.id).catch(() => undefined);
+    });
 
     // Bulk presence snapshot for everyone in my groups and chats, in one shot.
     const peerIds = new Set<string>(client.data.presencePeers);
@@ -1688,13 +1701,22 @@ export class EventsGateway
     return rows.map((row) => row.userId);
   }
 
-  /** One presence change to the user's groups and chat partners (each socket once). */
+  /**
+   * One presence change to the user's groups and chat partners (each socket
+   * once). Chat partners are looked up now, not taken from connect time —
+   * someone who started a DM after this socket connected must hear it too.
+   */
   private emitPresence(client: AppSocket, userId: string, status: PresenceStatus) {
-    const rooms = [
-      ...(client.data?.groupIds ?? []).map((groupId) => `group:${groupId}`),
-      ...(client.data?.presencePeers ?? []).map((peerId) => `user:${peerId}`),
-    ];
-    if (rooms.length) this.server.to(rooms).emit('presence_update', { userId, status });
+    void this.chatPresencePeers(userId)
+      .catch(() => client.data?.presencePeers ?? [])
+      .then((peers) => {
+        if (client.data) client.data.presencePeers = peers;
+        const rooms = [
+          ...(client.data?.groupIds ?? []).map((groupId) => `group:${groupId}`),
+          ...peers.map((peerId) => `user:${peerId}`),
+        ];
+        if (rooms.length) this.server.to(rooms).emit('presence_update', { userId, status });
+      });
   }
 
   /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */

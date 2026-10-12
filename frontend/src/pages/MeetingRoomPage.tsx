@@ -12,7 +12,7 @@ import { LiveKitMeeting } from "../lib/liveKitMeeting";
 import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { getSocket } from "../lib/socket";
+import { currentSocket, getSocket } from "../lib/socket";
 import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting, MeetingParticipant, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
@@ -347,7 +347,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [waitingRequests, setWaitingRequests] = useState<MeetingJoinRequest[]>([]);
   const [waitingBusy, setWaitingBusy] = useState<string | null>(null);
   const [waitingCount, setWaitingCount] = useState<number | null>(null);
-  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("group_only");
+  const [settingsVisibility, setSettingsVisibility] = useState<MeetingVisibility>("public");
   const [settingsJoinPolicy, setSettingsJoinPolicy] = useState<MeetingJoinPolicyValue>("auto");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
@@ -1453,6 +1453,22 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
 
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
 
+  // Closing the tab (Ctrl+W) or navigating the page away: say goodbye right
+  // now — the socket "meeting:leave" makes everyone drop the tile at once and
+  // the LiveKit disconnect sends its leave signal. Without this the server
+  // only noticed after the reconnect grace window (~30s). Backgrounding or
+  // minimizing the tab doesn't fire pagehide, so that keeps the call going.
+  const leaveOnPageHide = useRef<(() => void) | null>(null);
+  leaveOnPageHide.current = entered ? () => {
+    currentSocket()?.emit("meeting:leave", { meetingId });
+    void liveKit.current?.disconnect();
+  } : null;
+  useEffect(() => {
+    const onPageHide = () => leaveOnPageHide.current?.();
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
   // Last-resort release of the camera/mic: on unmount, and when the page is
   // being torn down or backgrounded on mobile (where pagehide, not unload, is
   // the event that actually fires). Without this the OS keeps showing the
@@ -1935,7 +1951,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
                   <h3>{t("meet.accessTitle")}</h3>
                   <label className="gm-field">{t("meetings.visibilityLabel")}
                     <select value={settingsVisibility} onChange={(event) => setSettingsVisibility(event.target.value as MeetingVisibility)}>
-                      {(["group_only", "private", "public", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
+                      {([...(meeting?.scope === "group_only" ? ["group_only"] : []), "public", "private", "invite_only"] as MeetingVisibility[]).map((option) => <option key={option} value={option}>{visibilityLabel(option)}</option>)}
                     </select>
                   </label>
                   {settingsVisibility !== "invite_only" && settingsVisibility !== "private" && (

@@ -36,7 +36,7 @@ export function installSocketAuth() {
   // the page was frozen — reconnect right away instead of waiting for backoff.
   document.addEventListener("visibilitychange", () => {
     const socket = currentSocket();
-    if (document.visibilityState === "visible" && socket && !socket.connected && session.isActive()) socket.connect();
+    if (document.visibilityState === "visible" && socket && !socket.active && session.isActive()) socket.connect();
   });
 
   let reconnecting = false;

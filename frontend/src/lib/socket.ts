@@ -45,7 +45,10 @@ export function getSocket(): Socket {
       if (reason === "io server disconnect") window.dispatchEvent(new Event("optima:socket-kicked"));
     });
   }
-  if (!socket.connected) socket.connect();
+  // `active` is true while connecting/reconnecting too: calling connect()
+  // then sent a second CONNECT on the same transport, the server dropped the
+  // connection, and that half-registered socket left presence stuck.
+  if (!socket.active) socket.connect();
   return socket;
 }
 

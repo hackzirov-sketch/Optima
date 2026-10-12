@@ -13,7 +13,7 @@ import type { Meeting, MeetingVisibility } from "../types";
 import { MESH_MAX_PARTICIPANTS, clampParticipants } from "../lib/meeting-limits";
 import { clock, dayLabel, dayTitle, shortDate, weekdayShort } from "../lib/meetDates";
 
-const VISIBILITY_OPTIONS: MeetingVisibility[] = ["group_only", "private", "public", "invite_only"];
+const VISIBILITY_OPTIONS: MeetingVisibility[] = ["public", "private", "invite_only"];
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function dayKey(date: Date) {
@@ -56,7 +56,7 @@ export function MeetingsPage() {
   const [maxAllowed, setMaxAllowed] = useState(MESH_MAX_PARTICIPANTS);
   const [laterMeeting, setLaterMeeting] = useState<Meeting | null>(null);
   const [copied, setCopied] = useState(false);
-  const [visibility, setVisibility] = useState<MeetingVisibility>("group_only");
+  const [visibility, setVisibility] = useState<MeetingVisibility>("public");
   const [joinPolicy, setJoinPolicy] = useState<"auto" | "request_approval">("auto");
   const newBarRef = useRef<HTMLButtonElement>(null);
   const newEmptyRef = useRef<HTMLButtonElement>(null);
@@ -139,7 +139,7 @@ export function MeetingsPage() {
         joinPolicy: visibility === "invite_only" || visibility === "private" ? undefined : joinPolicy,
       });
       setCreateMode(null);
-      setVisibility("group_only");
+      setVisibility("public");
       setJoinPolicy("auto");
       setMeetings((current) => [meeting, ...current]);
       if (mode === "instant") {

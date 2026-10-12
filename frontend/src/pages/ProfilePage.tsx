@@ -1,4 +1,4 @@
-import { AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
+import { AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { Avatar, Button, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -343,12 +343,27 @@ export function ProfilePage() {
           <section className="tgp-panel" key={section}>
             {section === "notifications" && <>
               <header><h2>{t("profile.notificationsTitle")}</h2><p>{t("profile.notificationsDesc")}</p></header>
-              <div className="toggle-list">
-                <button onClick={() => void toggleNotification("notificationsEnabled")}><span className="setting-icon"><Bell size={18} /></span><span><strong>{t("profile.allNotifications")}</strong><small>{t("profile.allNotificationsDesc")}</small></span><i className={notifications.notificationsEnabled ? "on" : ""}><b /></i></button>
-                <button onClick={() => void toggleNotification("emailNotifications")}><span className="setting-icon"><Mail size={18} /></span><span><strong>{t("profile.emailNotifications")}</strong><small>{t("profile.emailNotificationsDesc")}</small></span><i className={notifications.emailNotifications ? "on" : ""}><b /></i></button>
-                <button onClick={() => void toggleNotification("pushNotifications")}><span className="setting-icon"><Smartphone size={18} /></span><span><strong>{t("profile.pushNotifications")}</strong><small>{t("profile.pushNotificationsDesc")}</small></span><i className={notifications.pushNotifications ? "on" : ""}><b /></i></button>
-                <button onClick={() => void toggleNotification("notifyMentions")}><span className="setting-icon"><Globe2 size={18} /></span><span><strong>{t("profile.mentions")}</strong><small>{t("profile.mentionsDesc")}</small></span><i className={notifications.notifyMentions ? "on" : ""}><b /></i></button>
-              </div>
+              {(() => {
+                const row = (key: "notificationsEnabled" | "emailNotifications" | "pushNotifications" | "notifyMentions", icon: ReactNode, tone: string, title: string, hint: string) => {
+                  const master = key === "notificationsEnabled";
+                  const on = !!notifications[key];
+                  // With everything muted the per-channel switches have no effect — show them as such.
+                  const muted = !master && !notifications.notificationsEnabled;
+                  return <button key={key} type="button" role="switch" aria-checked={on} disabled={muted} className="tgp-notify-row" onClick={() => void toggleNotification(key)}>
+                    <span className={`tgp-notify-icon tone-${tone}`}>{icon}</span>
+                    <span className="tgp-notify-text"><strong>{title}</strong><small>{hint}</small></span>
+                    <span className={`tgp-switch${on ? " on" : ""}`} aria-hidden="true"><b /></span>
+                  </button>;
+                };
+                return <div className="tgp-notify">
+                  <div className="tgp-notify-card master">{row("notificationsEnabled", <Bell size={18} />, "violet", t("profile.allNotifications"), t("profile.allNotificationsDesc"))}</div>
+                  <div className="tgp-notify-card">
+                    {row("emailNotifications", <Mail size={18} />, "red", t("profile.emailNotifications"), t("profile.emailNotificationsDesc"))}
+                    {row("pushNotifications", <Smartphone size={18} />, "blue", t("profile.pushNotifications"), t("profile.pushNotificationsDesc"))}
+                    {row("notifyMentions", <AtSign size={18} />, "green", t("profile.mentions"), t("profile.mentionsDesc"))}
+                  </div>
+                </div>;
+              })()}
             </>}
 
             {section === "privacy" && <>
