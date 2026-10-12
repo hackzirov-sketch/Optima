@@ -30,6 +30,7 @@ import { ChatRoomService } from './services/room.service';
 import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
+import { AiConversationService } from './services/ai-conversation.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChannelSettingsService } from './services/channel-settings.service';
 import { MessageViewService } from './services/message-view.service';
@@ -72,6 +73,7 @@ export class ChatController {
     private readonly messageService: ChatMessageService,
     private readonly reactionService: ChatReactionService,
     private readonly aiService: ChatAiService,
+    private readonly aiConversations: AiConversationService,
     private readonly roomInviteService: ChatRoomInviteService,
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
@@ -466,6 +468,15 @@ export class ChatController {
     return this.messageService.sendThreadReply(messageId, userId, dto);
   }
 
+  @Get('chat/messages/:messageId/reactions')
+  @ApiOperation({ summary: 'Who reacted to a message, with emoji and time' })
+  listReactions(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.reactionService.listReactors(messageId, userId);
+  }
+
   @Post('chat/messages/:messageId/reactions')
   @ApiOperation({ summary: 'Add reaction' })
   addReaction(
@@ -766,11 +777,47 @@ export class ChatController {
     await this.roomInviteService.revoke(roomId, inviteId, userId);
   }
 
+  @Get('chat/rooms/:roomId/join-requests')
+  @ApiOperation({ summary: 'Pending ask-to-join requests (owner/admin)' })
+  listJoinRequests(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.roomInviteService.listJoinRequests(roomId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/join-requests/:requestId/approve')
+  @ApiOperation({ summary: 'Approve an ask-to-join request' })
+  async approveJoinRequest(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const result = await this.roomInviteService.resolveJoinRequest(roomId, requestId, userId, true);
+    this.events.emit('chat.join_request_resolved', { roomId, userId: result.userId, approved: true });
+    return result;
+  }
+
+  @Post('chat/rooms/:roomId/join-requests/:requestId/reject')
+  @ApiOperation({ summary: 'Decline an ask-to-join request' })
+  async rejectJoinRequest(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const result = await this.roomInviteService.resolveJoinRequest(roomId, requestId, userId, false);
+    this.events.emit('chat.join_request_resolved', { roomId, userId: result.userId, approved: false });
+    return result;
+  }
+
   @Post('chat/join/:code')
   @UseGuards(IpRateLimitGuard)
   @ApiOperation({ summary: 'Join room by invite code' })
-  joinByCode(@Param('code') code: string, @CurrentUser('id') userId: string) {
-    return this.roomInviteService.joinByCode(code, userId);
+  async joinByCode(@Param('code') code: string, @CurrentUser('id') userId: string) {
+    const result = await this.roomInviteService.joinByCode(code, userId);
+    if ('joinRequested' in result)
+      this.events.emit('chat.join_request_created', { roomId: result.roomId, userId });
+    return result;
   }
 
   /**
@@ -868,7 +915,7 @@ export class ChatController {
   @UseInterceptors(FileInterceptor('image', { limits: { fileSize: 8 * 1024 * 1024, files: 1 } }))
   async aiImageReply(
     @UploadedFile() image: { buffer: Buffer; mimetype: string; size: number } | undefined,
-    @Body() body: { message?: string; history?: string },
+    @Body() body: { message?: string; history?: string; conversationId?: string },
     @CurrentUser('id') userId: string,
   ) {
     if (!image?.buffer || !/^image\/(png|jpe?g|webp|heic|heif|gif)$/.test(image.mimetype))
@@ -885,7 +932,11 @@ export class ChatController {
     } catch {
       /* no history */
     }
-    return this.aiService.generateAiReply(message, history, userId, [{ mimeType: image.mimetype, data: image.buffer }]);
+    const conversationId = typeof body?.conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(body.conversationId) ? body.conversationId : undefined;
+    if (conversationId) history = await this.aiConversations.history(conversationId, userId);
+    const reply = await this.aiService.generateAiReply(message, history, userId, [{ mimeType: image.mimetype, data: image.buffer }]);
+    const saved = await this.aiConversations.record(userId, conversationId, { text: message, hasImage: true }, { text: reply.reply, sources: reply.sources });
+    return { ...reply, ...saved };
   }
 
   @Post('chat/ai')
@@ -895,11 +946,42 @@ export class ChatController {
   })
   @ApiOperation({ summary: 'AI assistant chat response' })
   async aiReply(@Body() dto: AiRequestDto, @CurrentUser('id') userId: string) {
-    return this.aiService.generateAiReply(
-      dto.message,
-      dto.history ?? [],
-      userId,
-    );
+    const history = dto.conversationId
+      ? await this.aiConversations.history(dto.conversationId, userId)
+      : dto.history ?? [];
+    const reply = await this.aiService.generateAiReply(dto.message, history, userId);
+    if (dto.ephemeral) return reply;
+    const saved = await this.aiConversations.record(userId, dto.conversationId, { text: dto.message, hasImage: false }, { text: reply.reply, sources: reply.sources });
+    return { ...reply, ...saved };
+  }
+
+  @Get('chat/ai/conversations')
+  @ApiOperation({ summary: 'My saved Optima AI conversations, newest first' })
+  aiConversationList(@CurrentUser('id') userId: string) {
+    return this.aiConversations.list(userId);
+  }
+
+  @Get('chat/ai/conversations/:id')
+  @ApiOperation({ summary: 'One saved AI conversation with its messages' })
+  aiConversation(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string) {
+    return this.aiConversations.messages(id, userId);
+  }
+
+  @Patch('chat/ai/conversations/:id')
+  @ApiOperation({ summary: 'Rename an AI conversation' })
+  renameAiConversation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { title?: string },
+  ) {
+    return this.aiConversations.rename(id, userId, String(body?.title ?? ''));
+  }
+
+  @Delete('chat/ai/conversations/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete an AI conversation' })
+  async deleteAiConversation(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string) {
+    await this.aiConversations.remove(id, userId);
   }
 
   // ── Media attachment upload ────────────────────────────────────────────────

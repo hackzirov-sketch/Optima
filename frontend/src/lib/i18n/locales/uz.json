@@ -27,7 +27,18 @@
     "topicForYou": "Siz uchun",
     "forYou": "Siz uchun tanlangan foydali videolar",
     "topicScience": "Ilm-fan",
-    "topicBusiness": "Biznes"
+    "topicBusiness": "Biznes",
+    "showMore": "...ko‘proq",
+    "showLess": "Kamroq",
+    "videoDetails": "Video tafsilotlari",
+    "dateLabel": "Sana",
+    "viewsLabel": "Ko‘rishlar",
+    "likesLabel": "Layklar",
+    "commentsLabel": "Izohlar",
+    "subscribers": "{{count}} obunachi",
+    "channelVideos": "Videolar",
+    "channelOnYoutube": "Kanal",
+    "viewsExact": "{{count}} marta ko‘rilgan"
   },
   "common": {
     "next": "Keyingi",
@@ -350,11 +361,16 @@
     "eyebrow": "OPTIMA TAKLIFI",
     "chatTitle": "Guruhga qo‘shiling",
     "groupTitle": "Group’ga qo‘shiling",
-    "chatDescription": "Bu havola sizni guruh suhbatiga olib kiradi. Avval shu group a’zosi bo‘lishingiz kerak.",
+    "chatDescription": "Bu havola sizni guruh yoki kanalga olib kiradi. Yopiq bo‘lsa, admin tasdiqlashi kerak bo‘ladi.",
     "groupDescription": "Taklif email manzilingizga bog‘langan. Qabul qilingach jamoa darhol ochiladi.",
     "acceptButton": "Taklifni qabul qilish",
     "skip": "Hozir emas",
-    "acceptFailed": "Taklifni qabul qilib bo‘lmadi"
+    "acceptFailed": "Taklifni qabul qilib bo‘lmadi",
+    "requestSentTitle": "So‘rov yuborildi",
+    "requestSentDesc": "Bu yopiq {{kind}}. Admin so‘rovingizni tasdiqlagach, u chatlaringizda paydo bo‘ladi.",
+    "kindGroup": "guruh",
+    "kindChannel": "kanal",
+    "goToChats": "Chatlarga o‘tish"
   },
   "publicProfile": {
     "backAria": "Ortga qaytish",
@@ -369,7 +385,15 @@
     "userId": "Foydalanuvchi ID",
     "copyIdAria": "ID ni nusxalash",
     "profileLink": "Profil havolasi",
-    "clickToCopy": "Nusxalash uchun bosing"
+    "clickToCopy": "Nusxalash uchun bosing",
+    "message": "Xabar",
+    "share": "Ulashish",
+    "bioLabel": "Bio",
+    "channelLabel": "Kanal",
+    "subscribers": "{{count}} obunachi",
+    "linkCopied": "Nusxalandi",
+    "closeAria": "Yopish",
+    "thisIsYou": "Bu sizning profilingiz"
   },
   "meetings": {
     "statusScheduled": "Rejalashtirilgan",
@@ -923,7 +947,27 @@
     "aiAttachImage": "Rasm qo‘shish",
     "aiRemoveImage": "Rasmni olib tashlash",
     "aiImageOnly": "Faqat rasm yuklash mumkin",
-    "aiImageTooLarge": "Rasm 8 MB dan oshmasligi kerak"
+    "aiImageTooLarge": "Rasm 8 MB dan oshmasligi kerak",
+    "joinRequestToast": "Yangi qo‘shilish so‘rovi",
+    "joinApprovedToast": "So‘rovingiz qabul qilindi",
+    "joinDeclinedToast": "So‘rovingiz rad etildi",
+    "inviteLinkLabel": "Taklif havolasi",
+    "publicLinkLabel": "Ochiq havola",
+    "reactionsTitle": "Reaksiyalar",
+    "reactionsAll": "Hammasi",
+    "reactionsEmpty": "Ro‘yxat ko‘rinmaydi",
+    "reactionsHint": "Kim reaksiya qoldirganini ko‘rish uchun bosib turing",
+    "showReactions": "Reaksiyalarni ko‘rish",
+    "aiNewChat": "Yangi suhbat",
+    "aiHistory": "Suhbatlar",
+    "aiNoHistory": "Hali suhbat yo‘q. Savol bering — u shu yerda saqlanadi.",
+    "aiRename": "Nomini o‘zgartirish",
+    "aiDelete": "O‘chirish",
+    "aiDeleteConfirm": "Bu suhbat o‘chirilsinmi?",
+    "aiOpenHistory": "Suhbatlar ro‘yxati",
+    "aiImageSent": "Rasm yuborilgan",
+    "aiToday": "Bugun",
+    "aiEarlier": "Avvalroq"
   },
   "presence": {
     "online": "Onlayn",
@@ -1181,7 +1225,8 @@
       "ai": "AI",
       "integrations": "Integratsiyalar",
       "education": "Ta'lim",
-      "danger": "Xavfli zona"
+      "danger": "Xavfli zona",
+      "requests": "Qo‘shilish so‘rovlari"
     },
     "audience": {
       "owner": "Faqat egasi",
@@ -1214,7 +1259,14 @@
     "growth": "O‘sish (30 kun)",
     "storageUsed": "Ishlatilgan joy",
     "auditLog": "O‘zgarishlar tarixi",
-    "auditEmpty": "Hali o‘zgarish yo‘q"
+    "auditEmpty": "Hali o‘zgarish yo‘q",
+    "on": "Yoniq",
+    "groupTitle": "Guruh sozlamalari",
+    "noRequests": "Hozircha so‘rov yo‘q",
+    "approve": "Qabul qilish",
+    "decline": "Rad etish",
+    "requestApproved": "So‘rov qabul qilindi",
+    "requestDeclined": "So‘rov rad etildi"
   },
   "meet": {
     "brand": "Optima Meet",

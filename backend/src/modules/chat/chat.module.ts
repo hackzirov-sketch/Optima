@@ -15,6 +15,7 @@ import { ChatMemberService } from './services/member.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatPresenceService } from './services/presence.service';
 import { ChatAiService } from './services/ai.service';
+import { AiConversationService } from './services/ai-conversation.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChatProcessor } from './workers/chat.processor';
 import { CommunityService } from './services/community.service';
@@ -44,6 +45,7 @@ import { ChatE2eeController } from './e2ee/e2ee.controller';
     ChatReactionService,
     ChatPresenceService,
     ChatAiService,
+    AiConversationService,
     ChatRoomInviteService,
     CommunityService,
     ChannelSettingsService,

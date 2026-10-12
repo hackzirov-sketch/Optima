@@ -27,7 +27,18 @@
     "topicForYou": "For you",
     "forYou": "Useful videos picked for you",
     "topicScience": "Science",
-    "topicBusiness": "Business"
+    "topicBusiness": "Business",
+    "showMore": "...more",
+    "showLess": "Show less",
+    "videoDetails": "Video details",
+    "dateLabel": "Date",
+    "viewsLabel": "Views",
+    "likesLabel": "Likes",
+    "commentsLabel": "Comments",
+    "subscribers": "{{count}} subscribers",
+    "channelVideos": "Videos",
+    "channelOnYoutube": "Channel",
+    "viewsExact": "{{count}} views"
   },
   "common": {
     "next": "Next",
@@ -350,11 +361,16 @@
     "eyebrow": "OPTIMA INVITE",
     "chatTitle": "Join the group",
     "groupTitle": "Join the group",
-    "chatDescription": "This link will take you to the group chat. You need to be a member of this group first.",
+    "chatDescription": "This link takes you into a group or channel. If it is private, an admin has to approve you.",
     "groupDescription": "This invite is tied to your email address. The team opens up right after you accept it.",
     "acceptButton": "Accept invite",
     "skip": "Not now",
-    "acceptFailed": "Couldn’t accept the invite"
+    "acceptFailed": "Couldn’t accept the invite",
+    "requestSentTitle": "Request sent",
+    "requestSentDesc": "This is a private {{kind}}. It will appear in your chats once an admin approves your request.",
+    "kindGroup": "group",
+    "kindChannel": "channel",
+    "goToChats": "Go to chats"
   },
   "publicProfile": {
     "backAria": "Go back",
@@ -369,7 +385,15 @@
     "userId": "User ID",
     "copyIdAria": "Copy ID",
     "profileLink": "Profile link",
-    "clickToCopy": "Click to copy"
+    "clickToCopy": "Click to copy",
+    "message": "Message",
+    "share": "Share",
+    "bioLabel": "Bio",
+    "channelLabel": "Channel",
+    "subscribers": "{{count}} subscribers",
+    "linkCopied": "Copied",
+    "closeAria": "Close",
+    "thisIsYou": "This is your profile"
   },
   "meetings": {
     "statusScheduled": "Scheduled",
@@ -923,7 +947,27 @@
     "aiAttachImage": "Add an image",
     "aiRemoveImage": "Remove the image",
     "aiImageOnly": "Only images can be attached",
-    "aiImageTooLarge": "The image must be 8 MB or smaller"
+    "aiImageTooLarge": "The image must be 8 MB or smaller",
+    "joinRequestToast": "New join request",
+    "joinApprovedToast": "Your join request was approved",
+    "joinDeclinedToast": "Your join request was declined",
+    "inviteLinkLabel": "Invite link",
+    "publicLinkLabel": "Public link",
+    "reactionsTitle": "Reactions",
+    "reactionsAll": "All",
+    "reactionsEmpty": "The list isn't available",
+    "reactionsHint": "Press and hold to see who reacted",
+    "showReactions": "See reactions",
+    "aiNewChat": "New chat",
+    "aiHistory": "Chats",
+    "aiNoHistory": "No chats yet. Ask something — it is saved here.",
+    "aiRename": "Rename",
+    "aiDelete": "Delete",
+    "aiDeleteConfirm": "Delete this chat?",
+    "aiOpenHistory": "Chat list",
+    "aiImageSent": "Image attached",
+    "aiToday": "Today",
+    "aiEarlier": "Earlier"
   },
   "presence": {
     "online": "Online",
@@ -1181,7 +1225,8 @@
       "ai": "AI",
       "integrations": "Integrations",
       "education": "Education",
-      "danger": "Danger zone"
+      "danger": "Danger zone",
+      "requests": "Join requests"
     },
     "audience": {
       "owner": "Owner only",
@@ -1214,7 +1259,14 @@
     "growth": "Growth (30 days)",
     "storageUsed": "Storage used",
     "auditLog": "Change history",
-    "auditEmpty": "No changes yet"
+    "auditEmpty": "No changes yet",
+    "on": "On",
+    "groupTitle": "Group settings",
+    "noRequests": "No pending requests",
+    "approve": "Approve",
+    "decline": "Decline",
+    "requestApproved": "Request approved",
+    "requestDeclined": "Request declined"
   },
   "meet": {
     "brand": "Optima Meet",

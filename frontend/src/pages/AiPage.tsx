@@ -1,11 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, LoaderCircle, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowUp, ImageIcon, ImagePlus, LoaderCircle, Menu, MessageSquarePlus, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { useLocation, useParams } from "wouter";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import { StarfieldBackground } from "../components/StarfieldBackground";
 
-type Message = { role: "user" | "model"; text: string; image?: string; sources?: Array<{ title: string; url: string }> };
+type Message = { role: "user" | "model"; text: string; image?: string; hasImage?: boolean; sources?: Array<{ title: string; url: string }> };
+type Conversation = { id: string; title: string; updatedAt: string };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const TEXTAREA_MAX = 160;
@@ -13,16 +15,47 @@ const TEXTAREA_MAX = 160;
 export function AiPage() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const params = useParams<{ id?: string }>();
+  const [, navigate] = useLocation();
+  const conversationId = params.id ?? null;
+  const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingConversation, setLoadingConversation] = useState(false);
   const [draft, setDraft] = useState("");
   const [image, setImage] = useState<{ file: File; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [drawer, setDrawer] = useState(false);
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const follow = useRef(true);
+  // The conversation a just-sent first message created: its route change must
+  // not reload (and wipe) the messages already on screen.
+  const justCreated = useRef<string | null>(null);
   useEffect(() => { if (follow.current) list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "auto" }); }, [messages, busy]);
+
+  const loadConversations = useCallback(() => {
+    api.chat.aiConversations().then(setConversations).catch(() => setConversations((current) => current ?? []));
+  }, []);
+  useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // The route says which conversation is open; /ai alone is a fresh one.
+  useEffect(() => {
+    setError("");
+    setDrawer(false);
+    if (!conversationId) { setMessages([]); return; }
+    if (justCreated.current === conversationId) { justCreated.current = null; return; }
+    let cancelled = false;
+    setLoadingConversation(true);
+    setMessages([]);
+    api.chat.aiConversation(conversationId)
+      .then((result) => { if (!cancelled) { follow.current = true; setMessages(result.messages.map(({ role, text, hasImage, sources }) => ({ role, text, hasImage, sources }))); } })
+      .catch(() => { if (!cancelled) navigate("/ai", { replace: true }); })
+      .finally(() => { if (!cancelled) setLoadingConversation(false); });
+    return () => { cancelled = true; };
+  }, [conversationId, navigate]);
 
   // The field grows with what's typed (no inner scrollbar for a line or two); past ~6 lines it scrolls.
   useLayoutEffect(() => {
@@ -50,32 +83,96 @@ export function AiPage() {
     setMessages(current => [...current, { role: "user", text: prompt, image: sentImage?.url }]);
     setDraft(""); setImage(null); setBusy(true); setError("");
     try {
-      const result = sentImage ? await api.chat.aiImage(sentImage.file, prompt, history) : await api.chat.ai(prompt, history);
+      const result = sentImage
+        ? await api.chat.aiImage(sentImage.file, prompt, history, conversationId ?? undefined)
+        : await api.chat.ai(prompt, history, { conversationId: conversationId ?? undefined });
       setMessages(current => [...current, { role: "model", text: result.reply, sources: result.sources }]);
+      if (result.conversationId) {
+        const id = result.conversationId;
+        const title = result.title ?? "";
+        setConversations((current) => [{ id, title, updatedAt: new Date().toISOString() }, ...(current ?? []).filter((item) => item.id !== id)]);
+        if (id !== conversationId) { justCreated.current = id; navigate(`/ai/${id}`, { replace: !conversationId }); }
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("chat.aiNotResponding"));
+      setMessages(current => current.slice(0, -1));
       setDraft(prompt);
       if (sentImage) setImage(sentImage);
     } finally { setBusy(false); }
   }
 
-  return <section className="standalone-ai" aria-label="Optima AI">
+  async function saveRename() {
+    if (!renaming) return;
+    const title = renaming.title.trim();
+    setRenaming(null);
+    if (!title) return;
+    setConversations((current) => current?.map((item) => item.id === renaming.id ? { ...item, title } : item) ?? current);
+    await api.chat.renameAiConversation(renaming.id, title).catch(() => loadConversations());
+  }
+
+  async function remove(id: string) {
+    if (!window.confirm(t("chat.aiDeleteConfirm"))) return;
+    setConversations((current) => current?.filter((item) => item.id !== id) ?? current);
+    if (id === conversationId) navigate("/ai");
+    await api.chat.deleteAiConversation(id).catch(() => loadConversations());
+  }
+
+  const startNew = () => { setDrawer(false); navigate("/ai"); window.requestAnimationFrame(() => field.current?.focus()); };
+  const today = new Date().toDateString();
+  const groups = [
+    { label: t("chat.aiToday"), items: (conversations ?? []).filter((item) => new Date(item.updatedAt).toDateString() === today) },
+    { label: t("chat.aiEarlier"), items: (conversations ?? []).filter((item) => new Date(item.updatedAt).toDateString() !== today) },
+  ].filter((group) => group.items.length > 0);
+
+  return <section className="standalone-ai has-sessions" aria-label="Optima AI">
     <StarfieldBackground />
-    <header><Sparkles size={24} /><div><h1>Optima AI</h1><p>{t("chat.aiOnlineAssistant")}</p></div></header>
-    <div ref={list} className="standalone-ai-messages" onScroll={() => { const node = list.current; if (node) follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100; }}>
-      {!messages.length && <div className="standalone-ai-empty"><Sparkles size={40} /><h2>Optima AI</h2><p>{t("chat.aiEmptyDesc")}</p></div>}
-      {messages.map((message, index) => <article key={index} className={`standalone-ai-message ${message.role}`}><small>{message.role === "model" ? "Optima AI" : user?.firstName}</small>{message.image && <img className="standalone-ai-image" src={message.image} alt="" />}{message.text && <p>{message.text}</p>}{message.sources?.map(source => /^https?:\/\//i.test(source.url) && <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</article>)}
-      {busy && <div role="status" className="standalone-ai-status"><LoaderCircle className="spin" size={18} />{t("chat.aiThinkingStatus")}</div>}
+    {drawer && <div className="ai-sessions-scrim" onClick={() => setDrawer(false)} aria-hidden="true" />}
+    <aside className={`ai-sessions ${drawer ? "open" : ""}`} aria-label={t("chat.aiHistory")}>
+      <div className="ai-sessions-top">
+        <button type="button" className="ai-new-chat" onClick={startNew}><MessageSquarePlus size={18} />{t("chat.aiNewChat")}</button>
+        <button type="button" className="ai-sessions-close" onClick={() => setDrawer(false)} aria-label={t("publicProfile.closeAria")}><X size={18} /></button>
+      </div>
+      <nav className="ai-sessions-list">
+        {conversations === null && <div className="ai-sessions-empty"><LoaderCircle className="spin" size={18} /></div>}
+        {conversations?.length === 0 && <p className="ai-sessions-empty">{t("chat.aiNoHistory")}</p>}
+        {groups.map((group) => <div key={group.label} className="ai-sessions-group">
+          <h3>{group.label}</h3>
+          {group.items.map((item) => renaming?.id === item.id
+            ? <form key={item.id} className="ai-session-rename" onSubmit={(event) => { event.preventDefault(); void saveRename(); }}>
+                <input autoFocus value={renaming.title} maxLength={120} onChange={(event) => setRenaming({ id: item.id, title: event.target.value })} onBlur={() => void saveRename()} onKeyDown={(event) => { if (event.key === "Escape") setRenaming(null); }} aria-label={t("chat.aiRename")} />
+              </form>
+            : <div key={item.id} className={`ai-session ${item.id === conversationId ? "active" : ""}`}>
+                <button type="button" className="ai-session-open" onClick={() => navigate(`/ai/${item.id}`)} title={item.title}>{item.title || t("chat.aiNewChat")}</button>
+                <span className="ai-session-actions">
+                  <button type="button" onClick={() => setRenaming({ id: item.id, title: item.title })} aria-label={t("chat.aiRename")} title={t("chat.aiRename")}><Pencil size={14} /></button>
+                  <button type="button" onClick={() => void remove(item.id)} aria-label={t("chat.aiDelete")} title={t("chat.aiDelete")}><Trash2 size={14} /></button>
+                </span>
+              </div>)}
+        </div>)}
+      </nav>
+    </aside>
+    <div className="ai-main">
+      <header>
+        <button type="button" className="ai-sessions-toggle" onClick={() => setDrawer(true)} aria-label={t("chat.aiOpenHistory")}><Menu size={20} /></button>
+        <Sparkles size={24} /><div><h1>Optima AI</h1><p>{t("chat.aiOnlineAssistant")}</p></div>
+        <button type="button" className="ai-header-new" onClick={startNew} aria-label={t("chat.aiNewChat")} title={t("chat.aiNewChat")}><MessageSquarePlus size={19} /></button>
+      </header>
+      <div ref={list} className="standalone-ai-messages" onScroll={() => { const node = list.current; if (node) follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100; }}>
+        {loadingConversation && <div className="standalone-ai-status"><LoaderCircle className="spin" size={18} /></div>}
+        {!messages.length && !loadingConversation && <div className="standalone-ai-empty"><Sparkles size={40} /><h2>Optima AI</h2><p>{t("chat.aiEmptyDesc")}</p></div>}
+        {messages.map((message, index) => <article key={index} className={`standalone-ai-message ${message.role}`}><small>{message.role === "model" ? "Optima AI" : user?.firstName}</small>{message.image && <img className="standalone-ai-image" src={message.image} alt="" />}{!message.image && message.hasImage && <span className="standalone-ai-image-note"><ImageIcon size={14} />{t("chat.aiImageSent")}</span>}{message.text && <p>{message.text}</p>}{message.sources?.map(source => /^https?:\/\//i.test(source.url) && <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</article>)}
+        {busy && <div role="status" className="standalone-ai-status"><LoaderCircle className="spin" size={18} />{t("chat.aiThinkingStatus")}</div>}
+      </div>
+      {error && <p role="alert" className="standalone-ai-error">{error}</p>}
+      <form onSubmit={event => { event.preventDefault(); void send(); }}>
+        {image && <span className="standalone-ai-attachment"><img src={image.url} alt="" /><button type="button" onClick={() => { URL.revokeObjectURL(image.url); setImage(null); }} aria-label={t("chat.aiRemoveImage")}><X size={14} /></button></span>}
+        <button type="button" className="standalone-ai-attach" onClick={() => picker.current?.click()} disabled={busy} aria-label={t("chat.aiAttachImage")} title={t("chat.aiAttachImage")}><ImagePlus size={20} /></button>
+        <input ref={picker} type="file" accept="image/*" hidden onChange={event => { attach(event.target.files?.[0]); event.target.value = ""; }} />
+        <textarea ref={field} value={draft} onChange={event => setDraft(event.target.value)} aria-label={t("chat.sendQuestionAria")} placeholder={t("chat.aiComposerPlaceholder")} rows={1}
+          onPaste={event => { const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/")); if (file) { event.preventDefault(); attach(file); } }}
+          onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
+        <button disabled={busy || (!draft.trim() && !image)} aria-label={t("chat.sendQuestionAria")}><ArrowUp size={20} /></button>
+      </form>
     </div>
-    {error && <p role="alert" className="standalone-ai-error">{error}</p>}
-    <form onSubmit={event => { event.preventDefault(); void send(); }}>
-      {image && <span className="standalone-ai-attachment"><img src={image.url} alt="" /><button type="button" onClick={() => { URL.revokeObjectURL(image.url); setImage(null); }} aria-label={t("chat.aiRemoveImage")}><X size={14} /></button></span>}
-      <button type="button" className="standalone-ai-attach" onClick={() => picker.current?.click()} disabled={busy} aria-label={t("chat.aiAttachImage")} title={t("chat.aiAttachImage")}><ImagePlus size={20} /></button>
-      <input ref={picker} type="file" accept="image/*" hidden onChange={event => { attach(event.target.files?.[0]); event.target.value = ""; }} />
-      <textarea ref={field} value={draft} onChange={event => setDraft(event.target.value)} aria-label={t("chat.sendQuestionAria")} placeholder={t("chat.aiComposerPlaceholder")} rows={1}
-        onPaste={event => { const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/")); if (file) { event.preventDefault(); attach(file); } }}
-        onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-      <button disabled={busy || (!draft.trim() && !image)} aria-label={t("chat.sendQuestionAria")}><ArrowUp size={20} /></button>
-    </form>
   </section>;
 }

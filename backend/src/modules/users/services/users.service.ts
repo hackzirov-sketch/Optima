@@ -77,15 +77,22 @@ export class UsersService {
   async findPublic(identifier: string): Promise<PublicUserDto> {
     const normalized = identifier.replace(/^@/, '');
     const isNumeric = /^\d+$/.test(normalized);
+    // The internal id too: chat messages carry the sender's id and nothing
+    // else, and that is where most profile cards are opened from.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized);
     const rows = await this.dataSource.query<PublicUserDto>(
-      isNumeric
+      isUuid
+        ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
+           FROM users WHERE id = $1 AND deleted_at IS NULL`
+        : isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
                   username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
            FROM users WHERE public_id = $1 AND deleted_at IS NULL`
         : `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
                   username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
            FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
-      [isNumeric ? Number(normalized) : normalized],
+      [isUuid ? normalized : isNumeric ? Number(normalized) : normalized],
     );
     const user = rows[0];
     if (!user) {
@@ -94,6 +101,19 @@ export class UsersService {
         message: 'User not found',
       });
     }
+    // Only public channels with a username (slug): those are the ones with a
+    // shareable address, the same rule the room drawer uses for its link.
+    user.channels = await this.dataSource.query(
+      `SELECT r.id, r.name, r.slug, r.avatar_url AS "avatarUrl",
+              (SELECT COUNT(*)::int FROM chat_members m
+                WHERE m.room_id = r.id AND m.left_at IS NULL AND m.status = 'active') AS "memberCount"
+         FROM chat_rooms r
+        WHERE r.created_by = $1 AND r.type = 'channel' AND r.scope = 'public'
+          AND r.slug IS NOT NULL AND r.is_archived = false
+        ORDER BY r.created_at
+        LIMIT 5`,
+      [user.id],
+    );
     return user;
   }
 

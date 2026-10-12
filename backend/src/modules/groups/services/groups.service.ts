@@ -108,7 +108,7 @@ export class GroupsService {
 
         // Add owner to the channel
         await query(
-          `INSERT INTO chat_members (room_id, user_id) VALUES ($1, $2)`,
+          `INSERT INTO chat_members (room_id, user_id, role) VALUES ($1, $2, 'owner')`,
           [savedRoomRows[0].id, userId],
         );
 

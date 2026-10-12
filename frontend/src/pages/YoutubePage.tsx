@@ -3,6 +3,7 @@ import { ArrowLeft, Check, ExternalLink, Heart, Link2, LoaderCircle, Play, Searc
 import { useLocation, useParams } from "wouter";
 import { api, type MediaPage } from "../lib/api";
 import { useToast } from "../components/Toast";
+import { YoutubeDescription } from "../components/YoutubeDescription";
 import { useI18n } from "../lib/i18n/i18n";
 
 type VideoItem = { key: string; youtubeVideoId: string; title: string; channelName: string; durationSeconds: number; views?: number | null };
@@ -242,6 +243,7 @@ export function YoutubePage() {
             <button type="button" className={`yt-pill ${copied ? "yt-pill-done" : ""}`} onClick={() => void copyLink(selected.id)}>{copied ? <Check size={17} /> : <Link2 size={17} />}{copied ? t("youtube.linkCopied") : t("youtube.copyLink")}</button>
           </div>
         </div>
+        <YoutubeDescription videoId={selected.id} onSearch={(text) => { closeVideo(); setDraft(text); setQuery(text); setCursor({ page: 1, token: null }); }} />
         </div>
       </section>
       <aside className="yt-up-next" aria-label={t("youtube.upNext")}>

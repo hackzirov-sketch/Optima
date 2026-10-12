@@ -1,4 +1,4 @@
-import { ArrowLeft, Camera, CameraOff, Check, ChevronUp, Copy, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, MessageSquareText, Mic, MicOff, Minus, MonitorUp, MoreVertical, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Smile, Unlock, UserPlus, UsersRound, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, CameraOff, Check, ChevronLeft, ChevronRight, ChevronUp, Copy, Hand, Hourglass, Info, LayoutGrid, Link2, Lock, LoaderCircle, Maximize2, MessageSquareText, Mic, MicOff, Minus, MonitorUp, MoreVertical, PhoneOff, PictureInPicture2, Pin, Settings2, ShieldCheck, ShieldX, Smile, Unlock, UserPlus, UsersRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Avatar, Button } from "../components/ui";
@@ -166,10 +166,19 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   const [box, setBox] = useState<{ x: number; y: number; w: number }>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("optima-call-widget") ?? "null");
-      if (saved && typeof saved.x === "number") return saved;
+      if (saved && typeof saved.x === "number") return { x: saved.x, y: saved.y, w: saved.w };
     } catch { /* default */ }
     return { x: -1, y: -1, w: 300 };
   });
+  // Pushed off a side edge, the widget tucks away into a small tab on that
+  // edge (iOS picture-in-picture style); tapping the tab brings it back. The
+  // call — and everyone's audio — keeps going while it is tucked.
+  const [docked, setDocked] = useState<"left" | "right" | null>(() => {
+    try { const saved = JSON.parse(localStorage.getItem("optima-call-widget") ?? "null"); return saved?.docked ?? null; } catch { return null; }
+  });
+  const persist = (next: { x: number; y: number; w: number }, side: "left" | "right" | null) => {
+    try { localStorage.setItem("optima-call-widget", JSON.stringify({ ...next, docked: side })); } catch { /* storage off */ }
+  };
   // mode "move", or the edge/corner being dragged to resize: n, s, e, w, ne, nw, se, sw.
   const drag = useRef<{ mode: string; startX: number; startY: number; box: { x: number; y: number; w: number }; height: number } | null>(null);
   // A drag that started on the video must not also count as "tap to expand".
@@ -214,7 +223,14 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
       dragged.current = true;
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     }
-    if (state.mode === "move") { setBox(clamp({ ...state.box, x: state.box.x + dx, y: state.box.y + dy })); return; }
+    if (state.mode === "move") {
+      // Vertically it stays on screen; sideways it may be pushed past the
+      // edge — far enough and letting go tucks it into the edge tab.
+      const clamped = clamp({ ...state.box, x: state.box.x + dx, y: state.box.y + dy });
+      const x = Math.max(-state.box.w + 48, Math.min(state.box.x + dx, window.innerWidth - 48));
+      setBox({ ...clamped, x });
+      return;
+    }
     // Resizing keeps the shape: width follows the dragged edge(s); the opposite
     // side stays put, so a left/top edge moves x/y by what the width/height gained.
     const ratio = state.height / state.box.w;
@@ -234,9 +250,38 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   };
   const end = () => {
     if (!drag.current) return;
+    const wasMove = drag.current.mode === "move";
     drag.current = null;
-    setBox((current) => { try { localStorage.setItem("optima-call-widget", JSON.stringify(current)); } catch { /* storage off */ } return current; });
+    setBox((current) => {
+      const hidden = wasMove ? (current.x < 0 ? -current.x : Math.max(0, current.x + current.w - window.innerWidth)) : 0;
+      if (hidden > current.w * 0.3) {
+        const side = current.x < 0 ? "left" : "right";
+        setDocked(side);
+        const parked = clamp(current);
+        persist(parked, side);
+        return parked;
+      }
+      const next = clamp(current);
+      persist(next, null);
+      return next;
+    });
   };
+  const undock = () => {
+    setDocked(null);
+    setBox((current) => { const next = clamp(current); persist(next, null); return next; });
+  };
+  if (docked) {
+    const tabTop = Math.max(8, Math.min(box.y + 40, window.innerHeight - 96));
+    return <>
+      {/* Still mounted while tucked away: the call's audio must keep playing. */}
+      {remotes.map((remote) => remote.stream && <RemoteAudio key={remote.id} stream={remote.stream} />)}
+      <button type="button" className={`meeting-widget-tab ${docked}`} style={{ top: tabTop }} onClick={undock}
+              aria-label={t("meetingRoom.expandWidgetAria")} title={title}>
+        {docked === "left" ? <ChevronRight size={22} /> : <ChevronLeft size={22} />}
+        {!microphone && <MicOff size={12} className="meeting-widget-tab-mic" />}
+      </button>
+    </>;
+  }
   return (
     <div ref={widgetRef} className="meeting-floating-widget" role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
          style={box.x >= 0 ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}

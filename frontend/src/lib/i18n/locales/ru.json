@@ -27,7 +27,18 @@
     "topicForYou": "Для вас",
     "forYou": "Полезные видео, подобранные для вас",
     "topicScience": "Наука",
-    "topicBusiness": "Бизнес"
+    "topicBusiness": "Бизнес",
+    "showMore": "...ещё",
+    "showLess": "Свернуть",
+    "videoDetails": "О видео",
+    "dateLabel": "Дата",
+    "viewsLabel": "Просмотры",
+    "likesLabel": "Лайки",
+    "commentsLabel": "Комментарии",
+    "subscribers": "{{count}} подписчиков",
+    "channelVideos": "Видео",
+    "channelOnYoutube": "Канал",
+    "viewsExact": "{{count}} просмотров"
   },
   "common": {
     "next": "Далее",
@@ -350,11 +361,16 @@
     "eyebrow": "ПРИГЛАШЕНИЕ OPTIMA",
     "chatTitle": "Присоединиться к группе",
     "groupTitle": "Присоединиться к пространству",
-    "chatDescription": "Эта ссылка приведёт вас в групповой чат. Сначала нужно стать участником этого пространства.",
+    "chatDescription": "Эта ссылка ведёт в группу или канал. Если он закрытый, нужно одобрение админа.",
     "groupDescription": "Приглашение привязано к вашему email. После принятия команда откроется сразу.",
     "acceptButton": "Принять приглашение",
     "skip": "Не сейчас",
-    "acceptFailed": "Не удалось принять приглашение"
+    "acceptFailed": "Не удалось принять приглашение",
+    "requestSentTitle": "Заявка отправлена",
+    "requestSentDesc": "Это закрытый {{kind}}. Он появится в ваших чатах, когда админ одобрит заявку.",
+    "kindGroup": "группа",
+    "kindChannel": "канал",
+    "goToChats": "К чатам"
   },
   "publicProfile": {
     "backAria": "Вернуться назад",
@@ -369,7 +385,15 @@
     "userId": "ID пользователя",
     "copyIdAria": "Копировать ID",
     "profileLink": "Ссылка на профиль",
-    "clickToCopy": "Нажмите, чтобы скопировать"
+    "clickToCopy": "Нажмите, чтобы скопировать",
+    "message": "Сообщение",
+    "share": "Поделиться",
+    "bioLabel": "О себе",
+    "channelLabel": "Канал",
+    "subscribers": "{{count}} подписчиков",
+    "linkCopied": "Скопировано",
+    "closeAria": "Закрыть",
+    "thisIsYou": "Это ваш профиль"
   },
   "meetings": {
     "statusScheduled": "Запланировано",
@@ -923,7 +947,27 @@
     "aiAttachImage": "Добавить изображение",
     "aiRemoveImage": "Убрать изображение",
     "aiImageOnly": "Можно прикрепить только изображение",
-    "aiImageTooLarge": "Изображение должно быть не больше 8 МБ"
+    "aiImageTooLarge": "Изображение должно быть не больше 8 МБ",
+    "joinRequestToast": "Новая заявка на вступление",
+    "joinApprovedToast": "Ваша заявка принята",
+    "joinDeclinedToast": "Ваша заявка отклонена",
+    "inviteLinkLabel": "Пригласительная ссылка",
+    "publicLinkLabel": "Публичная ссылка",
+    "reactionsTitle": "Реакции",
+    "reactionsAll": "Все",
+    "reactionsEmpty": "Список недоступен",
+    "reactionsHint": "Удерживайте, чтобы увидеть, кто отреагировал",
+    "showReactions": "Посмотреть реакции",
+    "aiNewChat": "Новый чат",
+    "aiHistory": "Чаты",
+    "aiNoHistory": "Чатов пока нет. Задайте вопрос — он сохранится здесь.",
+    "aiRename": "Переименовать",
+    "aiDelete": "Удалить",
+    "aiDeleteConfirm": "Удалить этот чат?",
+    "aiOpenHistory": "Список чатов",
+    "aiImageSent": "Изображение прикреплено",
+    "aiToday": "Сегодня",
+    "aiEarlier": "Ранее"
   },
   "presence": {
     "online": "В сети",
@@ -1181,7 +1225,8 @@
       "ai": "AI",
       "integrations": "Integrations",
       "education": "Education",
-      "danger": "Danger zone"
+      "danger": "Danger zone",
+      "requests": "Заявки на вступление"
     },
     "audience": {
       "owner": "Owner only",
@@ -1214,7 +1259,14 @@
     "growth": "Growth (30 days)",
     "storageUsed": "Storage used",
     "auditLog": "Change history",
-    "auditEmpty": "No changes yet"
+    "auditEmpty": "No changes yet",
+    "on": "Вкл",
+    "groupTitle": "Настройки группы",
+    "noRequests": "Заявок нет",
+    "approve": "Принять",
+    "decline": "Отклонить",
+    "requestApproved": "Заявка принята",
+    "requestDeclined": "Заявка отклонена"
   },
   "meet": {
     "brand": "Optima Meet",

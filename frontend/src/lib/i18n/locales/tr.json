@@ -27,7 +27,18 @@
     "topicForYou": "Senin için",
     "forYou": "Senin için seçilen faydalı videolar",
     "topicScience": "Bilim",
-    "topicBusiness": "İş"
+    "topicBusiness": "İş",
+    "showMore": "...daha fazla",
+    "showLess": "Daha az göster",
+    "videoDetails": "Video ayrıntıları",
+    "dateLabel": "Tarih",
+    "viewsLabel": "Görüntüleme",
+    "likesLabel": "Beğeni",
+    "commentsLabel": "Yorumlar",
+    "subscribers": "{{count}} abone",
+    "channelVideos": "Videolar",
+    "channelOnYoutube": "Kanal",
+    "viewsExact": "{{count}} görüntüleme"
   },
   "common": {
     "next": "İleri",
@@ -350,11 +361,16 @@
     "eyebrow": "OPTIMA DAVETİ",
     "chatTitle": "Gruba katılın",
     "groupTitle": "Çalışma alanına katılın",
-    "chatDescription": "Bu bağlantı sizi grup sohbetine götürür. Önce bu çalışma alanının üyesi olmanız gerekir.",
+    "chatDescription": "Bu bağlantı sizi bir gruba veya kanala götürür. Özelse bir yöneticinin onaylaması gerekir.",
     "groupDescription": "Davet e-posta adresinize bağlıdır. Kabul edildiğinde ekip hemen açılır.",
     "acceptButton": "Daveti kabul et",
     "skip": "Şimdi değil",
-    "acceptFailed": "Davet kabul edilemedi"
+    "acceptFailed": "Davet kabul edilemedi",
+    "requestSentTitle": "İstek gönderildi",
+    "requestSentDesc": "Bu özel bir {{kind}}. Bir yönetici isteğinizi onayladığında sohbetlerinizde görünecek.",
+    "kindGroup": "grup",
+    "kindChannel": "kanal",
+    "goToChats": "Sohbetlere git"
   },
   "publicProfile": {
     "backAria": "Geri dön",
@@ -369,7 +385,15 @@
     "userId": "Kullanıcı ID’si",
     "copyIdAria": "ID’yi kopyala",
     "profileLink": "Profil bağlantısı",
-    "clickToCopy": "Kopyalamak için tıklayın"
+    "clickToCopy": "Kopyalamak için tıklayın",
+    "message": "Mesaj",
+    "share": "Paylaş",
+    "bioLabel": "Hakkında",
+    "channelLabel": "Kanal",
+    "subscribers": "{{count}} abone",
+    "linkCopied": "Kopyalandı",
+    "closeAria": "Kapat",
+    "thisIsYou": "Bu sizin profiliniz"
   },
   "meetings": {
     "statusScheduled": "Planlandı",
@@ -923,7 +947,27 @@
     "aiAttachImage": "Görsel ekle",
     "aiRemoveImage": "Görseli kaldır",
     "aiImageOnly": "Yalnızca görsel eklenebilir",
-    "aiImageTooLarge": "Görsel en fazla 8 MB olmalı"
+    "aiImageTooLarge": "Görsel en fazla 8 MB olmalı",
+    "joinRequestToast": "Yeni katılma isteği",
+    "joinApprovedToast": "Katılma isteğiniz onaylandı",
+    "joinDeclinedToast": "Katılma isteğiniz reddedildi",
+    "inviteLinkLabel": "Davet bağlantısı",
+    "publicLinkLabel": "Herkese açık bağlantı",
+    "reactionsTitle": "Tepkiler",
+    "reactionsAll": "Tümü",
+    "reactionsEmpty": "Liste mevcut değil",
+    "reactionsHint": "Kimin tepki verdiğini görmek için basılı tutun",
+    "showReactions": "Tepkileri gör",
+    "aiNewChat": "Yeni sohbet",
+    "aiHistory": "Sohbetler",
+    "aiNoHistory": "Henüz sohbet yok. Bir şey sorun — burada saklanır.",
+    "aiRename": "Yeniden adlandır",
+    "aiDelete": "Sil",
+    "aiDeleteConfirm": "Bu sohbet silinsin mi?",
+    "aiOpenHistory": "Sohbet listesi",
+    "aiImageSent": "Görsel eklendi",
+    "aiToday": "Bugün",
+    "aiEarlier": "Daha önce"
   },
   "presence": {
     "online": "Çevrimiçi",
@@ -1181,7 +1225,8 @@
       "ai": "AI",
       "integrations": "Integrations",
       "education": "Education",
-      "danger": "Danger zone"
+      "danger": "Danger zone",
+      "requests": "Katılma istekleri"
     },
     "audience": {
       "owner": "Owner only",
@@ -1214,7 +1259,14 @@
     "growth": "Growth (30 days)",
     "storageUsed": "Storage used",
     "auditLog": "Change history",
-    "auditEmpty": "No changes yet"
+    "auditEmpty": "No changes yet",
+    "on": "Açık",
+    "groupTitle": "Grup ayarları",
+    "noRequests": "Bekleyen istek yok",
+    "approve": "Onayla",
+    "decline": "Reddet",
+    "requestApproved": "İstek onaylandı",
+    "requestDeclined": "İstek reddedildi"
   },
   "meet": {
     "brand": "Optima Meet",

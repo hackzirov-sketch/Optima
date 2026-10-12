@@ -91,6 +91,8 @@ import { useAuth }                                                          from
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
 import { DRAFT_CLIENT_ID, openDraft, saveDraft } from "../lib/drafts";
 import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, isRoomE2ee, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
+import { openProfile } from "../lib/profileModal";
+import { ReactorsPopover } from "../components/ReactorsPopover";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -376,6 +378,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // "Who reacted" list, opened by right-click or press-and-hold on a reaction chip.
+  const [reactorsFor, setReactorsFor] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const reactionHold = useRef<{ timer: number; fired: boolean } | null>(null);
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
@@ -784,7 +789,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setAiThinking(true);
     try {
       const history = next.slice(-12, -1).map(({ role, text }) => ({ role, text }));
-      const result = await api.chat.ai(prompt, history);
+      const result = await api.chat.ai(prompt, history, { ephemeral: true });
       const list = aiMessageList.current;
       aiShouldScroll.current = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 120;
       const completed = [...next, {
@@ -1252,6 +1257,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("message_pinned", onMessagePinned);
     socket.on("room_voice_chat", onRoomVoiceChat);
     socket.on("room_keys_shared", onRoomKeysShared);
+    // Ask-to-join: admins hear about a new request; the requester hears the answer.
+    const onJoinRequest = () => show(t("chat.joinRequestToast"));
+    const onJoinResolved = (payload: { approved: boolean }) => {
+      show(t(payload.approved ? "chat.joinApprovedToast" : "chat.joinDeclinedToast"), payload.approved ? "success" : "error");
+      if (payload.approved) void loadRooms();
+    };
+    socket.on("chat:join_request", onJoinRequest);
+    socket.on("chat:join_request_resolved", onJoinResolved);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -1272,6 +1285,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("message_pinned", onMessagePinned);
       socket.off("room_voice_chat", onRoomVoiceChat);
       socket.off("room_keys_shared", onRoomKeysShared);
+      socket.off("chat:join_request", onJoinRequest);
+      socket.off("chat:join_request_resolved", onJoinResolved);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -1514,7 +1529,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!prompt || aiThinking) return;
     setAiThinking(true);
     try {
-      const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), []);
+      const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), [], { ephemeral: true });
       setDraft(result.reply);
       setAiAssistPrompt("");
     } catch (error) {
@@ -2165,6 +2180,25 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
    */
   const canAdminister = (room?: ChatRoom | null) =>
     Boolean(room) && (room!.createdById === user?.id || room!.myRole === "owner" || room!.myRole === "admin");
+
+  // The link the info drawer shares. A public room with a username (slug)
+  // shows that; anything else shows its invite link — to admins only, since
+  // for a private room following it files an ask-to-join request. The bare
+  // numeric /g/<publicId> address is never shown.
+  const [drawerInviteLink, setDrawerInviteLink] = useState<{ roomId: string; url: string } | null>(null);
+  const publicSlugLink = selectedRoom && selectedRoom.type !== "direct" && selectedRoom.scope === "public" && selectedRoom.slug ? roomLink(selectedRoom) : null;
+  const drawerRoomId = detailsOpen && selectedRoom && selectedRoom.type !== "direct" && !publicSlugLink && canAdminister(selectedRoom) ? selectedRoom.id : null;
+  useEffect(() => {
+    if (!drawerRoomId || drawerInviteLink?.roomId === drawerRoomId) return;
+    let cancelled = false;
+    void api.chat.inviteCode(drawerRoomId)
+      .then(({ code }) => { if (!cancelled) setDrawerInviteLink({ roomId: drawerRoomId, url: new URL(`/join/chat/${code}`, window.location.origin).toString() }); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [drawerRoomId, drawerInviteLink?.roomId]);
+  const drawerLink = publicSlugLink
+    ? { url: publicSlugLink, label: t("chat.publicLinkLabel") }
+    : drawerInviteLink && drawerInviteLink.roomId === drawerRoomId ? { url: drawerInviteLink.url, label: t("chat.inviteLinkLabel") } : null;
 
   const canPostIn = (room: ChatRoom) => {
     if (room.isReadOnly) return false;
@@ -2863,8 +2897,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             className={`swipe-reply-indicator ${swipingMessage?.id === message.id && swipingMessage.armed ? "armed" : ""}`}
                             aria-hidden="true"><Reply size={18} /></span>
                           {!mine && !grouped &&
-                            <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl}
-                                    size="sm" />}
+                            <button type="button" className="message-avatar-button" onClick={() => openProfile(sender?.id)} aria-label={t("chat.openProfileAria", { name: sender ? `${sender.firstName} ${sender.lastName}`.trim() : "" })}>
+                              <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />
+                            </button>}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
                             {message.replyToId && <button className="message-reply-quote"
@@ -2875,7 +2910,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span>
                             </button>}
                             {!mine && !grouped &&
-                              <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
+                              <strong className="message-sender-link" onClick={() => openProfile(sender?.id)}>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
                               <AnimatedEmoji className="message-custom-emoji" id={telegramEmojiId(message.content)} /> :
                               <p>{renderMessageContent(message.content, true)}</p>)}
@@ -2896,10 +2931,27 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                     size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download
                                     size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 &&
-                              <div className="message-reactions">{message.reactions.map((reaction) => <button
-                                key={reaction.emoji}
-                                onClick={() => void reactToMessage(message, reaction.emoji)}>{renderReaction(reaction.emoji)}
-                                <span>{reaction.userIds.length}</span></button>)}</div>}
+                              <div className="message-reactions" title={selectedRoom.type !== "channel" ? t("chat.reactionsHint") : undefined}>{message.reactions.map((reaction) => {
+                                // Telegram: up to three reactors show as tiny avatars, more as a count.
+                                const faces = selectedRoom.type !== "channel" && reaction.userIds.length <= 3 ? reaction.userIds.map((id) => memberMap.get(id) ?? (id === user?.id ? user : null)) : null;
+                                return <button
+                                  key={reaction.emoji}
+                                  className={user && reaction.userIds.includes(user.id) ? "mine" : ""}
+                                  onClick={() => { if (reactionHold.current?.fired) { reactionHold.current = null; return; } void reactToMessage(message, reaction.emoji); }}
+                                  onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setReactorsFor({ messageId: message.id, x: event.clientX, y: event.clientY }); }}
+                                  onPointerDown={(event) => {
+                                    const { clientX, clientY } = event;
+                                    const timer = window.setTimeout(() => { if (reactionHold.current) reactionHold.current.fired = true; setReactorsFor({ messageId: message.id, x: clientX, y: clientY }); }, 450);
+                                    reactionHold.current = { timer, fired: false };
+                                  }}
+                                  onPointerUp={() => { if (reactionHold.current && !reactionHold.current.fired) { window.clearTimeout(reactionHold.current.timer); reactionHold.current = null; } }}
+                                  onPointerLeave={() => { if (reactionHold.current && !reactionHold.current.fired) { window.clearTimeout(reactionHold.current.timer); reactionHold.current = null; } }}>
+                                  {renderReaction(reaction.emoji)}
+                                  {faces && faces.every(Boolean)
+                                    ? <span className="reaction-faces">{faces.map((face) => <Avatar key={face!.id} firstName={face!.firstName} lastName={face!.lastName} url={face!.avatarUrl} size="sm" />)}</span>
+                                    : <span>{reaction.userIds.length}</span>}
+                                </button>;
+                              })}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>
                               {/* Channels report a bare count to everyone; in a group
                                   the author alone can open the list of who read it. */}
@@ -3169,7 +3221,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 {detailPeer?.username && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
               </> : <>
                 {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
-                <button className="tg-info-row" onClick={() => void copyText(roomLink(selectedRoom))}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{roomLink(selectedRoom).replace(/^https?:\/\//, "")}</strong><small>{t("chat.linkLabel")}</small></span><Copy size={16} /></button>
+                {drawerLink && <button className="tg-info-row" onClick={() => void copyText(drawerLink.url)}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{drawerLink.url.replace(/^https?:\/\//, "")}</strong><small>{drawerLink.label}</small></span><Copy size={16} /></button>}
               </>}
             </section>
             <section className="tg-info-section">
@@ -3185,7 +3237,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /></label>
               {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
               {!detailsLoading && detailMembers.map((member) => (
-                <button key={member.publicId} className="tg-info-row tg-info-member" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}>
+                <button key={member.publicId} className="tg-info-row tg-info-member" onClick={() => openProfile(member.username || member.publicId)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}>
                   <span className="tg-info-member-avatar"><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><MemberPresenceDot userId={member.id} /></span>
                   <span className="tg-info-text"><strong>{member.firstName} {member.lastName}</strong><small><MemberPresenceText userId={member.id} /></small></span>
                   {member.role !== "member" && <em className="tg-info-role">{t(`chat.role_${member.role}`)}</em>}
@@ -3248,8 +3300,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       </Modal>
 
       <Modal open={channelSettingsOpen} onClose={() => setChannelSettingsOpen(false)}
-             title={t("channelSettings.title")}
-             description={selectedRoom?.name ?? ""} width="lg">
+             title={selectedRoom?.type === "channel" ? t("channelSettings.title") : t("channelSettings.groupTitle")}
+             description={selectedRoom?.name ?? ""} width="md">
         {selectedRoom && channelSettingsOpen && <ChannelSettingsPanel
           room={selectedRoom}
           onClose={() => setChannelSettingsOpen(false)}
@@ -3320,6 +3372,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           </footer>
         </form>
       </Modal>
+
+      {reactorsFor && <ReactorsPopover messageId={reactorsFor.messageId} x={reactorsFor.x} y={reactorsFor.y} renderEmoji={renderReaction} onClose={() => setReactorsFor(null)} />}
 
       <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)}
              title={t("chat.forwardMessageTitle")} description={t("chat.forwardMessageDesc")} width="md">

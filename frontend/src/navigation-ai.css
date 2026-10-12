@@ -291,3 +291,51 @@
    below it keeps only its action. */
 .dashboard-page:has(.dashboard-welcome) > .page-header :is(p, span:not(.button span)) { display: none; }
 .dashboard-page:has(.dashboard-welcome) > .page-header { justify-content: flex-end; min-height: 0; margin-block: 18px 12px; }
+
+/* Optima AI with saved chats: a Claude-style sidebar of conversations on the
+   left, the chat on the right. On a phone the list is a drawer. */
+.standalone-ai.has-sessions { flex-direction: row; gap: 16px; inset: 100px max(24px, calc((100vw - 1180px) / 2)) 132px; }
+.ai-main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ai-main > header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--accent); }
+.ai-main > header > div { flex: 1; min-width: 0; }
+.ai-main > header h1 { margin: 0; font-size: 20px; color: var(--text); }
+.ai-main > header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.ai-sessions-toggle, .ai-header-new { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border: 0; border-radius: 10px; background: none; color: var(--text-soft); cursor: pointer; }
+.ai-sessions-toggle { display: none; }
+.ai-sessions-toggle:hover, .ai-header-new:hover { background: var(--surface-muted); color: var(--accent); }
+.ai-sessions { position: relative; z-index: 2; width: 264px; flex: none; display: flex; flex-direction: column; min-height: 0; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.ai-sessions-top { display: flex; gap: 6px; }
+.ai-new-chat { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.ai-new-chat:hover { border-color: var(--accent); color: var(--accent); }
+.ai-sessions-close { display: none; place-items: center; width: 42px; border: 0; border-radius: 12px; background: none; color: var(--muted); cursor: pointer; }
+.ai-sessions-list { flex: 1; min-height: 0; overflow-y: auto; margin-top: 10px; padding-right: 2px; }
+.ai-sessions-group + .ai-sessions-group { margin-top: 12px; }
+.ai-sessions-group h3 { margin: 4px 10px 6px; color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.ai-session { position: relative; display: flex; align-items: center; border-radius: 10px; }
+.ai-session:hover, .ai-session.active { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.ai-session.active .ai-session-open { color: var(--text); font-weight: 650; }
+.ai-session-open { flex: 1; min-width: 0; padding: 9px 10px; border: 0; background: none; color: var(--text-soft); font: inherit; font-size: 13.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ai-session-actions { display: none; flex: none; gap: 2px; padding-right: 4px; }
+.ai-session:hover .ai-session-actions, .ai-session.active .ai-session-actions, .ai-session:focus-within .ai-session-actions { display: flex; }
+.ai-session-actions button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.ai-session-actions button:hover { background: var(--surface); color: var(--accent); }
+.ai-session-rename input { width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 13.5px; }
+.ai-sessions-empty { display: grid; place-items: center; margin: 18px 8px; color: var(--muted); font-size: 13px; line-height: 1.5; text-align: center; }
+.ai-sessions-scrim { display: none; }
+.standalone-ai-image-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 8px; border-radius: 8px; background: var(--surface-muted); color: var(--muted); font-size: 12px; }
+@media (max-width: 820px) {
+  .standalone-ai.has-sessions { inset: 88px 12px calc(112px + env(safe-area-inset-bottom)); gap: 0; }
+  .ai-main > header { padding: 8px 4px 12px; }
+  .ai-sessions-toggle { display: grid; }
+  .ai-sessions { position: fixed; z-index: 1001; top: 0; bottom: 0; left: 0; width: min(84vw, 320px); border-radius: 0 18px 18px 0; padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); transform: translateX(-104%); transition: transform .22s ease; }
+  .ai-sessions.open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .3); }
+  .ai-sessions-close { display: grid; }
+  .ai-sessions-scrim { display: block; position: fixed; z-index: 1000; inset: 0; background: rgba(0, 0, 0, .35); }
+  .ai-session-actions { display: flex; }
+}
+@media (prefers-reduced-motion: reduce) { .ai-sessions { transition: none; } }
+@media (max-width: 820px) {
+  /* The page is position:fixed (its own stacking context): lift it above the
+     top bar and the dock while the chat list drawer is open. */
+  .standalone-ai.has-sessions:has(.ai-sessions.open) { z-index: 3000; }
+}

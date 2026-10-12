@@ -140,6 +140,58 @@ export class YoutubeService {
     return found.items[0] ?? null;
   }
 
+  /**
+   * The full description card for the watch page: the video (long
+   * description, tags, date, views, likes) and its channel (avatar, handle,
+   * subscribers). Cached for six hours; 2 units when cold.
+   */
+  async watchDetails(id: string) {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+    return this.cached(`v1:watch?${id}`, 6 * 3600, async () => {
+      const result = await this.call<{ items?: unknown[] }>(
+        `videos?${new URLSearchParams({ part: 'snippet,statistics', id })}`,
+      );
+      const raw = result.items?.[0] as
+        | {
+            snippet?: { title?: string; description?: string; tags?: string[]; publishedAt?: string; channelId?: string; channelTitle?: string };
+            statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+          }
+        | undefined;
+      if (!raw) return null;
+      const channelId = raw.snippet?.channelId ?? '';
+      let channel: { id: string; title: string; handle: string | null; avatarUrl: string | null; subscribers: number | null } | null = null;
+      if (channelId) {
+        const found = await this.call<{ items?: unknown[] }>(
+          `channels?${new URLSearchParams({ part: 'snippet,statistics', id: channelId })}`,
+        ).catch(() => ({ items: [] }));
+        const item = found.items?.[0] as
+          | {
+              snippet?: { title?: string; customUrl?: string; thumbnails?: { default?: { url?: string }; medium?: { url?: string } } };
+              statistics?: { subscriberCount?: string; hiddenSubscriberCount?: boolean };
+            }
+          | undefined;
+        if (item)
+          channel = {
+            id: channelId,
+            title: item.snippet?.title ?? raw.snippet?.channelTitle ?? '',
+            handle: item.snippet?.customUrl ?? null,
+            avatarUrl: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? null,
+            subscribers: item.statistics?.hiddenSubscriberCount || !item.statistics?.subscriberCount ? null : Number(item.statistics.subscriberCount),
+          };
+      }
+      const number = (value?: string) => (value ? Number(value) : null);
+      return {
+        description: (raw.snippet?.description ?? '').slice(0, 5000),
+        tags: (raw.snippet?.tags ?? []).slice(0, 15),
+        publishedAt: raw.snippet?.publishedAt ?? null,
+        views: number(raw.statistics?.viewCount),
+        likes: number(raw.statistics?.likeCount),
+        comments: number(raw.statistics?.commentCount),
+        channel: channel ?? (channelId ? { id: channelId, title: raw.snippet?.channelTitle ?? '', handle: null, avatarUrl: null, subscribers: null } : null),
+      };
+    });
+  }
+
   /** Durations and view counts — search results carry neither. 1 unit per call. */
   private async details(ids: string[]) {
     if (!ids.length) return [];

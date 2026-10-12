@@ -51,6 +51,18 @@ export interface LibraryReviews {
   saved?: boolean;
   items: Array<{ id: string; rating: number; body: string; createdAt: string; updatedAt: string; mine: boolean; author: { id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null } }>;
 }
+export interface AiReplyResult { reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }
+
+/** The watch page's description card. */
+export interface YoutubeDetails {
+  description: string;
+  tags: string[];
+  publishedAt: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  channel: { id: string; title: string; handle: string | null; avatarUrl: string | null; subscribers: number | null } | null;
+}
 export interface YoutubeVideo {
   youtubeVideoId: string;
   title: string;
@@ -413,7 +425,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio">>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -548,6 +560,8 @@ export const api = {
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>
       apiFetch<void>(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: "DELETE" }),
+    reactors: (messageId: string) =>
+      apiFetch<Array<{ userId: string; emoji: string; createdAt: string; firstName: string; lastName: string; avatarUrl: string | null; username: string | null }>>(`/chat/messages/${messageId}/reactions`),
     presignAttachment: (roomId: string, file: File) =>
       apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string; expiresIn: number }>(`/chat/rooms/${roomId}/attachments/presign`, {
         method: "POST",
@@ -570,8 +584,15 @@ export const api = {
     listInvites: (roomId: string) => apiFetch<RoomInvite[]>(`/chat/rooms/${roomId}/invites`),
     revokeInvite: (roomId: string, inviteId: string) =>
       apiFetch<void>(`/chat/rooms/${roomId}/invites/${inviteId}`, { method: "DELETE" }),
+    /** Joins straight away, or — for a private room — files an ask-to-join request. */
     joinByCode: (code: string) =>
-      apiFetch<ChatRoom>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+      apiFetch<ChatRoom | { joinRequested: true; roomId: string; name: string | null; type: ChatRoom["type"]; avatarUrl: string | null }>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+    /** The room's standing unlimited invite link (created on first ask) — owner/admin only. */
+    inviteCode: (roomId: string) => apiFetch<{ code: string }>(`/chat/rooms/${roomId}/invite-code`, { method: "POST" }),
+    joinRequests: (roomId: string) =>
+      apiFetch<Array<{ id: string; userId: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; createdAt: string }>>(`/chat/rooms/${roomId}/join-requests`),
+    resolveJoinRequest: (roomId: string, requestId: string, approve: boolean) =>
+      apiFetch<{ userId: string; approved: boolean }>(`/chat/rooms/${roomId}/join-requests/${requestId}/${approve ? "approve" : "reject"}`, { method: "POST" }),
     discussion: (messageId: string) =>
       apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
     deleteRoom: (roomId: string) =>
@@ -616,15 +637,21 @@ export const api = {
     leaveRoom: (roomId: string) =>
       apiFetch<{ left: boolean }>(`/chat/rooms/${roomId}/leave`, { method: "POST" }),
     /** The AI with a picture (multipart: an image is too big for a JSON body). */
-    aiImage: (image: File, message: string, history: Array<{ role: "user" | "model"; text: string }>) => {
+    aiImage: (image: File, message: string, history: Array<{ role: "user" | "model"; text: string }>, conversationId?: string) => {
       const form = new FormData();
       form.append("image", image);
       form.append("message", message);
       form.append("history", JSON.stringify(history));
-      return apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai/image", { method: "POST", body: form });
+      if (conversationId) form.append("conversationId", conversationId);
+      return apiFetch<AiReplyResult & { conversationId: string; title: string }>("/chat/ai/image", { method: "POST", body: form });
     },
-    ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>
-      apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history }) }),
+    /** Saved to a conversation (started if none given), unless `ephemeral`. */
+    ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>, options: { conversationId?: string; ephemeral?: boolean } = {}) =>
+      apiFetch<AiReplyResult & { conversationId?: string; title?: string }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history, ...options }) }),
+    aiConversations: () => apiFetch<Array<{ id: string; title: string; updatedAt: string }>>("/chat/ai/conversations"),
+    aiConversation: (id: string) => apiFetch<{ id: string; title: string; messages: Array<{ id: string; role: "user" | "model"; text: string; hasImage: boolean; sources: Array<{ title: string; url: string }>; createdAt: string }> }>(`/chat/ai/conversations/${id}`),
+    renameAiConversation: (id: string, title: string) => apiFetch<{ id: string; title: string }>(`/chat/ai/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+    deleteAiConversation: (id: string) => apiFetch<void>(`/chat/ai/conversations/${id}`, { method: "DELETE" }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
@@ -729,6 +756,7 @@ export const api = {
   youtube: {
     status: () => apiFetch<{ enabled: boolean }>("/youtube/status"),
     /** "For you": vetted (nothing off-topic for Optima) and ranked for me. */
+    details: (videoId: string) => apiFetch<YoutubeDetails>(`/youtube/videos/${encodeURIComponent(videoId)}/details`),
     feed: (page = 1) => apiFetch<{ items: YoutubeVideo[]; hasMore: boolean }>(`/youtube/feed?page=${page}`),
     search: (q: string, pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/search?${new URLSearchParams({ q, ...(pageToken ? { pageToken } : {}) })}`),
     popular: (pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/popular${pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : ""}`),

@@ -16,6 +16,8 @@ import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
+import { UserProfileModal } from "./components/UserProfileModal";
+import { openProfile } from "./lib/profileModal";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
 
@@ -39,18 +41,26 @@ function WorkspaceLoading() {
 
 export function App() {
   const { ready, user, group } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   useEffect(() => {
     document.documentElement.dataset.theme = user
       ? localStorage.getItem("optima-theme") === "dark" ? "dark" : "light"
       : "light";
   }, [user]);
+  const profileRoute = location.match(/^\/(?:profile|user)\/([^/?#]+)$/)?.[1];
+  useEffect(() => {
+    if (!user || !profileRoute) return;
+    openProfile(decodeURIComponent(profileRoute));
+    navigate("/chat", { replace: true });
+  }, [user, profileRoute, navigate]);
   if (!ready) return <LoadingScreen />;
   // /profile/:id is the public profile view. /user/:id is kept as a legacy alias
   // (old shared links) — it used to also serve /u/:id, but that prefix now opens
   // a DM (see chatUserMatch below), per the chat route redesign.
   const publicProfileMatch = location.match(/^\/(?:profile|user)\/([^/?#]+)$/);
-  if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
+  // Signed in, a profile link opens the profile card over the app (see the
+  // effect above); only a visitor without an account gets the standalone page.
+  if (publicProfileMatch && !user) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
   if (!user) return <AuthPage />;
 
   const chatInviteMatch = location.match(/^\/join\/chat\/([^/?#]+)$/);
@@ -88,7 +98,7 @@ export function App() {
       <div className="route-transition" key={isEducation ? "/education" : section}>
         {isEducation ? <EducationPage /> : isChat ? null : (
           <Switch>
-            <Route path="/ai" component={AiPage} />
+            <Route path="/ai/:id?" component={AiPage} />
             <Route path="/youtube/:slug?" component={YoutubePage} />
             <Route path="/statistics" component={StatisticsPage} />
             <Route path="/" component={DashboardPage} />
@@ -106,6 +116,7 @@ export function App() {
     <>
       {mainContent}
       <UsageTracker />
+      <UserProfileModal />
       {/* MeetingRoomPage (no meetingId prop = the standalone instance) is
           mounted here unconditionally, same reasoning as ChatPage below: it
           renders its own full-screen UI on top of everything via CSS when

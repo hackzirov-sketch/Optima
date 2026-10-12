@@ -310,3 +310,51 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 /* "Draft:" in the room list, Telegram red. */
 .chat-page .room-draft { color: #e53935; font-weight: 600; }
 :root[data-theme="dark"] .chat-page .room-draft { color: #ff6b6b; }
+
+/* Sender avatar / name open the profile card. */
+.message-avatar-button { flex: none; align-self: flex-end; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.message-avatar-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.message-sender-link { cursor: pointer; }
+.message-sender-link:hover { text-decoration: underline; }
+
+/* Profile card (UserProfileModal): Telegram's centered user popup. */
+.upm-layer { z-index: 1200; }
+.upm { position: relative; width: min(100% - 32px, 400px); max-height: min(86vh, 720px); overflow-y: auto; border-radius: 16px; background: var(--surface-muted); color: var(--text); box-shadow: 0 24px 60px rgba(0, 0, 0, .3); animation: upm-in .16s ease-out; }
+.upm > section, .upm > .tg-info-actions { background: var(--surface); }
+.upm > .tg-info-section { margin-top: 8px; }
+.upm-close { position: absolute; top: 10px; right: 10px; z-index: 1; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.upm-close:hover { background: var(--surface-muted); color: var(--text); }
+.upm-hero { padding-top: 26px; }
+.upm-avatar { position: relative; display: inline-block; margin-bottom: 8px; }
+.upm-avatar > i { position: absolute; right: 6px; bottom: 6px; width: 16px; height: 16px; border: 3px solid var(--surface); border-radius: 50%; background: #22c55e; }
+.upm-loading { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; background: var(--surface); color: var(--muted); text-align: center; }
+.upm-loading strong { color: var(--text); }
+@keyframes upm-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .upm { animation: none; } }
+
+/* Reaction chips: your own reaction is filled; ≤3 reactors show as faces. */
+.message-reactions button.mine { border-color: var(--accent) !important; background: var(--accent) !important; color: #fff !important; }
+.message-reactions button { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.reaction-faces { display: inline-flex; align-items: center; margin-left: 2px; }
+.reaction-faces > * { width: 20px !important; height: 20px !important; min-width: 20px; font-size: 8px !important; border: 1.5px solid var(--surface); border-radius: 50%; }
+.message-reactions button.mine .reaction-faces > * { border-color: var(--accent); }
+.reaction-faces > * + * { margin-left: -7px; }
+
+/* Who-reacted popover. */
+.reactors-popover { position: fixed; z-index: 1300; width: min(300px, calc(100vw - 16px)); max-height: min(380px, 70vh); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 18px 48px rgba(0, 0, 0, .22); animation: upm-in .14s ease-out; }
+.reactors-popover > header { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 8px; border-bottom: 1px solid var(--line); }
+.reactors-tabs { flex: 1; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.reactors-tabs button { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--text-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.reactors-tabs button.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.reactors-tabs button img, .reactors-tabs button .tg-emoji { width: 18px; height: 18px; }
+.reactors-close { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.reactors-popover ul { margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
+.reactors-popover li button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.reactors-popover li button:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.reactors-popover li span { flex: 1; min-width: 0; display: grid; }
+.reactors-popover li strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.reactors-popover li small { color: var(--muted); font-size: 12px; }
+.reactors-popover li em { flex: none; font-style: normal; font-size: 20px; line-height: 1; }
+.reactors-popover li em img, .reactors-popover li em .tg-emoji { width: 22px; height: 22px; }
+.reactors-empty { padding: 22px; color: var(--muted); font-size: 13px; text-align: center; }
+.reactors-popover li button > :first-child { flex: none; width: 34px; height: 34px; }

@@ -50,3 +50,13 @@
   background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, .35) 50% 58%, transparent 58% 70%, rgba(255, 255, 255, .35) 70% 78%, transparent 78%);
 }
 @media (max-width: 640px) { .meeting-floating-widget :is(.resize-ne, .resize-nw, .resize-se, .resize-sw) { width: 24px; height: 24px; } .meeting-floating-widget :is(.resize-n, .resize-s) { height: 14px; } .meeting-floating-widget :is(.resize-e, .resize-w) { width: 14px; } }
+
+/* The widget tucked into a screen edge: a frosted tab with a chevron. */
+.meeting-widget-tab { position: fixed; z-index: 1100; display: grid; place-items: center; width: 30px; height: 84px; padding: 0; border: 0; background: rgba(40, 40, 48, .72); color: #fff; box-shadow: 0 6px 20px rgba(0, 0, 0, .28); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); cursor: pointer; animation: meeting-tab-in .18s ease-out; }
+.meeting-widget-tab.left { left: 0; border-radius: 0 16px 16px 0; }
+.meeting-widget-tab.right { right: 0; border-radius: 16px 0 0 16px; }
+.meeting-widget-tab:hover { background: rgba(40, 40, 48, .86); }
+.meeting-widget-tab:focus-visible { outline: 2px solid var(--accent, #6366f1); outline-offset: 2px; }
+.meeting-widget-tab-mic { position: absolute; bottom: 8px; color: #ff6b6b; }
+@keyframes meeting-tab-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .meeting-widget-tab { animation: none; } }
