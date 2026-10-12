@@ -192,6 +192,8 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
     // Phones get a smaller first size: 300px is most of a 390px screen.
     return { x: -1, y: -1, w: window.innerWidth < 600 ? Math.round(window.innerWidth * 0.48) : 300 };
   });
+  const boxRef = useRef(box);
+  boxRef.current = box;
   // Pushed off a side edge, the widget tucks away into a small tab on that
   // edge (iOS picture-in-picture style); tapping the tab brings it back. The
   // call — and everyone's audio — keeps going while it is tucked.
@@ -230,7 +232,82 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [clamp]);
+  // Phones: dragging runs on native touch events (below) — pointer events got
+  // cancelled by the browser's own scroll/back-swipe gestures and the widget
+  // only crept along a few pixels per try.
+  const touchMode = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const [snapping, setSnapping] = useState(false);
+  useEffect(() => {
+    const node = widgetRef.current;
+    if (!touchMode || !node) return;
+    let startX = 0, startY = 0, origin = { x: 0, y: 0, w: 0 }, moved = false, lastX = 0, lastT = 0, velocity = 0, active = false;
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || (event.target as HTMLElement).closest("button")) return;
+      const touch = event.touches[0];
+      active = true; moved = false; velocity = 0;
+      startX = lastX = touch.clientX; startY = touch.clientY; lastT = performance.now();
+      origin = { ...boxRef.current };
+      setSnapping(false);
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!active) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - startX, dy = touch.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      moved = true;
+      event.preventDefault();
+      const now = performance.now();
+      velocity = (touch.clientX - lastX) / Math.max(1, now - lastT);
+      lastX = touch.clientX; lastT = now;
+      const h = node.offsetHeight;
+      setBox({
+        w: origin.w,
+        x: Math.max(-origin.w + 40, Math.min(origin.x + dx, window.innerWidth - 40)),
+        y: Math.max(8, Math.min(origin.y + dy, window.innerHeight - h - 8)),
+      });
+    };
+    const onEnd = () => {
+      if (!active) return;
+      active = false;
+      if (!moved) return;
+      dragged.current = true;
+      window.setTimeout(() => { dragged.current = false; }, 50);
+      const current = boxRef.current;
+      const hidden = current.x < 0 ? -current.x : Math.max(0, current.x + current.w - window.innerWidth);
+      // Pushed well past a side, or flicked hard towards it: tuck it away there.
+      const side = hidden > current.w * 0.35 ? (current.x < 0 ? "left" : "right")
+        : Math.abs(velocity) > 1.1 ? (velocity < 0 ? "left" : "right") : null;
+      if (side) {
+        setDocked(side);
+        const parked = clamp(current);
+        persist(parked, side);
+        setBox(parked);
+        return;
+      }
+      // Otherwise settle into the nearest corner, like picture-in-picture.
+      const h = node.offsetHeight, m = 12;
+      const left = current.x + current.w / 2 < window.innerWidth / 2;
+      const top = current.y + h / 2 < window.innerHeight / 2;
+      const next = { w: current.w, x: left ? m : window.innerWidth - current.w - m, y: top ? 72 : window.innerHeight - h - 96 };
+      setSnapping(true);
+      setBox(next);
+      persist(next, null);
+      window.setTimeout(() => setSnapping(false), 260);
+    };
+    node.addEventListener("touchstart", onStart, { passive: true });
+    node.addEventListener("touchmove", onMove, { passive: false });
+    node.addEventListener("touchend", onEnd);
+    node.addEventListener("touchcancel", onEnd);
+    return () => {
+      node.removeEventListener("touchstart", onStart);
+      node.removeEventListener("touchmove", onMove);
+      node.removeEventListener("touchend", onEnd);
+      node.removeEventListener("touchcancel", onEnd);
+    };
+  }, [touchMode, docked, clamp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const start = (mode: string) => (event: React.PointerEvent) => {
+    if (event.pointerType === "touch" && touchMode) return; // touch handled natively above
     // Grab anywhere — except the buttons and (for moving) the resize edges.
     if (mode === "move" && (event.target as HTMLElement).closest("button, .floating-widget-resize")) return;
     if (event.button > 0) return;
@@ -317,7 +394,7 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   }
   return (<>
     {edgeHint && <div className={`meeting-dock-hint ${edgeHint}`} aria-hidden="true" />}
-    <div ref={widgetRef} className={`meeting-floating-widget${edgeHint ? " is-docking" : ""}`} role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
+    <div ref={widgetRef} className={`meeting-floating-widget${edgeHint ? " is-docking" : ""}${snapping ? " is-snapping" : ""}${touchMode ? " is-touch" : ""}`} role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
          style={placed.current ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}
          onPointerDown={start("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
       <div className="floating-widget-video" onClick={() => { if (!dragged.current) onExpand(); }}>

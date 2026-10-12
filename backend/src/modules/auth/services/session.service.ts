@@ -10,6 +10,7 @@ import { ErrorCode } from '../../../common/enums/error-code.enum';
 import { mapUserRow } from '../../users/repositories/users.sql';
 
 interface TokenContext {
+  deviceId?: string;
   ip?: string;
   userAgent?: string;
   deviceName?: string;
@@ -144,13 +145,21 @@ export class SessionService {
     ctx: TokenContext,
     deviceInfo: { browser?: string; os?: string; deviceName?: string },
   ): Promise<void> {
+    // One browser = one session: logging in again (or switching group) on
+    // the same device replaces its old session instead of adding another.
+    if (ctx.deviceId)
+      await this.dataSource.query(
+        `UPDATE refresh_tokens SET revoked_at = NOW()
+          WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL`,
+        [userId, ctx.deviceId],
+      );
     // Raw INSERT — faster than TypeORM .save() which does SELECT first
     await this.dataSource.query(
       `
       INSERT INTO refresh_tokens
-        (user_id, token_hash, expires_at, ip_address, user_agent, device_name, device_info, provider, last_used_at, created_at)
+        (user_id, token_hash, expires_at, ip_address, user_agent, device_name, device_info, provider, device_id, last_used_at, created_at)
       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
       `,
       [
         userId,
@@ -161,6 +170,7 @@ export class SessionService {
         deviceInfo.deviceName ?? null,
         JSON.stringify({ browser: deviceInfo.browser, os: deviceInfo.os }),
         ctx.provider ?? null,
+        ctx.deviceId ?? null,
       ],
     );
 

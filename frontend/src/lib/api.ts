@@ -73,6 +73,7 @@ export interface YoutubeVideo {
   views: number | null;
 }
 import { envUrl } from "./env-url";
+import { deviceId } from "./device";
 import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = envUrl(import.meta.env.VITE_API_URL) || "/api/v1";
@@ -197,7 +198,7 @@ async function renewSession(): Promise<RefreshResult> {
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", [CLIENT_HEADER]: CLIENT_HEADER_VALUE },
+      headers: { "Content-Type": "application/json", [CLIENT_HEADER]: CLIENT_HEADER_VALUE, "X-Device-Id": deviceId() },
       body: "{}",
     });
   } catch (error) {
@@ -312,6 +313,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
   headers.set(CLIENT_HEADER, CLIENT_HEADER_VALUE);
+  headers.set("X-Device-Id", deviceId());
   // No Authorization header on purpose: JwtStrategy/JwtRefreshStrategy read the
   // token from the httpOnly cookie only, so `credentials: "include"` below is
   // the whole auth mechanism. Setting the header did nothing but leak a

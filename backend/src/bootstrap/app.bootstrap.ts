@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import * as path from 'path';
+import type { Request } from 'express';
+import { requestContext } from '../common/context/request-context';
 
 export function setupApp(
   app: NestExpressApplication,
@@ -55,6 +57,8 @@ export function setupApp(
   // Auth now lives in httpOnly cookies (not localStorage) — needed to read
   // them off incoming requests (req.cookies) in the JWT strategies below.
   app.use(cookieParser());
+  // Every request runs inside its own context (see common/context).
+  app.use((req: Request, _res: unknown, next: () => void) => requestContext.run(req, next));
   app.useStaticAssets(path.resolve(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });

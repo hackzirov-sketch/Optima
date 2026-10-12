@@ -200,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </div>
             <NotificationsMenu />
-            <AccountMenu status={myStatus} onStatus={chooseStatus} />
+            <AccountMenu status={myStatus} />
           </div>
         </header>
         <main className="app-main">{children}</main>

@@ -78,3 +78,8 @@
   .meeting-floating-widget .floating-widget-controls button { width: 34px; height: 34px; }
   .meeting-floating-widget .video-tile-label, .meeting-floating-widget .video-tile .tile-name { font-size: 11px; }
 }
+/* Touch: no resize handles (fixed size), a soft glide into the corner. */
+.meeting-floating-widget.is-touch .floating-widget-resize { display: none; }
+.meeting-floating-widget.is-touch { touch-action: none; }
+.meeting-floating-widget.is-snapping { transition: left .24s cubic-bezier(.2, .8, .2, 1), top .24s cubic-bezier(.2, .8, .2, 1); }
+@media (prefers-reduced-motion: reduce) { .meeting-floating-widget.is-snapping { transition: none; } }

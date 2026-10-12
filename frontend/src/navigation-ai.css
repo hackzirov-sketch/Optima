@@ -368,3 +368,10 @@
 .ai-memory footer button:disabled { opacity: .5; cursor: default; }
 .ai-memory { display: flex; flex-direction: column; }
 .ai-memory > * { flex: none; }
+
+/* Desktop top bar: no long empty pill — just a compact cluster of controls
+   (theme, language, notifications, account) floating at the top right. */
+@media (min-width: 821px) {
+  :root[data-theme] body .app-shell:not(:has(.profile-page)) .topbar { justify-content: flex-end; width: auto !important; max-width: none; margin-left: auto !important; margin-right: clamp(16px, 2.2vw, 30px) !important; padding: 6px 8px 6px 14px !important; border-radius: 999px !important; }
+  :root[data-theme] body .app-shell:not(:has(.profile-page)) .topbar .topbar-context { display: none; }
+}
