@@ -3321,7 +3321,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 {detailPeer?.username && (detailPeer as { accountVisibility?: string }).accountVisibility !== "private" && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
               </> : <>
                 {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
-                {drawerLink && <button className="tg-info-row" onClick={() => void copyText(drawerLink.url)}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{drawerLink.url.replace(/^https?:\/\//, "")}</strong><small>{drawerLink.label}</small></span><Copy size={16} /></button>}
+                {drawerLink && <button className="tg-info-row tg-info-handle" onClick={() => void copyText(drawerLink.url)} title={drawerLink.url}>
+                  {publicSlugLink ? <AtSign size={20} /> : <Link2 size={20} />}
+                  <span className="tg-info-text"><strong className="link">{publicSlugLink && selectedRoom.slug ? `@${selectedRoom.slug}` : drawerLink.url.replace(/^https?:\/\//, "")}</strong><small>{publicSlugLink ? t("chat.usernameLabel") : drawerLink.label}</small></span>
+                  <Copy size={16} />
+                </button>}
               </>}
             </section>
             <section className="tg-info-section">
@@ -3332,7 +3336,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 </button>
               ))}
             </section>
-            {selectedRoom.type !== "direct" && <section className="tg-info-section tg-info-members">
+            {selectedRoom.type !== "direct" && (selectedRoom.type !== "channel" || canAdminister(selectedRoom)) && <section className="tg-info-section tg-info-members">
               <header><strong>{selectedRoom.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab")}</strong><span>{detailMemberTotal}</span></header>
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /></label>
               {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}

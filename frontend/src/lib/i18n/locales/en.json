@@ -1154,7 +1154,9 @@
     "noteSaveFailed": "Could not save the note",
     "noteDeleteFailed": "Could not delete the note",
     "dragToMove": "Drag to move",
-    "dragToResize": "Drag to resize"
+    "dragToResize": "Drag to resize",
+    "busyElsewhere": "You're already in another meeting (another tab or device). Leave it and join this one?",
+    "movedElsewhere": "You joined another meeting — left this one"
   },
   "channelSettings": {
     "title": "Channel settings",

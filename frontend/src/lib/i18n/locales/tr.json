@@ -1154,7 +1154,9 @@
     "noteSaveFailed": "Not kaydedilemedi",
     "noteDeleteFailed": "Not silinemedi",
     "dragToMove": "Taşımak için sürükleyin",
-    "dragToResize": "Boyutlandırmak için sürükleyin"
+    "dragToResize": "Boyutlandırmak için sürükleyin",
+    "busyElsewhere": "Zaten başka bir toplantıdasınız (başka sekme veya cihaz). Ondan çıkıp buna katılmak ister misiniz?",
+    "movedElsewhere": "Başka bir toplantıya katıldınız — bu toplantıdan çıkıldı"
   },
   "channelSettings": {
     "title": "Channel settings",

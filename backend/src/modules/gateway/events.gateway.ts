@@ -133,6 +133,8 @@ export interface AddReactionWsDto {
 // ─── Meeting DTOs ──────────────────────────────────────
 export interface MeetingJoinDto {
   meetingId: string;
+  /** Leave the meeting this person is in elsewhere (another tab/device) and join this one. */
+  force?: boolean;
 }
 export interface MeetingLeaveDto {
   meetingId: string;
@@ -194,6 +196,11 @@ const ALLOWED_MEETING_REACTIONS = new Set([
 // participant is marked as having left in the DB (which can in turn trigger
 // meeting auto-end if they were the last one present).
 const MEETING_RECONNECT_GRACE_MS = 12_000;
+
+// One meeting per person at a time: Redis holds the meeting each user is in,
+// refreshed by the socket heartbeat, so a crashed tab frees it by itself.
+const ACTIVE_MEETING_TTL_SECONDS = 120;
+const activeMeetingKey = (userId: string) => `meeting:active-user:${userId}`;
 
 // How often a live socket's handshake token is re-checked (expiry, logout
 // blacklist, session block, account status). Short enough that a revoked
@@ -513,6 +520,11 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) return;
     await this.presenceService.refresh(userId, client.id);
+    if (client.data?.meetingId)
+      await this.redisService
+        .getClient()
+        ?.expire(activeMeetingKey(userId), ACTIVE_MEETING_TTL_SECONDS)
+        .catch(() => undefined);
     // Cheap, already-debounced (30s) DB write - keeps users.last_seen fresh
     // for the "last seen" history column without hammering Postgres.
     void this.usersService.updateLastSeen(userId);
@@ -606,6 +618,7 @@ export class EventsGateway
         .fetchSockets();
       if (stillPresent.length === 0) {
         await this.meetingsService.leave(meetingId, userId).catch(() => {});
+        await this.clearActiveMeeting(userId, meetingId);
         this.server
           .to(`meeting:${meetingId}`)
           .emit('meeting:user-left', { meetingId, userId });
@@ -1068,6 +1081,37 @@ export class EventsGateway
     // this was the root cause of "users can't join each other's meetings"
     // (the participant list / permission checks read from the DB, which
     // stayed empty because only the WS room existed).
+    // Already in another meeting from a different tab or device? Refuse
+    // (the client asks whether to switch), or with `force` move them over.
+    const redis = this.redisService.getClient();
+    const otherMeeting = await redis?.get(activeMeetingKey(userId)).catch(() => null);
+    if (otherMeeting && otherMeeting !== meetingId && otherMeeting !== client.data?.meetingId) {
+      const elsewhere = (await this.server.in(`meeting:${otherMeeting}:user:${userId}`).fetchSockets())
+        .filter((socket) => socket.id !== client.id);
+      if (elsewhere.length > 0) {
+        if (!data.force) {
+          client.emit('meeting:error', {
+            code: 'MEETING_BUSY_ELSEWHERE',
+            message: 'You are already in another meeting',
+            otherMeetingId: otherMeeting,
+            fatal: true,
+          });
+          return;
+        }
+        this.server
+          .to(`meeting:${otherMeeting}:user:${userId}`)
+          .emit('meeting:moved', { meetingId: otherMeeting, to: meetingId });
+        this.server.in(`meeting:${otherMeeting}:user:${userId}`).socketsLeave([
+          `meeting:${otherMeeting}`,
+          `meeting:${otherMeeting}:user:${userId}`,
+        ]);
+        await this.meetingsService.leave(otherMeeting, userId).catch(() => undefined);
+        this.server
+          .to(`meeting:${otherMeeting}`)
+          .emit('meeting:user-left', { meetingId: otherMeeting, userId });
+      }
+    }
+
     try {
       await this.meetingsService.join(meetingId, userId);
     } catch (err) {
@@ -1092,6 +1136,9 @@ export class EventsGateway
 
     // Register in meeting presence
     client.data.meetingId = meetingId;
+    await redis
+      ?.set(activeMeetingKey(userId), meetingId, 'EX', ACTIVE_MEETING_TTL_SECONDS)
+      .catch(() => undefined);
     await client.join(`meeting:${meetingId}`);
     await client.join(`meeting:${meetingId}:user:${userId}`);
 
@@ -1654,6 +1701,7 @@ export class EventsGateway
       // Swallow errors: the participant row may not exist if this socket
       // never completed a validated join (e.g. it disconnected mid-join).
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
+      await this.clearActiveMeeting(userId, meetingId);
       // A departed participant shouldn't linger in the raised-hands list —
       // best-effort clear, mirrors the resilience of the leave() call above.
       await this.meetingsService
@@ -1670,6 +1718,14 @@ export class EventsGateway
       // call silently made an invisible user visible again.
       await this.restorePresenceAfterMeeting(client, userId);
     }
+  }
+
+  /** Frees the one-meeting lock, but only if it still points at this meeting. */
+  private async clearActiveMeeting(userId: string, meetingId: string) {
+    const redis = this.redisService.getClient();
+    if (!redis) return;
+    const current = await redis.get(activeMeetingKey(userId)).catch(() => null);
+    if (current === meetingId) await redis.del(activeMeetingKey(userId)).catch(() => undefined);
   }
 
   /** Clears IN_MEETING, leaving any manually chosen status alone. */

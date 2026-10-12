@@ -112,3 +112,67 @@
 .lib2 .book-cover { position: relative; }
 .lib2 .lib2-card-progress { position: absolute; z-index: 2; left: 8px; right: 8px; bottom: 8px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, .55); overflow: hidden; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); }
 .lib2 .lib2-card-progress i { display: block; height: 100%; border-radius: inherit; background: var(--accent, #45429a); }
+
+/* ── Books as books (both themes) ───────────────────────────────────────────
+   No card box: each title is a little hardcover — rounded fore-edge, a spine
+   with two light bands on the left, a block of pages under the cover and a
+   soft floor shadow. Title bold under it, author/genre in italics. */
+.lib2 { --book-page: #ecebe6; --book-page-edge: #c9c7c0; --book-floor: rgba(30, 34, 60, .22); }
+:root[data-theme="dark"] .lib2 { --book-page: #d9dbe2; --book-page-edge: #9ea3b3; --book-floor: rgba(0, 0, 0, .55); }
+.lib2 .book-grid { gap: 34px 26px; }
+.lib2 .book-card { border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 !important; }
+.lib2 .book-cover {
+  overflow: visible !important; border-radius: 3px 9px 9px 3px !important; background: transparent !important;
+  margin-bottom: 10px;
+  /* the page block under the cover, then the floor shadow */
+  box-shadow: 4px 7px 0 -2px var(--book-page), 4px 9px 0 -2px var(--book-page-edge), 2px 18px 22px -8px var(--book-floor) !important;
+  transition: transform .22s cubic-bezier(.2, .8, .2, 1), box-shadow .22s ease !important;
+}
+.lib2 .book-cover > img, .lib2 .book-cover > span.lib2-gen-cover { border-radius: 3px 9px 9px 3px; overflow: hidden; }
+/* spine: darker strip with two light bands */
+.lib2 .book-cover::before {
+  content: ""; position: absolute; z-index: 3; top: 0; bottom: 0; left: 0; width: 14px; border-radius: 3px 0 0 3px; pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 9%, rgba(255, 255, 255, .85) 9% 11.5%, transparent 11.5% 14%, rgba(255, 255, 255, .85) 14% 16.5%, transparent 16.5% 83.5%, rgba(255, 255, 255, .85) 83.5% 86%, transparent 86% 88.5%, rgba(255, 255, 255, .85) 88.5% 91%, transparent 91%) left 3px top 0 / 7px 100% no-repeat,
+    linear-gradient(90deg, rgba(0, 0, 0, .34), rgba(0, 0, 0, .12) 55%, rgba(255, 255, 255, .18) 80%, transparent);
+}
+/* a gloss across the cover */
+.lib2 .book-cover::after { content: ""; position: absolute; z-index: 3; inset: 0; border-radius: 3px 9px 9px 3px; pointer-events: none; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .14) 48%, transparent 58%); display: block !important; }
+.lib2 .book-cover:hover { transform: translateY(-6px) rotate(-1deg) !important; box-shadow: 4px 7px 0 -2px var(--book-page), 4px 9px 0 -2px var(--book-page-edge), 4px 26px 28px -8px var(--book-floor) !important; }
+.lib2 .book-cover > i { z-index: 4; right: 8px; bottom: 8px; }
+.lib2 .lib2-card-progress { z-index: 4; }
+.lib2 .book-card h3 { margin: 14px 0 4px !important; font-size: .98rem !important; font-weight: 750; line-height: 1.25; white-space: normal !important; }
+.lib2 .book-card p { font-size: .8rem !important; font-style: italic; color: var(--muted); }
+.lib2 .book-card small { font-size: .74rem !important; }
+/* actions stay, but quieter */
+.lib2 .book-card > div > div { margin-top: 10px !important; }
+.lib2 .book-card > div button { min-height: 32px !important; background: color-mix(in srgb, var(--accent) 8%, transparent) !important; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important; color: var(--accent) !important; }
+/* typeset covers read like a printed jacket */
+.lib2 .book-cover > span.lib2-gen-cover { padding: 18px 14px 16px 22px !important; align-content: space-between; justify-items: start; text-align: left; }
+.lib2-gen-cover b { font-size: 16px !important; letter-spacing: .01em; text-shadow: 0 1px 0 rgba(0, 0, 0, .25); }
+.lib2-gen-cover small { text-transform: uppercase; letter-spacing: .08em !important; font-size: 10.5px !important; }
+
+/* Detail: title block on the left, a big cover on the right floating over its
+   own blurred reflection (as in the reference). */
+.lib2-detail-top { grid-template-columns: minmax(0, 1fr) 132px !important; gap: 22px !important; }
+.lib2-detail-top > img { order: 2; width: 132px !important; border-radius: 3px 10px 10px 3px !important; box-shadow: 5px 8px 0 -2px var(--book-page, #ecebe6), 5px 10px 0 -2px var(--book-page-edge, #c9c7c0), 18px 22px 40px -6px rgba(0, 0, 0, .35) !important; transform: rotate(2deg); }
+.lib2-detail-top > div { order: 1; }
+.lib2-detail-top h2 { font-size: 1.8rem !important; line-height: 1.15; }
+.lib2-detail-top .author { font-style: italic; }
+@media (max-width: 560px) {
+  .lib2 .book-grid { gap: 28px 16px; }
+  .lib2-detail-top { grid-template-columns: minmax(0, 1fr) 96px !important; gap: 14px !important; }
+  .lib2-detail-top > img { width: 96px !important; }
+  .lib2-detail-top h2 { font-size: 1.35rem !important; }
+}
+@media (prefers-reduced-motion: reduce) { .lib2 .book-cover { transition: none !important; } .lib2 .book-cover:hover { transform: none !important; } }
+/* Spine bands: wider, like the stitched bands on a hardcover. */
+.lib2 .book-cover::before {
+  width: 18px;
+  background:
+    linear-gradient(180deg, transparent 8%, rgba(255, 255, 255, .9) 8% 10.5%, transparent 10.5% 13%, rgba(255, 255, 255, .9) 13% 15.5%, transparent 15.5% 84.5%, rgba(255, 255, 255, .9) 84.5% 87%, transparent 87% 89.5%, rgba(255, 255, 255, .9) 89.5% 92%, transparent 92%) left 2px top 0 / 13px 100% no-repeat,
+    linear-gradient(90deg, rgba(0, 0, 0, .38), rgba(0, 0, 0, .14) 50%, rgba(255, 255, 255, .2) 78%, transparent) !important;
+  border-radius: 3px 0 0 3px;
+  clip-path: inset(0 0 0 0 round 3px 0 0 3px);
+}
+.lib2 .book-cover { box-shadow: 5px 8px 0 -2px var(--book-page), 5px 11px 0 -2px var(--book-page-edge), 2px 20px 24px -8px var(--book-floor) !important; }

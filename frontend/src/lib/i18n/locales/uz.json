@@ -1154,7 +1154,9 @@
     "noteSaveFailed": "Eslatmani saqlab bo‘lmadi",
     "noteDeleteFailed": "Eslatmani o‘chirib bo‘lmadi",
     "dragToMove": "Surish uchun ushlang",
-    "dragToResize": "O‘lchamini o‘zgartirish"
+    "dragToResize": "O‘lchamini o‘zgartirish",
+    "busyElsewhere": "Siz boshqa meetingdasiz (boshqa oyna yoki qurilmada). Undan chiqib, shu meetingga qo‘shilasizmi?",
+    "movedElsewhere": "Siz boshqa meetingga o‘tdingiz — bu yerdan chiqildi"
   },
   "channelSettings": {
     "title": "Kanal sozlamalari",

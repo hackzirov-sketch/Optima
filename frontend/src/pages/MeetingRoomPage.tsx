@@ -1140,10 +1140,28 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     // (a screen share already claimed by someone else, a rejected moderation
     // action) is a message, not an eviction — this used to drop the user out
     // of a perfectly healthy meeting for pressing the share button.
-    const onMeetingError = ({ message, fatal }: { message: string; fatal?: boolean }) => {
+    const onMeetingError = ({ message, fatal, code }: { message: string; fatal?: boolean; code?: string }) => {
+      // One meeting at a time: offer to move over from the other tab/device.
+      if (code === "MEETING_BUSY_ELSEWHERE") {
+        if (window.confirm(t("meetingRoom.busyElsewhere"))) {
+          socket.emit("meeting:join", { meetingId, force: true });
+          return;
+        }
+        joinedSocketId.current = null;
+        setEntered(false);
+        return;
+      }
       show(message || t("meetingRoom.joinFailed"), "error");
       if (fatal) setEntered(false);
     };
+    // This person joined another meeting from elsewhere: this one is over here.
+    const onMoved = (data: { meetingId?: string }) => {
+      if (data?.meetingId !== meetingId) return;
+      show(t("meetingRoom.movedElsewhere"));
+      joinedSocketId.current = null;
+      setEntered(false);
+    };
+    socket.on("meeting:moved", onMoved);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("meeting:participants", onParticipants);
@@ -1176,6 +1194,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
       socket.off("meeting:toggled", onToggle);
       socket.off("meeting:permissions", onPermissions);
       socket.off("meeting:error", onMeetingError);
+      socket.off("meeting:moved", onMoved);
     };
   }, [entered, meetingId, negotiate, isPolite, sendSecurityKey, updateSecurityCode, createPeer, flushIce, closePeer, startLiveKit, show, user?.id]);
 

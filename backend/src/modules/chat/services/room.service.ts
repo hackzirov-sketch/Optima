@@ -195,6 +195,11 @@ export class ChatRoomService {
       ? await this.fetchLastMessage(room.lastMessageId)
       : null;
 
+    // Channel subscribers are private to its admins (the count stays public).
+    const visibleMembers =
+      room.type === 'channel' && !['owner', 'admin'].includes(myMembership?.role ?? '')
+        ? []
+        : members;
     return {
       id: room.id,
       type: room.type,
@@ -211,8 +216,8 @@ export class ChatRoomService {
       createdById: room.createdById,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
-      memberIds: members.map((m) => m.userId),
-      memberProfiles: members.map((m) => ({
+      memberIds: visibleMembers.map((m) => m.userId),
+      memberProfiles: visibleMembers.map((m) => ({
         id: m.userId,
         firstName: m.firstName,
         lastName: m.lastName,
@@ -355,6 +360,8 @@ export class ChatRoomService {
         : [];
     const lastMsgMap = new Map(lastMessages.map((m) => [m.id, m]));
 
+    const hideSubscribers = (room: { type: string; myRole?: string | null }) =>
+      room.type === 'channel' && !['owner', 'admin'].includes(room.myRole ?? '');
     return myRooms.map((room) => {
       const roomMemberIds = membersByRoom.get(room.id) ?? [];
       const unreadCount = Math.max(0, room.messageSeq - room.myLastReadSeq);
@@ -378,8 +385,9 @@ export class ChatRoomService {
         createdById: room.createdById,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
-        memberIds: roomMemberIds,
-        memberProfiles: profilesByRoom.get(room.id) ?? [],
+        // Channel subscribers are private to its admins (count stays public).
+        memberIds: hideSubscribers(room) ? [] : roomMemberIds,
+        memberProfiles: hideSubscribers(room) ? [] : profilesByRoom.get(room.id) ?? [],
         memberStatus: (room.myStatus as 'pending' | 'active') ?? 'active',
         myRole:
           (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
