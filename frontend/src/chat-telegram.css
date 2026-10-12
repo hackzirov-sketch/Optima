@@ -441,3 +441,9 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 @media (min-width: 821px) {
   .chat-sidebar-header { grid-template-columns: auto auto minmax(0, 1fr) auto !important; column-gap: 10px; }
 }
+
+/* Chat list foot: the other sections of Optima as a row of icons. */
+.chat-elsewhere { display: flex; justify-content: space-around; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--surface); }
+.chat-elsewhere button { display: grid; place-items: center; width: 40px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--text-soft); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.chat-elsewhere button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+@media (max-width: 820px) { .chat-elsewhere { display: none; } }

@@ -61,7 +61,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [myStatus, setMyStatus] = useState<Exclude<PresenceStatus, "offline" | "in_meeting">>("online");
   // Where "back" from the full-screen chat returns to: the last page visited outside it.
   useEffect(() => {
-    if (!/^\/(chat|u|g|ch)(\/|$)/.test(location)) {
+    // Only real pages — not "/" (it just redirects to the chat) or a meeting link.
+    if (location !== "/" && !/^\/(chat|u|g|ch|meet|join)(\/|$)/.test(location)) {
       try { sessionStorage.setItem("optima:last-page", location); } catch { /* storage off */ }
     }
   }, [location]);

@@ -2,6 +2,10 @@ import {
   ArrowDown,
   ArrowLeft,
   AtSign,
+  BarChart3,
+  BookOpen,
+  GraduationCap,
+  Youtube,
   CalendarClock,
   ChevronRight,
   Image as ImageIcon,
@@ -2819,6 +2823,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             ))}
           </>}
         </div>
+        {/* The rest of Optima, one tap away (the dock is hidden on the chat screen). */}
+        <nav className="chat-elsewhere" aria-label={t("shell.mainNav")}>
+          {([
+            ["/meetings", Video, "meetings"],
+            ["/ai", Sparkles, "ai"],
+            ["/youtube", Youtube, "youtube"],
+            ["/library", BookOpen, "library"],
+            ["/education", GraduationCap, "education"],
+            ["/statistics", BarChart3, "statistics"],
+          ] as const).map(([href, Icon, key]) => (
+            <button key={href} type="button" onClick={() => navigate(href)} title={t(`shell.${key}`)} aria-label={t(`shell.${key}`)}><Icon size={19} /></button>
+          ))}
+        </nav>
         <footer className="chat-connection"><span
           className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small>
         </footer>

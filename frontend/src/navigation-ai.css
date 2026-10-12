@@ -375,3 +375,7 @@
   :root[data-theme] body .app-shell:not(:has(.profile-page)) .topbar { justify-content: flex-end; width: auto !important; max-width: none; margin-left: auto !important; margin-right: clamp(16px, 2.2vw, 30px) !important; padding: 6px 8px 6px 14px !important; border-radius: 999px !important; }
   :root[data-theme] body .app-shell:not(:has(.profile-page)) .topbar .topbar-context { display: none; }
 }
+/* Seven destinations now (Home and Profile left): no empty columns, centred. */
+@media (min-width: 821px) {
+  :root[data-theme] body .desktop-dock.reference-dock { grid-template-columns: repeat(7, minmax(0, 1fr)); width: min(620px, calc(100vw - 32px)); }
+}

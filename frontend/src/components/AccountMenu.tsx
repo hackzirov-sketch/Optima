@@ -1,5 +1,5 @@
 import { LogOut, Settings, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
@@ -15,13 +15,23 @@ export function AccountMenu({ status = "online", align = "end" }: { status?: Sta
   const { t } = useI18n();
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
-  return <div className="account-menu-wrap">
+  const wrap = useRef<HTMLDivElement>(null);
+  // Closes on a click/tap anywhere else and on Escape. (A full-screen scrim
+  // didn't work: the top bar's backdrop-filter traps fixed children inside it.)
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: PointerEvent) => { if (!wrap.current?.contains(event.target as Node)) setOpen(false); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return <div className="account-menu-wrap" ref={wrap}>
               <button type="button" className="account-avatar-button" onClick={() => setOpen((value) => !value)} aria-label={t("shell.accountMenu")} aria-haspopup="menu" aria-expanded={open}>
                 <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="sm" />
                 <i className={`account-status-dot status-${status}`} aria-hidden="true" />
               </button>
               {open && <>
-                <button type="button" className="account-menu-scrim" onClick={() => setOpen(false)} aria-hidden="true" tabIndex={-1} />
                 <div className={`account-menu align-${align}`} role="menu">
                   <div className="account-menu-head">
                     <Avatar firstName={user?.firstName} lastName={user?.lastName} url={user?.avatarUrl} size="md" />
