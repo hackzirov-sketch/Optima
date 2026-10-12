@@ -393,7 +393,10 @@
     "subscribers": "{{count}} obunachi",
     "linkCopied": "Nusxalandi",
     "closeAria": "Yopish",
-    "thisIsYou": "Bu sizning profilingiz"
+    "thisIsYou": "Bu sizning profilingiz",
+    "call": "Qo‘ng‘iroq",
+    "editProfile": "Tahrirlash",
+    "channelSubtitle": "Kanal · {{count}} obunachi"
   },
   "meetings": {
     "statusScheduled": "Rejalashtirilgan",
@@ -981,7 +984,9 @@
     "aiMemoryPlaceholder": "- Ismim ...\n- Men ... o‘qiyman\n- Javoblarni qisqa yoz",
     "aiMemoryClear": "Xotirani tozalash",
     "aiMemoryClearConfirm": "AI siz haqingizda eslab qolgan hamma narsa o‘chirilsinmi?",
-    "aiMemorySaved": "Xotira saqlandi"
+    "aiMemorySaved": "Xotira saqlandi",
+    "joinRequestsBar": "{{count}} ta qo‘shilish so‘rovi",
+    "joinRequestsHide": "Yashirish"
   },
   "presence": {
     "online": "Onlayn",
@@ -1420,6 +1425,18 @@
     "micBlocked": "Mikrofonga ruxsat berilmadi",
     "cameraBlocked": "Kameraga ruxsat berilmadi",
     "joinFailed": "Video chatga qo‘shilib bo‘lmadi",
-    "endFailed": "Video chatni tugatib bo‘lmadi"
+    "endFailed": "Video chatni tugatib bo‘lmadi",
+    "startNow": "Hozir boshlash",
+    "schedule": "Rejalashtirish",
+    "scheduleTitle": "Video chatni rejalashtirish",
+    "scheduleDesc": "Belgilangan vaqtda video chat o‘zi boshlanadi va a’zolarga xabar boradi.",
+    "scheduleWhen": "Boshlanish vaqti",
+    "scheduleName": "Mavzu (ixtiyoriy)",
+    "scheduled": "Video chat rejalashtirilgan",
+    "scheduledAt": "{{when}} da boshlanadi",
+    "cancelSchedule": "Bekor qilish",
+    "scheduleSaved": "Video chat rejalashtirildi",
+    "scheduleCancelled": "Rejalashtirilgan video chat bekor qilindi",
+    "startedNow": "Video chat boshlandi"
   }
 }

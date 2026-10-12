@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { LoaderCircle, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -51,7 +52,7 @@ export function ReactorsPopover({ messageId, x, y, renderEmoji, onClose }: {
   const shown = items?.filter((item) => !tab || item.emoji === tab) ?? [];
   const when = (iso: string) => new Date(iso).toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-  return <div ref={ref} className="reactors-popover" role="dialog" aria-label={t("chat.reactionsTitle")} style={pos}>
+  return createPortal(<div ref={ref} className="reactors-popover" role="dialog" aria-label={t("chat.reactionsTitle")} style={pos}>
     <header>
       <div className="reactors-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={!tab} className={!tab ? "active" : ""} onClick={() => setTab(null)}>{t("chat.reactionsAll")} {items?.length ?? ""}</button>
@@ -74,5 +75,5 @@ export function ReactorsPopover({ messageId, x, y, renderEmoji, onClose }: {
         </li>
       ))}
     </ul>
-  </div>;
+  </div>, document.body);
 }

@@ -901,6 +901,15 @@ export class MeetingsService {
     );
   }
 
+  /** Starts a scheduled group/channel video chat at its time (queued, survives restarts). */
+  async scheduleRoomVoiceStart(meetingId: string, delayMs: number) {
+    await this.lifecycleQueue.add(
+      'start-room-voice-chat',
+      { meetingId },
+      { delay: Math.max(0, delayMs), jobId: `voice-start_${meetingId}`, removeOnComplete: true, removeOnFail: true },
+    );
+  }
+
   /**
    * Queues the "did they come back?" check for a socket that just dropped.
    *

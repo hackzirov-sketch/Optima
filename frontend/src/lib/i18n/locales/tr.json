@@ -393,7 +393,10 @@
     "subscribers": "{{count}} abone",
     "linkCopied": "Kopyalandı",
     "closeAria": "Kapat",
-    "thisIsYou": "Bu sizin profiliniz"
+    "thisIsYou": "Bu sizin profiliniz",
+    "call": "Ara",
+    "editProfile": "Düzenle",
+    "channelSubtitle": "Kanal · {{count}} abone"
   },
   "meetings": {
     "statusScheduled": "Planlandı",
@@ -981,7 +984,9 @@
     "aiMemoryPlaceholder": "- Adım ...\n- ... okuyorum\n- Yanıtları kısa tut",
     "aiMemoryClear": "Belleği temizle",
     "aiMemoryClearConfirm": "Yapay zekânın sizinle ilgili hatırladığı her şey silinsin mi?",
-    "aiMemorySaved": "Bellek kaydedildi"
+    "aiMemorySaved": "Bellek kaydedildi",
+    "joinRequestsBar": "{{count}} katılma isteği",
+    "joinRequestsHide": "Gizle"
   },
   "presence": {
     "online": "Çevrimiçi",
@@ -1420,6 +1425,18 @@
     "micBlocked": "Mikrofon izni engellendi",
     "cameraBlocked": "Kamera izni engellendi",
     "joinFailed": "Görüntülü sohbete katılınamadı",
-    "endFailed": "Görüntülü sohbet bitirilemedi"
+    "endFailed": "Görüntülü sohbet bitirilemedi",
+    "startNow": "Şimdi başlat",
+    "schedule": "Planla",
+    "scheduleTitle": "Görüntülü sohbet planla",
+    "scheduleDesc": "Görüntülü sohbet o saatte kendiliğinden başlar ve üyelere bildirilir.",
+    "scheduleWhen": "Başlangıç zamanı",
+    "scheduleName": "Konu (isteğe bağlı)",
+    "scheduled": "Görüntülü sohbet planlandı",
+    "scheduledAt": "{{when}} başlar",
+    "cancelSchedule": "İptal",
+    "scheduleSaved": "Görüntülü sohbet planlandı",
+    "scheduleCancelled": "Planlanan görüntülü sohbet iptal edildi",
+    "startedNow": "Görüntülü sohbet başladı"
   }
 }

@@ -393,7 +393,10 @@
     "subscribers": "{{count}} подписчиков",
     "linkCopied": "Скопировано",
     "closeAria": "Закрыть",
-    "thisIsYou": "Это ваш профиль"
+    "thisIsYou": "Это ваш профиль",
+    "call": "Звонок",
+    "editProfile": "Изменить",
+    "channelSubtitle": "Канал · {{count}} подписчиков"
   },
   "meetings": {
     "statusScheduled": "Запланировано",
@@ -981,7 +984,9 @@
     "aiMemoryPlaceholder": "- Меня зовут ...\n- Я учусь ...\n- Отвечай коротко",
     "aiMemoryClear": "Очистить память",
     "aiMemoryClearConfirm": "Стереть всё, что ИИ помнит о вас?",
-    "aiMemorySaved": "Память сохранена"
+    "aiMemorySaved": "Память сохранена",
+    "joinRequestsBar": "Заявок на вступление: {{count}}",
+    "joinRequestsHide": "Скрыть"
   },
   "presence": {
     "online": "В сети",
@@ -1420,6 +1425,18 @@
     "micBlocked": "Доступ к микрофону запрещён",
     "cameraBlocked": "Доступ к камере запрещён",
     "joinFailed": "Не удалось войти в видеочат",
-    "endFailed": "Не удалось завершить видеочат"
+    "endFailed": "Не удалось завершить видеочат",
+    "startNow": "Начать сейчас",
+    "schedule": "Запланировать",
+    "scheduleTitle": "Запланировать видеочат",
+    "scheduleDesc": "Видеочат начнётся сам в это время, участники получат уведомление.",
+    "scheduleWhen": "Время начала",
+    "scheduleName": "Тема (необязательно)",
+    "scheduled": "Видеочат запланирован",
+    "scheduledAt": "Начнётся {{when}}",
+    "cancelSchedule": "Отменить",
+    "scheduleSaved": "Видеочат запланирован",
+    "scheduleCancelled": "Запланированный видеочат отменён",
+    "startedNow": "Видеочат начался"
   }
 }

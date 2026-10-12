@@ -13,4 +13,6 @@ export interface PublicUserDto {
   nameEmoji: string | null;
   bio?: string | null;
   lastSeen: Date | null;
+  /** 'private': the card hides the username from others. */
+  accountVisibility?: 'public' | 'private';
 }

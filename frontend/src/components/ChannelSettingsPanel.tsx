@@ -67,6 +67,8 @@ const AUTO_DELETE = [null, 1, 7, 30, 90, 365];
 
 interface Props {
   room: ChatRoom;
+  /** Open straight on one section (e.g. the join requests from the chat's banner). */
+  initialSection?: "requests";
   onClose: () => void;
   onSaved: () => void;
 }
@@ -79,11 +81,11 @@ interface RoomMember {
   role: string;
 }
 
-export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
+export function ChannelSettingsPanel({ room, onClose, onSaved, initialSection }: Props) {
   const { t } = useI18n();
   const { show } = useToast();
   // null = the Telegram-style main list; a section id = that sub-page.
-  const [section, setSection] = useState<SectionId | null>(null);
+  const [section, setSection] = useState<SectionId | null>(initialSection ?? null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRole] = useState<RoomRole>("member");
@@ -156,7 +158,9 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
    * sections would produce empty panels.
    */
   const visibleSections = useMemo(
-    () => canAdminister ? SECTIONS : SECTIONS.filter((entry) => entry.id === "general" || entry.id === "content"),
+    // Preview-only sections stay hidden until something actually enforces them.
+    () => (canAdminister ? SECTIONS : SECTIONS.filter((entry) => entry.id === "general" || entry.id === "content"))
+      .filter((entry) => !PREVIEW_SECTIONS.has(entry.id)),
     [canAdminister]
   );
 

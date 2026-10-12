@@ -78,6 +78,42 @@ export class MeetingsController {
     return result.chat;
   }
 
+  @Get('chat/rooms/:roomId/voice-chat/scheduled')
+  @ApiOperation({ summary: 'The next scheduled video chat of the room' })
+  scheduledVoiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.voiceChats.scheduled(roomId, userId);
+  }
+
+  @Post('chat/rooms/:roomId/voice-chat/schedule')
+  @ApiOperation({ summary: 'Schedule a video chat; it starts by itself at that time' })
+  async scheduleVoiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { startTime?: string; title?: string },
+  ) {
+    const result = await this.voiceChats.schedule(roomId, userId, new Date(String(body?.startTime ?? '')), body?.title);
+    void this.gateway
+      .broadcastToRoomMembers(roomId, 'room_voice_chat', { roomId, scheduled: true })
+      .catch(() => undefined);
+    return result;
+  }
+
+  @Delete('chat/rooms/:roomId/voice-chat/scheduled')
+  @ApiOperation({ summary: 'Cancel the scheduled video chat' })
+  async cancelScheduledVoiceChat(
+    @Param('roomId', ParseUUIDPipe) roomId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const result = await this.voiceChats.cancelScheduled(roomId, userId);
+    void this.gateway
+      .broadcastToRoomMembers(roomId, 'room_voice_chat', { roomId, scheduled: false })
+      .catch(() => undefined);
+    return result;
+  }
+
   @Delete('chat/rooms/:roomId/voice-chat')
   @ApiOperation({ summary: 'End the room video chat for everyone (admins)' })
   @ApiParam({ name: 'roomId', format: 'uuid' })

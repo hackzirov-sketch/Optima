@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Brain, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
@@ -38,7 +39,7 @@ export function AiMemoryPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return <div className="modal-layer ai-memory-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  return createPortal(<div className="modal-layer ai-memory-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="ai-memory" role="dialog" aria-modal="true" aria-label={t("chat.aiMemoryTitle")}>
       <header>
         <span className="ai-memory-icon"><Brain size={20} /></span>
@@ -61,5 +62,5 @@ export function AiMemoryPanel({ onClose }: { onClose: () => void }) {
           </footer>
         </>}
     </section>
-  </div>;
+  </div>, document.body);
 }

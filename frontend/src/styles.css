@@ -4693,3 +4693,6 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .channel-settings.cs-tg .tone-pink { --tile: #ec4899; }
 .channel-settings.cs-tg .cs-list-row.danger > span:nth-child(2) { color: var(--danger, #e5484d); }
 .channel-settings.cs-tg .cs-list-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dialogs sit above the top bar and the dock, so the blur covers them too. */
+:root[data-theme] body .modal-layer { z-index: 4000; }
+:root[data-theme] body .reactors-popover { z-index: 4100; }

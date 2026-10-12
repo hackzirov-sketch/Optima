@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowLeft,
   AtSign,
+  CalendarClock,
   ChevronRight,
   Image as ImageIcon,
   Info,
@@ -379,6 +380,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   // "Who reacted" list, opened by right-click or press-and-hold on a reaction chip.
+  // Pending ask-to-join requests of the open room (admins only) — the banner.
+  const [joinRequestsBar, setJoinRequestsBar] = useState<{ roomId: string; items: Awaited<ReturnType<typeof api.chat.joinRequests>> } | null>(null);
+  const [hiddenRequestBars, setHiddenRequestBars] = useState<Record<string, number>>({});
+  const [channelSettingsSection, setChannelSettingsSection] = useState<"requests" | undefined>(undefined);
   const [reactorsFor, setReactorsFor] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const reactionHold = useRef<{ timer: number; fired: boolean } | null>(null);
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
@@ -515,11 +520,45 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setPinnedIndex((index) => (index + 1) % Math.max(1, pinned.length));
   }
   // ── Group / channel video chat ──
+  const [voiceScheduled, setVoiceScheduled] = useState<Awaited<ReturnType<typeof api.chat.voiceChatScheduled>> & { roomId?: string } | null>(null);
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const loadRoomVoice = useCallback((roomId: string) => {
     api.chat.voiceChat(roomId).then((chat) => setRoomVoice(chat)).catch(() => setRoomVoice(null));
+    api.chat.voiceChatScheduled(roomId).then((next) => setVoiceScheduled(next ? { ...next, roomId } : null)).catch(() => setVoiceScheduled(null));
   }, []);
+  async function scheduleVoice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRoom) return;
+    const data = new FormData(event.currentTarget);
+    const when = new Date(String(data.get("startTime") || ""));
+    setScheduling(true);
+    try {
+      await api.chat.scheduleVoiceChat(selectedRoom.id, when.toISOString(), String(data.get("title") || "") || undefined);
+      show(t("voiceChat.scheduleSaved"));
+      setScheduleOpen(false);
+      loadRoomVoice(selectedRoom.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("voiceChat.joinFailed"), "error");
+    } finally {
+      setScheduling(false);
+    }
+  }
+  async function cancelScheduledVoice() {
+    if (!selectedRoom) return;
+    try {
+      await api.chat.cancelScheduledVoiceChat(selectedRoom.id);
+      show(t("voiceChat.scheduleCancelled"));
+      loadRoomVoice(selectedRoom.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("voiceChat.joinFailed"), "error");
+    }
+  }
   useEffect(() => {
     setRoomVoice(null);
+    setVoiceScheduled(null);
+    setVoiceMenuOpen(false);
     if (!selectedId || !selectedRoom || selectedRoom.type === "direct" || selectedRoom.memberStatus === "pending") return;
     loadRoomVoice(selectedId);
     // Participant counts move as people come and go; the banner stays roughly current.
@@ -1198,7 +1237,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
     // Another member device published a new room key.
     const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
-    const onRoomVoiceChat = (data: { roomId: string }) => {
+    const onRoomVoiceChat = (data: { roomId: string; started?: boolean; scheduled?: boolean }) => {
+      if (data.started && data.scheduled) show(t("voiceChat.startedNow"));
       if (data.roomId === selectedId) loadRoomVoice(data.roomId);
     };
     const onMessagePinned = (data: { roomId: string; messageId: string; pinned: boolean }) => {
@@ -1874,6 +1914,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     });
   }
 
+  // "Call" on a profile card opens the DM and asks for a call once it is up.
+  useEffect(() => {
+    if (!selectedRoom || selectedRoom.type !== "direct" || !detailPeer) return;
+    let pending: string | null = null;
+    try { pending = sessionStorage.getItem("optima:pending-call"); } catch { /* storage off */ }
+    if (pending !== "audio" && pending !== "video") return;
+    try { sessionStorage.removeItem("optima:pending-call"); } catch { /* storage off */ }
+    void startCall(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoom?.id, detailPeer?.id]);
+
   async function startCall(kind: "audio" | "video") {
     if (!workspace || !selectedRoom || startingCall) return;
     if (selectedRoom.type !== "direct" || !detailPeer) {
@@ -2195,7 +2246,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   // numeric /g/<publicId> address is never shown.
   const [drawerInviteLink, setDrawerInviteLink] = useState<{ roomId: string; url: string } | null>(null);
   const publicSlugLink = selectedRoom && selectedRoom.type !== "direct" && selectedRoom.scope === "public" && selectedRoom.slug ? roomLink(selectedRoom) : null;
-  const drawerRoomId = detailsOpen && selectedRoom && selectedRoom.type !== "direct" && !publicSlugLink && canAdminister(selectedRoom) ? selectedRoom.id : null;
+  // Private groups/channels show no link here at all — joining them goes
+  // through an invite the admin sends from the Invite screen.
+  const drawerRoomId = detailsOpen && selectedRoom && selectedRoom.type !== "direct" && !publicSlugLink && selectedRoom.scope === "public" && canAdminister(selectedRoom) ? selectedRoom.id : null;
   useEffect(() => {
     if (!drawerRoomId || drawerInviteLink?.roomId === drawerRoomId) return;
     let cancelled = false;
@@ -2207,6 +2260,23 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const drawerLink = publicSlugLink
     ? { url: publicSlugLink, label: t("chat.publicLinkLabel") }
     : drawerInviteLink && drawerInviteLink.roomId === drawerRoomId ? { url: drawerInviteLink.url, label: t("chat.inviteLinkLabel") } : null;
+
+  const requestsRoomId = selectedRoom && selectedRoom.type !== "direct" && canAdminister(selectedRoom) ? selectedRoom.id : null;
+  const loadJoinRequests = useCallback((roomId: string) => {
+    api.chat.joinRequests(roomId)
+      .then((items) => setJoinRequestsBar({ roomId, items }))
+      .catch(() => setJoinRequestsBar(null));
+  }, []);
+  useEffect(() => {
+    if (!requestsRoomId) { setJoinRequestsBar(null); return; }
+    loadJoinRequests(requestsRoomId);
+    const socket = getSocket();
+    const onRequest = (payload: { roomId: string }) => { if (payload.roomId === requestsRoomId) loadJoinRequests(requestsRoomId); };
+    socket.on("chat:join_request", onRequest);
+    return () => { socket.off("chat:join_request", onRequest); };
+  }, [requestsRoomId, loadJoinRequests]);
+  const pendingRequests = joinRequestsBar && joinRequestsBar.roomId === requestsRoomId ? joinRequestsBar.items : [];
+  const showRequestsBar = pendingRequests.length > 0 && (hiddenRequestBars[requestsRoomId ?? ""] ?? 0) < pendingRequests.length;
 
   const canPostIn = (room: ChatRoom) => {
     if (room.isReadOnly) return false;
@@ -2789,9 +2859,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} />
                 </button>
                 {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (selectedRoom.type === "group" || roomVoice || canAdminister(selectedRoom)) &&
-                  <button className={`icon-button ${voice?.roomId === selectedRoom.id ? "active" : ""}`} onClick={() => joinRoomVoice(selectedRoom)}
+                  <span className="vc-start-wrap">
+                  <button className={`icon-button ${voice?.roomId === selectedRoom.id ? "active" : ""}`} onClick={() => { if (roomVoice || voice?.roomId === selectedRoom.id) joinRoomVoice(selectedRoom); else setVoiceMenuOpen((open) => !open); }}
+                          aria-haspopup="menu" aria-expanded={voiceMenuOpen}
                           aria-label={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")} title={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")}>
-                    <Video size={18} /></button>}
+                    <Video size={18} /></button>
+                  {voiceMenuOpen && <>
+                    <span className="vc-start-scrim" onClick={() => setVoiceMenuOpen(false)} aria-hidden="true" />
+                    <span className="vc-start-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => { setVoiceMenuOpen(false); joinRoomVoice(selectedRoom); }}><Video size={17} />{t("voiceChat.startNow")}</button>
+                      <button type="button" role="menuitem" onClick={() => { setVoiceMenuOpen(false); setScheduleOpen(true); }}><CalendarClock size={17} />{t("voiceChat.schedule")}</button>
+                    </span>
+                  </>}
+                  </span>}
                 {selectedRoom.type === "direct" && <>
                   <button className="icon-button" onClick={() => void startCall("audio")}
                           disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")}
@@ -2818,6 +2898,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <button type="button" className="vc-bar-main" onClick={() => setVoiceMinimized(false)}><strong>{voice.title}</strong><small>{voiceBar.phase === "connected" ? t("voiceChat.participants", { count: voiceBar.count }) : t("voiceChat.connecting")}</small></button>
               <button type="button" className="vc-bar-leave" onClick={voiceBar.leave} aria-label={t("voiceChat.leave")}><PhoneOff size={18} /></button>
             </div>}
+            {!roomVoice && voiceScheduled && voiceScheduled.roomId === selectedRoom.id && <div className="vc-join-banner vc-scheduled-banner">
+              <span className="vc-scheduled-icon"><CalendarClock size={20} /></span>
+              <span className="vc-join-text"><strong>{voiceScheduled.title || t("voiceChat.scheduled")}</strong><small>{t("voiceChat.scheduledAt", { when: new Date(voiceScheduled.startTime).toLocaleString(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</small></span>
+              {voiceScheduled.canCancel && <button type="button" className="vc-scheduled-cancel" onClick={() => void cancelScheduledVoice()}>{t("voiceChat.cancelSchedule")}</button>}
+            </div>}
             {roomVoice && voice?.roomId !== selectedRoom.id && <div className="vc-join-banner">
               <span className="vc-join-faces">{roomVoice.participants.slice(0, 3).map((p) => <Avatar key={p.id} firstName={p.firstName} lastName={p.lastName} url={p.avatarUrl} size="sm" />)}</span>
               <span className="vc-join-text"><strong>{selectedRoom.type === "channel" ? t("voiceChat.liveStream") : t("voiceChat.title")}</strong><small>{roomVoice.participants.length ? t("voiceChat.participants", { count: roomVoice.participants.length }) : t("voiceChat.nobodyYet")}</small></span>
@@ -2829,6 +2914,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 <span className="pinned-bar-copy"><strong>{pinned.length > 1 ? t("chat.pinnedNumbered", { n: pinned.length - pinnedIndex }) : t("chat.pinnedSingle")}</strong><small>{previewOf(pinnedMessage)}</small></span>
               </button>
               {canPin(selectedRoom) && <button type="button" className="pinned-bar-close" onClick={() => void togglePin(pinnedMessage)} aria-label={t("chat.unpinAction")} title={t("chat.unpinAction")}><X size={17} /></button>}
+            </div>}
+            {showRequestsBar && <div className="join-requests-bar">
+              <button type="button" className="join-requests-main" onClick={() => { setChannelSettingsSection("requests"); setChannelSettingsOpen(true); }}>
+                <span className="join-requests-faces">{pendingRequests.slice(0, 3).map((entry) => <Avatar key={entry.id} firstName={entry.firstName} lastName={entry.lastName} url={entry.avatarUrl} size="sm" />)}</span>
+                <strong>{t("chat.joinRequestsBar", { count: pendingRequests.length })}</strong>
+              </button>
+              <button type="button" className="join-requests-close" onClick={() => setHiddenRequestBars((current) => ({ ...current, [requestsRoomId ?? ""]: pendingRequests.length }))} aria-label={t("chat.joinRequestsHide")} title={t("chat.joinRequestsHide")}><X size={18} /></button>
             </div>}
             {selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3>
@@ -3226,7 +3318,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             </div>
             <section className="tg-info-section">
               {selectedRoom.type === "direct" ? <>
-                {detailPeer?.username && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
+                {detailPeer?.username && (detailPeer as { accountVisibility?: string }).accountVisibility !== "private" && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
               </> : <>
                 {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
                 {drawerLink && <button className="tg-info-row" onClick={() => void copyText(drawerLink.url)}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{drawerLink.url.replace(/^https?:\/\//, "")}</strong><small>{drawerLink.label}</small></span><Copy size={16} /></button>}
@@ -3307,13 +3399,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               ))}</ul>}
       </Modal>
 
-      <Modal open={channelSettingsOpen} onClose={() => setChannelSettingsOpen(false)}
+      <Modal open={channelSettingsOpen} onClose={() => { setChannelSettingsOpen(false); setChannelSettingsSection(undefined); if (requestsRoomId) loadJoinRequests(requestsRoomId); }}
              title={selectedRoom?.type === "channel" ? t("channelSettings.title") : t("channelSettings.groupTitle")}
              description={selectedRoom?.name ?? ""} width="md">
         {selectedRoom && channelSettingsOpen && <ChannelSettingsPanel
           room={selectedRoom}
-          onClose={() => setChannelSettingsOpen(false)}
-          onSaved={() => void loadRooms()} />}
+          initialSection={channelSettingsSection}
+          onClose={() => { setChannelSettingsOpen(false); setChannelSettingsSection(undefined); if (requestsRoomId) loadJoinRequests(requestsRoomId); }}
+          onSaved={() => { void loadRooms(); if (requestsRoomId) loadJoinRequests(requestsRoomId); }} />}
       </Modal>
 
       <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)}
@@ -3377,6 +3470,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           <footer className="tg-edit-actions">
             <button type="button" onClick={() => setRoomSettingsOpen(false)}>{t("common.cancel")}</button>
             <button type="submit" className="primary" disabled={savingRoomSettings || !roomSettingsName.trim()}>{savingRoomSettings ? <LoaderCircle className="spin" size={16} /> : null}{t("common.save")}</button>
+          </footer>
+        </form>
+      </Modal>
+
+      <Modal open={scheduleOpen} onClose={() => !scheduling && setScheduleOpen(false)} title={t("voiceChat.scheduleTitle")} description={t("voiceChat.scheduleDesc")} width="sm">
+        <form className="vc-schedule-form" onSubmit={(event) => void scheduleVoice(event)}>
+          <label>{t("voiceChat.scheduleWhen")}<input name="startTime" type="datetime-local" required
+            min={(() => { const d = new Date(Date.now() + 5 * 60_000); d.setSeconds(0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); })()}
+            defaultValue={(() => { const d = new Date(Date.now() + 60 * 60_000); d.setMinutes(0, 0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); })()} /></label>
+          <label>{t("voiceChat.scheduleName")}<input name="title" maxLength={200} placeholder={selectedRoom ? roomTitle(selectedRoom) : ""} /></label>
+          <footer>
+            <Button type="button" variant="secondary" onClick={() => setScheduleOpen(false)} disabled={scheduling}>{t("common.cancel")}</Button>
+            <Button type="submit" loading={scheduling} icon={<CalendarClock size={16} />}>{t("voiceChat.schedule")}</Button>
           </footer>
         </form>
       </Modal>

@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { MeetingsService, MEETING_LIFECYCLE_QUEUE } from '../meetings.service';
 import { EventsGateway } from '../../gateway/events.gateway';
+import { RoomVoiceChatService } from '../services/room-voice-chat.service';
 import { MeetingLiveKitService } from '../services/meeting-livekit.service';
 
 /** How often to look again while someone is on media but off the socket. */
@@ -33,6 +34,7 @@ export class MeetingLifecycleProcessor extends WorkerHost {
     @Inject(forwardRef(() => EventsGateway))
     private readonly gateway: EventsGateway,
     private readonly liveKit: MeetingLiveKitService,
+    private readonly voiceChats: RoomVoiceChatService,
   ) {
     super();
   }
@@ -52,6 +54,22 @@ export class MeetingLifecycleProcessor extends WorkerHost {
         return;
       }
       await this.gateway.finalizeMeetingLeaveAfterGrace(meetingId, userId);
+      return;
+    }
+
+    // A scheduled group/channel video chat reaching its time.
+    if (job.name === 'start-room-voice-chat') {
+      const roomId = await this.voiceChats.startScheduled(job.data.meetingId);
+      if (roomId)
+        await this.gateway
+          .broadcastToRoomMembers(roomId, 'room_voice_chat', {
+            roomId,
+            meetingId: job.data.meetingId,
+            participants: 0,
+            started: true,
+            scheduled: true,
+          })
+          .catch(() => undefined);
       return;
     }
 

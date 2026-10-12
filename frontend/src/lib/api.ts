@@ -425,7 +425,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { accountVisibility?: "public" | "private"; channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -552,6 +552,12 @@ export const api = {
     voiceChat: (roomId: string) => apiFetch<RoomVoiceChat | null>(`/chat/rooms/${roomId}/voice-chat`).then((chat) => (chat && "meetingId" in chat ? chat : null)),
     voiceChatJoin: (roomId: string) => apiFetch<RoomVoiceChat>(`/chat/rooms/${roomId}/voice-chat/join`, { method: "POST" }),
     voiceChatEnd: (roomId: string) => apiFetch<{ ended: boolean }>(`/chat/rooms/${roomId}/voice-chat`, { method: "DELETE" }),
+    voiceChatScheduled: (roomId: string) =>
+      apiFetch<{ meetingId: string; title: string; startTime: string; hostId: string; canCancel: boolean } | null>(`/chat/rooms/${roomId}/voice-chat/scheduled`)
+        .then((next) => (next && "meetingId" in next ? next : null)),
+    scheduleVoiceChat: (roomId: string, startTime: string, title?: string) =>
+      apiFetch(`/chat/rooms/${roomId}/voice-chat/schedule`, { method: "POST", body: JSON.stringify({ startTime, title }) }),
+    cancelScheduledVoiceChat: (roomId: string) => apiFetch(`/chat/rooms/${roomId}/voice-chat/scheduled`, { method: "DELETE" }),
     /** Pinned messages of a room, newest pin first (decrypted like the timeline). */
     pins: (roomId: string) => apiFetch<ChatMessage[]>(`/chat/rooms/${roomId}/pins`).then(decryptMessages),
     pin: (messageId: string) => apiFetch(`/chat/messages/${messageId}/pin`, { method: "POST" }),

@@ -83,14 +83,17 @@ export class UsersService {
     const rows = await this.dataSource.query<PublicUserDto>(
       isUuid
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen",
+                  account_visibility AS "accountVisibility"
            FROM users WHERE id = $1 AND deleted_at IS NULL`
         : isNumeric
         ? `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen",
+                  account_visibility AS "accountVisibility"
            FROM users WHERE public_id = $1 AND deleted_at IS NULL`
         : `SELECT id, public_id::text AS "publicId", first_name AS "firstName", last_name AS "lastName",
-                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen"
+                  username, nickname, avatar_url AS "avatarUrl", name_emoji AS "nameEmoji", bio, last_seen AS "lastSeen",
+                  account_visibility AS "accountVisibility"
            FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL`,
       [isUuid ? normalized : isNumeric ? Number(normalized) : normalized],
     );

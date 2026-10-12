@@ -13,6 +13,7 @@ import { useToast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { currentSocket, getSocket } from "../lib/socket";
+import { forgetAudio, playWithUnlock } from "../lib/audioUnlock";
 import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting, MeetingParticipant, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
@@ -137,30 +138,6 @@ interface MeetingTile {
  * expanding takes them back to the full room.
  */
 /** Plays one participant's audio while their tile isn't on screen. */
-/**
- * Audio elements the browser refused to start (autoplay policy: no user
- * gesture yet on this page — typical after accepting a call on a phone, or
- * when the remote's audio track arrives seconds after joining). They are
- * retried on the very next tap or key press, so nobody is left in a silent
- * call with nothing on screen saying why.
- */
-const blockedAudio = new Set<HTMLAudioElement>();
-let unlockArmed = false;
-function armAudioUnlock() {
-  if (unlockArmed || typeof window === "undefined") return;
-  unlockArmed = true;
-  const retry = () => {
-    blockedAudio.forEach((audio) => {
-      void audio.play().then(() => blockedAudio.delete(audio)).catch(() => undefined);
-    });
-    if (blockedAudio.size === 0) {
-      unlockArmed = false;
-      ["pointerdown", "keydown", "touchend"].forEach((name) => window.removeEventListener(name, retry, true));
-    }
-  };
-  ["pointerdown", "keydown", "touchend"].forEach((name) => window.addEventListener(name, retry, true));
-}
-
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement>(null);
   // One stable stream per element holding just the audio tracks: the caller
@@ -176,17 +153,14 @@ function RemoteAudio({ stream }: { stream: MediaStream }) {
       own.current.getAudioTracks().forEach((track) => { if (!wanted.includes(track)) own.current!.removeTrack(track); });
       wanted.forEach((track) => { if (!own.current!.getTrackById(track.id)) own.current!.addTrack(track); });
       if (audio.srcObject !== own.current) audio.srcObject = own.current;
-      if (audio.paused && own.current.getAudioTracks().length)
-        void audio.play().then(() => blockedAudio.delete(audio)).catch((error: DOMException) => {
-          if (error?.name === "NotAllowedError") { blockedAudio.add(audio); armAudioUnlock(); }
-        });
+      if (own.current.getAudioTracks().length) playWithUnlock(audio);
     };
     sync();
     // The audio track often lands after the video one: pick it up when it does.
     stream.addEventListener("addtrack", sync);
     return () => { stream.removeEventListener("addtrack", sync); };
   }, [stream]);
-  useEffect(() => () => { if (ref.current) blockedAudio.delete(ref.current); }, []);
+  useEffect(() => () => forgetAudio(ref.current), []);
   return <audio ref={ref} autoPlay playsInline />;
 }
 
@@ -240,12 +214,16 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
     const h = widgetRef.current?.offsetHeight ?? w * 0.75;
     return { w, x: Math.max(8, Math.min(next.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(next.y, window.innerHeight - h - 8)) };
   }, []);
-  // First show: bottom-right corner.
+  // First show only (nothing saved yet): bottom-right corner. Keyed on a
+  // sentinel, not on "x is negative" — dragging past the left edge makes x
+  // negative too, and that used to throw the widget back to the right side.
+  const placed = useRef(box.x !== -1 || box.y !== -1);
   useEffect(() => {
-    if (box.x >= 0) return;
+    if (placed.current) return;
+    placed.current = true;
     const h = widgetRef.current?.offsetHeight ?? 220;
     setBox((current) => clamp({ ...current, x: window.innerWidth - current.w - 20, y: window.innerHeight - h - 96 }));
-  }, [box.x, clamp]);
+  }, [clamp]);
   useEffect(() => {
     const onResize = () => setBox((current) => clamp(current));
     window.addEventListener("resize", onResize);
@@ -339,8 +317,8 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   return (<>
     {edgeHint && <div className={`meeting-dock-hint ${edgeHint}`} aria-hidden="true" />}
     <div ref={widgetRef} className={`meeting-floating-widget${edgeHint ? " is-docking" : ""}`} role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
-         style={box.x >= 0 ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}
-         onPointerDown={start("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+         style={placed.current ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}
+         onPointerDown={start("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
       <div className="floating-widget-video" onClick={() => { if (!dragged.current) onExpand(); }}>
         {/* Muted: the audio comes from the <audio> elements below, one per person. */}
         {tile ? <VideoTile stream={tile.stream} muted mirrored={tile.isSelf} label={tile.label} avatar={tile.avatar} microphoneOn={tile.mic} videoOn={tile.video} /> : <div className="video-placeholder"><LoaderCircle className="spin" size={22} /></div>}

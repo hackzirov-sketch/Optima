@@ -393,7 +393,10 @@
     "subscribers": "{{count}} subscribers",
     "linkCopied": "Copied",
     "closeAria": "Close",
-    "thisIsYou": "This is your profile"
+    "thisIsYou": "This is your profile",
+    "call": "Call",
+    "editProfile": "Edit",
+    "channelSubtitle": "Channel · {{count}} subscribers"
   },
   "meetings": {
     "statusScheduled": "Scheduled",
@@ -981,7 +984,9 @@
     "aiMemoryPlaceholder": "- My name is ...\n- I study ...\n- Keep answers short",
     "aiMemoryClear": "Clear memory",
     "aiMemoryClearConfirm": "Erase everything the AI remembers about you?",
-    "aiMemorySaved": "Memory saved"
+    "aiMemorySaved": "Memory saved",
+    "joinRequestsBar": "{{count}} join requests",
+    "joinRequestsHide": "Hide"
   },
   "presence": {
     "online": "Online",
@@ -1420,6 +1425,18 @@
     "micBlocked": "Microphone access was blocked",
     "cameraBlocked": "Camera access was blocked",
     "joinFailed": "Couldn’t join the video chat",
-    "endFailed": "Couldn’t end the video chat"
+    "endFailed": "Couldn’t end the video chat",
+    "startNow": "Start now",
+    "schedule": "Schedule",
+    "scheduleTitle": "Schedule a video chat",
+    "scheduleDesc": "The video chat starts by itself at that time and members are notified.",
+    "scheduleWhen": "Start time",
+    "scheduleName": "Topic (optional)",
+    "scheduled": "Video chat scheduled",
+    "scheduledAt": "Starts {{when}}",
+    "cancelSchedule": "Cancel",
+    "scheduleSaved": "Video chat scheduled",
+    "scheduleCancelled": "Scheduled video chat cancelled",
+    "startedNow": "The video chat has started"
   }
 }

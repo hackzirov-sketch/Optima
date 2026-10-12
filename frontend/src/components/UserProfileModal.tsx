@@ -1,4 +1,5 @@
-import { AtSign, Info, Link2, LoaderCircle, Megaphone, MessageCircle, Share2, UserRound, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AtSign, Info, LoaderCircle, MessageCircle, Pencil, Phone, Share2, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
@@ -42,9 +43,11 @@ export function UserProfileModal() {
 
   if (!identifier) return null;
 
-  const handle = profile ? profile.username || String(profile.publicId) : identifier;
+  const handle = profile ? (profile.accountVisibility === "private" ? String(profile.publicId) : profile.username || String(profile.publicId)) : identifier;
   const profileUrl = `${window.location.origin}/profile/${handle}`;
   const isMe = !!profile && String(profile.publicId) === String(user?.publicId);
+  // A private account keeps its username to itself.
+  const showUsername = !!profile?.username && (isMe || profile.accountVisibility !== "private");
 
   async function copy(text: string) {
     try { await navigator.clipboard.writeText(text); show(t("publicProfile.linkCopied")); } catch { show(text); }
@@ -57,7 +60,7 @@ export function UserProfileModal() {
     await copy(profileUrl);
   }
 
-  return <div className="modal-layer upm-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeProfile()}>
+  return createPortal(<div className="modal-layer upm-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeProfile()}>
     <section className="upm" role="dialog" aria-modal="true" aria-label={profile ? `${profile.firstName} ${profile.lastName}` : t("publicProfile.profileLink")}>
       <button type="button" className="upm-close" onClick={closeProfile} aria-label={t("publicProfile.closeAria")}><X size={20} /></button>
       {!profile && !failed && <div className="upm-loading"><LoaderCircle className="spin" size={24} /></div>}
@@ -68,27 +71,29 @@ export function UserProfileModal() {
           <strong><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} /></strong>
           <small className={isPresenceActive(presence) ? "online" : ""}>{isMe ? t("publicProfile.thisIsYou") : formatPresenceLabel(presence, t)}</small>
         </section>
-        <div className="tg-info-actions">
-          {user && !isMe && <button type="button" onClick={() => { closeProfile(); navigate(`/u/${handle}`); }}><MessageCircle size={20} /><span>{t("publicProfile.message")}</span></button>}
-          <button type="button" onClick={() => void share()}><Share2 size={20} /><span>{t("publicProfile.share")}</span></button>
+        <div className="tg-info-actions upm-actions">
+          {user && !isMe && <button type="button" onClick={() => { closeProfile(); navigate(`/u/${handle}`); }}><MessageCircle size={19} /><span>{t("publicProfile.message")}</span></button>}
+          {user && !isMe && <button type="button" onClick={() => { try { sessionStorage.setItem("optima:pending-call", "audio"); } catch { /* storage off */ } closeProfile(); navigate(`/u/${handle}`); }}><Phone size={19} /><span>{t("publicProfile.call")}</span></button>}
+          {isMe && <button type="button" onClick={() => { closeProfile(); navigate("/profile"); }}><Pencil size={19} /><span>{t("publicProfile.editProfile")}</span></button>}
+          <button type="button" onClick={() => void share()}><Share2 size={19} /><span>{t("publicProfile.share")}</span></button>
         </div>
-        <section className="tg-info-section">
-          {profile.username && <button type="button" className="tg-info-row" onClick={() => void copy(`@${profile.username}`)}>
-            <AtSign size={20} /><span className="tg-info-text"><strong className="link">@{profile.username}</strong><small>{t("publicProfile.usernameLabel")}</small></span>
-          </button>}
+        {profile.channels && profile.channels.length > 0 && <section className="tg-info-section upm-channels">
+          {profile.channels.map((channel) => (
+            <button key={channel.id} type="button" className="upm-channel" onClick={() => { closeProfile(); navigate(`/ch/${channel.slug}`); }}>
+              <span className="upm-channel-avatar">{channel.avatarUrl ? <img src={channel.avatarUrl} alt="" /> : channel.name.charAt(0).toUpperCase()}</span>
+              <span className="tg-info-text"><strong>{channel.name}</strong><small>{t("publicProfile.channelSubtitle", { count: channel.memberCount })}</small></span>
+            </button>
+          ))}
+        </section>}
+        {(profile.bio || showUsername) && <section className="tg-info-section">
           {profile.bio && <div className="tg-info-row">
             <Info size={20} /><span className="tg-info-text"><strong className="multiline">{profile.bio}</strong><small>{t("publicProfile.bioLabel")}</small></span>
           </div>}
-          {profile.channels?.map((channel) => (
-            <button key={channel.id} type="button" className="tg-info-row" onClick={() => { closeProfile(); navigate(`/ch/${channel.slug}`); }}>
-              <Megaphone size={20} /><span className="tg-info-text"><strong>{channel.name}</strong><small>{t("publicProfile.channelLabel")} · {window.location.host}/ch/{channel.slug} · {t("publicProfile.subscribers", { count: channel.memberCount })}</small></span>
-            </button>
-          ))}
-          <button type="button" className="tg-info-row" onClick={() => void copy(profileUrl)}>
-            <Link2 size={20} /><span className="tg-info-text"><strong className="link">{profileUrl.replace(/^https?:\/\//, "")}</strong><small>{t("publicProfile.profileLink")}</small></span>
-          </button>
-        </section>
+          {showUsername && <button type="button" className="tg-info-row" onClick={() => void copy(`@${profile.username}`)}>
+            <AtSign size={20} /><span className="tg-info-text"><strong className="link">@{profile.username}</strong><small>{t("publicProfile.usernameLabel")}</small></span>
+          </button>}
+        </section>}
       </>}
     </section>
-  </div>;
+  </div>, document.body);
 }
