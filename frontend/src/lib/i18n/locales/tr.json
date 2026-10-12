@@ -986,7 +986,8 @@
     "aiMemoryClearConfirm": "Yapay zekânın sizinle ilgili hatırladığı her şey silinsin mi?",
     "aiMemorySaved": "Bellek kaydedildi",
     "joinRequestsBar": "{{count}} katılma isteği",
-    "joinRequestsHide": "Gizle"
+    "joinRequestsHide": "Gizle",
+    "newMessagesBelow": "{{count}} yeni mesaj — en sona git"
   },
   "presence": {
     "online": "Çevrimiçi",

@@ -986,7 +986,8 @@
     "aiMemoryClearConfirm": "Erase everything the AI remembers about you?",
     "aiMemorySaved": "Memory saved",
     "joinRequestsBar": "{{count}} join requests",
-    "joinRequestsHide": "Hide"
+    "joinRequestsHide": "Hide",
+    "newMessagesBelow": "{{count}} new messages — jump to latest"
   },
   "presence": {
     "online": "Online",

@@ -334,6 +334,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  // New messages that arrived while the reader was scrolled up (the badge on the ↓ button).
+  const [unseenBelow, setUnseenBelow] = useState(0);
+  const lastSeenMessageId = useRef<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
@@ -435,6 +438,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const catalogNav = useRef<HTMLElement>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const catalogSwipe = useRef<{ x: number; y: number; at: number } | null>(null);
+  const [catalogSwipeDir, setCatalogSwipeDir] = useState<"next" | "prev" | null>(null);
   const [catalogIndicator, setCatalogIndicator] = useState({ left: 0, width: 0 });
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
@@ -618,6 +624,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
   const peerPresence = usePresence(detailPeer?.id);
+  // The peer's bio and public channels for the DM info card (Telegram shows both).
+  const [peerCard, setPeerCard] = useState<Awaited<ReturnType<typeof api.users.publicProfile>> | null>(null);
+  useEffect(() => {
+    setPeerCard(null);
+    if (!detailsOpen || !detailPeer?.id) return;
+    let cancelled = false;
+    api.users.publicProfile(detailPeer.id).then((profile) => { if (!cancelled) setPeerCard(profile); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [detailsOpen, detailPeer?.id]);
   const sectionLabel = (kind: "media" | "files" | "links" | "music" | "voice") => ({
     media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab"),
   })[kind];
@@ -1347,6 +1362,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
   }, [selectedId, selectedRoom?.memberStatus]);
 
+  // Count what lands below while the reader is up in the history — they are
+  // not yanked down; the ↓ button shows how many are waiting instead.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const previous = lastSeenMessageId.current;
+    lastSeenMessageId.current = last?.id ?? null;
+    if (!last || !previous || last.id === previous || preserveMessageScroll.current) return;
+    if (!shouldStickToMessageBottom.current && last.senderId !== user?.id) setUnseenBelow((count) => count + 1);
+  }, [messages, user?.id]);
+  useEffect(() => { setUnseenBelow(0); lastSeenMessageId.current = null; }, [selectedId]);
+
   useEffect(() => {
     if (preserveMessageScroll.current) {
       preserveMessageScroll.current = false;
@@ -1682,6 +1708,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const touch = event.touches[0];
     swipeGesture.current = { id: message.id, startX: touch.clientX, startY: touch.clientY, horizontal: false };
     if (swipeResetTimer.current) window.clearTimeout(swipeResetTimer.current);
+    // Press and hold opens the message menu (reply, copy, forward, react…) —
+    // iOS never fires contextmenu for a long press, so it is timed here.
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+    const { clientX, clientY } = touch;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      if (swipeGesture.current?.id !== message.id || swipeGesture.current.horizontal) return;
+      swipeGesture.current = null;
+      navigator.vibrate?.(12);
+      openMessageMenu(message.id, clientX, clientY);
+    }, 480);
   }
 
   function moveReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
@@ -1690,6 +1727,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const touch = event.touches[0];
     const dx = touch.clientX - gesture.startX;
     const dy = touch.clientY - gesture.startY;
+    if (longPressTimer.current && Math.hypot(dx, dy) > 8) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     if (!gesture.horizontal) {
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
         swipeGesture.current = null;
@@ -1708,6 +1746,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   function finishReplySwipe(message: ChatMessage) {
+    if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     const active = swipeCurrent.current?.id === message.id ? swipeCurrent.current : null;
     swipeGesture.current = null;
     swipeCurrent.current = null;
@@ -2701,7 +2740,22 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               size={18} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>;
           })}
         </nav>
-        <div className="room-list room-list-transition" key={catalog}>
+        <div className="room-list room-list-transition" key={catalog}
+             onTouchStart={(event) => { const touch = event.touches[0]; catalogSwipe.current = { x: touch.clientX, y: touch.clientY, at: Date.now() }; }}
+             onTouchEnd={(event) => {
+               // A deliberate sideways swipe flips to the next/previous tab
+               // (All · Direct · Groups · Channels · Bots); vertical scrolling is untouched.
+               const start = catalogSwipe.current;
+               catalogSwipe.current = null;
+               if (!start) return;
+               const touch = event.changedTouches[0];
+               const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+               if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6 || Date.now() - start.at > 700) return;
+               const ids = catalogItems.map((item) => item.id);
+               const next = ids[ids.indexOf(catalog) + (dx < 0 ? 1 : -1)];
+               if (next) { setCatalogSwipeDir(dx < 0 ? "next" : "prev"); setCatalog(next); }
+             }}
+             data-swipe={catalogSwipeDir}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
           {!loadingRooms && catalog === "bot" &&
             <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span
@@ -2934,6 +2988,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
                   shouldStickToMessageBottom.current = distanceFromBottom < 96;
                   setShowScrollButton(distanceFromBottom > 96);
+                  if (distanceFromBottom < 96 && unseenBelow) setUnseenBelow(0);
                   if (node.scrollTop < 90) void loadOlderMessages();
                 }}>
                   {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin"
@@ -3095,11 +3150,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
-                  {showScrollButton && <button className="scroll-bottom" onClick={() => {
+                  {showScrollButton && <button className={`scroll-bottom ${unseenBelow ? "has-unseen" : ""}`} onClick={() => {
                     shouldStickToMessageBottom.current = true;
                     setShowScrollButton(false);
+                    setUnseenBelow(0);
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-                  }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
+                  }} aria-label={unseenBelow ? t("chat.newMessagesBelow", { count: unseenBelow }) : t("chat.scrollToLatestAria")}><ArrowDown size={19} />{unseenBelow > 0 && <b>{unseenBelow > 99 ? "99+" : unseenBelow}</b>}</button>}
                 </div>
                 {!canPostIn(selectedRoom) ?
                   <div className="channel-subscribe-bar">
@@ -3318,7 +3374,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             </div>
             <section className="tg-info-section">
               {selectedRoom.type === "direct" ? <>
-                {detailPeer?.username && (detailPeer as { accountVisibility?: string }).accountVisibility !== "private" && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
+                {peerCard?.bio && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{peerCard.bio}</strong><small>{t("publicProfile.bioLabel")}</small></span></div>}
+                {peerCard?.channels?.map((channel) => <button key={channel.id} className="tg-info-row" onClick={() => { setDetailsOpen(false); navigate(`/ch/${channel.slug}`); }}>
+                  <Megaphone size={20} /><span className="tg-info-text"><strong>{channel.name}</strong><small>{t("publicProfile.channelSubtitle", { count: channel.memberCount })}</small></span><ChevronRight size={18} />
+                </button>)}
+                {detailPeer?.username && (detailPeer as { accountVisibility?: string }).accountVisibility !== "private" && peerCard?.accountVisibility !== "private" && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
               </> : <>
                 {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
                 {drawerLink && <button className="tg-info-row tg-info-handle" onClick={() => void copyText(drawerLink.url)} title={drawerLink.url}>

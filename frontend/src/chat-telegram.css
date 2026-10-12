@@ -390,3 +390,22 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .vc-schedule-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
 .vc-schedule-form input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 15px; }
 .vc-schedule-form footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
+/* ── One-handed chat on phones ─────────────────────────────────────────────
+   The message list scrolls on its own (no page bounce, momentum on iOS),
+   the ↓ button sits low in thumb reach and counts what arrived below, and
+   the room list flips tabs with a sideways swipe. */
+.message-list { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.room-list { overscroll-behavior-y: contain; touch-action: pan-y; }
+.scroll-bottom { position: sticky; z-index: 5; }
+.scroll-bottom > b { position: absolute; top: -7px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, .2); }
+.scroll-bottom.has-unseen { color: var(--accent); }
+@media (max-width: 820px) {
+  .scroll-bottom { width: 48px !important; height: 48px !important; bottom: 12px !important; left: calc(100% - 60px) !important; }
+  .message-list { scroll-padding-bottom: 24px; }
+}
+.room-list[data-swipe="next"] { animation: room-tab-next .22s ease-out; }
+.room-list[data-swipe="prev"] { animation: room-tab-prev .22s ease-out; }
+@keyframes room-tab-next { from { opacity: .4; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes room-tab-prev { from { opacity: .4; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .room-list[data-swipe] { animation: none; } }

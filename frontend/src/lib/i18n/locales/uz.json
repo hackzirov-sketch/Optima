@@ -986,7 +986,8 @@
     "aiMemoryClearConfirm": "AI siz haqingizda eslab qolgan hamma narsa o‘chirilsinmi?",
     "aiMemorySaved": "Xotira saqlandi",
     "joinRequestsBar": "{{count}} ta qo‘shilish so‘rovi",
-    "joinRequestsHide": "Yashirish"
+    "joinRequestsHide": "Yashirish",
+    "newMessagesBelow": "{{count}} ta yangi xabar — pastga o‘tish"
   },
   "presence": {
     "online": "Onlayn",

@@ -986,7 +986,8 @@
     "aiMemoryClearConfirm": "Стереть всё, что ИИ помнит о вас?",
     "aiMemorySaved": "Память сохранена",
     "joinRequestsBar": "Заявок на вступление: {{count}}",
-    "joinRequestsHide": "Скрыть"
+    "joinRequestsHide": "Скрыть",
+    "newMessagesBelow": "Новых сообщений: {{count}} — перейти вниз"
   },
   "presence": {
     "online": "В сети",
