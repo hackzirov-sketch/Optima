@@ -31,6 +31,7 @@ import { ChatMessageService } from './services/message.service';
 import { ChatReactionService } from './services/reaction.service';
 import { ChatAiService } from './services/ai.service';
 import { AiConversationService } from './services/ai-conversation.service';
+import { AiMemoryService } from './services/ai-memory.service';
 import { ChatRoomInviteService } from './services/room-invite.service';
 import { ChannelSettingsService } from './services/channel-settings.service';
 import { MessageViewService } from './services/message-view.service';
@@ -74,6 +75,7 @@ export class ChatController {
     private readonly reactionService: ChatReactionService,
     private readonly aiService: ChatAiService,
     private readonly aiConversations: AiConversationService,
+    private readonly aiMemory: AiMemoryService,
     private readonly roomInviteService: ChatRoomInviteService,
     private readonly memberService: ChatMemberService,
     private readonly storageService: StorageService,
@@ -934,8 +936,10 @@ export class ChatController {
     }
     const conversationId = typeof body?.conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(body.conversationId) ? body.conversationId : undefined;
     if (conversationId) history = await this.aiConversations.history(conversationId, userId);
-    const reply = await this.aiService.generateAiReply(message, history, userId, [{ mimeType: image.mimetype, data: image.buffer }]);
+    const memory = await this.aiMemory.forPrompt(userId);
+    const reply = await this.aiService.generateAiReply(message, history, userId, [{ mimeType: image.mimetype, data: image.buffer }], memory);
     const saved = await this.aiConversations.record(userId, conversationId, { text: message, hasImage: true }, { text: reply.reply, sources: reply.sources });
+    this.aiMemory.learn(userId, message, reply.reply);
     return { ...reply, ...saved };
   }
 
@@ -949,10 +953,30 @@ export class ChatController {
     const history = dto.conversationId
       ? await this.aiConversations.history(dto.conversationId, userId)
       : dto.history ?? [];
-    const reply = await this.aiService.generateAiReply(dto.message, history, userId);
+    const memory = await this.aiMemory.forPrompt(userId);
+    const reply = await this.aiService.generateAiReply(dto.message, history, userId, [], memory);
     if (dto.ephemeral) return reply;
     const saved = await this.aiConversations.record(userId, dto.conversationId, { text: dto.message, hasImage: false }, { text: reply.reply, sources: reply.sources });
+    this.aiMemory.learn(userId, dto.message, reply.reply);
     return { ...reply, ...saved };
+  }
+
+  @Get('chat/ai/memory')
+  @ApiOperation({ summary: 'What Optima AI remembers about me' })
+  getAiMemory(@CurrentUser('id') userId: string) {
+    return this.aiMemory.get(userId);
+  }
+
+  @Patch('chat/ai/memory')
+  @ApiOperation({ summary: 'Edit, clear or switch off Optima AI memory' })
+  updateAiMemory(
+    @CurrentUser('id') userId: string,
+    @Body() body: { content?: string; enabled?: boolean },
+  ) {
+    return this.aiMemory.save(userId, {
+      content: typeof body?.content === 'string' ? body.content : undefined,
+      enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined,
+    });
   }
 
   @Get('chat/ai/conversations')

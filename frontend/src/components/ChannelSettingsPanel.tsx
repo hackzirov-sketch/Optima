@@ -41,6 +41,13 @@ const SECTIONS: Array<{ id: SectionId; icon: typeof Info }> = [
   { id: "danger", icon: Megaphone }
 ];
 
+/** Telegram-style coloured icon tile per settings row. */
+const SECTION_TONES: Record<SectionId, string> = {
+  general: "blue", privacy: "violet", requests: "green", content: "orange", notifications: "red",
+  permissions: "teal", moderation: "indigo", files: "sky", security: "slate", analytics: "amber",
+  meeting: "green", ai: "pink", integrations: "slate", education: "orange", danger: "red",
+};
+
 /**
  * Audit actions are stored as stable machine strings (`chat_room.deleted`), so
  * they survive renames and stay greppable. Anything unmapped falls through to
@@ -232,6 +239,13 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
   return (
     <div className="channel-settings cs-tg">
       {section === null && <div className="cs-list">
+        <div className="cs-hero">
+          <span className="cs-hero-avatar">{room.avatarUrl ? <img src={room.avatarUrl} alt="" /> : (room.name || "?").trim().charAt(0).toUpperCase()}</span>
+          <span className="cs-hero-text">
+            <strong>{room.name}</strong>
+            <small>{room.type === "channel" ? <Megaphone size={13} /> : <Users size={13} />}{room.scope === "public" ? t("chat.visibilityPublicShort") : t("chat.visibilityPrivateShort")}{room.scope === "public" && room.slug ? ` · ${window.location.host}/${room.type === "channel" ? "ch" : "g"}/${room.slug}` : ""}</small>
+          </span>
+        </div>
         {[
           ["general", "privacy", "requests", "content", "notifications"],
           ["permissions", "moderation", "files", "security"],
@@ -244,7 +258,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
               const Icon = entry.icon;
               return (
                 <button key={id} type="button" className={`cs-list-row${id === "danger" ? " danger" : ""}`} onClick={() => setSection(entry.id)}>
-                  <Icon size={20} />
+                  <span className={`cs-row-icon tone-${SECTION_TONES[entry.id]}`}><Icon size={17} /></span>
                   <span>{t(`channelSettings.section.${entry.id}`)}</span>
                   {PREVIEW_SECTIONS.has(entry.id) ? <em>{t("channelSettings.previewBadge")}</em> : <small>{summaryFor(entry.id)}</small>}
                   <ChevronRight size={17} />
@@ -253,7 +267,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
             })}
             {group[0] === "permissions" && canAdminister && (
               <label className="cs-toggle cs-list-switch">
-                <Heart size={20} />
+                <span className="cs-row-icon tone-pink"><Heart size={17} /></span>
                 <span><strong>{t("channelSettings.reactions")}</strong></span>
                 <input type="checkbox" role="switch" checked={Boolean(value.reactionsEnabled)} onChange={(event) => set("reactionsEnabled", event.target.checked)} />
                 <i className="cs-switch" aria-hidden="true"><b /></i>
@@ -264,7 +278,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
       </div>}
 
       {section !== null && <div className="cs-body">
-        <button type="button" className="cs-back" onClick={() => setSection(null)}><ArrowLeft size={18} />{t(`channelSettings.section.${section}`)}</button>
+        <button type="button" className="cs-back" onClick={() => setSection(null)}><ArrowLeft size={18} /><span className={`cs-row-icon tone-${SECTION_TONES[section]}`}>{(() => { const Icon = SECTIONS.find((item) => item.id === section)!.icon; return <Icon size={15} />; })()}</span>{t(`channelSettings.section.${section}`)}</button>
         {PREVIEW_SECTIONS.has(section) && (
           <p className="cs-preview-note">
             <Info size={15} />

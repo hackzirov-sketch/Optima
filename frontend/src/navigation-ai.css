@@ -339,3 +339,32 @@
      top bar and the dock while the chat list drawer is open. */
   .standalone-ai.has-sessions:has(.ai-sessions.open) { z-index: 3000; }
 }
+
+/* Memory entry at the bottom of the chat list, and the memory dialog. */
+.ai-memory-open { display: flex; align-items: center; gap: 10px; min-height: 42px; margin-top: 8px; padding: 0 12px; border: 0; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; background: none; color: var(--text-soft); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ai-memory-open:hover { color: var(--accent); }
+.ai-memory-layer { z-index: 3100; }
+.ai-memory { width: min(100% - 32px, 520px); max-height: min(88vh, 720px); overflow-y: auto; display: grid; gap: 14px; padding: 20px; border-radius: 18px; background: var(--surface); color: var(--text); box-shadow: 0 24px 60px rgba(0, 0, 0, .3); }
+.ai-memory > header { display: flex; align-items: flex-start; gap: 12px; }
+.ai-memory > header > div { flex: 1; }
+.ai-memory h2 { margin: 0; font-size: 18px; }
+.ai-memory header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.ai-memory-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.ai-memory-close { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.ai-memory-switch { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font-weight: 600; cursor: pointer; }
+.ai-memory-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.ai-memory-switch i { position: relative; width: 42px; height: 24px; border-radius: 999px; background: var(--line-strong); transition: background-color .18s ease; }
+.ai-memory-switch i b { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .18s ease; }
+.ai-memory-switch:has(input:checked) i { background: var(--accent); }
+.ai-memory-switch:has(input:checked) i b { transform: translateX(18px); }
+.ai-memory textarea { width: 100%; min-height: 200px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
+.ai-memory textarea:disabled { opacity: .55; }
+.ai-memory-empty { margin: 0; color: var(--muted); font-size: 13px; }
+.ai-memory-loading { display: grid; place-items: center; padding: 30px; color: var(--muted); }
+.ai-memory footer { display: flex; justify-content: space-between; gap: 10px; }
+.ai-memory footer button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.ai-memory-clear { border: 1px solid var(--line); background: none; color: var(--danger, #e5484d); }
+.ai-memory-save { border: 0; background: var(--accent); color: #fff; }
+.ai-memory footer button:disabled { opacity: .5; cursor: default; }
+.ai-memory { display: flex; flex-direction: column; }
+.ai-memory > * { flex: none; }

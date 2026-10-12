@@ -190,3 +190,12 @@
 .yt-desc-table > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; padding: 10px 0; }
 .yt-desc-table dt { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
 .yt-desc-table dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* The watch column must never grow past the screen: a long unbroken line in a
+   description (URLs, ▬▬▬ rules) widened the grid track on phones and cut off
+   half of the player. */
+.yt-watch { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .yt-watch { grid-template-columns: minmax(0, 1fr) minmax(0, 380px); } }
+.yt-watch > *, .yt-watch-main, .yt-watch-info, .yt-desc { min-width: 0; max-width: 100%; }
+.yt-desc-text { overflow-wrap: anywhere; word-break: break-word; }
+.yt-watch-actions { flex-wrap: wrap; }

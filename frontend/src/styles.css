@@ -4642,3 +4642,54 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .channel-settings.cs-tg .cs-body > * { flex: none; }
 .channel-settings.cs-tg .cs-body > .cs-toggle + .cs-toggle { margin-top: -12px; }
 .channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 22px minmax(0, 1fr) auto; min-height: 50px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+
+/* "Kimga ochiq" as three tiles: a big tinted icon per audience, the chosen
+   one lifted with a coloured ring and a check badge; the radio itself hidden. */
+.meet-visibility.meet-visibility-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.meet-visibility-cards legend { grid-column: 1 / -1; }
+.meet-visibility-cards label { --tone: #2563eb; position: relative; display: grid; justify-items: start; align-content: start; gap: 10px; min-height: 148px; padding: 14px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--surface); transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background-color .15s ease; }
+.meet-visibility-cards label.tone-public { --tone: #16a34a; }
+.meet-visibility-cards label.tone-private { --tone: #d97706; }
+.meet-visibility-cards label.tone-invite_only { --tone: #7c3aed; }
+.meet-visibility-cards label:hover { border-color: color-mix(in srgb, var(--tone) 45%, var(--line)); transform: translateY(-1px); }
+.meet-visibility-cards label.selected { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 7%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent), 0 10px 24px color-mix(in srgb, var(--tone) 16%, transparent); }
+.meet-visibility-cards input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.meet-visibility-cards label:has(input:focus-visible) { outline: 2px solid var(--tone); outline-offset: 2px; }
+.meet-visibility-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); transition: background-color .15s ease, color .15s ease; }
+.meet-visibility-cards label.selected .meet-visibility-icon { background: var(--tone); color: #fff; }
+.meet-visibility-check { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: transparent; transition: all .15s ease; }
+.meet-visibility-cards label.selected .meet-visibility-check { border-color: var(--tone); background: var(--tone); color: #fff; }
+.meet-visibility-cards span strong { font-size: 14.5px; }
+@media (max-width: 560px) {
+  .meet-visibility.meet-visibility-cards { grid-template-columns: minmax(0, 1fr); }
+  .meet-visibility-cards label { min-height: 0; grid-template-columns: 44px minmax(0, 1fr); align-items: center; padding-right: 44px; }
+  .meet-visibility-cards label > span { grid-column: 2; }
+  .meet-visibility-cards .meet-visibility-check { top: 50%; transform: translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) { .meet-visibility-cards label { transition: none; } }
+
+/* Settings polish: a room card on top, colour-coded icon tiles per row. */
+.channel-settings.cs-tg .cs-hero { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 70%); }
+.channel-settings.cs-tg .cs-hero-avatar { display: grid; place-items: center; width: 54px; height: 54px; flex: none; overflow: hidden; border-radius: 50%; background: var(--accent); color: #fff; font-size: 22px; font-weight: 700; }
+.channel-settings.cs-tg .cs-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.channel-settings.cs-tg .cs-hero-text { display: grid; gap: 3px; min-width: 0; }
+.channel-settings.cs-tg .cs-hero-text strong { overflow: hidden; font-size: 17px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings.cs-tg .cs-hero-text small { display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings.cs-tg .cs-list-row, .channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 30px minmax(0, 1fr) auto auto; }
+.channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.channel-settings.cs-tg .cs-row-icon { --tile: #3b82f6; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--tile); color: #fff !important; }
+.channel-settings.cs-tg .cs-row-icon svg { color: #fff !important; }
+.channel-settings.cs-tg .cs-back .cs-row-icon { width: 26px; height: 26px; border-radius: 8px; }
+.channel-settings.cs-tg .tone-blue { --tile: #3b82f6; }
+.channel-settings.cs-tg .tone-violet { --tile: #8b5cf6; }
+.channel-settings.cs-tg .tone-green { --tile: #22c55e; }
+.channel-settings.cs-tg .tone-orange { --tile: #f97316; }
+.channel-settings.cs-tg .tone-red { --tile: #ef4444; }
+.channel-settings.cs-tg .tone-teal { --tile: #14b8a6; }
+.channel-settings.cs-tg .tone-indigo { --tile: #6366f1; }
+.channel-settings.cs-tg .tone-sky { --tile: #0ea5e9; }
+.channel-settings.cs-tg .tone-slate { --tile: #64748b; }
+.channel-settings.cs-tg .tone-amber { --tile: #f59e0b; }
+.channel-settings.cs-tg .tone-pink { --tile: #ec4899; }
+.channel-settings.cs-tg .cs-list-row.danger > span:nth-child(2) { color: var(--danger, #e5484d); }
+.channel-settings.cs-tg .cs-list-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

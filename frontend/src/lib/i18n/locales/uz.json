@@ -967,7 +967,21 @@
     "aiOpenHistory": "Suhbatlar ro‘yxati",
     "aiImageSent": "Rasm yuborilgan",
     "aiToday": "Bugun",
-    "aiEarlier": "Avvalroq"
+    "aiEarlier": "Avvalroq",
+    "previewVoice": "🎤 Ovozli xabar",
+    "previewPhoto": "🖼 Rasm",
+    "previewVideo": "🎬 Video",
+    "previewFile": "📎 Fayl",
+    "previewMessage": "Xabar",
+    "aiMemory": "Xotira",
+    "aiMemoryTitle": "Optima AI xotirasi",
+    "aiMemoryDesc": "AI siz haqingizdagi muhim narsalarni eslab qoladi va har javobdan oldin ko‘rib chiqadi — har safar o‘zingizni qaytadan tushuntirishingiz shart emas.",
+    "aiMemoryEnabled": "Xotirani ishlatish",
+    "aiMemoryEmpty": "Hali hech narsa eslab qolinmagan. AI bilan suhbatlashing — muhim faktlar shu yerda paydo bo‘ladi.",
+    "aiMemoryPlaceholder": "- Ismim ...\n- Men ... o‘qiyman\n- Javoblarni qisqa yoz",
+    "aiMemoryClear": "Xotirani tozalash",
+    "aiMemoryClearConfirm": "AI siz haqingizda eslab qolgan hamma narsa o‘chirilsinmi?",
+    "aiMemorySaved": "Xotira saqlandi"
   },
   "presence": {
     "online": "Onlayn",

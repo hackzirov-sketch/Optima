@@ -137,16 +137,62 @@ interface MeetingTile {
  * expanding takes them back to the full room.
  */
 /** Plays one participant's audio while their tile isn't on screen. */
+/**
+ * Audio elements the browser refused to start (autoplay policy: no user
+ * gesture yet on this page — typical after accepting a call on a phone, or
+ * when the remote's audio track arrives seconds after joining). They are
+ * retried on the very next tap or key press, so nobody is left in a silent
+ * call with nothing on screen saying why.
+ */
+const blockedAudio = new Set<HTMLAudioElement>();
+let unlockArmed = false;
+function armAudioUnlock() {
+  if (unlockArmed || typeof window === "undefined") return;
+  unlockArmed = true;
+  const retry = () => {
+    blockedAudio.forEach((audio) => {
+      void audio.play().then(() => blockedAudio.delete(audio)).catch(() => undefined);
+    });
+    if (blockedAudio.size === 0) {
+      unlockArmed = false;
+      ["pointerdown", "keydown", "touchend"].forEach((name) => window.removeEventListener(name, retry, true));
+    }
+  };
+  ["pointerdown", "keydown", "touchend"].forEach((name) => window.addEventListener(name, retry, true));
+}
+
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement>(null);
+  // One stable stream per element holding just the audio tracks: the caller
+  // hands a new MediaStream on every track change, and re-assigning srcObject
+  // each time restarted playback (an aborted play() and a gap in the voice).
+  const own = useRef<MediaStream | null>(null);
   useEffect(() => {
     const audio = ref.current;
     if (!audio) return;
-    if (audio.srcObject !== stream) audio.srcObject = stream;
-    void audio.play().catch(() => undefined);
+    const sync = () => {
+      own.current ??= new MediaStream();
+      const wanted = stream.getAudioTracks();
+      own.current.getAudioTracks().forEach((track) => { if (!wanted.includes(track)) own.current!.removeTrack(track); });
+      wanted.forEach((track) => { if (!own.current!.getTrackById(track.id)) own.current!.addTrack(track); });
+      if (audio.srcObject !== own.current) audio.srcObject = own.current;
+      if (audio.paused && own.current.getAudioTracks().length)
+        void audio.play().then(() => blockedAudio.delete(audio)).catch((error: DOMException) => {
+          if (error?.name === "NotAllowedError") { blockedAudio.add(audio); armAudioUnlock(); }
+        });
+    };
+    sync();
+    // The audio track often lands after the video one: pick it up when it does.
+    stream.addEventListener("addtrack", sync);
+    return () => { stream.removeEventListener("addtrack", sync); };
   }, [stream]);
-  return <audio ref={ref} autoPlay />;
+  useEffect(() => () => { if (ref.current) blockedAudio.delete(ref.current); }, []);
+  return <audio ref={ref} autoPlay playsInline />;
 }
+
+/** How close (px) to a side edge the pointer must get to tuck the widget there. */
+const EDGE_ZONE = 30;
+const minWidgetWidth = () => (window.innerWidth < 600 ? 150 : 220);
 
 function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onToggleMic, onToggleCamera, onExpand, onLeave }: {
   tile: MeetingTile | null;
@@ -168,7 +214,8 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
       const saved = JSON.parse(localStorage.getItem("optima-call-widget") ?? "null");
       if (saved && typeof saved.x === "number") return { x: saved.x, y: saved.y, w: saved.w };
     } catch { /* default */ }
-    return { x: -1, y: -1, w: 300 };
+    // Phones get a smaller first size: 300px is most of a 390px screen.
+    return { x: -1, y: -1, w: window.innerWidth < 600 ? Math.round(window.innerWidth * 0.48) : 300 };
   });
   // Pushed off a side edge, the widget tucks away into a small tab on that
   // edge (iOS picture-in-picture style); tapping the tab brings it back. The
@@ -176,6 +223,10 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   const [docked, setDocked] = useState<"left" | "right" | null>(() => {
     try { const saved = JSON.parse(localStorage.getItem("optima-call-widget") ?? "null"); return saved?.docked ?? null; } catch { return null; }
   });
+  // While dragging: the side the widget will tuck into if let go now — shown
+  // as a coloured glow along that screen edge (at most EDGE_ZONE px wide).
+  const [edgeHint, setEdgeHint] = useState<"left" | "right" | null>(null);
+  const edgeHintRef = useRef<"left" | "right" | null>(null);
   const persist = (next: { x: number; y: number; w: number }, side: "left" | "right" | null) => {
     try { localStorage.setItem("optima-call-widget", JSON.stringify({ ...next, docked: side })); } catch { /* storage off */ }
   };
@@ -185,7 +236,7 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
   const dragged = useRef(false);
   const widgetRef = useRef<HTMLDivElement>(null);
   const clamp = useCallback((next: { x: number; y: number; w: number }) => {
-    const w = Math.max(220, Math.min(next.w, window.innerWidth - 16, 720));
+    const w = Math.max(minWidgetWidth(), Math.min(next.w, window.innerWidth - 16, 720));
     const h = widgetRef.current?.offsetHeight ?? w * 0.75;
     return { w, x: Math.max(8, Math.min(next.x, window.innerWidth - w - 8)), y: Math.max(8, Math.min(next.y, window.innerHeight - h - 8)) };
   }, []);
@@ -229,6 +280,13 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
       const clamped = clamp({ ...state.box, x: state.box.x + dx, y: state.box.y + dy });
       const x = Math.max(-state.box.w + 48, Math.min(state.box.x + dx, window.innerWidth - 48));
       setBox({ ...clamped, x });
+      // The pointer reaching a side edge — or the widget pushed a good way
+      // past it — means "tuck it away there".
+      const hidden = x < 0 ? -x : Math.max(0, x + state.box.w - window.innerWidth);
+      const hint = event.clientX <= EDGE_ZONE || (x < 0 && hidden > state.box.w * 0.3) ? "left"
+        : event.clientX >= window.innerWidth - EDGE_ZONE || (x > 0 && hidden > state.box.w * 0.3) ? "right"
+        : null;
+      if (hint !== edgeHintRef.current) { edgeHintRef.current = hint; setEdgeHint(hint); }
       return;
     }
     // Resizing keeps the shape: width follows the dragged edge(s); the opposite
@@ -240,7 +298,7 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
     if (state.mode.includes("s")) grow += dy / ratio;
     if (state.mode.includes("n")) grow -= dy / ratio;
     if (state.mode.length === 2) grow /= 2; // a corner moves along both axes at once
-    const w = Math.max(220, Math.min(state.box.w + grow, window.innerWidth - 16, 720));
+    const w = Math.max(minWidgetWidth(), Math.min(state.box.w + grow, window.innerWidth - 16, 720));
     const gained = w - state.box.w;
     setBox(clamp({
       w,
@@ -252,17 +310,13 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
     if (!drag.current) return;
     const wasMove = drag.current.mode === "move";
     drag.current = null;
+    const side = wasMove ? edgeHintRef.current : null;
+    edgeHintRef.current = null;
+    setEdgeHint(null);
+    if (side) setDocked(side);
     setBox((current) => {
-      const hidden = wasMove ? (current.x < 0 ? -current.x : Math.max(0, current.x + current.w - window.innerWidth)) : 0;
-      if (hidden > current.w * 0.3) {
-        const side = current.x < 0 ? "left" : "right";
-        setDocked(side);
-        const parked = clamp(current);
-        persist(parked, side);
-        return parked;
-      }
       const next = clamp(current);
-      persist(next, null);
+      persist(next, side);
       return next;
     });
   };
@@ -282,8 +336,9 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
       </button>
     </>;
   }
-  return (
-    <div ref={widgetRef} className="meeting-floating-widget" role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
+  return (<>
+    {edgeHint && <div className={`meeting-dock-hint ${edgeHint}`} aria-hidden="true" />}
+    <div ref={widgetRef} className={`meeting-floating-widget${edgeHint ? " is-docking" : ""}`} role="complementary" aria-label={t("meetingRoom.floatingWidgetAria")}
          style={box.x >= 0 ? { left: box.x, top: box.y, right: "auto", bottom: "auto", width: box.w } : { width: box.w }}
          onPointerDown={start("move")} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
       <div className="floating-widget-video" onClick={() => { if (!dragged.current) onExpand(); }}>
@@ -304,7 +359,7 @@ function FloatingMeetingWidget({ tile, remotes, title, microphone, camera, onTog
         <span key={edge} className={`floating-widget-resize resize-${edge}`} onPointerDown={start(edge)} role="separator" aria-label={t("meetingRoom.dragToResize")} title={t("meetingRoom.dragToResize")} />
       ))}
     </div>
-  );
+  </>);
 }
 
 /**

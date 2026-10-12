@@ -967,7 +967,21 @@
     "aiOpenHistory": "Sohbet listesi",
     "aiImageSent": "Görsel eklendi",
     "aiToday": "Bugün",
-    "aiEarlier": "Daha önce"
+    "aiEarlier": "Daha önce",
+    "previewVoice": "🎤 Sesli mesaj",
+    "previewPhoto": "🖼 Fotoğraf",
+    "previewVideo": "🎬 Video",
+    "previewFile": "📎 Dosya",
+    "previewMessage": "Mesaj",
+    "aiMemory": "Bellek",
+    "aiMemoryTitle": "Optima AI belleği",
+    "aiMemoryDesc": "Yapay zekâ sizinle ilgili önemli şeyleri hatırlar ve her yanıttan önce okur — kendinizi her seferinde yeniden anlatmanız gerekmez.",
+    "aiMemoryEnabled": "Belleği kullan",
+    "aiMemoryEmpty": "Henüz hatırlanan bir şey yok. Yapay zekâyla sohbet edin — önemli bilgiler burada görünür.",
+    "aiMemoryPlaceholder": "- Adım ...\n- ... okuyorum\n- Yanıtları kısa tut",
+    "aiMemoryClear": "Belleği temizle",
+    "aiMemoryClearConfirm": "Yapay zekânın sizinle ilgili hatırladığı her şey silinsin mi?",
+    "aiMemorySaved": "Bellek kaydedildi"
   },
   "presence": {
     "online": "Çevrimiçi",

@@ -88,6 +88,8 @@ export interface ChatRoomDto {
     id: string;
     content: string | null;
     e2ee: E2eeEnvelope | null;
+    /** First attachment's type, so a voice note or photo still has a preview. */
+    attachmentMime?: string | null;
     senderId: string;
     senderName: string | null;
     createdAt: Date;
@@ -134,6 +136,7 @@ export class ChatRoomService {
     const rows = await this.dataSource.query<any>(
       `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
               m.created_at AS "createdAt",
+              (SELECT a.mime_type FROM message_attachments a WHERE a.message_id = m.id LIMIT 1) AS "attachmentMime",
               u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
        FROM chat_messages m
        LEFT JOIN users u ON u.id = m.sender_id
@@ -145,6 +148,7 @@ export class ChatRoomService {
     return {
       id: msg.id,
       ...this.lastMessageBody(msg),
+      attachmentMime: msg.attachmentMime ?? null,
       senderId: msg.senderId,
       senderName: msg.senderFirstName
         ? `${msg.senderFirstName ?? ''} ${msg.senderLastName ?? ''}`.trim()
@@ -335,6 +339,7 @@ export class ChatRoomService {
         ? await this.dataSource.query(
             `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
                     m.created_at AS "createdAt",
+                    (SELECT a.mime_type FROM message_attachments a WHERE a.message_id = m.id LIMIT 1) AS "attachmentMime",
                     u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
              FROM chat_messages m
              LEFT JOIN users u ON u.id = m.sender_id
@@ -386,6 +391,7 @@ export class ChatRoomService {
           ? {
               id: lastMsg.id,
               ...this.lastMessageBody(lastMsg),
+              attachmentMime: lastMsg.attachmentMime ?? null,
               senderId: lastMsg.senderId,
               senderName: lastMsg.senderFirstName
                 ? `${lastMsg.senderFirstName ?? ''} ${lastMsg.senderLastName ?? ''}`.trim()

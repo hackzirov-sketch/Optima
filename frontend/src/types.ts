@@ -89,6 +89,7 @@ export interface ChatRoom {
     id: string;
     content: string;
     e2ee?: E2eeEnvelope | null;
+    attachmentMime?: string | null;
     senderId: string;
     senderName?: string | null;
     createdAt: string;

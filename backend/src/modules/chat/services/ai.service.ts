@@ -77,7 +77,7 @@ export class ChatAiService {
     }
   }
 
-  private async askGroq(message: string, history: History): Promise<AiReply> {
+  private async askGroq(message: string, history: History, system = SYSTEM): Promise<AiReply> {
     if (!this.groq) throw new Error('GROQ_NOT_CONFIGURED');
     const response = await this.withTimeout(
       this.groq.chat.completions.create({
@@ -86,7 +86,7 @@ export class ChatAiService {
         max_tokens: 1200,
         user: 'optima-user',
         messages: [
-          { role: 'system', content: SYSTEM },
+          { role: 'system', content: system },
           ...history.map((item) => ({
             role:
               item.role === 'model'
@@ -108,16 +108,17 @@ export class ChatAiService {
     history: History,
     grounded: boolean,
     images: AiImage[] = [],
+    system = SYSTEM,
   ): Promise<AiReply> {
     if (!this.gemini) throw new Error('GEMINI_NOT_CONFIGURED');
     let lastError: unknown;
     for (const name of this.geminiModels) {
       try {
-        return await this.askGeminiModel(name, message, history, grounded, images);
+        return await this.askGeminiModel(name, message, history, grounded, images, system);
       } catch (error) {
         lastError = error;
         // Retired, overloaded or rate-limited: the next model may answer.
-        if (!/\b(404|429|500|503)\b|not found|no longer available|high demand|overloaded/i.test(String((error as Error)?.message))) throw error;
+        if (!/\b(404|429|500|503)\b|AI_TIMEOUT|not found|no longer available|high demand|overloaded/i.test(String((error as Error)?.message))) throw error;
         this.logger.warn(`Gemini ${name} unavailable, trying the next model: ${(error as Error)?.message?.slice(0, 160)}`);
       }
     }
@@ -130,10 +131,11 @@ export class ChatAiService {
     history: History,
     grounded: boolean,
     images: AiImage[],
+    system = SYSTEM,
   ): Promise<AiReply> {
     const model = this.gemini!.getGenerativeModel({
       model: modelName,
-      systemInstruction: SYSTEM,
+      systemInstruction: system,
       ...(grounded ? { tools: [{ googleSearch: {} }] as any } : {}),
     });
     const chat = model.startChat({
@@ -149,7 +151,7 @@ export class ChatAiService {
         ...images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data.toString('base64') } })),
         { text: message },
       ]),
-      images.length ? 40000 : 18000,
+      images.length ? 40000 : 14000,
     );
     const reply = result.response.text().trim();
     if (!reply) throw new Error('GEMINI_EMPTY');
@@ -168,18 +170,58 @@ export class ChatAiService {
     };
   }
 
+  /**
+   * Folds one exchange into the person's memory: durable facts only (who they
+   * are, what they work on or study, preferences, ongoing goals), never the
+   * conversation itself. Returns the new memory, or null when nothing changed.
+   */
+  async updateMemory(existing: string, question: string, answer: string): Promise<string | null> {
+    const system = `Sen foydalanuvchi xotirasini yurituvchi yordamchisan. Vazifang: mavjud xotira va oxirgi savol-javobdan foydalanuvchi haqida UZOQ MUDDAT foydali faktlarni ajratish (ismi, kasbi/o'qishi, loyihalari, maqsadlari, afzal ko'rgan til va javob uslubi, muhim kontekst).
+Qoidalar: faqat foydalanuvchining o'zi aytgan yoki aniq ko'rinib turgan narsalar; bir martalik savollar, umumiy bilim va AI javobidagi faktlarni yozma; parol, karta, telefon kabi maxfiy ma'lumotlarni hech qachon yozma.
+Natija: yangilangan xotira — har biri "- " bilan boshlanuvchi qisqa qatorlar, ko'pi bilan 25 qator, eski faktlarni saqla, eskirganini yangisi bilan almashtir. Yangi narsa bo'lmasa faqat NO_CHANGE deb yoz.`;
+    const prompt = `Mavjud xotira:\n${existing.trim() || '(bo\'sh)'}\n\nFoydalanuvchi: ${question.slice(0, 3000)}\n\nAI javobi: ${answer.slice(0, 2000)}`;
+    const attempts = [
+      this.groq && (() => this.askGroq(prompt, [], system)),
+      this.gemini && (() => this.askGemini(prompt, [], false, [], system)),
+    ];
+    for (const attempt of attempts) {
+      if (!attempt) continue;
+      try {
+        const { reply } = await attempt();
+        const text = reply.trim();
+        if (!text || /^NO_CHANGE\b/i.test(text)) return null;
+        return text
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('- '))
+          .slice(0, 25)
+          .join('\n')
+          .slice(0, 3000) || null;
+      } catch (error) {
+        this.logger.debug(`Memory update failed: ${(error as Error)?.message?.slice(0, 120)}`);
+      }
+    }
+    return null;
+  }
+
   async generateAiReply(
     message: string,
     history: History,
     userId: string,
     images: AiImage[] = [],
+    memory = '',
   ): Promise<AiReply> {
+    // What Optima AI remembers about this person (see AiMemoryService): read
+    // before every answer so they never have to explain themselves again.
+    const system = memory.trim()
+      ? `${SYSTEM}\n\nFoydalanuvchi haqida avvalgi suhbatlardan eslab qolganlaring (faqat kerak bo'lsa ishlat, ro'yxatni o'qib berma):\n${memory.trim()}`
+      : SYSTEM;
     // A picture with no words still deserves an answer.
     const text = message.trim() || (images.length ? 'Bu rasmda nima borligini tushuntirib ber.' : '');
     if (images.length) {
       // Only Gemini sees images (the Groq model is text-only).
       try {
-        return await this.askGemini(text, history, false, images);
+        return await this.askGemini(text, history, false, images, system);
       } catch (error) {
         this.logger.warn(`AI image request failed for user ${userId}: ${error instanceof Error ? error.message : 'unknown'}`);
         throw new ServiceUnavailableException('AI xizmatlari vaqtincha band. Birozdan keyin qayta urinib ko‘ring.');
@@ -195,12 +237,12 @@ export class ChatAiService {
     const fresh = this.needsFreshFacts(text);
     const providers = fresh
       ? [
-          this.gemini && (() => this.askGemini(text, history, true)),
-          this.groq && (() => this.askGroq(text, history)),
+          this.gemini && (() => this.askGemini(text, history, true, [], system)),
+          this.groq && (() => this.askGroq(text, history, system)),
         ]
       : [
-          this.groq && (() => this.askGroq(text, history)),
-          this.gemini && (() => this.askGemini(text, history, false)),
+          this.groq && (() => this.askGroq(text, history, system)),
+          this.gemini && (() => this.askGemini(text, history, false, [], system)),
         ];
     for (const provider of providers) {
       if (!provider) continue;

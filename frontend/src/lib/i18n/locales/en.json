@@ -967,7 +967,21 @@
     "aiOpenHistory": "Chat list",
     "aiImageSent": "Image attached",
     "aiToday": "Today",
-    "aiEarlier": "Earlier"
+    "aiEarlier": "Earlier",
+    "previewVoice": "🎤 Voice message",
+    "previewPhoto": "🖼 Photo",
+    "previewVideo": "🎬 Video",
+    "previewFile": "📎 File",
+    "previewMessage": "Message",
+    "aiMemory": "Memory",
+    "aiMemoryTitle": "Optima AI memory",
+    "aiMemoryDesc": "The AI remembers what matters about you and reads it before every answer — no need to explain yourself every time.",
+    "aiMemoryEnabled": "Use memory",
+    "aiMemoryEmpty": "Nothing remembered yet. Chat with the AI — key facts will appear here.",
+    "aiMemoryPlaceholder": "- My name is ...\n- I study ...\n- Keep answers short",
+    "aiMemoryClear": "Clear memory",
+    "aiMemoryClearConfirm": "Erase everything the AI remembers about you?",
+    "aiMemorySaved": "Memory saved"
   },
   "presence": {
     "online": "Online",

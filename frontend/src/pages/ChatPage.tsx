@@ -582,6 +582,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const sectionLabel = (kind: "media" | "files" | "links" | "music" | "voice") => ({
     media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab"),
   })[kind];
+  /** A last message with no text (a voice note, a photo…) still says what it was. */
+  const attachmentPreview = (mime?: string | null) =>
+    !mime ? t("chat.previewMessage")
+      : mime.startsWith("audio/") ? t("chat.previewVoice")
+      : mime.startsWith("image/") ? t("chat.previewPhoto")
+      : mime.startsWith("video/") ? t("chat.previewVideo")
+      : t("chat.previewFile");
   const roomLink = (room: ChatRoom) =>
     `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}`;
   async function copyText(text: string) {
@@ -1101,6 +1108,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           lastMessage: {
             id: message.id,
             content: message.content,
+            attachmentMime: message.attachments?.[0]?.mimeType ?? null,
             senderId: message.senderId,
             createdAt: message.createdAt
           }
@@ -2536,7 +2544,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : room.lastMessage ? attachmentPreview(room.lastMessage.attachmentMime) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                     <b>{room.unreadCount}</b>}</span>
                 </span>
                 </button>
@@ -2643,7 +2651,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : room.lastMessage ? attachmentPreview(room.lastMessage.attachmentMime) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
             );

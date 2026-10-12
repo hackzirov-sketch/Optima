@@ -60,3 +60,21 @@
 .meeting-widget-tab-mic { position: absolute; bottom: 8px; color: #ff6b6b; }
 @keyframes meeting-tab-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .meeting-widget-tab { animation: none; } }
+
+/* Dragging the widget to a side: that edge glows (≤30px) — let go to tuck it. */
+.meeting-dock-hint { position: fixed; z-index: 1099; top: 0; bottom: 0; width: 30px; pointer-events: none; animation: meeting-tab-in .12s ease-out; }
+.meeting-dock-hint.left { left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--accent, #6366f1) 55%, transparent), transparent); box-shadow: inset 3px 0 0 var(--accent, #6366f1); }
+.meeting-dock-hint.right { right: 0; background: linear-gradient(270deg, color-mix(in srgb, var(--accent, #6366f1) 55%, transparent), transparent); box-shadow: inset -3px 0 0 var(--accent, #6366f1); }
+.meeting-floating-widget.is-docking { opacity: .82; transition: opacity .12s ease; }
+/* The tucked tab glows on its edge side on hover. */
+.meeting-widget-tab.left:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, .28), inset 3px 0 0 var(--accent, #6366f1); }
+.meeting-widget-tab.right:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, .28), inset -3px 0 0 var(--accent, #6366f1); }
+/* Phones: a bigger touch target for the tab, a tighter widget. */
+@media (max-width: 600px) {
+  .meeting-widget-tab { width: 34px; height: 96px; }
+  .meeting-floating-widget .floating-widget-handle { padding: 6px 8px; }
+  .meeting-floating-widget .floating-widget-handle strong { font-size: 12px; }
+  .meeting-floating-widget .floating-widget-controls { gap: 6px; padding: 6px; }
+  .meeting-floating-widget .floating-widget-controls button { width: 34px; height: 34px; }
+  .meeting-floating-widget .video-tile-label, .meeting-floating-widget .video-tile .tile-name { font-size: 11px; }
+}

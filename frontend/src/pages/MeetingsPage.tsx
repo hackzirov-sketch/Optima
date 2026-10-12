@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, History, Keyboard, Link2, MoreVertical, Plus, Radio, Trash2, Video } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, Globe2, History, Keyboard, Link2, Lock, MoreVertical, Plus, Radio, Ticket, Trash2, Video } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, Modal, Skeleton } from "../components/ui";
@@ -323,11 +323,13 @@ export function MeetingsPage() {
             {createMode === "schedule" && <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={localInput(defaultStart)} required /></label>}
             <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={maxAllowed} defaultValue={Math.min(maxAllowed, 25)} required /><small className="field-hint">{t("meet.maxHint", { max: maxAllowed })}</small></label>
           </div>
-          <fieldset className="meet-visibility">
+          <fieldset className="meet-visibility meet-visibility-cards">
             <legend>{t("meetings.visibilityLabel")}</legend>
             {VISIBILITY_OPTIONS.map((option) => (
-              <label key={option} className={visibility === option ? "selected" : ""}>
+              <label key={option} className={`tone-${option} ${visibility === option ? "selected" : ""}`}>
                 <input type="radio" name="visibility" value={option} checked={visibility === option} onChange={() => setVisibility(option)} />
+                <b className="meet-visibility-icon" aria-hidden="true">{option === "public" ? <Globe2 size={22} /> : option === "private" ? <Lock size={22} /> : <Ticket size={22} />}</b>
+                <i className="meet-visibility-check" aria-hidden="true"><Check size={13} strokeWidth={3} /></i>
                 <span><strong>{({ group_only: t("meetings.visibilityWorkspace"), private: t("meetings.visibilityPrivate"), public: t("meetings.visibilityPublic"), invite_only: t("meetings.visibilityInviteOnly") })[option]}</strong>
                   <small>{({ group_only: t("meetings.visibilityWorkspaceHint"), private: t("meetings.visibilityPrivateHint"), public: t("meetings.visibilityPublicHint"), invite_only: t("meetings.visibilityInviteOnlyHint") })[option]}</small></span>
               </label>

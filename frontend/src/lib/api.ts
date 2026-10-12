@@ -652,6 +652,9 @@ export const api = {
     aiConversation: (id: string) => apiFetch<{ id: string; title: string; messages: Array<{ id: string; role: "user" | "model"; text: string; hasImage: boolean; sources: Array<{ title: string; url: string }>; createdAt: string }> }>(`/chat/ai/conversations/${id}`),
     renameAiConversation: (id: string, title: string) => apiFetch<{ id: string; title: string }>(`/chat/ai/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
     deleteAiConversation: (id: string) => apiFetch<void>(`/chat/ai/conversations/${id}`, { method: "DELETE" }),
+    aiMemory: () => apiFetch<{ content: string; enabled: boolean; updatedAt: string | null }>("/chat/ai/memory"),
+    saveAiMemory: (patch: { content?: string; enabled?: boolean }) =>
+      apiFetch<{ content: string; enabled: boolean; updatedAt: string | null }>("/chat/ai/memory", { method: "PATCH", body: JSON.stringify(patch) }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),

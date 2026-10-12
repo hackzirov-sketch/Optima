@@ -967,7 +967,21 @@
     "aiOpenHistory": "Список чатов",
     "aiImageSent": "Изображение прикреплено",
     "aiToday": "Сегодня",
-    "aiEarlier": "Ранее"
+    "aiEarlier": "Ранее",
+    "previewVoice": "🎤 Голосовое сообщение",
+    "previewPhoto": "🖼 Фото",
+    "previewVideo": "🎬 Видео",
+    "previewFile": "📎 Файл",
+    "previewMessage": "Сообщение",
+    "aiMemory": "Память",
+    "aiMemoryTitle": "Память Optima AI",
+    "aiMemoryDesc": "ИИ запоминает важное о вас и учитывает это перед каждым ответом — не нужно каждый раз объяснять всё заново.",
+    "aiMemoryEnabled": "Использовать память",
+    "aiMemoryEmpty": "Пока ничего не запомнено. Общайтесь с ИИ — важные факты появятся здесь.",
+    "aiMemoryPlaceholder": "- Меня зовут ...\n- Я учусь ...\n- Отвечай коротко",
+    "aiMemoryClear": "Очистить память",
+    "aiMemoryClearConfirm": "Стереть всё, что ИИ помнит о вас?",
+    "aiMemorySaved": "Память сохранена"
   },
   "presence": {
     "online": "В сети",

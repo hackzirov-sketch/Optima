@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, ImageIcon, ImagePlus, LoaderCircle, Menu, MessageSquarePlus, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, Brain, ImageIcon, ImagePlus, LoaderCircle, Menu, MessageSquarePlus, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import { StarfieldBackground } from "../components/StarfieldBackground";
+import { AiMemoryPanel } from "../components/AiMemoryPanel";
 
 type Message = { role: "user" | "model"; text: string; image?: string; hasImage?: boolean; sources?: Array<{ title: string; url: string }> };
 type Conversation = { id: string; title: string; updatedAt: string };
@@ -26,6 +27,7 @@ export function AiPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [drawer, setDrawer] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -150,7 +152,9 @@ export function AiPage() {
               </div>)}
         </div>)}
       </nav>
+      <button type="button" className="ai-memory-open" onClick={() => { setDrawer(false); setMemoryOpen(true); }}><Brain size={17} />{t("chat.aiMemory")}</button>
     </aside>
+    {memoryOpen && <AiMemoryPanel onClose={() => setMemoryOpen(false)} />}
     <div className="ai-main">
       <header>
         <button type="button" className="ai-sessions-toggle" onClick={() => setDrawer(true)} aria-label={t("chat.aiOpenHistory")}><Menu size={20} /></button>
