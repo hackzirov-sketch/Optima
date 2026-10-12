@@ -53,12 +53,13 @@
 
   /* ── Bottom bar: five destinations ── */
   :root[data-theme] body .mobile-nav.reference-dock { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  :root[data-theme] body .mobile-nav.reference-dock a:is([data-nav="statistics"], [data-nav="youtube"], [data-nav="library"], [data-nav="education"]) { display: none; }
-  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="home"] { order: 1; }
-  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="chat"] { order: 2; }
+  /* Home and Profile left the bar (profile lives on the avatar up top). */
+  :root[data-theme] body .mobile-nav.reference-dock a:is([data-nav="statistics"], [data-nav="education"]) { display: none; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="chat"] { order: 1; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="meetings"] { order: 2; }
   :root[data-theme] body .mobile-nav.reference-dock a[data-nav="ai"] { order: 3; }
-  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="meetings"] { order: 4; }
-  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="profile"] { order: 5; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="youtube"] { order: 4; }
+  :root[data-theme] body .mobile-nav.reference-dock a[data-nav="library"] { order: 5; }
   :root[data-theme] body .mobile-nav.reference-dock .dock-label { font-size: 10.5px; line-height: 13px; }
   :root[data-theme] body .mobile-nav.reference-dock a:not(.dock-ai) .dock-icon { width: 52px; }
 }

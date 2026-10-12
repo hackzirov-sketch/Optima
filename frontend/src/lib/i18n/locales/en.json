@@ -112,7 +112,11 @@
     "groups": "Groups",
     "brandLine": "Aloqa",
     "brandTagline": "Growing together",
-    "promoText": "From Central Asia to the global market"
+    "promoText": "From Central Asia to the global market",
+    "myProfile": "Profile",
+    "settingsMenu": "Settings",
+    "accountMenu": "Account menu",
+    "status": "Status"
   },
   "dashboard": {
     "greetingMorning": "Good morning",
@@ -1156,8 +1160,9 @@
     "noteDeleteFailed": "Could not delete the note",
     "dragToMove": "Drag to move",
     "dragToResize": "Drag to resize",
-    "busyElsewhere": "You're already in another meeting (another tab or device). Leave it and join this one?",
-    "movedElsewhere": "You joined another meeting — left this one"
+    "busyElsewhere": "You're in another meeting (another tab or device). Leave it first.",
+    "movedElsewhere": "You joined another meeting — left this one",
+    "alreadyInMeeting": "You're already in a meeting. Leave it first."
   },
   "channelSettings": {
     "title": "Channel settings",
@@ -1389,7 +1394,8 @@
     "maxHint": "Up to {{max}} people",
     "scheduleAction": "Schedule",
     "createLinkAction": "Create link",
-    "startAction": "Start"
+    "startAction": "Start",
+    "returnToMeeting": "Return"
   },
   "voiceChat": {
     "title": "Video chat",

@@ -112,7 +112,11 @@
     "groups": "Guruhlar",
     "brandLine": "Aloqa",
     "brandTagline": "Birlikda o‘sish",
-    "promoText": "Markaziy Osiyodan global bozorga"
+    "promoText": "Markaziy Osiyodan global bozorga",
+    "myProfile": "Profil",
+    "settingsMenu": "Sozlamalar",
+    "accountMenu": "Akkaunt menyusi",
+    "status": "Holat"
   },
   "dashboard": {
     "greetingMorning": "Xayrli tong",
@@ -1156,8 +1160,9 @@
     "noteDeleteFailed": "Eslatmani o‘chirib bo‘lmadi",
     "dragToMove": "Surish uchun ushlang",
     "dragToResize": "O‘lchamini o‘zgartirish",
-    "busyElsewhere": "Siz boshqa meetingdasiz (boshqa oyna yoki qurilmada). Undan chiqib, shu meetingga qo‘shilasizmi?",
-    "movedElsewhere": "Siz boshqa meetingga o‘tdingiz — bu yerdan chiqildi"
+    "busyElsewhere": "Siz boshqa meetdasiz (boshqa oyna yoki qurilmada). Avval undan chiqing.",
+    "movedElsewhere": "Siz boshqa meetingga o‘tdingiz — bu yerdan chiqildi",
+    "alreadyInMeeting": "Siz allaqachon meetdasiz. Avval undan chiqing."
   },
   "channelSettings": {
     "title": "Kanal sozlamalari",
@@ -1389,7 +1394,8 @@
     "maxHint": "Ko‘pi bilan {{max}} kishi",
     "scheduleAction": "Rejalashtirish",
     "createLinkAction": "Havola yaratish",
-    "startAction": "Boshlash"
+    "startAction": "Boshlash",
+    "returnToMeeting": "Qaytish"
   },
   "voiceChat": {
     "title": "Video chat",

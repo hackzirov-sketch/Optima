@@ -133,8 +133,6 @@ export interface AddReactionWsDto {
 // ─── Meeting DTOs ──────────────────────────────────────
 export interface MeetingJoinDto {
   meetingId: string;
-  /** Leave the meeting this person is in elsewhere (another tab/device) and join this one. */
-  force?: boolean;
 }
 export interface MeetingLeaveDto {
   meetingId: string;
@@ -1081,34 +1079,21 @@ export class EventsGateway
     // this was the root cause of "users can't join each other's meetings"
     // (the participant list / permission checks read from the DB, which
     // stayed empty because only the WS room existed).
-    // Already in another meeting from a different tab or device? Refuse
-    // (the client asks whether to switch), or with `force` move them over.
+    // Already in another meeting from a different tab or device? Refuse —
+    // one meeting at a time; they have to leave that one first.
     const redis = this.redisService.getClient();
     const otherMeeting = await redis?.get(activeMeetingKey(userId)).catch(() => null);
     if (otherMeeting && otherMeeting !== meetingId && otherMeeting !== client.data?.meetingId) {
       const elsewhere = (await this.server.in(`meeting:${otherMeeting}:user:${userId}`).fetchSockets())
         .filter((socket) => socket.id !== client.id);
       if (elsewhere.length > 0) {
-        if (!data.force) {
-          client.emit('meeting:error', {
-            code: 'MEETING_BUSY_ELSEWHERE',
-            message: 'You are already in another meeting',
-            otherMeetingId: otherMeeting,
-            fatal: true,
-          });
-          return;
-        }
-        this.server
-          .to(`meeting:${otherMeeting}:user:${userId}`)
-          .emit('meeting:moved', { meetingId: otherMeeting, to: meetingId });
-        this.server.in(`meeting:${otherMeeting}:user:${userId}`).socketsLeave([
-          `meeting:${otherMeeting}`,
-          `meeting:${otherMeeting}:user:${userId}`,
-        ]);
-        await this.meetingsService.leave(otherMeeting, userId).catch(() => undefined);
-        this.server
-          .to(`meeting:${otherMeeting}`)
-          .emit('meeting:user-left', { meetingId: otherMeeting, userId });
+        client.emit('meeting:error', {
+          code: 'MEETING_BUSY_ELSEWHERE',
+          message: 'You are already in another meeting',
+          otherMeetingId: otherMeeting,
+          fatal: true,
+        });
+        return;
       }
     }
 

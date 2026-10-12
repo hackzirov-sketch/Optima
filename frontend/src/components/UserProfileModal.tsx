@@ -62,21 +62,24 @@ export function UserProfileModal() {
 
   return createPortal(<div className="modal-layer upm-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeProfile()}>
     <section className="upm" role="dialog" aria-modal="true" aria-label={profile ? `${profile.firstName} ${profile.lastName}` : t("publicProfile.profileLink")}>
-      <button type="button" className="upm-close" onClick={closeProfile} aria-label={t("publicProfile.closeAria")}><X size={20} /></button>
+      <div className="upm-top-actions">
+        {isMe && <button type="button" onClick={() => { closeProfile(); navigate("/profile"); }} aria-label={t("publicProfile.editProfile")} title={t("publicProfile.editProfile")}><Pencil size={18} /></button>}
+        {isMe && <button type="button" onClick={() => void share()} aria-label={t("publicProfile.share")} title={t("publicProfile.share")}><Share2 size={18} /></button>}
+        <button type="button" onClick={closeProfile} aria-label={t("publicProfile.closeAria")}><X size={20} /></button>
+      </div>
       {!profile && !failed && <div className="upm-loading"><LoaderCircle className="spin" size={24} /></div>}
       {failed && <div className="upm-loading"><UserRound size={32} /><strong>{t("publicProfile.notFoundTitle")}</strong><small>{t("publicProfile.notFoundDesc")}</small></div>}
       {profile && <>
-        <section className="tg-info-hero upm-hero">
+        <section className={`tg-info-hero upm-hero ${isMe ? "is-me" : ""}`}>
           <span className="upm-avatar"><Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />{isPresenceActive(presence) && <i />}</span>
           <strong><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} /></strong>
-          <small className={isPresenceActive(presence) ? "online" : ""}>{isMe ? t("publicProfile.thisIsYou") : formatPresenceLabel(presence, t)}</small>
+          <small className={isPresenceActive(presence) || isMe ? "online" : ""}>{isMe ? t("presence.online") : formatPresenceLabel(presence, t)}</small>
         </section>
-        <div className="tg-info-actions upm-actions">
+        {!isMe && <div className="tg-info-actions upm-actions">
           {user && !isMe && <button type="button" onClick={() => { closeProfile(); navigate(`/u/${handle}`); }}><MessageCircle size={19} /><span>{t("publicProfile.message")}</span></button>}
           {user && !isMe && <button type="button" onClick={() => { try { sessionStorage.setItem("optima:pending-call", "audio"); } catch { /* storage off */ } closeProfile(); navigate(`/u/${handle}`); }}><Phone size={19} /><span>{t("publicProfile.call")}</span></button>}
-          {isMe && <button type="button" onClick={() => { closeProfile(); navigate("/profile"); }}><Pencil size={19} /><span>{t("publicProfile.editProfile")}</span></button>}
           <button type="button" onClick={() => void share()}><Share2 size={19} /><span>{t("publicProfile.share")}</span></button>
-        </div>
+        </div>}
         {profile.channels && profile.channels.length > 0 && <section className="tg-info-section upm-channels">
           {profile.channels.map((channel) => (
             <button key={channel.id} type="button" className="upm-channel" onClick={() => { closeProfile(); navigate(`/ch/${channel.slug}`); }}>

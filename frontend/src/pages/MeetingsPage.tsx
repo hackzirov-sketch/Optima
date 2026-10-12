@@ -1,4 +1,5 @@
 import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, Globe2, History, Keyboard, Link2, Lock, MoreVertical, Plus, Radio, Ticket, Trash2, Video } from "lucide-react";
+import { getActiveMeeting, useActiveMeeting } from "../lib/activeMeeting";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, Modal, Skeleton } from "../components/ui";
@@ -163,6 +164,7 @@ export function MeetingsPage() {
     event.preventDefault();
     const value = code.trim();
     if (!value) return;
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     const id = value.match(UUID)?.[0];
     if (id && /\/meetings\//.test(value)) {
       navigate(`/meetings/${id}`);
@@ -362,17 +364,22 @@ function MeetingRow({ meeting, locale, canDelete, onOpen, onCopyLink, onCopyCode
   const trigger = useRef<HTMLButtonElement>(null);
   const start = new Date(meeting.startTime);
   const ended = meeting.status === "ended" || meeting.status === "cancelled";
+  // In another meeting already: this one can't be joined until that one is left.
+  const active = useActiveMeeting();
+  const blocked = !!active && active.id !== meeting.id;
+  const here = active?.id === meeting.id;
   return (
     <article className={`meet-row ${meeting.status === "live" ? "live" : ""}`}>
       <time dateTime={meeting.startTime}>
         <strong>{clock(start, locale)}</strong>
         {ended && <small>{shortDate(start, locale)}</small>}
       </time>
-      <button type="button" className="meet-row-main" onClick={onOpen}>
+      <button type="button" className="meet-row-main" onClick={blocked ? undefined : onOpen} aria-disabled={blocked}>
         <strong>{meeting.title}</strong>
         <small>{meeting.code} · {t("meet.participantsShort", { count: meeting.participantCount })}</small>
       </button>
-      {!ended && <button type="button" className="meet-row-join" onClick={onOpen}>{t("meet.join")}</button>}
+      {!ended && <button type="button" className={`meet-row-join ${blocked ? "is-blocked" : ""} ${here ? "is-here" : ""}`} onClick={blocked ? undefined : onOpen}
+        aria-disabled={blocked} title={blocked ? t("meetingRoom.alreadyInMeeting") : undefined}>{here ? t("meet.returnToMeeting") : t("meet.join")}</button>}
       <span className="meet-anchor">
         <button ref={trigger} type="button" className="meet-icon-button" aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("meet.itemMenu")} onClick={() => setMenuOpen((open) => !open)}><MoreVertical size={20} /></button>
         <MeetMenu open={menuOpen} onClose={() => setMenuOpen(false)} triggerRef={trigger} placement="bottom" align="end" label={t("meet.itemMenu")} className="meet-menu-light" items={[

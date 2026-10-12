@@ -14,6 +14,7 @@ import { api, ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { currentSocket, getSocket } from "../lib/socket";
 import { forgetAudio, playWithUnlock } from "../lib/audioUnlock";
+import { getActiveMeeting, setActiveMeeting } from "../lib/activeMeeting";
 import { useI18n } from "../lib/i18n/i18n";
 import type { Meeting, MeetingParticipant, MeetingPermissions, MeetingUser, MeetingJoinRequest, MeetingVisibility, MeetingJoinPolicyValue, User, GroupMember } from "../types";
 
@@ -366,12 +367,23 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     // Route match only ever needs to set the id, never clear it — leaving
     // the route is exactly the "keep running as a widget" case.
     if (directMode) return;
-    if (routeId) { setCodeNotFound(false); setStandaloneMeetingId(routeId); return; }
+    // One meeting at a time: a link to another meeting while in one is refused
+    // and the page goes back to the meeting this person is in.
+    const pick = (id: string) => {
+      const active = getActiveMeeting();
+      if (active && active.id !== id) {
+        show(t("meetingRoom.alreadyInMeeting"), "error");
+        navigate(active.code ? `/meet/${active.code}` : `/meetings/${active.id}`, { replace: true });
+        return;
+      }
+      setStandaloneMeetingId(id);
+    };
+    if (routeId) { setCodeNotFound(false); pick(routeId); return; }
     if (!routeCode) return;
     let cancelled = false;
     setCodeNotFound(false);
     api.meetings.resolveByCode(routeCode)
-      .then((found) => { if (!cancelled) setStandaloneMeetingId(found.id); })
+      .then((found) => { if (!cancelled) pick(found.id); })
       .catch(() => { if (!cancelled) setCodeNotFound(true); });
     return () => { cancelled = true; };
   }, [directMode, routeId, routeCode]);
@@ -1143,10 +1155,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     const onMeetingError = ({ message, fatal, code }: { message: string; fatal?: boolean; code?: string }) => {
       // One meeting at a time: offer to move over from the other tab/device.
       if (code === "MEETING_BUSY_ELSEWHERE") {
-        if (window.confirm(t("meetingRoom.busyElsewhere"))) {
-          socket.emit("meeting:join", { meetingId, force: true });
-          return;
-        }
+        show(t("meetingRoom.busyElsewhere"), "error");
         joinedSocketId.current = null;
         setEntered(false);
         return;
@@ -1549,6 +1558,12 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }
 
   useEffect(() => () => { if (entered) cleanup(); }, [entered, cleanup]);
+  // Tell the rest of the app which meeting this tab is in (Join buttons elsewhere grey out).
+  useEffect(() => {
+    if (!entered || !meetingId) return;
+    setActiveMeeting({ id: meetingId, code: meeting?.code ?? null, title: meeting?.title ?? null });
+    return () => { if (getActiveMeeting()?.id === meetingId) setActiveMeeting(null); };
+  }, [entered, meetingId, meeting?.code, meeting?.title]);
 
   // Closing the tab (Ctrl+W) or navigating the page away: say goodbye right
   // now — the socket "meeting:leave" makes everyone drop the tile at once and
@@ -1967,7 +1982,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     { key: "details", label: t("meet.details"), icon: <Info size={20} />, onSelect: () => togglePanel("info") },
     { key: "layout", label: gridViewForced ? t("meet.layoutAuto") : t("meet.layoutGrid"), icon: <LayoutGrid size={20} />, onSelect: () => setGridViewForced((value) => !value) },
     { key: "link", label: t("meet.copyLink"), icon: <Link2 size={20} />, onSelect: copyLink },
-    { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/") },
+    { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/chat") },
     ...(isHost ? [{ key: "end", label: t("meet.endForAll"), icon: <PhoneOff size={20} />, danger: true, onSelect: () => void endMeetingForAll() }] : []),
   ];
 

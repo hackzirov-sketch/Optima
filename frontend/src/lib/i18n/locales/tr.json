@@ -112,7 +112,11 @@
     "groups": "Gruplar",
     "brandLine": "Aloqa",
     "brandTagline": "Birlikte büyüyoruz",
-    "promoText": "Orta Asya'dan küresel pazara"
+    "promoText": "Orta Asya'dan küresel pazara",
+    "myProfile": "Profil",
+    "settingsMenu": "Ayarlar",
+    "accountMenu": "Hesap menüsü",
+    "status": "Durum"
   },
   "dashboard": {
     "greetingMorning": "Günaydın",
@@ -1156,8 +1160,9 @@
     "noteDeleteFailed": "Not silinemedi",
     "dragToMove": "Taşımak için sürükleyin",
     "dragToResize": "Boyutlandırmak için sürükleyin",
-    "busyElsewhere": "Zaten başka bir toplantıdasınız (başka sekme veya cihaz). Ondan çıkıp buna katılmak ister misiniz?",
-    "movedElsewhere": "Başka bir toplantıya katıldınız — bu toplantıdan çıkıldı"
+    "busyElsewhere": "Başka bir toplantıdasınız (başka sekme veya cihaz). Önce ondan çıkın.",
+    "movedElsewhere": "Başka bir toplantıya katıldınız — bu toplantıdan çıkıldı",
+    "alreadyInMeeting": "Zaten bir toplantıdasınız. Önce ondan çıkın."
   },
   "channelSettings": {
     "title": "Channel settings",
@@ -1389,7 +1394,8 @@
     "maxHint": "En fazla {{max}} kişi",
     "scheduleAction": "Planla",
     "createLinkAction": "Bağlantı oluştur",
-    "startAction": "Başlat"
+    "startAction": "Başlat",
+    "returnToMeeting": "Geri dön"
   },
   "voiceChat": {
     "title": "Görüntülü sohbet",

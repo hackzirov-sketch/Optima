@@ -41,7 +41,7 @@ export function InvitePage({ kind, token }: InvitePageProps) {
       const items = await refreshWorkspaces();
       const target = items.find((item) => item.id === membership.groupId);
       if (target) selectWorkspace(target);
-      navigate("/");
+      navigate("/chat");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("invite.acceptFailed"));
     } finally {

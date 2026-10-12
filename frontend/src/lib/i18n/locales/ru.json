@@ -112,7 +112,11 @@
     "groups": "Группы",
     "brandLine": "Aloqa",
     "brandTagline": "Растём вместе",
-    "promoText": "Из Центральной Азии на мировой рынок"
+    "promoText": "Из Центральной Азии на мировой рынок",
+    "myProfile": "Профиль",
+    "settingsMenu": "Настройки",
+    "accountMenu": "Меню аккаунта",
+    "status": "Статус"
   },
   "dashboard": {
     "greetingMorning": "Доброе утро",
@@ -1156,8 +1160,9 @@
     "noteDeleteFailed": "Не удалось удалить заметку",
     "dragToMove": "Перетащите, чтобы переместить",
     "dragToResize": "Потяните, чтобы изменить размер",
-    "busyElsewhere": "Вы уже в другой встрече (в другой вкладке или на другом устройстве). Выйти из неё и присоединиться к этой?",
-    "movedElsewhere": "Вы присоединились к другой встрече — эта покинута"
+    "busyElsewhere": "Вы в другой встрече (в другой вкладке или на другом устройстве). Сначала выйдите из неё.",
+    "movedElsewhere": "Вы присоединились к другой встрече — эта покинута",
+    "alreadyInMeeting": "Вы уже во встрече. Сначала выйдите из неё."
   },
   "channelSettings": {
     "title": "Channel settings",
@@ -1389,7 +1394,8 @@
     "maxHint": "Не более {{max}} человек",
     "scheduleAction": "Запланировать",
     "createLinkAction": "Создать ссылку",
-    "startAction": "Начать"
+    "startAction": "Начать",
+    "returnToMeeting": "Вернуться"
   },
   "voiceChat": {
     "title": "Видеочат",

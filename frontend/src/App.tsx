@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Route, Switch, useLocation } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/ui";
 import { useAuth } from "./lib/auth";
@@ -10,7 +10,6 @@ import { AiPage } from "./pages/AiPage";
 import { YoutubePage } from "./pages/YoutubePage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import { UsageTracker } from "./components/UsageTracker";
-import { DashboardPage } from "./pages/DashboardPage";
 import { MeetingRoomPage } from "./pages/MeetingRoomPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -101,11 +100,12 @@ export function App() {
             <Route path="/ai/:id?" component={AiPage} />
             <Route path="/youtube/:slug?" component={YoutubePage} />
             <Route path="/statistics" component={StatisticsPage} />
-            <Route path="/" component={DashboardPage} />
+            <Route path="/"><Redirect to="/chat" /></Route>
             <Route path="/meetings" component={MeetingsPage} />
             <Route path="/library/:slug?/:mode?" component={LibraryPage} />
             <Route path="/profile" component={ProfilePage} />
-            <Route><DashboardPage /></Route>
+            {/* /meet/:code, /meetings/:id …: the meeting page draws itself on top. */}
+            <Route>{null}</Route>
           </Switch>
         )}
       </div>

@@ -416,3 +416,28 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
   .chat-page .composer .emoji-menu-wrap > .emoji-picker,
   .chat-page .composer .emoji-menu-wrap > .telegram-emoji-picker { left: auto !important; right: 0 !important; max-width: calc(100vw - 24px); }
 }
+/* Home is gone (the dock is the way around): no "back to home" / minimize. */
+.chat-minimize-button { display: none !important; }
+/* Profile card header icons (edit/share for yourself, close) — Telegram style. */
+.upm-top-actions { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 2px; }
+.upm-top-actions button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.upm-top-actions button:hover { background: var(--surface-muted); color: var(--accent); }
+.upm-close { display: none; }
+.upm-hero { padding-top: 30px !important; padding-bottom: 20px !important; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 75%) !important; }
+.upm-hero .upm-avatar > :first-child { width: 104px !important; height: 104px !important; font-size: 34px !important; border: 3px solid var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .14); }
+.upm-hero > strong { font-size: 20px !important; }
+.upm-hero.is-me { padding-bottom: 22px !important; }
+.upm > .tg-info-section + .tg-info-section { margin-top: 8px; }
+
+/* Phones: the bottom bar stays on the chat list (it is the way out now that
+   Home is gone); inside a conversation the composer owns the bottom. */
+@media (max-width: 820px) {
+  :root[data-theme] body:has(.chat-page:not(.chat-room-open)) .app-shell-chat .mobile-nav { display: grid !important; z-index: 60; }
+  :root[data-theme] body:has(.app-shell-chat) .chat-page:not(.chat-room-open) .room-list { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .chat-home-back { display: none !important; }
+}
+
+/* Desktop chat list header: back · avatar menu · title · new. */
+@media (min-width: 821px) {
+  .chat-sidebar-header { grid-template-columns: auto auto minmax(0, 1fr) auto !important; column-gap: 10px; }
+}

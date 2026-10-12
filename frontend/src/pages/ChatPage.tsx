@@ -93,6 +93,8 @@ import { emitWithAck, getSocket, isServerRejection }                        from
 import { DRAFT_CLIENT_ID, openDraft, saveDraft } from "../lib/drafts";
 import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, isRoomE2ee, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
 import { openProfile } from "../lib/profileModal";
+import { getActiveMeeting } from "../lib/activeMeeting";
+import { AccountMenu } from "../components/AccountMenu";
 import { ReactorsPopover } from "../components/ReactorsPopover";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
@@ -573,6 +575,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }, [selectedId, selectedRoom?.type, selectedRoom?.memberStatus, loadRoomVoice]); // eslint-disable-line react-hooks/exhaustive-deps
   function joinRoomVoice(room: ChatRoom) {
     if (voice?.roomId === room.id) { setVoiceMinimized(false); return; }
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     if (voice) voiceBar?.leave();
     setVoiceMinimized(false);
     setVoice({ roomId: room.id, title: roomTitle(room), inviteLink: `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}` });
@@ -1966,6 +1969,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   async function startCall(kind: "audio" | "video") {
     if (!workspace || !selectedRoom || startingCall) return;
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     if (selectedRoom.type !== "direct" || !detailPeer) {
       show(t("chat.directCallOnlyPersonal"), "error");
       return;
@@ -2709,8 +2713,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         </div>}
       <aside className="chat-sidebar">
         <header className="chat-sidebar-header">
-          <button className="icon-button chat-home-back" onClick={() => navigate("/")}
+          <button className="icon-button chat-home-back" onClick={() => { let back = "/meetings"; try { back = sessionStorage.getItem("optima:last-page") || back; } catch { /* storage off */ } navigate(back); }}
                   aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
+          {/* No top bar on the chat screen: the account menu lives here. */}
+          <AccountMenu align="start" />
           <div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div>
           <div className="tg-new-anchor" ref={newMenuRef}>
             <button className={`icon-button icon-button-dark ${newMenuOpen ? "active" : ""}`} onClick={() => setNewMenuOpen((value) => !value)}
@@ -2831,7 +2837,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         })()}
       >
         {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty">
-          <button className="icon-button" onClick={() => {
+          <button className="icon-button chat-minimize-button" onClick={() => {
             setMinimized(true);
             navigate("/");
           }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
@@ -2851,7 +2857,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <div className="conversation-title"><h2>OPTIMA AI</h2>
               <p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div>
             <span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span>
-            <button className="icon-button" onClick={() => {
+            <button className="icon-button chat-minimize-button" onClick={() => {
               setMinimized(true);
               navigate("/");
             }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
@@ -2907,7 +2913,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   setMessageSearchOpen((value) => !value);
                   if (messageSearchOpen) setMessageSearch("");
                 }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
-                <button className="icon-button" onClick={() => {
+                <button className="icon-button chat-minimize-button" onClick={() => {
                   setMinimized(true);
                   navigate("/");
                 }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} />
