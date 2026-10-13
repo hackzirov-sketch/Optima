@@ -994,7 +994,9 @@
     "joinRequestsBar": "{{count}} join requests",
     "joinRequestsHide": "Hide",
     "newMessagesBelow": "{{count}} new messages — jump to latest",
-    "showMoreMembers": "Show more ({{count}})"
+    "showMoreMembers": "Show more ({{count}})",
+    "ghostWatching": "You're looking in unseen — members can't see you here.",
+    "ghostJoin": "Join"
   },
   "presence": {
     "online": "Online",

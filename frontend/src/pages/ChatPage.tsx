@@ -21,6 +21,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   FileText,
   Globe,
   Hash,
@@ -988,6 +989,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       isReadOnly: room!.isReadOnly || false, memberStatus: "active" as const
     }));
     const mergedRooms = [...systemRooms, ...nextRooms.filter((room) => !systemRooms.some((system) => system.id === room.id))];
+    // An admin opening a room they are not in (from the admin site) looks in
+    // as a ghost: it is fetched on its own and shown, but they are no member.
+    const wanted = preferredId || selectedId;
+    if (user?.isSuperAdmin && wanted && !mergedRooms.some((room) => room.id === wanted)) {
+      const ghost = await api.chat.room(wanted).catch(() => null);
+      if (ghost && ghost.type !== "direct") mergedRooms.push({ ...ghost, ghost: true, memberIds: ghost.memberIds || [], memberProfiles: ghost.memberProfiles || [], unreadCount: 0 });
+    }
     setRooms(mergedRooms);
     setMembers(nextMembers);
     const target = preferredId || selectedId;
@@ -3187,7 +3195,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
                   }} aria-label={unseenBelow ? t("chat.newMessagesBelow", { count: unseenBelow }) : t("chat.scrollToLatestAria")}><ArrowDown size={19} />{unseenBelow > 0 && <b>{unseenBelow > 99 ? "99+" : unseenBelow}</b>}</button>}
                 </div>
-                {!canPostIn(selectedRoom) ?
+                {selectedRoom.ghost ?
+                  <div className="ghost-bar"><span><EyeOff size={17} />{t("chat.ghostWatching")}</span>
+                    <button type="button" onClick={() => void api.admin.joinRoom(selectedRoom.id).then(() => loadRooms(selectedRoom.id)).catch((error) => show(error instanceof Error ? error.message : "Error", "error"))}>{t("chat.ghostJoin")}</button>
+                  </div> :
+                !canPostIn(selectedRoom) ?
                   <div className="channel-subscribe-bar">
                     <button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> :
                       <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button>

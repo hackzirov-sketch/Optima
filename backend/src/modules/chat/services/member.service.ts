@@ -74,6 +74,17 @@ export class ChatMemberService {
       await this.redis.setJson(key, rows[0], ROOM_MEMBERSHIP_TTL_SECONDS);
       return asOwner(rows[0]);
     }
+    // Ghost view: an Optima admin may look into any group/channel without
+    // joining — no membership row, so nothing shows up in member lists, view
+    // counts or "joined" notices. Sending still needs a real (visible) join.
+    if (superAdmin) {
+      const [room] = await this.dataSource.query<{ type: string }>(
+        `SELECT type FROM chat_rooms WHERE id = $1`,
+        [roomId],
+      );
+      if (room && room.type !== 'direct')
+        return { id: 'ghost', roomId, userId, role: 'owner', status: 'active', ghost: true } as RoomMembership;
+    }
     // Not active. Distinguish "invited, hasn't accepted" from "not involved
     // at all" so the client can offer the accept action.
     const pendingRows = await this.dataSource.query<ChatMember>(

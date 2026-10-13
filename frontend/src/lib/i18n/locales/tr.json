@@ -994,7 +994,9 @@
     "joinRequestsBar": "{{count}} katılma isteği",
     "joinRequestsHide": "Gizle",
     "newMessagesBelow": "{{count}} yeni mesaj — en sona git",
-    "showMoreMembers": "Daha fazla göster ({{count}})"
+    "showMoreMembers": "Daha fazla göster ({{count}})",
+    "ghostWatching": "Görünmeden bakıyorsunuz — üyeler sizi görmüyor.",
+    "ghostJoin": "Katıl"
   },
   "presence": {
     "online": "Çevrimiçi",

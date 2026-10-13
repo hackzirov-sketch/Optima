@@ -524,6 +524,8 @@ export const api = {
       apiFetch<ChatDraftRecord>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify(body) }),
     updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
       apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
+    /** One room by id (an admin's ghost view of a room they are not in). */
+    room: (roomId: string) => apiFetch<ChatRoom>(`/chat/rooms/${roomId}`),
     roomMembers: (roomId: string, query = "", page = 1) => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; nickname?: string | null; nameEmoji?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=20&page=${page}`),
     readReceipts: (roomId: string) => apiFetch<Array<{ userId: string; lastReadSeq: number }>>(`/chat/rooms/${roomId}/read-receipts`),
     presence: (userIds: string[]) => apiFetch<Record<string, { status: string; lastSeenAt: string | null }>>(`/chat/presence?ids=${userIds.map(encodeURIComponent).join(",")}`),

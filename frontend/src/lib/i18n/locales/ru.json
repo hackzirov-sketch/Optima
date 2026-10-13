@@ -994,7 +994,9 @@
     "joinRequestsBar": "Заявок на вступление: {{count}}",
     "joinRequestsHide": "Скрыть",
     "newMessagesBelow": "Новых сообщений: {{count}} — перейти вниз",
-    "showMoreMembers": "Показать ещё ({{count}})"
+    "showMoreMembers": "Показать ещё ({{count}})",
+    "ghostWatching": "Вы смотрите незаметно — участники вас не видят.",
+    "ghostJoin": "Вступить"
   },
   "presence": {
     "online": "В сети",

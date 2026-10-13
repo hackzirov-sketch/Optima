@@ -82,6 +82,8 @@ export interface ChatRoom {
   memberIds: string[];
   /** Blocked by an Optima admin. */
   blocked?: boolean;
+  /** An admin's unseen look into a room they are not a member of (client-only). */
+  ghost?: boolean;
   memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "publicId" | "nameEmoji">>;
   memberCount: number;
   unreadCount: number;

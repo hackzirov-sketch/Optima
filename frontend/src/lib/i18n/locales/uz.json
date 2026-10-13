@@ -994,7 +994,9 @@
     "joinRequestsBar": "{{count}} ta qo‘shilish so‘rovi",
     "joinRequestsHide": "Yashirish",
     "newMessagesBelow": "{{count}} ta yangi xabar — pastga o‘tish",
-    "showMoreMembers": "Yana ko‘rsatish ({{count}})"
+    "showMoreMembers": "Yana ko‘rsatish ({{count}})",
+    "ghostWatching": "Siz bu yerni ko‘rinmas holda kuzatyapsiz — a’zolar sizni ko‘rmaydi.",
+    "ghostJoin": "Qo‘shilish"
   },
   "presence": {
     "online": "Onlayn",

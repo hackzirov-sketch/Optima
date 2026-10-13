@@ -448,3 +448,18 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .chat-elsewhere button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 @media (max-width: 820px) { .chat-elsewhere { display: none; } }
 .details-more { display: block; width: calc(100% - 32px); margin: 8px 16px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent); font: inherit; font-weight: 650; cursor: pointer; }
+
+/* The chat screen never grows past the window: the sidebar (header, search,
+   tabs, list, section icons, status) and the conversation share one row, and
+   only the room list / message list scroll. When the sidebar's content was
+   taller, the grid row grew with it and a scrollIntoView pushed the whole
+   page up — the headers vanished and nothing could scroll them back. */
+.chat-page { grid-template-rows: minmax(0, 1fr) !important; overflow: hidden; }
+.chat-page > .chat-sidebar, .chat-page > .conversation { min-height: 0; max-height: 100%; }
+.chat-page > .chat-sidebar > .room-list { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.chat-page > .chat-sidebar > :not(.room-list) { flex: none; }
+/* Admin ghost view: instead of the composer, a quiet note and a Join button. */
+.ghost-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 16px; border-top: 1px solid var(--line); background: color-mix(in srgb, #7c3aed 8%, var(--surface)); color: var(--text-soft); font-size: 14px; }
+.ghost-bar span { display: flex; align-items: center; gap: 8px; }
+.ghost-bar svg { color: #7c3aed; flex: none; }
+.ghost-bar button { min-height: 38px; padding: 0 18px; border: 0; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }

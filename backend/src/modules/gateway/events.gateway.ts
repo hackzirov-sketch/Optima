@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../common/super-admin';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -697,11 +698,20 @@ export class EventsGateway
       [data.roomId, userId],
     );
     const member = chatMemberRows[0];
-    if (!member)
+    if (!member) {
+      // An admin looking in as a ghost gets the live feed silently.
+      if (isSuperAdmin(userId)) {
+        const [room] = await this.dataSource.query<{ type: string }>(`SELECT type FROM chat_rooms WHERE id = $1`, [data.roomId]);
+        if (room && room.type !== 'direct') {
+          await client.join(`room:${data.roomId}`);
+          return { event: 'joined', roomId: data.roomId, ghost: true };
+        }
+      }
       throw new WsException({
         code: 'WS_NOT_ROOM_MEMBER',
         message: 'Not a room member',
       });
+    }
 
     await client.join(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_joined_room', {

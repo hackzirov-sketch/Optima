@@ -1,4 +1,5 @@
 import { StrictMode, useCallback, useEffect, useState } from "react";
+import { Activity, Ban, CalendarClock, Check, ChevronLeft, ChevronRight, Copy, Eye, Hash, LogIn, Megaphone, RefreshCw, Route, ShieldCheck, UserPlus, Users, UsersRound, Video } from "lucide-react";
 import { createRoot } from "react-dom/client";
 import "./admin.css";
 
@@ -41,15 +42,25 @@ type Meeting = { id: string; title: string; code: string; scope: string; startTi
 type Audit = { id: string; action: string; targetType: string; targetName: string | null; targetId: string | null; createdAt: string; actorFirstName: string | null; actorLastName: string | null; details: { reason?: string } };
 
 const TABS = [
-  ["overview", "Umumiy"],
-  ["users", "Foydalanuvchilar"],
-  ["rooms", "Guruh va kanallar"],
-  ["requests", "So‘rovlar"],
-  ["meetings", "Jonli meetinglar"],
-  ["audit", "Amallar tarixi"],
-  ["announce", "E’lon yuborish"],
-  ["routes", "API va route’lar"],
+  ["overview", "Umumiy", Activity],
+  ["users", "Foydalanuvchilar", Users],
+  ["rooms", "Guruh va kanallar", UsersRound],
+  ["requests", "So‘rovlar", UserPlus],
+  ["meetings", "Jonli meetinglar", Video],
+  ["audit", "Amallar tarixi", CalendarClock],
+  ["announce", "E’lon yuborish", Megaphone],
+  ["routes", "API va route’lar", Route],
 ] as const;
+
+/** A server id as a small chip: # icon, shortened, copied on click. */
+function IdChip({ id, label }: { id: string | null | undefined; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!id) return null;
+  return <button type="button" className="id-chip" title={id} onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(id).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1200); }); }}>
+    <Hash size={11} />{label ?? `${id.slice(0, 8)}…${id.slice(-4)}`}{copied ? <Check size={11} /> : <Copy size={11} />}
+  </button>;
+}
+const ROUTES_PAGE = 20;
 
 /** Optima's own pages (the web app), linked from the routes tab. */
 const APP_ROUTES: Array<[string, string]> = [
@@ -196,11 +207,12 @@ function App() {
   const total = tab === "users" ? users?.total ?? 0 : tab === "rooms" ? rooms?.total ?? 0 : 0;
   return <div className="app">
     <header className="top">
+      <span className="brand-icon"><ShieldCheck size={22} /></span>
       <strong>Optima Admin</strong>
       <span className="me">{me.firstName} {me.lastName} · {me.email}</span>
       <a href={OPTIMA}>Optima’ga o‘tish ↗</a>
     </header>
-    <nav className="tabs">{TABS.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => switchTab(id)}>{label}</button>)}<button className="refresh" onClick={load}>↻ Yangilash</button></nav>
+    <nav className="tabs">{TABS.map(([id, label, Icon]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => switchTab(id)}><Icon size={16} />{label}</button>)}<button className="refresh" onClick={load} aria-label="Yangilash"><RefreshCw size={16} /></button></nav>
     {error && <p className="error">{error}</p>}
     {notice && <p className="notice">{notice}</p>}
 
@@ -232,7 +244,7 @@ function App() {
     {tab === "users" && users && <table>
       <thead><tr><th>Foydalanuvchi</th><th>Email</th><th>Oxirgi faollik</th><th>Holat</th><th /></tr></thead>
       <tbody>{users.items.map((user) => <tr key={user.id} className={user.blockedAt ? "blocked" : ""}>
-        <td><button className="link" onClick={() => openDetail(user)}><b>{user.firstName} {user.lastName}</b></button>{user.superAdmin && <em className="tag">admin</em>}<br /><small>{user.username ? `@${user.username}` : user.id}</small></td>
+        <td><button className="link" onClick={() => openDetail(user)}><b>{user.firstName} {user.lastName}</b></button>{user.superAdmin && <em className="tag">admin</em>}<br /><small>{user.username ? `@${user.username}` : null}</small> <IdChip id={user.id} /></td>
         <td>{user.email}</td>
         <td>{user.online ? <span className="online">● onlayn</span> : when(user.lastSeen)}</td>
         <td>{user.blockedAt ? <span className="red">Bloklangan {when(user.blockedAt)}{user.blockedReason ? ` — ${user.blockedReason}` : ""}</span> : "Faol"}</td>
@@ -243,12 +255,12 @@ function App() {
     {tab === "rooms" && rooms && <table>
       <thead><tr><th>Nomi</th><th>Turi</th><th>A’zolar</th><th>Egasi</th><th>Holat</th><th /></tr></thead>
       <tbody>{rooms.items.map((room) => <tr key={room.id} className={room.blockedAt ? "blocked" : ""}>
-        <td><b>{room.name || "—"}</b><br /><small>{room.slug ? `@${room.slug}` : room.id}</small></td>
+        <td><b>{room.name || "—"}</b><br /><small>{room.slug ? `@${room.slug} ` : null}</small><IdChip id={room.id} /></td>
         <td>{room.type === "channel" ? "Kanal" : "Guruh"} · {room.scope}</td>
         <td>{room.memberCount}{room.pendingRequests ? <small> (+{room.pendingRequests} so‘rov)</small> : null}</td>
         <td>{room.ownerFirstName} {room.ownerLastName}</td>
         <td>{room.blockedAt ? <span className="red">Bloklangan {when(room.blockedAt)}{room.blockedReason ? ` — ${room.blockedReason}` : ""}</span> : "Faol"}</td>
-        <td className="actions"><button onClick={() => loadMembers(room)}>A’zolar</button>{room.type === "channel" && <button onClick={() => verify(room, true)}>✓ Tasdiqlash</button>}<button onClick={() => joinRoom(room.id)}>Kirish</button>{room.blockedAt ? <button onClick={() => unblock("rooms", room.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("rooms", room.id)}>Bloklash</button>}</td>
+        <td className="actions"><button onClick={() => loadMembers(room)}>A’zolar</button>{room.type === "channel" && <button onClick={() => verify(room, true)}>✓ Tasdiqlash</button>}<a className="btn" href={`${OPTIMA}/chat?room=${room.id}`} target="_blank" rel="noopener" title="Ko‘rinmas holda ko‘rish — a’zolar bilmaydi"><Eye size={15} />Ko‘rish</a><button onClick={() => joinRoom(room.id)} title="Ochiq qo‘shilish — a’zolar ko‘radi"><LogIn size={15} />Qo‘shilish</button>{room.blockedAt ? <button onClick={() => unblock("rooms", room.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("rooms", room.id)}><Ban size={15} />Bloklash</button>}</td>
       </tr>)}</tbody>
     </table>}
 
@@ -263,13 +275,13 @@ function App() {
 
     {tab === "meetings" && meetings && <table>
       <thead><tr><th>Meeting</th><th>Host</th><th>Ishtirokchilar</th><th>Boshlangan</th><th /></tr></thead>
-      <tbody>{meetings.map((item) => <tr key={item.id}><td><b>{item.title}</b><br /><small>{item.code} · {item.scope}</small></td><td>{item.hostFirstName} {item.hostLastName}</td><td>{item.participants}</td><td>{when(item.startTime)}</td><td className="actions"><a className="button small" href={`${OPTIMA}/meet/${item.code}`} target="_blank" rel="noopener">Kirish</a><button className="danger" onClick={() => endMeeting(item)}>Tugatish</button></td></tr>)}</tbody>
+      <tbody>{meetings.map((item) => <tr key={item.id}><td><b>{item.title}</b><br /><IdChip id={item.code} label={item.code} /> <small>{item.scope}</small></td><td>{item.hostFirstName} {item.hostLastName}</td><td>{item.participants}</td><td>{when(item.startTime)}</td><td className="actions"><a className="button small" href={`${OPTIMA}/meet/${item.code}`} target="_blank" rel="noopener">Kirish</a><button className="danger" onClick={() => endMeeting(item)}>Tugatish</button></td></tr>)}</tbody>
     </table>}
     {tab === "meetings" && meetings && !meetings.length && <p className="muted">Hozir jonli meeting yo‘q</p>}
 
     {tab === "audit" && audit && <table>
       <thead><tr><th>Vaqt</th><th>Admin</th><th>Amal</th><th>Kimga/nimaga</th><th>Sabab</th></tr></thead>
-      <tbody>{audit.map((item) => <tr key={item.id}><td>{when(item.createdAt)}</td><td>{item.actorFirstName} {item.actorLastName}</td><td><code>{item.action}</code></td><td>{item.targetName ?? item.targetId} <small>({item.targetType})</small></td><td>{item.details?.reason ?? ""}</td></tr>)}</tbody>
+      <tbody>{audit.map((item) => <tr key={item.id}><td>{when(item.createdAt)}</td><td>{item.actorFirstName} {item.actorLastName}</td><td><code>{item.action}</code></td><td>{item.targetName ?? ""} <IdChip id={item.targetId} /> <small>({item.targetType})</small></td><td>{item.details?.reason ?? ""}</td></tr>)}</tbody>
     </table>}
 
     {tab === "announce" && <div className="form">
@@ -283,7 +295,7 @@ function App() {
 
     {detail && <div className="dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && setDetail(null)}>
       <div className="dialog">
-        <h2>{String(detail.firstName ?? "")} {String(detail.lastName ?? "")}{detail.superAdmin ? " · admin" : ""}</h2>
+        <h2>{String(detail.firstName ?? "")} {String(detail.lastName ?? "")}{detail.superAdmin ? <em className="tag">admin</em> : null} <IdChip id={detail.id as string | undefined} /></h2>
         {detail.loading ? <p className="muted">Yuklanmoqda…</p> : <>
           <table><tbody>
             {([["Username", detail.username ? `@${detail.username}` : "—"], ["Email", detail.email], ["Bio", detail.bio || "—"], ["Akkaunt", detail.accountVisibility], ["Ro‘yxatdan o‘tgan", when(detail.createdAt as string)], ["Oxirgi faollik", when(detail.lastSeen as string)], ["Guruhlar", detail.groups], ["Kanallar", detail.channels], ["Yaratgan guruh/kanallari", detail.roomsOwned], ["O‘tkazgan meetinglari", detail.meetingsHosted], ["AI savollari", detail.aiQuestions], ["Faol sessiyalar", detail.sessions], ["Holat", detail.blockedAt ? `Bloklangan — ${detail.blockedReason ?? ""}` : "Faol"]] as Array<[string, unknown]>).map(([label, value]) => <tr key={label}><td className="muted">{label}</td><td>{String(value ?? "—")}</td></tr>)}
@@ -296,9 +308,9 @@ function App() {
 
     {membersFor && <div className="dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && setMembersFor(null)}>
       <div className="dialog">
-        <h2>{membersFor.room.name} — a’zolar ({membersFor.total})</h2>
+        <h2>{membersFor.room.name} — a’zolar ({membersFor.total}) <IdChip id={membersFor.room.id} /></h2>
         {membersFor.items === null ? <p className="muted">Yuklanmoqda…</p> : <table><tbody>{membersFor.items.map((member) => <tr key={member.id}>
-          <td><b>{member.firstName} {member.lastName}</b>{member.username ? <small> @{member.username}</small> : null}</td>
+          <td><b>{member.firstName} {member.lastName}</b>{member.username ? <small> @{member.username}</small> : null}<br /><IdChip id={member.id} /></td>
           <td><select value={member.role} onChange={(event) => setRole(membersFor.room, member.id, event.target.value)}>
             <option value="owner">Egasi</option><option value="admin">Admin</option><option value="moderator">Moderator</option><option value="member">A’zo</option>
           </select></td>
@@ -318,9 +330,23 @@ function App() {
         <table><tbody>{APP_ROUTES.map(([path, label]) => <tr key={path}><td><code>{path}</code></td><td>{label}</td><td className="actions">{!path.includes("<") && <a className="button small" href={OPTIMA + path} target="_blank" rel="noopener">Ochish</a>}</td></tr>)}</tbody></table>
       </section>
       <section>
-        <h2>Backend API ({routes ? routes.filter((route) => !q || route.path.includes(q) || route.method.includes(q.toUpperCase())).length : "…"})</h2>
-        <input className="route-search" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Filtr: admin, meetings, POST…" />
-        <table><tbody>{(routes ?? []).filter((route) => !q || route.path.includes(q) || route.method.includes(q.toUpperCase())).map((route) => <tr key={route.method + route.path} className={route.path.includes("/admin") ? "admin-route" : ""}><td><span className={`method m-${route.method}`}>{route.method}</span></td><td><code>{route.path}</code></td></tr>)}</tbody></table>
+        {(() => {
+          const shown = (routes ?? []).filter((route) => !q || route.path.includes(q) || route.method.includes(q.toUpperCase()));
+          const pages = Math.max(1, Math.ceil(shown.length / ROUTES_PAGE));
+          const current = Math.min(page, pages);
+          return <>
+            <div className="routes-head">
+              <h2>Backend API ({routes ? shown.length : "…"})</h2>
+              <div className="pager inline">
+                <button aria-label="Oldingi" disabled={current <= 1} onClick={() => setPage(current - 1)}><ChevronLeft size={18} /></button>
+                <span>{current} / {pages}</span>
+                <button aria-label="Keyingi" disabled={current >= pages} onClick={() => setPage(current + 1)}><ChevronRight size={18} /></button>
+              </div>
+            </div>
+            <input className="route-search" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Filtr: admin, meetings, POST…" />
+            <table className="routes"><tbody>{shown.slice((current - 1) * ROUTES_PAGE, current * ROUTES_PAGE).map((route) => <tr key={route.method + route.path} className={route.path.includes("/admin") ? "admin-route" : ""}><td><span className={`method m-${route.method}`}>{route.method}</span></td><td><code>{route.path}</code></td></tr>)}</tbody></table>
+          </>;
+        })()}
       </section>
     </div>}
 
