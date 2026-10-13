@@ -222,6 +222,31 @@ export class AdminService {
     );
   }
 
+  /** A person's signed-in devices (active sessions). */
+  async userSessions(userId: string) {
+    return this.db.query(
+      `SELECT id, device_name AS "deviceName", device_info AS "deviceInfo", ip_address AS "ipAddress",
+              user_agent AS "userAgent", device_id AS "deviceId", provider,
+              created_at AS "createdAt", last_used_at AS "lastUsedAt"
+         FROM refresh_tokens
+        WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+        ORDER BY last_used_at DESC NULLS LAST`,
+      [userId],
+    );
+  }
+
+  /** Sign a person out everywhere (sessions revoked, sockets cut) without blocking them. */
+  async revokeUserSessions(actorId: string, userId: string) {
+    const rows = await this.db.query<{ id: string }>(
+      `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL RETURNING id`,
+      [userId],
+    );
+    await this.redis.drop(RedisKeys.cachedUser(userId));
+    this.events.emit('admin.user_blocked', { userId });
+    await this.audit(actorId, 'user.sign_out_everywhere', 'user', userId, { sessions: String(rows.length) });
+    return { userId, revoked: rows.length };
+  }
+
   async auditLog(pageParam?: string) {
     const p = page(pageParam);
     return this.db.query(

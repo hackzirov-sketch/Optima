@@ -45,3 +45,13 @@ button.danger { border-color: color-mix(in srgb, var(--red) 50%, var(--line)); c
 .pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 14px 0; }
 .pager button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 760px) { table { display: block; overflow-x: auto; } }
+.route-search { width: 100%; min-height: 36px; margin-bottom: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.method { display: inline-block; min-width: 58px; padding: 2px 6px; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 800; text-align: center; }
+.m-GET { background: #2563eb; } .m-POST { background: #16a34a; } .m-PATCH { background: #d97706; } .m-PUT { background: #7c3aed; } .m-DELETE { background: #dc2626; }
+tr.admin-route { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.dialog-layer { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .4); }
+.dialog { width: min(640px, 100%); max-height: 85vh; overflow: auto; padding: 18px; border-radius: 14px; background: var(--surface); box-shadow: 0 20px 50px rgba(0, 0, 0, .3); }
+.dialog h2 { margin: 0 0 12px; font-size: 16px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.dialog-actions button { min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }

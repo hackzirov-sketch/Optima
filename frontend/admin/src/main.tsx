@@ -47,7 +47,30 @@ const TABS = [
   ["requests", "So‘rovlar"],
   ["meetings", "Jonli meetinglar"],
   ["audit", "Amallar tarixi"],
+  ["routes", "API va route’lar"],
 ] as const;
+
+/** Optima's own pages (the web app), linked from the routes tab. */
+const APP_ROUTES: Array<[string, string]> = [
+  ["/chat", "Chat (shaxsiy, guruh, kanal, bot)"],
+  ["/chat?tab=group", "Guruhlar"],
+  ["/chat?tab=channel", "Kanallar"],
+  ["/meetings", "Meetinglar (ro‘yxat, yaratish, tarix)"],
+  ["/meet/<kod>", "Meeting xonasi (kod bo‘yicha)"],
+  ["/ai", "Optima AI (suhbatlar, xotira)"],
+  ["/youtube", "YouTube (tanlangan videolar)"],
+  ["/library", "Kutubxona"],
+  ["/education", "Ta’lim"],
+  ["/statistics", "Statistika"],
+  ["/profile", "Profil va sozlamalar"],
+  ["/profile/<username>", "Foydalanuvchi profili"],
+  ["/u/<username>", "Shaxsiy chat"],
+  ["/g/<username>", "Guruh"],
+  ["/ch/<username>", "Kanal"],
+  ["/join/chat/<kod>", "Taklif havolasi"],
+  ["/admin", "Admin (ilova ichida)"],
+];
+type Session = { id: string; deviceName: string | null; ipAddress: string | null; userAgent: string | null; createdAt: string; lastUsedAt: string | null };
 type Tab = (typeof TABS)[number][0];
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -66,6 +89,8 @@ function App() {
   const [requests, setRequests] = useState<Requests | null>(null);
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [audit, setAudit] = useState<Audit[] | null>(null);
+  const [routes, setRoutes] = useState<Array<{ method: string; path: string }> | null>(null);
+  const [sessionsFor, setSessionsFor] = useState<{ user: User; items: Session[] | null } | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("");
   const [type, setType] = useState("");
@@ -89,7 +114,8 @@ function App() {
     if (tab === "requests") call<Requests>("/admin/requests").then(setRequests).catch(fail);
     if (tab === "meetings") call<Meeting[]>("/admin/meetings").then(setMeetings).catch(fail);
     if (tab === "audit") call<Audit[]>(`/admin/audit?page=${page}`).then(setAudit).catch(fail);
-  }, [tab, q, filter, type, page]);
+    if (tab === "routes" && !routes) call<{ total: number; routes: Array<{ method: string; path: string }> }>("/admin/routes").then((result) => setRoutes(result.routes)).catch(fail);
+  }, [tab, q, filter, type, page, routes]);
 
   useEffect(() => {
     if (typeof me !== "object" || !me) return;
@@ -117,6 +143,18 @@ function App() {
     void act("Bloklandi", () => call(`/admin/${kind}/${id}/block`, { method: "POST", body: JSON.stringify({ reason: reason.trim() || undefined }) }));
   };
   const unblock = (kind: "users" | "rooms", id: string) => void act("Blokdan chiqarildi", () => call(`/admin/${kind}/${id}/unblock`, { method: "POST" }));
+  const showSessions = (user: User) => {
+    setSessionsFor({ user, items: null });
+    call<Session[]>(`/admin/users/${user.id}/sessions`).then((items) => setSessionsFor({ user, items })).catch((caught) => setError((caught as Error).message));
+  };
+  const signOutEverywhere = (user: User) => {
+    if (!window.confirm(`${user.firstName} ${user.lastName} — barcha qurilmalardan chiqarilsinmi?`)) return;
+    void act("Barcha qurilmalardan chiqarildi", async () => { await call(`/admin/users/${user.id}/sessions/revoke`, { method: "POST" }); setSessionsFor(null); });
+  };
+  const endMeeting = (meeting: Meeting) => {
+    if (!window.confirm(`“${meeting.title}” hamma uchun tugatilsinmi?`)) return;
+    void act("Meeting tugatildi", () => call(`/meetings/${meeting.id}/end`, { method: "POST" }));
+  };
   const joinRoom = (id: string) => void act("Qo‘shildingiz — Optima’da ochilmoqda", async () => {
     await call(`/admin/rooms/${id}/join`, { method: "POST" });
     window.open(`${OPTIMA}/chat?room=${id}`, "_blank", "noopener");
@@ -169,7 +207,7 @@ function App() {
         <td>{user.email}</td>
         <td>{user.online ? <span className="online">● onlayn</span> : when(user.lastSeen)}</td>
         <td>{user.blockedAt ? <span className="red">Bloklangan {when(user.blockedAt)}{user.blockedReason ? ` — ${user.blockedReason}` : ""}</span> : "Faol"}</td>
-        <td className="actions">{!user.superAdmin && (user.blockedAt ? <button onClick={() => unblock("users", user.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("users", user.id)}>Bloklash</button>)}</td>
+        <td className="actions"><button onClick={() => showSessions(user)}>Sessiyalar</button>{!user.superAdmin && (user.blockedAt ? <button onClick={() => unblock("users", user.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("users", user.id)}>Bloklash</button>)}</td>
       </tr>)}</tbody>
     </table>}
 
@@ -196,7 +234,7 @@ function App() {
 
     {tab === "meetings" && meetings && <table>
       <thead><tr><th>Meeting</th><th>Host</th><th>Ishtirokchilar</th><th>Boshlangan</th><th /></tr></thead>
-      <tbody>{meetings.map((item) => <tr key={item.id}><td><b>{item.title}</b><br /><small>{item.code} · {item.scope}</small></td><td>{item.hostFirstName} {item.hostLastName}</td><td>{item.participants}</td><td>{when(item.startTime)}</td><td className="actions"><a className="button small" href={`${OPTIMA}/meet/${item.code}`} target="_blank" rel="noopener">Kirish</a></td></tr>)}</tbody>
+      <tbody>{meetings.map((item) => <tr key={item.id}><td><b>{item.title}</b><br /><small>{item.code} · {item.scope}</small></td><td>{item.hostFirstName} {item.hostLastName}</td><td>{item.participants}</td><td>{when(item.startTime)}</td><td className="actions"><a className="button small" href={`${OPTIMA}/meet/${item.code}`} target="_blank" rel="noopener">Kirish</a><button className="danger" onClick={() => endMeeting(item)}>Tugatish</button></td></tr>)}</tbody>
     </table>}
     {tab === "meetings" && meetings && !meetings.length && <p className="muted">Hozir jonli meeting yo‘q</p>}
 
@@ -204,6 +242,30 @@ function App() {
       <thead><tr><th>Vaqt</th><th>Admin</th><th>Amal</th><th>Kimga/nimaga</th><th>Sabab</th></tr></thead>
       <tbody>{audit.map((item) => <tr key={item.id}><td>{when(item.createdAt)}</td><td>{item.actorFirstName} {item.actorLastName}</td><td><code>{item.action}</code></td><td>{item.targetName ?? item.targetId} <small>({item.targetType})</small></td><td>{item.details?.reason ?? ""}</td></tr>)}</tbody>
     </table>}
+
+    {tab === "routes" && <div className="split">
+      <section>
+        <h2>Optima sahifalari ({APP_ROUTES.length})</h2>
+        <table><tbody>{APP_ROUTES.map(([path, label]) => <tr key={path}><td><code>{path}</code></td><td>{label}</td><td className="actions">{!path.includes("<") && <a className="button small" href={OPTIMA + path} target="_blank" rel="noopener">Ochish</a>}</td></tr>)}</tbody></table>
+      </section>
+      <section>
+        <h2>Backend API ({routes ? routes.filter((route) => !q || route.path.includes(q) || route.method.includes(q.toUpperCase())).length : "…"})</h2>
+        <input className="route-search" value={q} onChange={(event) => setQ(event.target.value)} placeholder="Filtr: admin, meetings, POST…" />
+        <table><tbody>{(routes ?? []).filter((route) => !q || route.path.includes(q) || route.method.includes(q.toUpperCase())).map((route) => <tr key={route.method + route.path} className={route.path.includes("/admin") ? "admin-route" : ""}><td><span className={`method m-${route.method}`}>{route.method}</span></td><td><code>{route.path}</code></td></tr>)}</tbody></table>
+      </section>
+    </div>}
+
+    {sessionsFor && <div className="dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && setSessionsFor(null)}>
+      <div className="dialog">
+        <h2>{sessionsFor.user.firstName} {sessionsFor.user.lastName} — sessiyalar</h2>
+        {sessionsFor.items === null ? <p className="muted">Yuklanmoqda…</p> : sessionsFor.items.length === 0 ? <p className="muted">Faol sessiya yo‘q</p> :
+          <table><tbody>{sessionsFor.items.map((item) => <tr key={item.id}><td><b>{item.deviceName || (item.userAgent ?? "").slice(0, 60) || "Qurilma"}</b><br /><small>{item.ipAddress ?? "IP noma’lum"}</small></td><td>{when(item.lastUsedAt ?? item.createdAt)}</td></tr>)}</tbody></table>}
+        <div className="dialog-actions">
+          {!sessionsFor.user.superAdmin && <button className="danger" onClick={() => signOutEverywhere(sessionsFor.user)}>Barcha qurilmalardan chiqarish</button>}
+          <button onClick={() => setSessionsFor(null)}>Yopish</button>
+        </div>
+      </div>
+    </div>}
 
     {(tab === "users" || tab === "rooms" || tab === "audit") && <div className="pager">
       <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>← Oldingi</button>
