@@ -194,6 +194,7 @@ export enum NotificationType {
   CHAT_INVITE = 'chat_invite',
   CHAT_INVITE_ACCEPTED = 'chat_invite_accepted',
   CHAT_INVITE_DECLINED = 'chat_invite_declined',
+  ANNOUNCEMENT = 'announcement',
 }
 
 // ─── Notification Channel & Priority ──────────────────────────────────────────

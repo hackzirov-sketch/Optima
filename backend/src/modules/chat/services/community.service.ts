@@ -68,7 +68,8 @@ export class CommunityService {
       );
       return { items: [], page: 1, limit: 0, total: count?.total ?? 0, hidden: true };
     }
-    const safeLimit = Math.min(Math.max(limit || 30, 1), 100);
+    // Twenty people per page at most; the client pages through the rest.
+    const safeLimit = Math.min(Math.max(limit || 20, 1), 20);
     const safePage = Math.max(page || 1, 1);
     const params: unknown[] = [roomId, safeLimit, (safePage - 1) * safeLimit];
     const search = query.trim();

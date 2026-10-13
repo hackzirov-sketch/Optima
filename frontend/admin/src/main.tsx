@@ -47,6 +47,7 @@ const TABS = [
   ["requests", "So‘rovlar"],
   ["meetings", "Jonli meetinglar"],
   ["audit", "Amallar tarixi"],
+  ["announce", "E’lon yuborish"],
   ["routes", "API va route’lar"],
 ] as const;
 
@@ -90,6 +91,9 @@ function App() {
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [audit, setAudit] = useState<Audit[] | null>(null);
   const [routes, setRoutes] = useState<Array<{ method: string; path: string }> | null>(null);
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [membersFor, setMembersFor] = useState<{ room: Room; page: number; total: number; items: Array<{ id: string; firstName: string; lastName: string; username: string | null; role: string }> | null } | null>(null);
+  const [announce, setAnnounce] = useState({ title: "", message: "", url: "", userId: "" });
   const [sessionsFor, setSessionsFor] = useState<{ user: User; items: Session[] | null } | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("");
@@ -155,6 +159,31 @@ function App() {
     if (!window.confirm(`“${meeting.title}” hamma uchun tugatilsinmi?`)) return;
     void act("Meeting tugatildi", () => call(`/meetings/${meeting.id}/end`, { method: "POST" }));
   };
+  const openDetail = (user: User) => {
+    setDetail({ loading: true, firstName: user.firstName, lastName: user.lastName });
+    call<Record<string, unknown>>(`/admin/users/${user.id}`).then(setDetail).catch((caught) => { setDetail(null); setError((caught as Error).message); });
+  };
+  const loadMembers = (room: Room, nextPage = 1) => {
+    setMembersFor({ room, page: nextPage, total: 0, items: null });
+    call<{ total: number; items: Array<{ id: string; firstName: string; lastName: string; username: string | null; role: string }> }>(`/admin/rooms/${room.id}/members?page=${nextPage}`)
+      .then((result) => setMembersFor({ room, page: nextPage, total: result.total, items: result.items }))
+      .catch((caught) => setError((caught as Error).message));
+  };
+  const setRole = (room: Room, userId: string, role: string) => void act("Rol o‘zgardi", async () => { await call(`/admin/rooms/${room.id}/members/${userId}/role`, { method: "POST", body: JSON.stringify({ role }) }); loadMembers(room, membersFor?.page ?? 1); });
+  const removeMember = (room: Room, userId: string, name: string) => {
+    if (!window.confirm(`${name} — ${room.name} dan chiqarilsinmi?`)) return;
+    void act("Chiqarildi", async () => { await call(`/admin/rooms/${room.id}/members/${userId}/remove`, { method: "POST" }); loadMembers(room, membersFor?.page ?? 1); });
+  };
+  const verify = (room: Room, verified: boolean) => void act(verified ? "Tasdiqlandi ✓" : "Tasdiq olib tashlandi", () => call(`/admin/rooms/${room.id}/verify`, { method: "POST", body: JSON.stringify({ verified }) }));
+  const sendAnnouncement = () => {
+    if (!announce.title.trim()) { setError("Sarlavha kerak"); return; }
+    if (!window.confirm(announce.userId.trim() ? "Bitta foydalanuvchiga yuborilsinmi?" : "Barcha faol foydalanuvchilarga yuborilsinmi?")) return;
+    void act("E’lon yuborildi", async () => {
+      const result = await call<{ sent: number }>("/admin/announce", { method: "POST", body: JSON.stringify({ title: announce.title, message: announce.message, url: announce.url || undefined, userId: announce.userId.trim() || undefined }) });
+      setNotice(`E’lon ${result.sent} kishiga yuborildi`);
+      setAnnounce({ title: "", message: "", url: "", userId: "" });
+    });
+  };
   const joinRoom = (id: string) => void act("Qo‘shildingiz — Optima’da ochilmoqda", async () => {
     await call(`/admin/rooms/${id}/join`, { method: "POST" });
     window.open(`${OPTIMA}/chat?room=${id}`, "_blank", "noopener");
@@ -203,7 +232,7 @@ function App() {
     {tab === "users" && users && <table>
       <thead><tr><th>Foydalanuvchi</th><th>Email</th><th>Oxirgi faollik</th><th>Holat</th><th /></tr></thead>
       <tbody>{users.items.map((user) => <tr key={user.id} className={user.blockedAt ? "blocked" : ""}>
-        <td><b>{user.firstName} {user.lastName}</b>{user.superAdmin && <em className="tag">admin</em>}<br /><small>{user.username ? `@${user.username}` : user.id}</small></td>
+        <td><button className="link" onClick={() => openDetail(user)}><b>{user.firstName} {user.lastName}</b></button>{user.superAdmin && <em className="tag">admin</em>}<br /><small>{user.username ? `@${user.username}` : user.id}</small></td>
         <td>{user.email}</td>
         <td>{user.online ? <span className="online">● onlayn</span> : when(user.lastSeen)}</td>
         <td>{user.blockedAt ? <span className="red">Bloklangan {when(user.blockedAt)}{user.blockedReason ? ` — ${user.blockedReason}` : ""}</span> : "Faol"}</td>
@@ -219,7 +248,7 @@ function App() {
         <td>{room.memberCount}{room.pendingRequests ? <small> (+{room.pendingRequests} so‘rov)</small> : null}</td>
         <td>{room.ownerFirstName} {room.ownerLastName}</td>
         <td>{room.blockedAt ? <span className="red">Bloklangan {when(room.blockedAt)}{room.blockedReason ? ` — ${room.blockedReason}` : ""}</span> : "Faol"}</td>
-        <td className="actions"><button onClick={() => joinRoom(room.id)}>Kirish</button>{room.blockedAt ? <button onClick={() => unblock("rooms", room.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("rooms", room.id)}>Bloklash</button>}</td>
+        <td className="actions"><button onClick={() => loadMembers(room)}>A’zolar</button>{room.type === "channel" && <button onClick={() => verify(room, true)}>✓ Tasdiqlash</button>}<button onClick={() => joinRoom(room.id)}>Kirish</button>{room.blockedAt ? <button onClick={() => unblock("rooms", room.id)}>Blokdan chiqarish</button> : <button className="danger" onClick={() => block("rooms", room.id)}>Bloklash</button>}</td>
       </tr>)}</tbody>
     </table>}
 
@@ -242,6 +271,46 @@ function App() {
       <thead><tr><th>Vaqt</th><th>Admin</th><th>Amal</th><th>Kimga/nimaga</th><th>Sabab</th></tr></thead>
       <tbody>{audit.map((item) => <tr key={item.id}><td>{when(item.createdAt)}</td><td>{item.actorFirstName} {item.actorLastName}</td><td><code>{item.action}</code></td><td>{item.targetName ?? item.targetId} <small>({item.targetType})</small></td><td>{item.details?.reason ?? ""}</td></tr>)}</tbody>
     </table>}
+
+    {tab === "announce" && <div className="form">
+      <p className="muted">E’lon Optima’da bildirishnoma bo‘lib keladi. Foydalanuvchi ID bo‘sh qolsa — barcha faol foydalanuvchilarga.</p>
+      <label>Sarlavha<input value={announce.title} maxLength={200} onChange={(event) => setAnnounce({ ...announce, title: event.target.value })} /></label>
+      <label>Matn<textarea rows={5} maxLength={2000} value={announce.message} onChange={(event) => setAnnounce({ ...announce, message: event.target.value })} /></label>
+      <label>Havola (ixtiyoriy, masalan /meetings)<input value={announce.url} onChange={(event) => setAnnounce({ ...announce, url: event.target.value })} /></label>
+      <label>Foydalanuvchi ID (ixtiyoriy)<input value={announce.userId} onChange={(event) => setAnnounce({ ...announce, userId: event.target.value })} placeholder="hammaga" /></label>
+      <button className="button" onClick={sendAnnouncement}>Yuborish</button>
+    </div>}
+
+    {detail && <div className="dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && setDetail(null)}>
+      <div className="dialog">
+        <h2>{String(detail.firstName ?? "")} {String(detail.lastName ?? "")}{detail.superAdmin ? " · admin" : ""}</h2>
+        {detail.loading ? <p className="muted">Yuklanmoqda…</p> : <>
+          <table><tbody>
+            {([["Username", detail.username ? `@${detail.username}` : "—"], ["Email", detail.email], ["Bio", detail.bio || "—"], ["Akkaunt", detail.accountVisibility], ["Ro‘yxatdan o‘tgan", when(detail.createdAt as string)], ["Oxirgi faollik", when(detail.lastSeen as string)], ["Guruhlar", detail.groups], ["Kanallar", detail.channels], ["Yaratgan guruh/kanallari", detail.roomsOwned], ["O‘tkazgan meetinglari", detail.meetingsHosted], ["AI savollari", detail.aiQuestions], ["Faol sessiyalar", detail.sessions], ["Holat", detail.blockedAt ? `Bloklangan — ${detail.blockedReason ?? ""}` : "Faol"]] as Array<[string, unknown]>).map(([label, value]) => <tr key={label}><td className="muted">{label}</td><td>{String(value ?? "—")}</td></tr>)}
+          </tbody></table>
+          {Array.isArray(detail.ips) && detail.ips.length > 0 && <><h2>IP manzillar</h2><table><tbody>{(detail.ips as Array<{ ip: string; lastAt: string; times: number }>).map((row) => <tr key={row.ip}><td><code>{row.ip}</code></td><td>{when(row.lastAt)}</td><td>{row.times} marta</td></tr>)}</tbody></table></>}
+        </>}
+        <div className="dialog-actions"><button onClick={() => setDetail(null)}>Yopish</button></div>
+      </div>
+    </div>}
+
+    {membersFor && <div className="dialog-layer" onMouseDown={(event) => event.target === event.currentTarget && setMembersFor(null)}>
+      <div className="dialog">
+        <h2>{membersFor.room.name} — a’zolar ({membersFor.total})</h2>
+        {membersFor.items === null ? <p className="muted">Yuklanmoqda…</p> : <table><tbody>{membersFor.items.map((member) => <tr key={member.id}>
+          <td><b>{member.firstName} {member.lastName}</b>{member.username ? <small> @{member.username}</small> : null}</td>
+          <td><select value={member.role} onChange={(event) => setRole(membersFor.room, member.id, event.target.value)}>
+            <option value="owner">Egasi</option><option value="admin">Admin</option><option value="moderator">Moderator</option><option value="member">A’zo</option>
+          </select></td>
+          <td className="actions"><button className="danger" onClick={() => removeMember(membersFor.room, member.id, `${member.firstName} ${member.lastName}`)}>Chiqarish</button></td>
+        </tr>)}</tbody></table>}
+        <div className="dialog-actions">
+          <button disabled={membersFor.page <= 1} onClick={() => loadMembers(membersFor.room, membersFor.page - 1)}>← Oldingi</button>
+          <button disabled={membersFor.page * 20 >= membersFor.total} onClick={() => loadMembers(membersFor.room, membersFor.page + 1)}>Keyingi →</button>
+          <button onClick={() => setMembersFor(null)}>Yopish</button>
+        </div>
+      </div>
+    </div>}
 
     {tab === "routes" && <div className="split">
       <section>
@@ -269,8 +338,8 @@ function App() {
 
     {(tab === "users" || tab === "rooms" || tab === "audit") && <div className="pager">
       <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>← Oldingi</button>
-      <span>{page}{total ? ` / ${Math.max(1, Math.ceil(total / 50))}` : ""}</span>
-      <button disabled={tab === "audit" ? (audit?.length ?? 0) < 50 : page * 50 >= total} onClick={() => setPage((value) => value + 1)}>Keyingi →</button>
+      <span>{page}{total ? ` / ${Math.max(1, Math.ceil(total / 20))}` : ""}</span>
+      <button disabled={tab === "audit" ? (audit?.length ?? 0) < 20 : page * 20 >= total} onClick={() => setPage((value) => value + 1)}>Keyingi →</button>
     </div>}
   </div>;
 }

@@ -159,8 +159,8 @@ export function AdminPage() {
 
     {(tab === "users" || tab === "rooms" || tab === "audit") && <div className="admin-pager">
       <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{t("admin.prev")}</button>
-      <span>{page}{total ? ` / ${Math.max(1, Math.ceil(total / 50))}` : ""}</span>
-      <button type="button" disabled={tab === "audit" ? (audit?.length ?? 0) < 50 : page * 50 >= total} onClick={() => setPage((value) => value + 1)}>{t("admin.next")}</button>
+      <span>{page}{total ? ` / ${Math.max(1, Math.ceil(total / 20))}` : ""}</span>
+      <button type="button" disabled={tab === "audit" ? (audit?.length ?? 0) < 20 : page * 20 >= total} onClick={() => setPage((value) => value + 1)}>{t("admin.next")}</button>
     </div>}
   </div>;
 }

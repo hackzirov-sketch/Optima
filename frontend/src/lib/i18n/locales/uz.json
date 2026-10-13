@@ -993,7 +993,8 @@
     "aiMemorySaved": "Xotira saqlandi",
     "joinRequestsBar": "{{count}} ta qo‘shilish so‘rovi",
     "joinRequestsHide": "Yashirish",
-    "newMessagesBelow": "{{count}} ta yangi xabar — pastga o‘tish"
+    "newMessagesBelow": "{{count}} ta yangi xabar — pastga o‘tish",
+    "showMoreMembers": "Yana ko‘rsatish ({{count}})"
   },
   "presence": {
     "online": "Onlayn",

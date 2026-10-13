@@ -3437,6 +3437,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   {member.role !== "member" && <em className="tg-info-role">{t(`chat.role_${member.role}`)}</em>}
                 </button>
               ))}
+                          {!detailsLoading && detailMembers.length < detailMemberTotal && <button type="button" className="details-more" onClick={() => {
+                const nextPage = Math.floor(detailMembers.length / 20) + 1;
+                void api.chat.roomMembers(selectedRoom.id, detailMemberSearch.trim(), nextPage)
+                  .then((result) => setDetailMembers((current) => [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))]))
+                  .catch(() => undefined);
+              }}>{t("chat.showMoreMembers", { count: detailMemberTotal - detailMembers.length })}</button>}
             </section>}
             {selectedRoom.type !== "direct" && !selectedRoom.isSystem && <section className="tg-info-section tg-info-danger">
               {!selectedRoom.membershipLocked && <button className="tg-info-row danger" onClick={() => { setDetailsOpen(false); void leaveRoomFromContext(selectedRoom); }}>

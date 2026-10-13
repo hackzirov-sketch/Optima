@@ -40,8 +40,8 @@ export function LibraryPage() {
   const { show } = useToast();
   const [lang, setLang] = useState<Lang>(() => (["uz", "en", "ru", "tr"].includes(locale) ? locale as Lang : "uz"));
   const [subject, setSubject] = useState<Subject>("all");
-  // On by default: only books that open in Optima's own reader, not links out.
-  const [readableOnly, setReadableOnly] = useState(() => { try { return localStorage.getItem("optima-library-readable") !== "0"; } catch { return true; } });
+  // Only books that open in Optima's own reader — never a link out to another site.
+  const readableOnly = true;
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [books, setBooks] = useState<LibraryBook[]>([]);
@@ -340,10 +340,6 @@ export function LibraryPage() {
       <button type="button" className={shelf === "saved" ? "active" : ""} onClick={() => setShelf("saved")}><Bookmark size={16} />{t("library.shelfSaved")}{saved.length ? <b>{saved.length}</b> : null}</button>
     </nav>
     {shelf === "browse" && <nav className="library-categories">
-      <button type="button" className={`library-readable-toggle ${readableOnly ? "active" : ""}`} aria-pressed={readableOnly}
-        onClick={() => setReadableOnly((value) => { const next = !value; try { localStorage.setItem("optima-library-readable", next ? "1" : "0"); } catch { /* storage off */ } return next; })}>
-        <BookOpen size={15} />{t("library.readableOnly")}
-      </button>
       {subjects.map((item) => <button key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
     </nav>}
     <section className="library-section">

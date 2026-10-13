@@ -4796,3 +4796,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 .room-blocked-state svg { color: var(--danger, #e5484d); }
 /* Optima admin badge (profile page and profile card). */
 .super-admin-badge { display: inline-flex; align-items: center; gap: 5px; width: fit-content; margin: 4px auto 0; padding: 3px 10px; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-size: 12px; font-weight: 750; letter-spacing: .01em; box-shadow: 0 4px 12px rgba(79, 70, 229, .3); }
+/* The admin tick next to a name (like a verified mark), "Optima admin" on hover. */
+.admin-tick { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 6px; vertical-align: -3px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; box-shadow: 0 2px 6px rgba(79, 70, 229, .35); flex: none; }
+.upm-name { display: inline-flex; align-items: center; justify-content: center; gap: 0; }
+.super-admin-badge { display: none; }

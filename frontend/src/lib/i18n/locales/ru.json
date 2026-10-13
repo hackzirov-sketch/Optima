@@ -993,7 +993,8 @@
     "aiMemorySaved": "Память сохранена",
     "joinRequestsBar": "Заявок на вступление: {{count}}",
     "joinRequestsHide": "Скрыть",
-    "newMessagesBelow": "Новых сообщений: {{count}} — перейти вниз"
+    "newMessagesBelow": "Новых сообщений: {{count}} — перейти вниз",
+    "showMoreMembers": "Показать ещё ({{count}})"
   },
   "presence": {
     "online": "В сети",

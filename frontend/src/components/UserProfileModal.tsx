@@ -72,8 +72,7 @@ export function UserProfileModal() {
       {profile && <>
         <section className={`tg-info-hero upm-hero ${isMe ? "is-me" : ""}`}>
           <span className="upm-avatar"><Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />{isPresenceActive(presence) && <i />}</span>
-          <strong><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} /></strong>
-          {profile.isSuperAdmin && <span className="super-admin-badge"><ShieldCheck size={14} />{t("profile.superAdminBadge")}</span>}
+          <strong className="upm-name"><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} />{profile.isSuperAdmin && <span className="admin-tick" title={t("profile.superAdminBadge")} aria-label={t("profile.superAdminBadge")}><ShieldCheck size={13} strokeWidth={2.6} /></span>}</strong>
           <small className={isPresenceActive(presence) || isMe ? "online" : ""}>{isMe ? t("presence.online") : formatPresenceLabel(presence, t)}</small>
         </section>
         {!isMe && <div className="tg-info-actions upm-actions">

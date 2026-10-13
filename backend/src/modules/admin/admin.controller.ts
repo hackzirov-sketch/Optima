@@ -35,6 +35,47 @@ export class AdminController {
     return this.admin.setUserBlocked(actorId, id, false);
   }
 
+  @Get('users/:id')
+  @ApiOperation({ summary: 'One person in detail (rooms, meetings, AI use, sessions, IPs)' })
+  userDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.admin.userDetail(id);
+  }
+
+  @Get('rooms/:id/members')
+  roomMembers(@Param('id', ParseUUIDPipe) id: string, @Query('page') page?: string) {
+    return this.admin.roomMembers(id, page);
+  }
+
+  @Post('rooms/:id/members/:userId/role')
+  setMemberRole(
+    @CurrentUser('id') actorId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: { role?: string },
+  ) {
+    return this.admin.setMemberRole(actorId, id, userId, String(body?.role ?? ''));
+  }
+
+  @Post('rooms/:id/members/:userId/remove')
+  removeMember(
+    @CurrentUser('id') actorId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.admin.removeMember(actorId, id, userId);
+  }
+
+  @Post('rooms/:id/verify')
+  verifyRoom(@CurrentUser('id') actorId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: { verified?: boolean }) {
+    return this.admin.setRoomVerified(actorId, id, body?.verified !== false);
+  }
+
+  @Post('announce')
+  @ApiOperation({ summary: 'Send an announcement (notification) to everyone or one person' })
+  announce(@CurrentUser('id') actorId: string, @Body() body: { title?: string; message?: string; userId?: string; url?: string }) {
+    return this.admin.announce(actorId, body ?? {});
+  }
+
   @Get('users/:id/sessions')
   @ApiOperation({ summary: "A person's active sessions (devices)" })
   userSessions(@Param('id', ParseUUIDPipe) id: string) {

@@ -993,7 +993,8 @@
     "aiMemorySaved": "Memory saved",
     "joinRequestsBar": "{{count}} join requests",
     "joinRequestsHide": "Hide",
-    "newMessagesBelow": "{{count}} new messages — jump to latest"
+    "newMessagesBelow": "{{count}} new messages — jump to latest",
+    "showMoreMembers": "Show more ({{count}})"
   },
   "presence": {
     "online": "Online",

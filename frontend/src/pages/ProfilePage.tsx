@@ -276,8 +276,8 @@ export function ProfilePage() {
             </div>
             <button type="button" className="tgp-name" onClick={() => setEditing("name")} title={t("profile.editNameHint")}>
               {`${draft.firstName} ${draft.lastName}`.trim() || t("profile.notSet")}
+              {user?.isSuperAdmin && <span className="admin-tick" title={t("profile.superAdminBadge")} aria-label={t("profile.superAdminBadge")}><ShieldCheck size={13} strokeWidth={2.6} /></span>}
             </button>
-            {user?.isSuperAdmin && <span className="super-admin-badge"><ShieldCheck size={14} />{t("profile.superAdminBadge")}</span>}
             <small className="tgp-status">{t("profile.online")}</small>
           </div>
 

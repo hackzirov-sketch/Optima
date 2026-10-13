@@ -993,7 +993,8 @@
     "aiMemorySaved": "Bellek kaydedildi",
     "joinRequestsBar": "{{count}} katılma isteği",
     "joinRequestsHide": "Gizle",
-    "newMessagesBelow": "{{count}} yeni mesaj — en sona git"
+    "newMessagesBelow": "{{count}} yeni mesaj — en sona git",
+    "showMoreMembers": "Daha fazla göster ({{count}})"
   },
   "presence": {
     "online": "Çevrimiçi",

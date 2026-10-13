@@ -5,9 +5,13 @@ import { RedisService } from '../../redis/redis.service';
 import { RedisKeys } from '../../redis/redis.keys';
 import { ChatMemberService } from '../chat/services/member.service';
 import { isSuperAdmin } from '../../common/super-admin';
+import { NotificationType } from '../../common/enums';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const PRESENCE_FRESH_MS = 90_000;
-const page = (value?: string) => Math.max(1, Math.min(500, Number(value) || 1));
+const page = (value?: string) => Math.max(1, Math.min(5000, Number(value) || 1));
+/** Every admin list returns 20 rows per page. */
+const PAGE = 20;
 
 /**
  * The Optima admin panel's backend. Blocking never deletes anything: an
@@ -22,6 +26,7 @@ export class AdminService {
     private readonly redis: RedisService,
     private readonly members: ChatMemberService,
     private readonly events: EventEmitter2,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private audit(actorId: string, action: string, targetType: string, targetId: string | null, details: Record<string, unknown> = {}) {
@@ -99,7 +104,7 @@ export class AdminService {
       params.push([...online]);
       where.push(`u.id = ANY($${params.length}::uuid[])`);
     }
-    params.push(50, (p - 1) * 50);
+    params.push(PAGE, (p - 1) * PAGE);
     const rows = await this.db.query<Record<string, unknown> & { id: string }>(
       `SELECT u.id, u.first_name AS "firstName", u.last_name AS "lastName", u.username, u.email,
               u.avatar_url AS "avatarUrl", u.created_at AS "createdAt", u.last_seen AS "lastSeen",
@@ -147,7 +152,7 @@ export class AdminService {
     }
     if (type === 'group' || type === 'channel') { params.push(type); where.push(`r.type = $${params.length}`); }
     if (filter === 'blocked') where.push(`r.blocked_at IS NOT NULL`);
-    params.push(50, (p - 1) * 50);
+    params.push(PAGE, (p - 1) * PAGE);
     const rows = await this.db.query<Record<string, unknown>>(
       `SELECT r.id, r.name, r.type, r.scope, r.slug, r.avatar_url AS "avatarUrl", r.created_at AS "createdAt",
               r.blocked_at AS "blockedAt", r.blocked_reason AS "blockedReason", r.last_message_at AS "lastMessageAt",
@@ -200,13 +205,13 @@ export class AdminService {
         `SELECT j.id, j.created_at AS "createdAt", r.id AS "roomId", r.name AS "roomName", r.type AS "roomType",
                 u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName", u.username
            FROM chat_join_requests j JOIN chat_rooms r ON r.id = j.room_id JOIN users u ON u.id = j.user_id
-          ORDER BY j.created_at DESC LIMIT 200`,
+          ORDER BY j.created_at DESC LIMIT 20`,
       ),
       this.db.query(
         `SELECT q.id, q.requested_at AS "createdAt", m.id AS "meetingId", m.title AS "meetingTitle", m.meeting_code AS code,
                 u.id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName", u.username
            FROM meeting_join_requests q JOIN meetings m ON m.id = q.meeting_id JOIN users u ON u.id = q.user_id
-          WHERE q.status = 'pending' ORDER BY q.requested_at DESC LIMIT 200`,
+          WHERE q.status = 'pending' ORDER BY q.requested_at DESC LIMIT 20`,
       ),
     ]);
     return { chat, meeting };
@@ -218,8 +223,116 @@ export class AdminService {
               h.first_name AS "hostFirstName", h.last_name AS "hostLastName",
               (SELECT count(*)::int FROM meeting_participants p WHERE p.meeting_id = m.id AND p.left_at IS NULL) AS participants
          FROM meetings m JOIN users h ON h.id = m.host_id
-        WHERE m.status = 'live' ORDER BY participants DESC, m.start_time DESC LIMIT 100`,
+        WHERE m.status = 'live' ORDER BY participants DESC, m.start_time DESC LIMIT 20`,
     );
+  }
+
+  /** Everything about one person at a glance. */
+  async userDetail(userId: string) {
+    const [user] = await this.db.query<Record<string, unknown>>(
+      `SELECT u.id, u.first_name AS "firstName", u.last_name AS "lastName", u.username, u.email, u.bio,
+              u.avatar_url AS "avatarUrl", u.created_at AS "createdAt", u.last_seen AS "lastSeen",
+              u.is_active AS "isActive", u.blocked_at AS "blockedAt", u.blocked_reason AS "blockedReason",
+              u.account_visibility AS "accountVisibility",
+              (SELECT count(*)::int FROM chat_members m JOIN chat_rooms r ON r.id = m.room_id
+                WHERE m.user_id = u.id AND m.left_at IS NULL AND r.type = 'group') AS groups,
+              (SELECT count(*)::int FROM chat_members m JOIN chat_rooms r ON r.id = m.room_id
+                WHERE m.user_id = u.id AND m.left_at IS NULL AND r.type = 'channel') AS channels,
+              (SELECT count(*)::int FROM chat_rooms r WHERE r.created_by = u.id AND r.type <> 'direct') AS "roomsOwned",
+              (SELECT count(*)::int FROM meetings m WHERE m.host_id = u.id) AS "meetingsHosted",
+              (SELECT count(*)::int FROM ai_messages a JOIN ai_conversations c ON c.id = a.conversation_id
+                WHERE c.user_id = u.id AND a.role = 'user') AS "aiQuestions",
+              (SELECT count(*)::int FROM refresh_tokens t WHERE t.user_id = u.id AND t.revoked_at IS NULL AND t.expires_at > now()) AS sessions
+         FROM users u WHERE u.id = $1`,
+      [userId],
+    );
+    if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    const ips = await this.db.query(
+      `SELECT ip_address AS ip, max(created_at) AS "lastAt", count(*)::int AS times
+         FROM user_ip_logs WHERE user_id = $1 GROUP BY ip_address ORDER BY max(created_at) DESC LIMIT 20`,
+      [userId],
+    ).catch(() => []);
+    return { ...user, superAdmin: isSuperAdmin(userId), ips };
+  }
+
+  /** A group/channel's members, 20 per page, owners and admins first. */
+  async roomMembers(roomId: string, pageParam?: string) {
+    const p = page(pageParam);
+    const rows = await this.db.query<Record<string, unknown>>(
+      `SELECT u.id, u.first_name AS "firstName", u.last_name AS "lastName", u.username, m.role,
+              m.joined_at AS "joinedAt", count(*) OVER()::int AS "totalCount"
+         FROM chat_members m JOIN users u ON u.id = m.user_id
+        WHERE m.room_id = $1 AND m.left_at IS NULL AND m.status = 'active'
+        ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'moderator' THEN 2 ELSE 3 END, u.first_name
+        LIMIT $2 OFFSET $3`,
+      [roomId, PAGE, (p - 1) * PAGE],
+    );
+    return { total: Number(rows[0]?.totalCount ?? 0), page: p, items: rows.map(({ totalCount: _t, ...row }) => row) };
+  }
+
+  /** Change someone's role in a group/channel (owner hands the room over). */
+  async setMemberRole(actorId: string, roomId: string, userId: string, role: string) {
+    if (!['owner', 'admin', 'moderator', 'member'].includes(role))
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Unknown role' });
+    if (role === 'owner')
+      await this.db.query(
+        `UPDATE chat_members SET role = 'admin' WHERE room_id = $1 AND role = 'owner' AND left_at IS NULL`,
+        [roomId],
+      );
+    const rows = await this.db.query<{ userId: string }>(
+      `UPDATE chat_members SET role = $3 WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL RETURNING user_id AS "userId"`,
+      [roomId, userId, role],
+    );
+    if (!rows[0]) throw new NotFoundException({ code: 'NOT_ROOM_MEMBER', message: 'Not a member of this room' });
+    if (role === 'owner') await this.db.query(`UPDATE chat_rooms SET created_by = $2 WHERE id = $1`, [roomId, userId]);
+    await this.members.invalidateRoomMember(roomId, userId);
+    this.events.emit('admin.room_blocked', { roomId, blocked: false });
+    await this.audit(actorId, 'room.member_role', 'room', roomId, { userId, role });
+    return { roomId, userId, role };
+  }
+
+  /** Take someone out of a group/channel (they can be invited back). */
+  async removeMember(actorId: string, roomId: string, userId: string) {
+    const rows = await this.db.query<{ userId: string }>(
+      `UPDATE chat_members SET left_at = now() WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL RETURNING user_id AS "userId"`,
+      [roomId, userId],
+    );
+    if (!rows[0]) throw new NotFoundException({ code: 'NOT_ROOM_MEMBER', message: 'Not a member of this room' });
+    await this.members.invalidateRoomMember(roomId, userId);
+    this.events.emit('admin.room_blocked', { roomId, blocked: false });
+    await this.audit(actorId, 'room.member_remove', 'room', roomId, { userId });
+    return { roomId, userId, removed: true };
+  }
+
+  /** The verified tick on a group/channel. */
+  async setRoomVerified(actorId: string, roomId: string, verified: boolean) {
+    await this.db.query(
+      `INSERT INTO channel_settings (room_id, is_verified) VALUES ($1, $2)
+       ON CONFLICT (room_id) DO UPDATE SET is_verified = $2`,
+      [roomId, verified],
+    );
+    this.events.emit('admin.room_blocked', { roomId, blocked: false });
+    await this.audit(actorId, verified ? 'room.verify' : 'room.unverify', 'room', roomId);
+    return { roomId, verified };
+  }
+
+  /** An announcement as an in-app notification — to one person or to everyone active. */
+  async announce(actorId: string, input: { title?: string; message?: string; userId?: string; url?: string }) {
+    const title = String(input.title ?? '').trim().slice(0, 200);
+    const message = String(input.message ?? '').trim().slice(0, 2000);
+    if (!title) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'A title is required' });
+    const recipients = input.userId
+      ? [{ id: input.userId }]
+      : await this.db.query<{ id: string }>(`SELECT id FROM users WHERE deleted_at IS NULL AND is_active = true`);
+    let sent = 0;
+    for (const recipient of recipients) {
+      await this.notifications
+        .create({ userId: recipient.id, actorId, type: NotificationType.ANNOUNCEMENT, title, message: message || null, actionUrl: input.url || null, entityType: 'announcement' })
+        .then(() => { sent += 1; })
+        .catch(() => undefined);
+    }
+    await this.audit(actorId, 'announce', input.userId ? 'user' : 'all', input.userId ?? null, { title, sent: String(sent) });
+    return { sent };
   }
 
   /** A person's signed-in devices (active sessions). */
@@ -257,8 +370,8 @@ export class AdminService {
          LEFT JOIN users u ON u.id = a.actor_id
          LEFT JOIN users tu ON a.target_type = 'user' AND tu.id = a.target_id
          LEFT JOIN chat_rooms tr ON a.target_type <> 'user' AND tr.id = a.target_id
-        ORDER BY a.created_at DESC LIMIT 50 OFFSET $1`,
-      [(p - 1) * 50],
+        ORDER BY a.created_at DESC LIMIT 20 OFFSET $1`,
+      [(p - 1) * PAGE],
     );
   }
 }

@@ -447,3 +447,4 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 .chat-elsewhere button { display: grid; place-items: center; width: 40px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--text-soft); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
 .chat-elsewhere button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 @media (max-width: 820px) { .chat-elsewhere { display: none; } }
+.details-more { display: block; width: calc(100% - 32px); margin: 8px 16px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent); font: inherit; font-weight: 650; cursor: pointer; }
