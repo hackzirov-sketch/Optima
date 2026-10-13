@@ -2869,7 +2869,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty">
           <button className="icon-button chat-minimize-button" onClick={() => {
             setMinimized(true);
-            navigate("/");
+            navigate("/meet");
           }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
         </header>}
         {!selectedRoom && !aiOpen && !loadingRooms &&
