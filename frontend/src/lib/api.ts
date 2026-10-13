@@ -52,6 +52,33 @@ export interface LibraryReviews {
   saved?: boolean;
   items: Array<{ id: string; rating: number; body: string; createdAt: string; updatedAt: string; mine: boolean; author: { id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null } }>;
 }
+export interface AdminOverview {
+  onlineNow: number;
+  users: { total: number; blocked: number; newToday: number; activeToday: number };
+  rooms: { groups: number; channels: number; direct: number; blocked: number };
+  meetings: { live: number; inCalls: number };
+  requests: { chat: number; meeting: number };
+  ai: { messagesToday: number };
+}
+export interface AdminUser { id: string; firstName: string; lastName: string; username: string | null; email: string; avatarUrl: string | null; createdAt: string; lastSeen: string | null; isActive: boolean; blockedAt: string | null; blockedReason: string | null; online: boolean; superAdmin: boolean }
+export interface AdminRoom { id: string; name: string | null; type: "group" | "channel"; scope: string; slug: string | null; avatarUrl: string | null; createdAt: string; blockedAt: string | null; blockedReason: string | null; lastMessageAt: string | null; memberCount: number; pendingRequests: number; ownerFirstName: string | null; ownerLastName: string | null; ownerUsername: string | null }
+export interface AdminChatRequest { id: string; createdAt: string; roomId: string; roomName: string | null; roomType: string; userId: string; firstName: string; lastName: string; username: string | null }
+export interface AdminMeetingRequest { id: string; createdAt: string; meetingId: string; meetingTitle: string; code: string; userId: string; firstName: string; lastName: string; username: string | null }
+export interface AdminMeeting { id: string; title: string; code: string; scope: string; startTime: string; chatRoomId: string | null; hostFirstName: string; hostLastName: string; participants: number }
+export interface AdminAuditEntry { id: string; action: string; targetType: string; targetId: string | null; details: Record<string, string>; createdAt: string; actorFirstName: string | null; actorLastName: string | null; targetName: string | null }
+
+export interface AiReplyResult { reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }
+
+/** The watch page's description card. */
+export interface YoutubeDetails {
+  description: string;
+  tags: string[];
+  publishedAt: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  channel: { id: string; title: string; handle: string | null; avatarUrl: string | null; subscribers: number | null } | null;
+}
 export interface YoutubeVideo {
   youtubeVideoId: string;
   title: string;
@@ -62,6 +89,7 @@ export interface YoutubeVideo {
   views: number | null;
 }
 import { envUrl } from "./env-url";
+import { deviceId } from "./device";
 import { decryptEnvelope, decryptMessage, decryptMessages, encryptFile, isRoomE2ee, sendWithE2ee, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "./e2ee";
 
 const API_URL = envUrl(import.meta.env.VITE_API_URL) || "/api/v1";
@@ -188,7 +216,7 @@ async function renewSession(): Promise<RefreshResult> {
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", [CLIENT_HEADER]: CLIENT_HEADER_VALUE },
+      headers: { "Content-Type": "application/json", [CLIENT_HEADER]: CLIENT_HEADER_VALUE, "X-Device-Id": deviceId() },
       body: "{}",
     });
   } catch (error) {
@@ -199,6 +227,8 @@ async function renewSession(): Promise<RefreshResult> {
   if (response.ok) {
     // The rotated pair arrives as Set-Cookie; the body carries no tokens.
     session.markActive();
+    // The open socket still runs on the old token — lib/socketAuth.ts moves it over.
+    window.dispatchEvent(new Event("optima:session-refreshed"));
     return { ok: true, networkError: false };
   }
 
@@ -305,6 +335,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
   headers.set(CLIENT_HEADER, CLIENT_HEADER_VALUE);
+  headers.set("X-Device-Id", deviceId());
   // No Authorization header on purpose: JwtStrategy/JwtRefreshStrategy read the
   // token from the httpOnly cookie only, so `credentials: "include"` below is
   // the whole auth mechanism. Setting the header did nothing but leak a
@@ -416,9 +447,22 @@ export const api = {
     revokeSession: (id: string) => apiFetch(`/auth/sessions/${id}`, { method: "DELETE" }),
     revokeAllSessions: () => apiFetch("/auth/sessions", { method: "DELETE" }),
   },
+  admin: {
+    overview: () => apiFetch<AdminOverview>("/admin/overview"),
+    users: (q = "", filter = "", page = 1) => apiFetch<{ total: number; page: number; items: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q, filter, page: String(page) })}`),
+    blockUser: (id: string, reason?: string) => apiFetch(`/admin/users/${id}/block`, { method: "POST", body: JSON.stringify({ reason }) }),
+    unblockUser: (id: string) => apiFetch(`/admin/users/${id}/unblock`, { method: "POST" }),
+    rooms: (q = "", type = "", filter = "", page = 1) => apiFetch<{ total: number; page: number; items: AdminRoom[] }>(`/admin/rooms?${new URLSearchParams({ q, type, filter, page: String(page) })}`),
+    blockRoom: (id: string, reason?: string) => apiFetch(`/admin/rooms/${id}/block`, { method: "POST", body: JSON.stringify({ reason }) }),
+    unblockRoom: (id: string) => apiFetch(`/admin/rooms/${id}/unblock`, { method: "POST" }),
+    joinRoom: (id: string) => apiFetch(`/admin/rooms/${id}/join`, { method: "POST" }),
+    requests: () => apiFetch<{ chat: AdminChatRequest[]; meeting: AdminMeetingRequest[] }>("/admin/requests"),
+    meetings: () => apiFetch<AdminMeeting[]>("/admin/meetings"),
+    audit: (page = 1) => apiFetch<AdminAuditEntry[]>(`/admin/audit?page=${page}`),
+  },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio">>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { accountVisibility?: "public" | "private"; isSuperAdmin?: boolean; channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -487,7 +531,9 @@ export const api = {
       apiFetch<ChatDraftRecord>(`/chat/rooms/${roomId}/draft`, { method: "PATCH", body: JSON.stringify(body) }),
     updateAppearance: (roomId: string, data: Partial<Pick<UserChatSettings, "backgroundUrl" | "backgroundType" | "theme" | "fontSize" | "compactMode" | "animationEnabled">>) =>
       apiFetch<UserChatSettings>(`/chat/rooms/${roomId}/appearance`, { method: "PATCH", body: JSON.stringify(data) }),
-    roomMembers: (roomId: string, query = "") => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; nickname?: string | null; nameEmoji?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=50`),
+    /** One room by id (an admin's ghost view of a room they are not in). */
+    room: (roomId: string) => apiFetch<ChatRoom>(`/chat/rooms/${roomId}`),
+    roomMembers: (roomId: string, query = "", page = 1) => apiFetch<{ items: Array<{ id: string; publicId: string; firstName: string; lastName: string; username?: string | null; nickname?: string | null; nameEmoji?: string | null; avatarUrl?: string | null; lastSeen?: string | null; role: string }>; total: number }>(`/chat/rooms/${roomId}/members?q=${encodeURIComponent(query)}&limit=20&page=${page}`),
     readReceipts: (roomId: string) => apiFetch<Array<{ userId: string; lastReadSeq: number }>>(`/chat/rooms/${roomId}/read-receipts`),
     presence: (userIds: string[]) => apiFetch<Record<string, { status: string; lastSeenAt: string | null }>>(`/chat/presence?ids=${userIds.map(encodeURIComponent).join(",")}`),
     shared: (roomId: string, kind: "media" | "files" | "links" | "music" | "voice") => apiFetch<Array<{ id?: string; messageId: string; fileName?: string; fileSize?: number; mimeType?: string; storageUrl?: string; content?: string; url?: string[] | string; username?: string; createdAt: string }>>(`/chat/rooms/${roomId}/shared?kind=${kind}&limit=30`),
@@ -545,6 +591,12 @@ export const api = {
     voiceChat: (roomId: string) => apiFetch<RoomVoiceChat | null>(`/chat/rooms/${roomId}/voice-chat`).then((chat) => (chat && "meetingId" in chat ? chat : null)),
     voiceChatJoin: (roomId: string) => apiFetch<RoomVoiceChat>(`/chat/rooms/${roomId}/voice-chat/join`, { method: "POST" }),
     voiceChatEnd: (roomId: string) => apiFetch<{ ended: boolean }>(`/chat/rooms/${roomId}/voice-chat`, { method: "DELETE" }),
+    voiceChatScheduled: (roomId: string) =>
+      apiFetch<{ meetingId: string; title: string; startTime: string; hostId: string; canCancel: boolean } | null>(`/chat/rooms/${roomId}/voice-chat/scheduled`)
+        .then((next) => (next && "meetingId" in next ? next : null)),
+    scheduleVoiceChat: (roomId: string, startTime: string, title?: string) =>
+      apiFetch(`/chat/rooms/${roomId}/voice-chat/schedule`, { method: "POST", body: JSON.stringify({ startTime, title }) }),
+    cancelScheduledVoiceChat: (roomId: string) => apiFetch(`/chat/rooms/${roomId}/voice-chat/scheduled`, { method: "DELETE" }),
     /** Pinned messages of a room, newest pin first (decrypted like the timeline). */
     pins: (roomId: string) => apiFetch<ChatMessage[]>(`/chat/rooms/${roomId}/pins`).then(decryptMessages),
     pin: (messageId: string) => apiFetch(`/chat/messages/${messageId}/pin`, { method: "POST" }),
@@ -553,6 +605,8 @@ export const api = {
       apiFetch(`/chat/messages/${messageId}/reactions`, { method: "POST", body: JSON.stringify({ emoji }) }),
     removeReaction: (messageId: string, emoji: string) =>
       apiFetch<void>(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: "DELETE" }),
+    reactors: (messageId: string) =>
+      apiFetch<Array<{ userId: string; emoji: string; createdAt: string; firstName: string; lastName: string; avatarUrl: string | null; username: string | null }>>(`/chat/messages/${messageId}/reactions`),
     presignAttachment: (roomId: string, file: File) =>
       apiFetch<{ uploadUrl: string; storageKey: string; storageUrl: string; expiresIn: number }>(`/chat/rooms/${roomId}/attachments/presign`, {
         method: "POST",
@@ -575,8 +629,15 @@ export const api = {
     listInvites: (roomId: string) => apiFetch<RoomInvite[]>(`/chat/rooms/${roomId}/invites`),
     revokeInvite: (roomId: string, inviteId: string) =>
       apiFetch<void>(`/chat/rooms/${roomId}/invites/${inviteId}`, { method: "DELETE" }),
+    /** Joins straight away, or — for a private room — files an ask-to-join request. */
     joinByCode: (code: string) =>
-      apiFetch<ChatRoom>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+      apiFetch<ChatRoom | { joinRequested: true; roomId: string; name: string | null; type: ChatRoom["type"]; avatarUrl: string | null }>(`/chat/join/${encodeURIComponent(code)}`, { method: "POST" }),
+    /** The room's standing unlimited invite link (created on first ask) — owner/admin only. */
+    inviteCode: (roomId: string) => apiFetch<{ code: string }>(`/chat/rooms/${roomId}/invite-code`, { method: "POST" }),
+    joinRequests: (roomId: string) =>
+      apiFetch<Array<{ id: string; userId: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; createdAt: string }>>(`/chat/rooms/${roomId}/join-requests`),
+    resolveJoinRequest: (roomId: string, requestId: string, approve: boolean) =>
+      apiFetch<{ userId: string; approved: boolean }>(`/chat/rooms/${roomId}/join-requests/${requestId}/${approve ? "approve" : "reject"}`, { method: "POST" }),
     discussion: (messageId: string) =>
       apiFetch<{ id: string; roomId: string; sourceChannelMessageId: string }>(`/chat/community/posts/${messageId}/discussion`, { method: "POST" }),
     deleteRoom: (roomId: string) =>
@@ -620,8 +681,25 @@ export const api = {
       apiFetch<{ count: number; viewers: Array<{ id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null; viewedAt: string }> | null }>(`/chat/messages/${messageId}/views`),
     leaveRoom: (roomId: string) =>
       apiFetch<{ left: boolean }>(`/chat/rooms/${roomId}/leave`, { method: "POST" }),
-    ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>) =>
-      apiFetch<{ reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history }) }),
+    /** The AI with a picture (multipart: an image is too big for a JSON body). */
+    aiImage: (image: File, message: string, history: Array<{ role: "user" | "model"; text: string }>, conversationId?: string) => {
+      const form = new FormData();
+      form.append("image", image);
+      form.append("message", message);
+      form.append("history", JSON.stringify(history));
+      if (conversationId) form.append("conversationId", conversationId);
+      return apiFetch<AiReplyResult & { conversationId: string; title: string }>("/chat/ai/image", { method: "POST", body: form });
+    },
+    /** Saved to a conversation (started if none given), unless `ephemeral`. */
+    ai: (message: string, history: Array<{ role: "user" | "model"; text: string }>, options: { conversationId?: string; ephemeral?: boolean } = {}) =>
+      apiFetch<AiReplyResult & { conversationId?: string; title?: string }>("/chat/ai", { method: "POST", body: JSON.stringify({ message, history, ...options }) }),
+    aiConversations: () => apiFetch<Array<{ id: string; title: string; updatedAt: string }>>("/chat/ai/conversations"),
+    aiConversation: (id: string) => apiFetch<{ id: string; title: string; messages: Array<{ id: string; role: "user" | "model"; text: string; hasImage: boolean; sources: Array<{ title: string; url: string }>; createdAt: string }> }>(`/chat/ai/conversations/${id}`),
+    renameAiConversation: (id: string, title: string) => apiFetch<{ id: string; title: string }>(`/chat/ai/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+    deleteAiConversation: (id: string) => apiFetch<void>(`/chat/ai/conversations/${id}`, { method: "DELETE" }),
+    aiMemory: () => apiFetch<{ content: string; enabled: boolean; updatedAt: string | null }>("/chat/ai/memory"),
+    saveAiMemory: (patch: { content?: string; enabled?: boolean }) =>
+      apiFetch<{ content: string; enabled: boolean; updatedAt: string | null }>("/chat/ai/memory", { method: "PATCH", body: JSON.stringify(patch) }),
   },
   meetings: {
     iceServers: () => apiFetch<RTCIceServer[]>("/meetings/ice-servers"),
@@ -689,8 +767,8 @@ export const api = {
   },
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
-    search: (params: { q?: string; lang: string; subject: string; page: number }) =>
-      apiFetch<{ total: number; items: LibraryBook[]; page: number; hasMore: boolean }>(`/library/search?${new URLSearchParams({ q: params.q ?? "", lang: params.lang, subject: params.subject, page: String(params.page) })}`),
+    search: (params: { q?: string; lang: string; subject: string; page: number; readable?: boolean }) =>
+      apiFetch<{ total: number; items: LibraryBook[]; page: number; hasMore: boolean }>(`/library/search?${new URLSearchParams({ q: params.q ?? "", lang: params.lang, subject: params.subject, page: String(params.page), readable: params.readable === false ? "0" : "1" })}`),
     reviews: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`),
     saveReview: (bookKey: string, rating: number, body: string) =>
       apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "PUT", body: JSON.stringify({ rating, body }) }),
@@ -704,6 +782,10 @@ export const api = {
     like: (bookKey: string, book?: LibraryBook) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "PUT", body: JSON.stringify({ book }) }),
     unlike: (bookKey: string) => apiFetch<{ liked: boolean; likes: number }>(`/library/books/${encodeURIComponent(bookKey)}/like`, { method: "DELETE" }),
     deleteReview: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "DELETE" }),
+  },
+  realtime: {
+    /** Moves this tab's open socket onto the freshly refreshed session cookie. */
+    renew: (socketId: string) => apiFetch<{ renewed: boolean }>("/realtime/renew", { method: "POST", body: JSON.stringify({ socketId }) }),
   },
   /** Our own pages for YouTube videos and library books (/youtube/:slug, /library/:slug). */
   media: {
@@ -722,6 +804,7 @@ export const api = {
   youtube: {
     status: () => apiFetch<{ enabled: boolean }>("/youtube/status"),
     /** "For you": vetted (nothing off-topic for Optima) and ranked for me. */
+    details: (videoId: string) => apiFetch<YoutubeDetails>(`/youtube/videos/${encodeURIComponent(videoId)}/details`),
     feed: (page = 1) => apiFetch<{ items: YoutubeVideo[]; hasMore: boolean }>(`/youtube/feed?page=${page}`),
     search: (q: string, pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/search?${new URLSearchParams({ q, ...(pageToken ? { pageToken } : {}) })}`),
     popular: (pageToken?: string) => apiFetch<{ items: YoutubeVideo[]; nextPageToken: string | null }>(`/youtube/popular${pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : ""}`),

@@ -36,6 +36,53 @@ export class ChatRealtimeBridge {
     }
   }
 
+  /** An Optima admin blocked an account: cut every socket it has open. */
+  @OnEvent('admin.user_blocked')
+  onUserBlocked(payload: { userId: string }) {
+    try {
+      this.gateway.server?.to(`user:${payload.userId}`).emit('account:blocked', {});
+      this.gateway.server?.in(`user:${payload.userId}`).disconnectSockets(true);
+    } catch (err) {
+      this.logger.warn(`Failed to disconnect blocked user: ${(err as Error).message}`);
+    }
+  }
+
+  /** A group/channel was (un)blocked: members' clients reload it. */
+  @OnEvent('admin.room_blocked')
+  onRoomBlocked(payload: { roomId: string; blocked: boolean }) {
+    this.toRoom(payload.roomId, 'room_settings_updated', { roomId: payload.roomId, blocked: payload.blocked });
+  }
+
+  /** Someone asked to join a private room: tell its owner and admins. */
+  @OnEvent('chat.join_request_created')
+  async onJoinRequestCreated(payload: { roomId: string; userId: string }) {
+    try {
+      const admins = await this.dataSource.query<{ userId: string }>(
+        `SELECT user_id AS "userId" FROM chat_members
+          WHERE room_id = $1 AND left_at IS NULL AND status = 'active' AND role IN ('owner', 'admin')
+         UNION
+         SELECT created_by FROM chat_rooms WHERE id = $1 AND created_by IS NOT NULL`,
+        [payload.roomId],
+      );
+      if (admins.length)
+        this.gateway.server
+          ?.to(admins.map((admin) => `user:${admin.userId}`))
+          .emit('chat:join_request', payload);
+    } catch (err) {
+      this.logger.warn(`Failed to announce join request: ${(err as Error).message}`);
+    }
+  }
+
+  /** The requester hears the answer; an approval also refreshes their room list. */
+  @OnEvent('chat.join_request_resolved')
+  onJoinRequestResolved(payload: { roomId: string; userId: string; approved: boolean }) {
+    try {
+      this.gateway.server?.to(`user:${payload.userId}`).emit('chat:join_request_resolved', payload);
+    } catch (err) {
+      this.logger.warn(`Failed to announce join decision: ${(err as Error).message}`);
+    }
+  }
+
   @OnEvent('chat.message_updated')
   onMessageUpdated(payload: {
     roomId: string;

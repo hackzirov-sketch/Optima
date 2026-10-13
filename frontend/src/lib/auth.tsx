@@ -136,7 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // gating both on this floor is enough — it doesn't touch apiFetch's
     // reactive 401 retry, which always needs to run immediately regardless
     // of timing.
-    const MIN_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+    // Well inside the access token's 15–20 minute life: refreshing at the same
+    // interval as the expiry let background-tab timer drift lose the race.
+    const MIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
     let lastRefreshAt = 0;
     const refresh = (force = false) => {
       if (!userRef.current) return;

@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../common/super-admin';
 import {
   Injectable,
   NotFoundException,
@@ -342,7 +343,7 @@ export class MeetingsService {
         code: ErrorCode.MEETING_NOT_FOUND,
         message: 'Meeting not found',
       });
-    if (m.hostId !== userId)
+    if (m.hostId !== userId && !isSuperAdmin(userId))
       throw new ForbiddenException({
         code: ErrorCode.MEETING_HOST_ONLY,
         message: 'Only the host can perform this action',
@@ -525,8 +526,10 @@ export class MeetingsService {
       `INSERT INTO meeting_participants (meeting_id, user_id, role, joined_at)
        VALUES ($1, $2, $3::meeting_participant_role_enum, now())
        ON CONFLICT (meeting_id, user_id)
-       DO UPDATE SET joined_at = now(), left_at = NULL`,
-      [meetingId, userId, MeetingParticipantRole.PARTICIPANT],
+       DO UPDATE SET joined_at = now(), left_at = NULL,
+                     role = CASE WHEN $4 THEN 'co_host'::meeting_participant_role_enum ELSE meeting_participants.role END`,
+      // A super admin is in every meeting as a co-host (moderation controls).
+      [meetingId, userId, isSuperAdmin(userId) ? MeetingParticipantRole.CO_HOST : MeetingParticipantRole.PARTICIPANT, isSuperAdmin(userId)],
     );
     return this.getOne(meetingId, userId);
   }
@@ -805,7 +808,7 @@ export class MeetingsService {
         message: 'Meeting not found',
       });
     }
-    if (meeting.hostId === userId) return;
+    if (meeting.hostId === userId || isSuperAdmin(userId)) return;
 
     const rows = await this.dataSource.query<{ role: string }>(
       `SELECT role FROM meeting_participants
@@ -898,6 +901,15 @@ export class MeetingsService {
         removeOnComplete: true,
         removeOnFail: true,
       },
+    );
+  }
+
+  /** Starts a scheduled group/channel video chat at its time (queued, survives restarts). */
+  async scheduleRoomVoiceStart(meetingId: string, delayMs: number) {
+    await this.lifecycleQueue.add(
+      'start-room-voice-chat',
+      { meetingId },
+      { delay: Math.max(0, delayMs), jobId: `voice-start_${meetingId}`, removeOnComplete: true, removeOnFail: true },
     );
   }
 

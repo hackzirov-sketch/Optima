@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import {
   Injectable,
   NotFoundException,
@@ -44,6 +45,8 @@ export interface MemberProfile {
   avatarUrl: string | null;
   nameEmoji: string | null;
   publicId: number;
+  /** 'private' accounts don't show their username to others in the UI. */
+  accountVisibility?: string;
 }
 
 export interface ChatRoomDto {
@@ -74,6 +77,8 @@ export interface ChatRoomDto {
    * input to everyone and let the send fail.
    */
   myRole: 'member' | 'admin' | 'owner';
+  /** Blocked by an Optima admin: read-only shell, nothing loads. */
+  blocked?: boolean;
   isMuted: boolean;
   memberCount: number;
   backgroundUrl: string | null;
@@ -88,6 +93,8 @@ export interface ChatRoomDto {
     id: string;
     content: string | null;
     e2ee: E2eeEnvelope | null;
+    /** First attachment's type, so a voice note or photo still has a preview. */
+    attachmentMime?: string | null;
     senderId: string;
     senderName: string | null;
     createdAt: Date;
@@ -134,6 +141,7 @@ export class ChatRoomService {
     const rows = await this.dataSource.query<any>(
       `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
               m.created_at AS "createdAt",
+              (SELECT a.mime_type FROM message_attachments a WHERE a.message_id = m.id LIMIT 1) AS "attachmentMime",
               u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
        FROM chat_messages m
        LEFT JOIN users u ON u.id = m.sender_id
@@ -145,6 +153,7 @@ export class ChatRoomService {
     return {
       id: msg.id,
       ...this.lastMessageBody(msg),
+      attachmentMime: msg.attachmentMime ?? null,
       senderId: msg.senderId,
       senderName: msg.senderFirstName
         ? `${msg.senderFirstName ?? ''} ${msg.senderLastName ?? ''}`.trim()
@@ -171,7 +180,8 @@ export class ChatRoomService {
       `SELECT cm.user_id AS "userId", cm.last_read_seq AS "lastReadSeq", cm.status,
               cm.role, cm.is_muted AS "isMuted",
               u.first_name AS "firstName", u.last_name AS "lastName",
-              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId"
+              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId",
+              u.account_visibility AS "accountVisibility"
        FROM chat_members cm
        JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = $1 AND cm.left_at IS NULL`,
@@ -188,6 +198,11 @@ export class ChatRoomService {
       ? await this.fetchLastMessage(room.lastMessageId)
       : null;
 
+    // Channel subscribers are private to its admins (the count stays public).
+    const visibleMembers =
+      room.type === 'channel' && !['owner', 'admin'].includes(myMembership?.role ?? '')
+        ? []
+        : members;
     return {
       id: room.id,
       type: room.type,
@@ -204,8 +219,8 @@ export class ChatRoomService {
       createdById: room.createdById,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
-      memberIds: members.map((m) => m.userId),
-      memberProfiles: members.map((m) => ({
+      memberIds: visibleMembers.map((m) => m.userId),
+      memberProfiles: visibleMembers.map((m) => ({
         id: m.userId,
         firstName: m.firstName,
         lastName: m.lastName,
@@ -213,12 +228,15 @@ export class ChatRoomService {
         nickname: m.nickname ?? null,
         avatarUrl: m.avatarUrl ?? null,
         nameEmoji: m.nameEmoji ?? null,
+        accountVisibility: (m as { accountVisibility?: string }).accountVisibility,
         publicId: m.publicId,
       })),
       memberStatus: (myMembership?.status as 'pending' | 'active') ?? 'active',
-      myRole:
-        (myMembership?.role as 'member' | 'admin' | 'owner' | undefined) ??
-        'member',
+      myRole: isSuperAdmin(userId)
+        ? 'owner'
+        : (myMembership?.role as 'member' | 'admin' | 'owner' | undefined) ??
+          'member',
+      blocked: Boolean((room as { blockedAt?: Date | null }).blockedAt),
       isMuted: myMembership?.isMuted ?? false,
       memberCount: members.length,
       backgroundUrl: room.backgroundUrl ?? null,
@@ -301,7 +319,8 @@ export class ChatRoomService {
     }>(
       `SELECT cm.room_id AS "roomId", cm.user_id AS "userId",
               u.first_name AS "firstName", u.last_name AS "lastName",
-              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId"
+              u.username, u.nickname, u.avatar_url AS "avatarUrl", u.name_emoji AS "nameEmoji", u.public_id AS "publicId",
+              u.account_visibility AS "accountVisibility"
        FROM chat_members cm
        JOIN users u ON u.id = cm.user_id
        WHERE cm.room_id = ANY($1::uuid[]) AND cm.left_at IS NULL`,
@@ -324,6 +343,7 @@ export class ChatRoomService {
         nickname: m.nickname ?? null,
         avatarUrl: m.avatarUrl ?? null,
         nameEmoji: m.nameEmoji ?? null,
+        accountVisibility: (m as { accountVisibility?: string }).accountVisibility,
         publicId: m.publicId,
       });
     }
@@ -335,6 +355,7 @@ export class ChatRoomService {
         ? await this.dataSource.query(
             `SELECT m.id, m.content, m.content_json AS "contentJson", m.is_e2ee AS "isE2ee", m.sender_id AS "senderId",
                     m.created_at AS "createdAt",
+                    (SELECT a.mime_type FROM message_attachments a WHERE a.message_id = m.id LIMIT 1) AS "attachmentMime",
                     u.first_name AS "senderFirstName", u.last_name AS "senderLastName"
              FROM chat_messages m
              LEFT JOIN users u ON u.id = m.sender_id
@@ -344,6 +365,8 @@ export class ChatRoomService {
         : [];
     const lastMsgMap = new Map(lastMessages.map((m) => [m.id, m]));
 
+    const hideSubscribers = (room: { type: string; myRole?: string | null }) =>
+      room.type === 'channel' && !['owner', 'admin'].includes(room.myRole ?? '');
     return myRooms.map((room) => {
       const roomMemberIds = membersByRoom.get(room.id) ?? [];
       const unreadCount = Math.max(0, room.messageSeq - room.myLastReadSeq);
@@ -367,11 +390,14 @@ export class ChatRoomService {
         createdById: room.createdById,
         createdAt: room.createdAt,
         updatedAt: room.updatedAt,
-        memberIds: roomMemberIds,
-        memberProfiles: profilesByRoom.get(room.id) ?? [],
+        // Channel subscribers are private to its admins (count stays public).
+        memberIds: hideSubscribers(room) ? [] : roomMemberIds,
+        memberProfiles: hideSubscribers(room) ? [] : profilesByRoom.get(room.id) ?? [],
         memberStatus: (room.myStatus as 'pending' | 'active') ?? 'active',
-        myRole:
-          (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
+        myRole: isSuperAdmin(userId)
+          ? 'owner'
+          : (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
+        blocked: Boolean((room as { blockedAt?: Date | null }).blockedAt),
         isMuted: room.myIsMuted ?? false,
         memberCount: roomMemberIds.length,
         backgroundUrl: room.backgroundUrl ?? null,
@@ -386,6 +412,7 @@ export class ChatRoomService {
           ? {
               id: lastMsg.id,
               ...this.lastMessageBody(lastMsg),
+              attachmentMime: lastMsg.attachmentMime ?? null,
               senderId: lastMsg.senderId,
               senderName: lastMsg.senderFirstName
                 ? `${lastMsg.senderFirstName ?? ''} ${lastMsg.senderLastName ?? ''}`.trim()
@@ -551,6 +578,8 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_PUBLIC,
         message: 'Room is not public',
       });
+    if ((room as { blockedAt?: Date | null }).blockedAt)
+      throw new ForbiddenException({ code: 'ROOM_BLOCKED', message: 'This chat has been blocked by Optima' });
 
     // "Public" inside a group means public *to that group* — which is
     // exactly how discoverRooms and listPublicRooms present it. This endpoint

@@ -2,6 +2,12 @@ import {
   ArrowDown,
   ArrowLeft,
   AtSign,
+  Ban,
+  BarChart3,
+  BookOpen,
+  GraduationCap,
+  Youtube,
+  CalendarClock,
   ChevronRight,
   Image as ImageIcon,
   Info,
@@ -15,6 +21,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   FileText,
   Globe,
   Hash,
@@ -91,6 +98,10 @@ import { useAuth }                                                          from
 import { emitWithAck, getSocket, isServerRejection }                        from "../lib/socket";
 import { DRAFT_CLIENT_ID, openDraft, saveDraft } from "../lib/drafts";
 import { decryptEnvelope, decryptMessage, decryptMessages, invalidateAllRooms, isRoomE2ee, invalidateRoom, sendWithE2ee, serveRoomKeys, UNDECRYPTABLE_TEXT, type E2eeEnvelope, type OutgoingAttachment } from "../lib/e2ee";
+import { openProfile } from "../lib/profileModal";
+import { getActiveMeeting } from "../lib/activeMeeting";
+import { AccountMenu } from "../components/AccountMenu";
+import { ReactorsPopover } from "../components/ReactorsPopover";
 import { formatPresenceLabel, initPresence, isPresenceActive, usePresence } from "../lib/presence";
 import { setUnreadTotal }                                                   from "../lib/chatUnread";
 import { type TranslateFn, useI18n }                                        from "../lib/i18n/i18n";
@@ -241,7 +252,7 @@ type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: strin
 
 export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
   // Workspaces were renamed to groups; the page still calls the current one `workspace`.
-  const { user, group: workspace } = useAuth();
+  const { user, group: workspace, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -331,6 +342,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  // New messages that arrived while the reader was scrolled up (the badge on the ↓ button).
+  const [unseenBelow, setUnseenBelow] = useState(0);
+  const lastSeenMessageId = useRef<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"group" | "channel" | "direct">("group");
@@ -376,6 +390,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [invitingWorkspace, setInvitingWorkspace] = useState(false);
   const [roomInfoOpen, setRoomInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // "Who reacted" list, opened by right-click or press-and-hold on a reaction chip.
+  // Pending ask-to-join requests of the open room (admins only) — the banner.
+  const [joinRequestsBar, setJoinRequestsBar] = useState<{ roomId: string; items: Awaited<ReturnType<typeof api.chat.joinRequests>> } | null>(null);
+  const [hiddenRequestBars, setHiddenRequestBars] = useState<Record<string, number>>({});
+  const [channelSettingsSection, setChannelSettingsSection] = useState<"requests" | undefined>(undefined);
+  const [reactorsFor, setReactorsFor] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const reactionHold = useRef<{ timer: number; fired: boolean } | null>(null);
   const [roomSettingsOpen, setRoomSettingsOpen] = useState(false);
   const [roomSettingsName, setRoomSettingsName] = useState("");
   const [roomSettingsDescription, setRoomSettingsDescription] = useState("");
@@ -425,6 +446,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const catalogNav = useRef<HTMLElement>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const catalogSwipe = useRef<{ x: number; y: number; at: number } | null>(null);
+  const [catalogSwipeDir, setCatalogSwipeDir] = useState<"next" | "prev" | null>(null);
   const [catalogIndicator, setCatalogIndicator] = useState({ left: 0, width: 0 });
   const messagesEnd = useRef<HTMLDivElement>(null);
   const messageList = useRef<HTMLDivElement>(null);
@@ -510,11 +534,45 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setPinnedIndex((index) => (index + 1) % Math.max(1, pinned.length));
   }
   // ── Group / channel video chat ──
+  const [voiceScheduled, setVoiceScheduled] = useState<Awaited<ReturnType<typeof api.chat.voiceChatScheduled>> & { roomId?: string } | null>(null);
+  const [voiceMenuOpen, setVoiceMenuOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const loadRoomVoice = useCallback((roomId: string) => {
     api.chat.voiceChat(roomId).then((chat) => setRoomVoice(chat)).catch(() => setRoomVoice(null));
+    api.chat.voiceChatScheduled(roomId).then((next) => setVoiceScheduled(next ? { ...next, roomId } : null)).catch(() => setVoiceScheduled(null));
   }, []);
+  async function scheduleVoice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRoom) return;
+    const data = new FormData(event.currentTarget);
+    const when = new Date(String(data.get("startTime") || ""));
+    setScheduling(true);
+    try {
+      await api.chat.scheduleVoiceChat(selectedRoom.id, when.toISOString(), String(data.get("title") || "") || undefined);
+      show(t("voiceChat.scheduleSaved"));
+      setScheduleOpen(false);
+      loadRoomVoice(selectedRoom.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("voiceChat.joinFailed"), "error");
+    } finally {
+      setScheduling(false);
+    }
+  }
+  async function cancelScheduledVoice() {
+    if (!selectedRoom) return;
+    try {
+      await api.chat.cancelScheduledVoiceChat(selectedRoom.id);
+      show(t("voiceChat.scheduleCancelled"));
+      loadRoomVoice(selectedRoom.id);
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("voiceChat.joinFailed"), "error");
+    }
+  }
   useEffect(() => {
     setRoomVoice(null);
+    setVoiceScheduled(null);
+    setVoiceMenuOpen(false);
     if (!selectedId || !selectedRoom || selectedRoom.type === "direct" || selectedRoom.memberStatus === "pending") return;
     loadRoomVoice(selectedId);
     // Participant counts move as people come and go; the banner stays roughly current.
@@ -523,6 +581,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }, [selectedId, selectedRoom?.type, selectedRoom?.memberStatus, loadRoomVoice]); // eslint-disable-line react-hooks/exhaustive-deps
   function joinRoomVoice(room: ChatRoom) {
     if (voice?.roomId === room.id) { setVoiceMinimized(false); return; }
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     if (voice) voiceBar?.leave();
     setVoiceMinimized(false);
     setVoice({ roomId: room.id, title: roomTitle(room), inviteLink: `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}` });
@@ -574,6 +633,15 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     ? selectedRoom.memberIds.map((id) => memberMap.get(id)).find((entry) => entry?.id !== user?.id) || null
     : null;
   const peerPresence = usePresence(detailPeer?.id);
+  // The peer's bio and public channels for the DM info card (Telegram shows both).
+  const [peerCard, setPeerCard] = useState<Awaited<ReturnType<typeof api.users.publicProfile>> | null>(null);
+  useEffect(() => {
+    setPeerCard(null);
+    if (!detailsOpen || !detailPeer?.id) return;
+    let cancelled = false;
+    api.users.publicProfile(detailPeer.id).then((profile) => { if (!cancelled) setPeerCard(profile); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [detailsOpen, detailPeer?.id]);
   const sectionLabel = (kind: "media" | "files" | "links" | "music" | "voice") => ({
     media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab"),
   })[kind];
@@ -583,6 +651,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     </button>
     {(["media", "files", "links", "voice", "music"] as const).map(kind => <button key={kind} type="button" aria-pressed={detailsSection === kind} className={detailsSection === kind ? "active" : ""} onClick={() => { setDetailsSection(kind); setDetailsTab(kind); }}>{sectionLabel(kind)}</button>)}
   </nav>;
+  /** A last message with no text (a voice note, a photo…) still says what it was. */
+  const attachmentPreview = (mime?: string | null) =>
+    !mime ? t("chat.previewMessage")
+      : mime.startsWith("audio/") ? t("chat.previewVoice")
+      : mime.startsWith("image/") ? t("chat.previewPhoto")
+      : mime.startsWith("video/") ? t("chat.previewVideo")
+      : t("chat.previewFile");
   const roomLink = (room: ChatRoom) =>
     `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}`;
   async function copyText(text: string) {
@@ -790,7 +865,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setAiThinking(true);
     try {
       const history = next.slice(-12, -1).map(({ role, text }) => ({ role, text }));
-      const result = await api.chat.ai(prompt, history);
+      const result = await api.chat.ai(prompt, history, { ephemeral: true });
       const list = aiMessageList.current;
       aiShouldScroll.current = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 120;
       const completed = [...next, {
@@ -920,6 +995,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       isReadOnly: room!.isReadOnly || false, memberStatus: "active" as const
     }));
     const mergedRooms = [...systemRooms, ...nextRooms.filter((room) => !systemRooms.some((system) => system.id === room.id))];
+    // An admin opening a room they are not in (from the admin site) looks in
+    // as a ghost: it is fetched on its own and shown, but they are no member.
+    const wanted = preferredId || selectedId;
+    if (user?.isSuperAdmin && wanted && !mergedRooms.some((room) => room.id === wanted)) {
+      const ghost = await api.chat.room(wanted).catch(() => null);
+      if (ghost && ghost.type !== "direct") mergedRooms.push({ ...ghost, ghost: true, memberIds: ghost.memberIds || [], memberProfiles: ghost.memberProfiles || [], unreadCount: 0 });
+    }
     setRooms(mergedRooms);
     setMembers(nextMembers);
     const target = preferredId || selectedId;
@@ -1102,6 +1184,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           lastMessage: {
             id: message.id,
             content: message.content,
+            attachmentMime: message.attachments?.[0]?.mimeType ?? null,
             senderId: message.senderId,
             createdAt: message.createdAt
           }
@@ -1191,7 +1274,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     };
     // Another member device published a new room key.
     const onRoomKeyRotated = (data: { roomId: string }) => invalidateRoom(data.roomId);
-    const onRoomVoiceChat = (data: { roomId: string }) => {
+    const onRoomVoiceChat = (data: { roomId: string; started?: boolean; scheduled?: boolean }) => {
+      if (data.started && data.scheduled) show(t("voiceChat.startedNow"));
       if (data.roomId === selectedId) loadRoomVoice(data.roomId);
     };
     const onMessagePinned = (data: { roomId: string; messageId: string; pinned: boolean }) => {
@@ -1258,6 +1342,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     socket.on("message_pinned", onMessagePinned);
     socket.on("room_voice_chat", onRoomVoiceChat);
     socket.on("room_keys_shared", onRoomKeysShared);
+    // Ask-to-join: admins hear about a new request; the requester hears the answer.
+    const onJoinRequest = () => show(t("chat.joinRequestToast"));
+    const onJoinResolved = (payload: { approved: boolean }) => {
+      show(t(payload.approved ? "chat.joinApprovedToast" : "chat.joinDeclinedToast"), payload.approved ? "success" : "error");
+      if (payload.approved) void loadRooms();
+    };
+    socket.on("chat:join_request", onJoinRequest);
+    // An Optima admin blocked this account: say so and sign out.
+    const onAccountBlocked = () => { show(t("admin.accountBlocked"), "error"); void logout(); };
+    socket.on("account:blocked", onAccountBlocked);
+    socket.on("chat:join_request_resolved", onJoinResolved);
     if (socket.connected) onConnect();
     return () => {
       socket.off("connect", onConnect);
@@ -1278,6 +1373,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("message_pinned", onMessagePinned);
       socket.off("room_voice_chat", onRoomVoiceChat);
       socket.off("room_keys_shared", onRoomKeysShared);
+      socket.off("chat:join_request", onJoinRequest);
+      socket.off("account:blocked", onAccountBlocked);
+      socket.off("chat:join_request_resolved", onJoinResolved);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace, selectedId, selectedRoom?.memberStatus, user?.id, show]);
@@ -1289,6 +1387,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       if (selectedId && socket.connected) socket.emit("leave_room", { roomId: selectedId });
     };
   }, [selectedId, selectedRoom?.memberStatus]);
+
+  // Count what lands below while the reader is up in the history — they are
+  // not yanked down; the ↓ button shows how many are waiting instead.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const previous = lastSeenMessageId.current;
+    lastSeenMessageId.current = last?.id ?? null;
+    if (!last || !previous || last.id === previous || preserveMessageScroll.current) return;
+    if (!shouldStickToMessageBottom.current && last.senderId !== user?.id) setUnseenBelow((count) => count + 1);
+  }, [messages, user?.id]);
+  useEffect(() => { setUnseenBelow(0); lastSeenMessageId.current = null; }, [selectedId]);
 
   useEffect(() => {
     if (preserveMessageScroll.current) {
@@ -1520,7 +1629,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!prompt || aiThinking) return;
     setAiThinking(true);
     try {
-      const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), []);
+      const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), [], { ephemeral: true });
       setDraft(result.reply);
       setAiAssistPrompt("");
     } catch (error) {
@@ -1625,6 +1734,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const touch = event.touches[0];
     swipeGesture.current = { id: message.id, startX: touch.clientX, startY: touch.clientY, horizontal: false };
     if (swipeResetTimer.current) window.clearTimeout(swipeResetTimer.current);
+    // Press and hold opens the message menu (reply, copy, forward, react…) —
+    // iOS never fires contextmenu for a long press, so it is timed here.
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+    const { clientX, clientY } = touch;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      if (swipeGesture.current?.id !== message.id || swipeGesture.current.horizontal) return;
+      swipeGesture.current = null;
+      navigator.vibrate?.(12);
+      openMessageMenu(message.id, clientX, clientY);
+    }, 480);
   }
 
   function moveReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
@@ -1633,6 +1753,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     const touch = event.touches[0];
     const dx = touch.clientX - gesture.startX;
     const dy = touch.clientY - gesture.startY;
+    if (longPressTimer.current && Math.hypot(dx, dy) > 8) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     if (!gesture.horizontal) {
       if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
         swipeGesture.current = null;
@@ -1651,6 +1772,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }
 
   function finishReplySwipe(message: ChatMessage) {
+    if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     const active = swipeCurrent.current?.id === message.id ? swipeCurrent.current : null;
     swipeGesture.current = null;
     swipeCurrent.current = null;
@@ -1857,8 +1979,20 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     });
   }
 
+  // "Call" on a profile card opens the DM and asks for a call once it is up.
+  useEffect(() => {
+    if (!selectedRoom || selectedRoom.type !== "direct" || !detailPeer) return;
+    let pending: string | null = null;
+    try { pending = sessionStorage.getItem("optima:pending-call"); } catch { /* storage off */ }
+    if (pending !== "audio" && pending !== "video") return;
+    try { sessionStorage.removeItem("optima:pending-call"); } catch { /* storage off */ }
+    void startCall(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRoom?.id, detailPeer?.id]);
+
   async function startCall(kind: "audio" | "video") {
     if (!workspace || !selectedRoom || startingCall) return;
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     if (selectedRoom.type !== "direct" || !detailPeer) {
       show(t("chat.directCallOnlyPersonal"), "error");
       return;
@@ -2171,6 +2305,44 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
    */
   const canAdminister = (room?: ChatRoom | null) =>
     Boolean(room) && (room!.createdById === user?.id || room!.myRole === "owner" || room!.myRole === "admin");
+
+  // The link the info drawer shares. A public room with a username (slug)
+  // shows that; anything else shows its invite link — to admins only, since
+  // for a private room following it files an ask-to-join request. The bare
+  // numeric /g/<publicId> address is never shown.
+  const [drawerInviteLink, setDrawerInviteLink] = useState<{ roomId: string; url: string } | null>(null);
+  const publicSlugLink = selectedRoom && selectedRoom.type !== "direct" && selectedRoom.scope === "public" && selectedRoom.slug ? roomLink(selectedRoom) : null;
+  // Private groups/channels show no link here at all — joining them goes
+  // through an invite the admin sends from the Invite screen.
+  const drawerRoomId = detailsOpen && selectedRoom && selectedRoom.type !== "direct" && !publicSlugLink && selectedRoom.scope === "public" && canAdminister(selectedRoom) ? selectedRoom.id : null;
+  useEffect(() => {
+    if (!drawerRoomId || drawerInviteLink?.roomId === drawerRoomId) return;
+    let cancelled = false;
+    void api.chat.inviteCode(drawerRoomId)
+      .then(({ code }) => { if (!cancelled) setDrawerInviteLink({ roomId: drawerRoomId, url: new URL(`/join/chat/${code}`, window.location.origin).toString() }); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [drawerRoomId, drawerInviteLink?.roomId]);
+  const drawerLink = publicSlugLink
+    ? { url: publicSlugLink, label: t("chat.publicLinkLabel") }
+    : drawerInviteLink && drawerInviteLink.roomId === drawerRoomId ? { url: drawerInviteLink.url, label: t("chat.inviteLinkLabel") } : null;
+
+  const requestsRoomId = selectedRoom && selectedRoom.type !== "direct" && canAdminister(selectedRoom) ? selectedRoom.id : null;
+  const loadJoinRequests = useCallback((roomId: string) => {
+    api.chat.joinRequests(roomId)
+      .then((items) => setJoinRequestsBar({ roomId, items }))
+      .catch(() => setJoinRequestsBar(null));
+  }, []);
+  useEffect(() => {
+    if (!requestsRoomId) { setJoinRequestsBar(null); return; }
+    loadJoinRequests(requestsRoomId);
+    const socket = getSocket();
+    const onRequest = (payload: { roomId: string }) => { if (payload.roomId === requestsRoomId) loadJoinRequests(requestsRoomId); };
+    socket.on("chat:join_request", onRequest);
+    return () => { socket.off("chat:join_request", onRequest); };
+  }, [requestsRoomId, loadJoinRequests]);
+  const pendingRequests = joinRequestsBar && joinRequestsBar.roomId === requestsRoomId ? joinRequestsBar.items : [];
+  const showRequestsBar = pendingRequests.length > 0 && (hiddenRequestBars[requestsRoomId ?? ""] ?? 0) < pendingRequests.length;
 
   const canPostIn = (room: ChatRoom) => {
     if (room.isReadOnly) return false;
@@ -2508,7 +2680,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     <RoomAvatar room={room} size="sm" />}
                   <span className="chat-mini-copy">
                   <span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span>
-                  <span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                  <span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : room.lastMessage ? attachmentPreview(room.lastMessage.attachmentMime) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                     <b>{room.unreadCount}</b>}</span>
                 </span>
                 </button>
@@ -2564,8 +2736,10 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         </div>}
       <aside className="chat-sidebar">
         <header className="chat-sidebar-header">
-          <button className="icon-button chat-home-back" onClick={() => navigate("/")}
+          <button className="icon-button chat-home-back" onClick={() => { let back = "/meetings"; try { back = sessionStorage.getItem("optima:last-page") || back; } catch { /* storage off */ } navigate(back); }}
                   aria-label={t("chat.backToHomeAria")} title={t("chat.homeTitle")}><ArrowLeft size={20} /></button>
+          {/* No top bar on the chat screen: the account menu lives here. */}
+          <AccountMenu align="start" />
           <div><p className="eyebrow">Workspace</p><h1>{t("chat.messagesTitle")}</h1></div>
           <div className="tg-new-anchor" ref={newMenuRef}>
             <button className={`icon-button icon-button-dark ${newMenuOpen ? "active" : ""}`} onClick={() => setNewMenuOpen((value) => !value)}
@@ -2595,7 +2769,22 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               size={18} /><span>{item.label}</span>{item.count > 0 && <b>{item.count}</b>}</button>;
           })}
         </nav>
-        <div className="room-list room-list-transition" key={catalog}>
+        <div className="room-list room-list-transition" key={catalog}
+             onTouchStart={(event) => { const touch = event.touches[0]; catalogSwipe.current = { x: touch.clientX, y: touch.clientY, at: Date.now() }; }}
+             onTouchEnd={(event) => {
+               // A deliberate sideways swipe flips to the next/previous tab
+               // (All · Direct · Groups · Channels · Bots); vertical scrolling is untouched.
+               const start = catalogSwipe.current;
+               catalogSwipe.current = null;
+               if (!start) return;
+               const touch = event.changedTouches[0];
+               const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+               if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6 || Date.now() - start.at > 700) return;
+               const ids = catalogItems.map((item) => item.id);
+               const next = ids[ids.indexOf(catalog) + (dx < 0 ? 1 : -1)];
+               if (next) { setCatalogSwipeDir(dx < 0 ? "next" : "prev"); setCatalog(next); }
+             }}
+             data-swipe={catalogSwipeDir}>
           {loadingRooms && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
           {!loadingRooms && catalog === "bot" &&
             <button className={`room-item ai-room-item ${aiOpen ? "active" : ""}`} onClick={chooseAi}><span
@@ -2615,7 +2804,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                       className={`room-item ${room.id === selectedId ? "active" : ""} ${room.unreadCount > 0 ? "unread" : ""}`}
                       onClick={() => chooseRoom(room.id)} onContextMenu={(event) => showRoomContext(event, room)}>
                 {room.type === "direct" ? <DirectRoomAvatar peer={other} /> : <RoomAvatar room={room} />}
-                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
+                <span className="room-copy"><span><strong>{roomTitle(room)}</strong><time>{room.lastMessage ? formatTime(room.lastMessage.createdAt) : ""}</time></span><span><small>{drafts[room.id] && room.id !== selectedId ? <><b className="room-draft">{t("chat.draftLabel")}</b> {drafts[room.id].replace(/\s+/g, " ")}</> : room.lastMessage?.content ? renderMessageContent(room.lastMessage.content) : room.lastMessage ? attachmentPreview(room.lastMessage.attachmentMime) : (room.memberStatus === "pending" ? t("chat.invitePending") : t("chat.noMessagesYet"))}</small>{room.unreadCount > 0 &&
                   <b>{room.unreadCount}</b>}</span></span>
               </button>
             );
@@ -2653,6 +2842,19 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             ))}
           </>}
         </div>
+        {/* The rest of Optima, one tap away (the dock is hidden on the chat screen). */}
+        <nav className="chat-elsewhere" aria-label={t("shell.mainNav")}>
+          {([
+            ["/meetings", Video, "meetings"],
+            ["/ai", Sparkles, "ai"],
+            ["/youtube", Youtube, "youtube"],
+            ["/library", BookOpen, "library"],
+            ["/education", GraduationCap, "education"],
+            ["/statistics", BarChart3, "statistics"],
+          ] as const).map(([href, Icon, key]) => (
+            <button key={href} type="button" onClick={() => navigate(href)} title={t(`shell.${key}`)} aria-label={t(`shell.${key}`)}><Icon size={19} /></button>
+          ))}
+        </nav>
         <footer className="chat-connection"><span
           className={connected ? "online" : ""} /><small>{connected ? t("shell.realtime") : t("chat.reconnecting")}</small>
         </footer>
@@ -2671,9 +2873,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         })()}
       >
         {!selectedRoom && !aiOpen && <header className="conversation-header conversation-header-empty">
-          <button className="icon-button" onClick={() => {
+          <button className="icon-button chat-minimize-button" onClick={() => {
             setMinimized(true);
-            navigate("/");
+            navigate("/meet");
           }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
         </header>}
         {!selectedRoom && !aiOpen && !loadingRooms &&
@@ -2691,7 +2893,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             <div className="conversation-title"><h2>OPTIMA AI</h2>
               <p>{aiThinking ? t("chat.aiThinkingStatus") : t("chat.aiOnlineAssistant")}</p></div>
             <span className="ai-provider-badge"><ShieldCheck size={14} /> {t("chat.secureBadge")}</span>
-            <button className="icon-button" onClick={() => {
+            <button className="icon-button chat-minimize-button" onClick={() => {
               setMinimized(true);
               navigate("/");
             }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} /></button>
@@ -2747,15 +2949,25 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   setMessageSearchOpen((value) => !value);
                   if (messageSearchOpen) setMessageSearch("");
                 }} aria-label={t("chat.searchMessagesAria")} title={t("chat.searchTitle")}><Search size={18} /></button>
-                <button className="icon-button" onClick={() => {
+                <button className="icon-button chat-minimize-button" onClick={() => {
                   setMinimized(true);
                   navigate("/");
                 }} aria-label={t("chat.minimizeChatAria")} title={t("chat.minimizeChatAria")}><Minus size={18} />
                 </button>
                 {selectedRoom.type !== "direct" && selectedRoom.memberStatus !== "pending" && (selectedRoom.type === "group" || roomVoice || canAdminister(selectedRoom)) &&
-                  <button className={`icon-button ${voice?.roomId === selectedRoom.id ? "active" : ""}`} onClick={() => joinRoomVoice(selectedRoom)}
+                  <span className="vc-start-wrap">
+                  <button className={`icon-button ${voice?.roomId === selectedRoom.id ? "active" : ""}`} onClick={() => { if (roomVoice || voice?.roomId === selectedRoom.id) joinRoomVoice(selectedRoom); else setVoiceMenuOpen((open) => !open); }}
+                          aria-haspopup="menu" aria-expanded={voiceMenuOpen}
                           aria-label={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")} title={selectedRoom.type === "channel" ? t("voiceChat.startStream") : t("voiceChat.start")}>
-                    <Video size={18} /></button>}
+                    <Video size={18} /></button>
+                  {voiceMenuOpen && <>
+                    <span className="vc-start-scrim" onClick={() => setVoiceMenuOpen(false)} aria-hidden="true" />
+                    <span className="vc-start-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => { setVoiceMenuOpen(false); joinRoomVoice(selectedRoom); }}><Video size={17} />{t("voiceChat.startNow")}</button>
+                      <button type="button" role="menuitem" onClick={() => { setVoiceMenuOpen(false); setScheduleOpen(true); }}><CalendarClock size={17} />{t("voiceChat.schedule")}</button>
+                    </span>
+                  </>}
+                  </span>}
                 {selectedRoom.type === "direct" && <>
                   <button className="icon-button" onClick={() => void startCall("audio")}
                           disabled={Boolean(startingCall) || !detailPeer} aria-label={t("chat.audioCallAria")}
@@ -2782,6 +2994,11 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               <button type="button" className="vc-bar-main" onClick={() => setVoiceMinimized(false)}><strong>{voice.title}</strong><small>{voiceBar.phase === "connected" ? t("voiceChat.participants", { count: voiceBar.count }) : t("voiceChat.connecting")}</small></button>
               <button type="button" className="vc-bar-leave" onClick={voiceBar.leave} aria-label={t("voiceChat.leave")}><PhoneOff size={18} /></button>
             </div>}
+            {!roomVoice && voiceScheduled && voiceScheduled.roomId === selectedRoom.id && <div className="vc-join-banner vc-scheduled-banner">
+              <span className="vc-scheduled-icon"><CalendarClock size={20} /></span>
+              <span className="vc-join-text"><strong>{voiceScheduled.title || t("voiceChat.scheduled")}</strong><small>{t("voiceChat.scheduledAt", { when: new Date(voiceScheduled.startTime).toLocaleString(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}</small></span>
+              {voiceScheduled.canCancel && <button type="button" className="vc-scheduled-cancel" onClick={() => void cancelScheduledVoice()}>{t("voiceChat.cancelSchedule")}</button>}
+            </div>}
             {roomVoice && voice?.roomId !== selectedRoom.id && <div className="vc-join-banner">
               <span className="vc-join-faces">{roomVoice.participants.slice(0, 3).map((p) => <Avatar key={p.id} firstName={p.firstName} lastName={p.lastName} url={p.avatarUrl} size="sm" />)}</span>
               <span className="vc-join-text"><strong>{selectedRoom.type === "channel" ? t("voiceChat.liveStream") : t("voiceChat.title")}</strong><small>{roomVoice.participants.length ? t("voiceChat.participants", { count: roomVoice.participants.length }) : t("voiceChat.nobodyYet")}</small></span>
@@ -2794,7 +3011,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               </button>
               {canPin(selectedRoom) && <button type="button" className="pinned-bar-close" onClick={() => void togglePin(pinnedMessage)} aria-label={t("chat.unpinAction")} title={t("chat.unpinAction")}><X size={17} /></button>}
             </div>}
-            {selectedRoom.memberStatus === "pending" ? (
+            {showRequestsBar && <div className="join-requests-bar">
+              <button type="button" className="join-requests-main" onClick={() => { setChannelSettingsSection("requests"); setChannelSettingsOpen(true); }}>
+                <span className="join-requests-faces">{pendingRequests.slice(0, 3).map((entry) => <Avatar key={entry.id} firstName={entry.firstName} lastName={entry.lastName} url={entry.avatarUrl} size="sm" />)}</span>
+                <strong>{t("chat.joinRequestsBar", { count: pendingRequests.length })}</strong>
+              </button>
+              <button type="button" className="join-requests-close" onClick={() => setHiddenRequestBars((current) => ({ ...current, [requestsRoomId ?? ""]: pendingRequests.length }))} aria-label={t("chat.joinRequestsHide")} title={t("chat.joinRequestsHide")}><X size={18} /></button>
+            </div>}
+            {selectedRoom.blocked && !user?.isSuperAdmin ? (
+              <div className="invite-state room-blocked-state"><Ban size={28} /><h3>{t("admin.roomBlocked")}</h3><p>{t("admin.roomBlockedDesc")}</p></div>
+            ) : selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3>
                 <p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check
                   size={17} />}>{t("chat.acceptButton")}</Button></div>
@@ -2806,6 +3032,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
                   shouldStickToMessageBottom.current = distanceFromBottom < 96;
                   setShowScrollButton(distanceFromBottom > 96);
+                  if (distanceFromBottom < 96 && unseenBelow) setUnseenBelow(0);
                   if (node.scrollTop < 90) void loadOlderMessages();
                 }}>
                   {loadingOlderMessages && <div className="older-messages-loader"><LoaderCircle className="spin"
@@ -2869,8 +3096,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                             className={`swipe-reply-indicator ${swipingMessage?.id === message.id && swipingMessage.armed ? "armed" : ""}`}
                             aria-hidden="true"><Reply size={18} /></span>
                           {!mine && !grouped &&
-                            <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl}
-                                    size="sm" />}
+                            <button type="button" className="message-avatar-button" onClick={() => openProfile(sender?.id)} aria-label={t("chat.openProfileAria", { name: sender ? `${sender.firstName} ${sender.lastName}`.trim() : "" })}>
+                              <Avatar firstName={sender?.firstName} lastName={sender?.lastName} url={sender?.avatarUrl} size="sm" />
+                            </button>}
                           {!mine && grouped && <span className="avatar-spacer" />}
                           <div className="message-bubble">
                             {message.replyToId && <button className="message-reply-quote"
@@ -2881,7 +3109,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                               size={13} /><span>{messages.find((item) => item.id === message.replyToId)?.content || t("chat.repliedMessageFallback")}</span>
                             </button>}
                             {!mine && !grouped &&
-                              <strong>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
+                              <strong className="message-sender-link" onClick={() => openProfile(sender?.id)}>{sender ? `${sender.firstName} ${sender.lastName}`.trim() : t("chat.teamMemberFallback")}</strong>}
                             {message.content && (isTelegramEmoji(message.content) ?
                               <AnimatedEmoji className="message-custom-emoji" id={telegramEmojiId(message.content)} /> :
                               <p>{renderMessageContent(message.content, true)}</p>)}
@@ -2902,10 +3130,27 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                                     size={20} /></span><span><strong>{attachment.fileName}</strong><small>{t("chat.fileSizeDownload", { size: Math.max(1, Math.round(attachment.fileSize / 1024)) })}</small></span><Download
                                     size={17} /></a>)}
                             {message.reactions && message.reactions.length > 0 &&
-                              <div className="message-reactions">{message.reactions.map((reaction) => <button
-                                key={reaction.emoji}
-                                onClick={() => void reactToMessage(message, reaction.emoji)}>{renderReaction(reaction.emoji)}
-                                <span>{reaction.userIds.length}</span></button>)}</div>}
+                              <div className="message-reactions" title={selectedRoom.type !== "channel" ? t("chat.reactionsHint") : undefined}>{message.reactions.map((reaction) => {
+                                // Telegram: up to three reactors show as tiny avatars, more as a count.
+                                const faces = selectedRoom.type !== "channel" && reaction.userIds.length <= 3 ? reaction.userIds.map((id) => memberMap.get(id) ?? (id === user?.id ? user : null)) : null;
+                                return <button
+                                  key={reaction.emoji}
+                                  className={user && reaction.userIds.includes(user.id) ? "mine" : ""}
+                                  onClick={() => { if (reactionHold.current?.fired) { reactionHold.current = null; return; } void reactToMessage(message, reaction.emoji); }}
+                                  onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setReactorsFor({ messageId: message.id, x: event.clientX, y: event.clientY }); }}
+                                  onPointerDown={(event) => {
+                                    const { clientX, clientY } = event;
+                                    const timer = window.setTimeout(() => { if (reactionHold.current) reactionHold.current.fired = true; setReactorsFor({ messageId: message.id, x: clientX, y: clientY }); }, 450);
+                                    reactionHold.current = { timer, fired: false };
+                                  }}
+                                  onPointerUp={() => { if (reactionHold.current && !reactionHold.current.fired) { window.clearTimeout(reactionHold.current.timer); reactionHold.current = null; } }}
+                                  onPointerLeave={() => { if (reactionHold.current && !reactionHold.current.fired) { window.clearTimeout(reactionHold.current.timer); reactionHold.current = null; } }}>
+                                  {renderReaction(reaction.emoji)}
+                                  {faces && faces.every(Boolean)
+                                    ? <span className="reaction-faces">{faces.map((face) => <Avatar key={face!.id} firstName={face!.firstName} lastName={face!.lastName} url={face!.avatarUrl} size="sm" />)}</span>
+                                    : <span>{reaction.userIds.length}</span>}
+                                </button>;
+                              })}</div>}
                             <span><time>{formatTime(message.createdAt)}</time>
                               {/* Channels report a bare count to everyone; in a group
                                   the author alone can open the list of who read it. */}
@@ -2949,13 +3194,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
                   <div ref={messagesEnd} />
-                  {showScrollButton && <button className="scroll-bottom" onClick={() => {
+                  {showScrollButton && <button className={`scroll-bottom ${unseenBelow ? "has-unseen" : ""}`} onClick={() => {
                     shouldStickToMessageBottom.current = true;
                     setShowScrollButton(false);
+                    setUnseenBelow(0);
                     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
-                  }} aria-label={t("chat.scrollToLatestAria")}><ArrowDown size={19} /></button>}
+                  }} aria-label={unseenBelow ? t("chat.newMessagesBelow", { count: unseenBelow }) : t("chat.scrollToLatestAria")}><ArrowDown size={19} />{unseenBelow > 0 && <b>{unseenBelow > 99 ? "99+" : unseenBelow}</b>}</button>}
                 </div>
-                {!canPostIn(selectedRoom) ?
+                {selectedRoom.ghost ?
+                  <div className="ghost-bar"><span><EyeOff size={17} />{t("chat.ghostWatching")}</span>
+                    <button type="button" onClick={() => void api.admin.joinRoom(selectedRoom.id).then(() => loadRooms(selectedRoom.id)).catch((error) => show(error instanceof Error ? error.message : "Error", "error"))}>{t("chat.ghostJoin")}</button>
+                  </div> :
+                !canPostIn(selectedRoom) ?
                   <div className="channel-subscribe-bar">
                     <button onClick={() => void toggleChannelMute()}>{selectedRoom.isMuted ? <Bell size={19} /> :
                       <BellOff size={19} />}{selectedRoom.isMuted ? t("chat.unmute") : t("chat.mute")}</button>
@@ -3173,24 +3423,38 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
             </div>
             <section className="tg-info-section">
               {selectedRoom.type === "direct" ? <>
-                {detailPeer?.username && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
+                {peerCard?.bio && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{peerCard.bio}</strong><small>{t("publicProfile.bioLabel")}</small></span></div>}
+                {peerCard?.channels?.map((channel) => <button key={channel.id} className="tg-info-row" onClick={() => { setDetailsOpen(false); navigate(`/ch/${channel.slug}`); }}>
+                  <Megaphone size={20} /><span className="tg-info-text"><strong>{channel.name}</strong><small>{t("publicProfile.channelSubtitle", { count: channel.memberCount })}</small></span><ChevronRight size={18} />
+                </button>)}
+                {detailPeer?.username && (detailPeer as { accountVisibility?: string }).accountVisibility !== "private" && peerCard?.accountVisibility !== "private" && <button className="tg-info-row" onClick={() => void copyText(`@${detailPeer.username}`)}><AtSign size={20} /><span className="tg-info-text"><strong>@{detailPeer.username}</strong><small>{t("chat.usernameLabel")}</small></span><Copy size={16} /></button>}
               </> : <>
                 {selectedRoom.description && <div className="tg-info-row"><Info size={20} /><span className="tg-info-text"><strong className="multiline">{selectedRoom.description}</strong><small>{t("chat.descriptionLabel")}</small></span></div>}
-                <button className="tg-info-row" onClick={() => void copyText(roomLink(selectedRoom))}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{roomLink(selectedRoom).replace(/^https?:\/\//, "")}</strong><small>{t("chat.linkLabel")}</small></span><Copy size={16} /></button>
+                {drawerLink && <button className="tg-info-row tg-info-handle" onClick={() => void copyText(drawerLink.url)} title={drawerLink.url}>
+                  {publicSlugLink ? <AtSign size={20} /> : <Link2 size={20} />}
+                  <span className="tg-info-text"><strong className="link">{publicSlugLink && selectedRoom.slug ? `@${selectedRoom.slug}` : drawerLink.url.replace(/^https?:\/\//, "")}</strong><small>{publicSlugLink ? t("chat.usernameLabel") : drawerLink.label}</small></span>
+                  <Copy size={16} />
+                </button>}
               </>}
             </section>
             {detailsNavigation}
-            {selectedRoom.type !== "direct" && <section className="tg-info-section tg-info-members">
+            {selectedRoom.type !== "direct" && (selectedRoom.type !== "channel" || canAdminister(selectedRoom)) && <section className="tg-info-section tg-info-members">
               <header><strong>{selectedRoom.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab")}</strong><span>{detailMemberTotal}</span></header>
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /></label>
               {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
               {!detailsLoading && detailMembers.map((member) => (
-                <button key={member.publicId} className="tg-info-row tg-info-member" onClick={() => navigate(`/profile/${member.username || member.publicId}`)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}>
+                <button key={member.publicId} className="tg-info-row tg-info-member" onClick={() => openProfile(member.username || member.publicId)} aria-label={t("chat.openProfileAria", { name: `${member.firstName} ${member.lastName}` })}>
                   <span className="tg-info-member-avatar"><Avatar firstName={member.firstName} lastName={member.lastName} url={member.avatarUrl} size="sm" /><MemberPresenceDot userId={member.id} /></span>
                   <span className="tg-info-text"><strong>{member.firstName} {member.lastName}</strong><small><MemberPresenceText userId={member.id} /></small></span>
                   {member.role !== "member" && <em className="tg-info-role">{t(`chat.role_${member.role}`)}</em>}
                 </button>
               ))}
+                          {!detailsLoading && detailMembers.length < detailMemberTotal && <button type="button" className="details-more" onClick={() => {
+                const nextPage = Math.floor(detailMembers.length / 20) + 1;
+                void api.chat.roomMembers(selectedRoom.id, detailMemberSearch.trim(), nextPage)
+                  .then((result) => setDetailMembers((current) => [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))]))
+                  .catch(() => undefined);
+              }}>{t("chat.showMoreMembers", { count: detailMemberTotal - detailMembers.length })}</button>}
             </section>}
             {selectedRoom.type !== "direct" && !selectedRoom.isSystem && <section className="tg-info-section tg-info-danger">
               {!selectedRoom.membershipLocked && <button className="tg-info-row danger" onClick={() => { setDetailsOpen(false); void leaveRoomFromContext(selectedRoom); }}>
@@ -3247,13 +3511,14 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               ))}</ul>}
       </Modal>
 
-      <Modal open={channelSettingsOpen} onClose={() => setChannelSettingsOpen(false)}
-             title={t(selectedRoom?.type === "channel" ? "channelSettings.title" : "channelSettings.groupTitle")}
-             description={selectedRoom?.name ?? ""} width="lg">
+      <Modal open={channelSettingsOpen} onClose={() => { setChannelSettingsOpen(false); setChannelSettingsSection(undefined); if (requestsRoomId) loadJoinRequests(requestsRoomId); }}
+             title={selectedRoom?.type === "channel" ? t("channelSettings.title") : t("channelSettings.groupTitle")}
+             description={selectedRoom?.name ?? ""} width="md">
         {selectedRoom && channelSettingsOpen && <ChannelSettingsPanel
           room={selectedRoom}
-          onClose={() => setChannelSettingsOpen(false)}
-          onSaved={() => void loadRooms()} />}
+          initialSection={channelSettingsSection}
+          onClose={() => { setChannelSettingsOpen(false); setChannelSettingsSection(undefined); if (requestsRoomId) loadJoinRequests(requestsRoomId); }}
+          onSaved={() => { void loadRooms(); if (requestsRoomId) loadJoinRequests(requestsRoomId); }} />}
       </Modal>
 
       <Modal open={roomSettingsOpen} onClose={() => !savingRoomSettings && setRoomSettingsOpen(false)}
@@ -3320,6 +3585,21 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           </footer>
         </form>
       </Modal>
+
+      <Modal open={scheduleOpen} onClose={() => !scheduling && setScheduleOpen(false)} title={t("voiceChat.scheduleTitle")} description={t("voiceChat.scheduleDesc")} width="sm">
+        <form className="vc-schedule-form" onSubmit={(event) => void scheduleVoice(event)}>
+          <label>{t("voiceChat.scheduleWhen")}<input name="startTime" type="datetime-local" required
+            min={(() => { const d = new Date(Date.now() + 5 * 60_000); d.setSeconds(0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); })()}
+            defaultValue={(() => { const d = new Date(Date.now() + 60 * 60_000); d.setMinutes(0, 0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); })()} /></label>
+          <label>{t("voiceChat.scheduleName")}<input name="title" maxLength={200} placeholder={selectedRoom ? roomTitle(selectedRoom) : ""} /></label>
+          <footer>
+            <Button type="button" variant="secondary" onClick={() => setScheduleOpen(false)} disabled={scheduling}>{t("common.cancel")}</Button>
+            <Button type="submit" loading={scheduling} icon={<CalendarClock size={16} />}>{t("voiceChat.schedule")}</Button>
+          </footer>
+        </form>
+      </Modal>
+
+      {reactorsFor && <ReactorsPopover messageId={reactorsFor.messageId} x={reactorsFor.x} y={reactorsFor.y} renderEmoji={renderReaction} onClose={() => setReactorsFor(null)} />}
 
       <Modal open={Boolean(forwardingMessage)} onClose={() => !forwarding && setForwardingMessage(null)}
              title={t("chat.forwardMessageTitle")} description={t("chat.forwardMessageDesc")} width="md">

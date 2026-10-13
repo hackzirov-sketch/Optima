@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { getSocket } from "../lib/socket";
 import { LiveKitMeeting, type MediaFlags } from "../lib/liveKitMeeting";
 import { useI18n } from "../lib/i18n/i18n";
+import { forgetAudio, playWithUnlock } from "../lib/audioUnlock";
 
 export type VoiceChatPerson = { firstName?: string | null; lastName?: string | null; avatarUrl?: string | null };
 type Phase = "connecting" | "connected" | "reconnecting" | "failed";
@@ -294,13 +295,14 @@ function RemoteAudio({ stream, sinkId }: { stream: MediaStream; sinkId: string }
     const audio = ref.current;
     if (!audio) return;
     if (audio.srcObject !== stream) audio.srcObject = stream;
-    void audio.play().catch(() => undefined);
+    playWithUnlock(audio);
   }, [stream]);
+  useEffect(() => () => forgetAudio(ref.current), []);
   useEffect(() => {
     const audio = ref.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (audio?.setSinkId) void audio.setSinkId(sinkId).catch(() => undefined);
   }, [sinkId]);
-  return <audio ref={ref} autoPlay />;
+  return <audio ref={ref} autoPlay playsInline />;
 }
 
 function VideoTile({ stream, mirrored, name, speaking }: { stream: MediaStream; mirrored: boolean; name: string; speaking: boolean }) {

@@ -2,9 +2,9 @@
   "name": "upz-backend",
   "version": "0.0.1",
   "description": "",
-  "author": "",
+  "author": "Elbek Rustamjanov",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",

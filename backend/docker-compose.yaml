@@ -38,6 +38,7 @@ services:
 
   postgres:
     image: postgres:18-alpine
+    restart: unless-stopped
     container_name: upz-backend-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -109,6 +110,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     container_name: upz-backend-redis
     ports:
       - "6379:6379"

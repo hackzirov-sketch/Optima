@@ -1,4 +1,5 @@
 import { ArrowLeft, Bookmark, BookOpen, Check, ExternalLink, Eye, Heart, LoaderCircle, Minus, Moon, Plus, Search, Star, Sun, Trash2, Type, X } from "lucide-react";
+import { cdnImage } from "../lib/cdn";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Avatar } from "../components/ui";
 import { BookReader } from "../components/BookReader";
@@ -39,6 +40,8 @@ export function LibraryPage() {
   const { show } = useToast();
   const [lang, setLang] = useState<Lang>(() => (["uz", "en", "ru", "tr"].includes(locale) ? locale as Lang : "uz"));
   const [subject, setSubject] = useState<Subject>("all");
+  // Only books that open in Optima's own reader — never a link out to another site.
+  const readableOnly = true;
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [books, setBooks] = useState<LibraryBook[]>([]);
@@ -82,22 +85,23 @@ export function LibraryPage() {
   useOutsideClose(panelRef, Boolean(selected) && !reader, closePanel);
 
   useEffect(() => { const timer = window.setTimeout(() => setDebounced(query.trim()), 400); return () => clearTimeout(timer); }, [query]);
-  useEffect(() => { setPage(1); }, [lang, subject, debounced]);
+  useEffect(() => { setPage(1); }, [lang, subject, debounced, readableOnly]);
 
   useEffect(() => {
     const sequence = ++request.current;
     setLoading(true);
     setFailed(false);
-    api.library.search({ q: debounced, lang, subject, page })
+    api.library.search({ q: debounced, lang, subject, page, readable: readableOnly })
       .then((result) => {
         if (sequence !== request.current) return;
-        setBooks((current) => page === 1 ? result.items : [...current, ...result.items.filter((book) => !current.some((item) => item.key === book.key))]);
+        const items = readableOnly ? result.items.filter((book) => book.readable) : result.items;
+        setBooks((current) => page === 1 ? items : [...current, ...items.filter((book) => !current.some((item) => item.key === book.key))]);
         setTotal(result.total);
         setHasMore(result.hasMore);
       })
       .catch(() => { if (sequence === request.current) { setFailed(true); if (page === 1) setBooks([]); } })
       .finally(() => { if (sequence === request.current) setLoading(false); });
-  }, [lang, subject, debounced, page]);
+  }, [lang, subject, debounced, page, readableOnly]);
 
   useEffect(() => {
     if (!selected) return;
@@ -345,7 +349,7 @@ export function LibraryPage() {
         : <div className="book-grid">{shelfBooks.map((book) => <article className={`book-card ${book.readable ? "" : "not-readable"}`} key={book.key}>
           <button className="book-cover" onClick={() => void (shelf === "reading" ? openReader(book) : openBook(book))} aria-label={book.title}>
             {progressOf(book.key) !== null && <span className="lib2-card-progress" aria-label={`${Math.round((progressOf(book.key) ?? 0) * 100)}%`}><i style={{ width: `${Math.round((progressOf(book.key) ?? 0) * 100)}%` }} /></span>}
-            {book.cover ? <img loading="lazy" src={book.cover} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
+            {book.cover ? <img loading="lazy" decoding="async" src={cdnImage(book.cover)} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
             {/* No scan cover (most Uzbek titles): a typeset one instead of a blank card. */}
             <span className={`lib2-gen-cover tone-${(book.title.length + book.authors.join("").length) % 5}`}><b>{book.title}</b><small>{author(book)}</small></span>
             {book.languages[0] && <i>{book.languages[0].slice(0, 3).toUpperCase()}</i>}
@@ -370,7 +374,7 @@ export function LibraryPage() {
       <aside ref={panelRef} className="lib2-detail" role="dialog" aria-modal="true" aria-label={selected.title}>
         <button className="close" onClick={closePanel} aria-label={t("common.close")}><X /></button>
         <div className="lib2-detail-top">
-          {selected.cover && <img src={selected.cover} alt="" />}
+          {selected.cover && <img src={cdnImage(selected.cover)} alt="" />}
           <div>
             <span>{selected.source === "gutenberg" ? t("library.publicDomain") : "Open Library"}</span>
             <h2>{selected.title}</h2>

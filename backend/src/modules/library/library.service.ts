@@ -140,6 +140,8 @@ export class LibraryService {
     lang?: LibraryLanguage;
     subject?: LibrarySubject;
     page?: number;
+    /** Only books that open inside Optima (not a link out to another site). */
+    readableOnly?: boolean;
   }) {
     const page = Math.min(Math.max(Number(params.page) || 1, 1), 100);
     const lang: LibraryLanguage =
@@ -159,6 +161,9 @@ export class LibraryService {
     if (lang === 'en') return this.searchGutenberg(q, subject, page);
 
     const clauses = [`language:${OL_LANGUAGE[lang]}`];
+    // Open Library's openly readable scans are the ones Optima can show in its
+    // own reader; everything else would only be a link to their site.
+    if (params.readableOnly) clauses.push('ebook_access:public');
     if (subject !== 'all') clauses.push(OL_SUBJECT[subject]);
     // The Uzbek shelf, unsearched and unfiltered, opens on Uzbek writers: by
     // language alone Open Library leads with translations (Shakespeare,

@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { VideoFeedService } from './video-feed.service';
 import { YoutubeService } from './youtube.service';
@@ -32,6 +32,14 @@ export class YoutubeController {
   ) {
     const result = await this.youtube.search(q, pageToken, language);
     return { items: await this.feed.rankSearch(userId, result.items), nextPageToken: result.nextPageToken };
+  }
+
+  /** Description, tags, date, counts and channel for the watch page. */
+  @Get('videos/:id/details')
+  async details(@Param('id') id: string) {
+    const details = this.youtube.enabled ? await this.youtube.watchDetails(id).catch(() => null) : null;
+    if (!details) throw new NotFoundException({ code: 'VIDEO_DETAILS_UNAVAILABLE', message: 'Video details unavailable' });
+    return details;
   }
 
   /** Kept for older clients: now the same vetted feed. */

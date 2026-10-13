@@ -290,11 +290,28 @@ export class ChatRoomInviteService {
         return lockedRoom;
       }
 
+      if ((lockedRoom as { blockedAt?: Date | null }).blockedAt)
+        throw new ForbiddenException({ code: 'ROOM_BLOCKED', message: 'This chat has been blocked by Optima' });
       if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
         throw new BadRequestException({
           code: ErrorCode.INVITE_CODE_EXHAUSTED,
           message: 'This invite link has reached its usage limit',
         });
+      }
+
+      // Private rooms (and any room with join approval switched on) never
+      // let a link straight in: the holder files a request an admin answers.
+      const approvalRows = await query<{ required: boolean }>(
+        `SELECT join_requires_approval AS required FROM channel_settings WHERE room_id = $1`,
+        [lockedRoom.id],
+      );
+      if (lockedRoom.scope !== 'public' || approvalRows[0]?.required) {
+        await query(
+          `INSERT INTO chat_join_requests (room_id, user_id, invite_id) VALUES ($1, $2, $3)
+           ON CONFLICT (room_id, user_id) DO NOTHING`,
+          [lockedRoom.id, userId, invite.id],
+        );
+        return { ...lockedRoom, joinRequested: true as const };
       }
       // A chat invite grants exactly one thing: membership of that room.
       //
@@ -324,11 +341,90 @@ export class ChatRoomInviteService {
       return lockedRoom;
     });
 
+    if ('joinRequested' in room) {
+      return {
+        joinRequested: true,
+        roomId: room.id,
+        name: room.name,
+        type: room.type,
+        avatarUrl: room.avatarUrl ?? null,
+      };
+    }
+
     // After the commit, not inside it: a rollback would otherwise have left
     // the cache cleared for a join that never happened — harmless here, but
     // the ordering that is always correct is "persist, then invalidate".
     await this.chatMemberService.invalidateRoomMember(room.id, userId);
 
     return this.roomService.enrichRoom(room, userId);
+  }
+
+  private async assertCanReviewRequests(roomId: string, userId: string) {
+    const room = await this.findRoomById(roomId);
+    if (!room)
+      throw new NotFoundException({
+        code: ErrorCode.ROOM_NOT_FOUND,
+        message: 'Room not found',
+      });
+    await this.assertCanManageInvites(room, userId);
+    return room;
+  }
+
+  /** Pending "ask to join" requests for a room — owner/admin only. */
+  async listJoinRequests(roomId: string, userId: string) {
+    await this.assertCanReviewRequests(roomId, userId);
+    return this.dataSource.query<{
+      id: string;
+      userId: string;
+      firstName: string;
+      lastName: string;
+      username: string | null;
+      avatarUrl: string | null;
+      createdAt: Date;
+    }>(
+      `SELECT r.id, r.user_id AS "userId", u.first_name AS "firstName", u.last_name AS "lastName",
+              u.username, u.avatar_url AS "avatarUrl", r.created_at AS "createdAt"
+         FROM chat_join_requests r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.room_id = $1
+        ORDER BY r.created_at`,
+      [roomId],
+    );
+  }
+
+  /** Approve (adds them as an active member) or decline one request. */
+  async resolveJoinRequest(
+    roomId: string,
+    requestId: string,
+    userId: string,
+    approve: boolean,
+  ) {
+    await this.assertCanReviewRequests(roomId, userId);
+    const rows = await this.dataSource.query<{ userId: string; inviteId: string | null }>(
+      `DELETE FROM chat_join_requests WHERE id = $1 AND room_id = $2
+       RETURNING user_id AS "userId", invite_id AS "inviteId"`,
+      [requestId, roomId],
+    );
+    const request = rows[0];
+    if (!request)
+      throw new NotFoundException({
+        code: 'JOIN_REQUEST_NOT_FOUND',
+        message: 'Join request not found',
+      });
+    if (approve) {
+      await this.dataSource.query(
+        `INSERT INTO chat_members (room_id, user_id, status) VALUES ($1, $2, 'active')
+         ON CONFLICT (room_id, user_id)
+         DO UPDATE SET left_at = NULL, status = 'active', joined_at = now()`,
+        [roomId, request.userId],
+      );
+      if (request.inviteId)
+        await this.dataSource.query(
+          `UPDATE chat_room_invites SET uses_count = uses_count + 1 WHERE id = $1`,
+          [request.inviteId],
+        );
+      await this.chatMemberService.invalidateRoomMember(roomId, request.userId);
+    }
+    return { userId: request.userId, approved: approve };
   }
 }

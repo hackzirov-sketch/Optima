@@ -28,6 +28,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { EarningsModule } from './modules/earnings/earnings.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { LibraryModule } from './modules/library/library.module';
@@ -106,6 +107,7 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     GatewayModule,
     MeetingsModule,
     ModerationModule,
+    AdminModule,
     EarningsModule,
     NotesModule,
     LibraryModule,

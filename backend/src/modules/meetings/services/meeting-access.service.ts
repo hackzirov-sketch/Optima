@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../../database/database.service';
 import {
@@ -53,6 +54,8 @@ export class MeetingAccessService {
    */
   async resolveAccess(meeting: any, userId: string): Promise<AccessDecision> {
     if (meeting.hostId === userId) return { kind: 'host' };
+    // Optima's super admins walk into any meeting (lock and approval included).
+    if (isSuperAdmin(userId)) return { kind: 'auto' };
 
     // Only someone *currently* in the meeting counts as a participant. Without
     // `left_at IS NULL` the row survives the person leaving, so anyone who ever

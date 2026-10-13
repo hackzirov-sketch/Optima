@@ -67,7 +67,6 @@
   :root[data-theme] body .tgp-page.is-settings-open .tgp-card { display: none; }
   .tgp-panel-back, .cs-section-back { display: inline-flex; margin-bottom: 16px; }
   :root[data-theme] body .channel-settings { grid-template-columns: minmax(0, 1fr); }
-  :root[data-theme] body .channel-settings:not(.is-section-open) .cs-body { display: none; }
   :root[data-theme] body .channel-settings.is-section-open .cs-nav { display: none; }
   :root[data-theme] body .cs-nav { display: flex; flex-direction: column; overflow: visible; padding: 8px; gap: 4px; }
   :root[data-theme] body .cs-nav > button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; text-align: left; }

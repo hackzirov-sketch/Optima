@@ -4568,3 +4568,235 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--bran
 }
 /* Focus view with nobody else in the call (e.g. presenting alone): no filmstrip column. */
 .gm-stage-focus.gm-stage-solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+
+/* Wallpaper: the light theme painted .message-list opaque on top of it, so a
+   chosen chat background never showed. Let it through, and keep the header
+   and composer readable over the photo with the theme's frosted surface. */
+.conversation.conversation-has-bg .message-list { background: transparent !important; background-image: none !important; }
+.conversation.conversation-has-bg > .conversation-header { background: var(--chat-bg-header, color-mix(in srgb, var(--surface) 92%, transparent)) !important; backdrop-filter: blur(12px); }
+
+/* Channel/group settings, Telegram "Edit group" style: one column, a list of
+   rows (icon · name · current value · chevron) grouped into cards; a row
+   opens its own page with a back row; booleans are switches on the right. */
+.channel-settings.cs-tg { display: flex; flex-direction: column; min-height: 0; max-height: min(78vh, 720px); border-radius: 0; }
+.channel-settings.cs-tg .cs-list,
+.channel-settings.cs-tg .cs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 14px 14px; display: grid; gap: 12px; align-content: start; background: var(--surface-muted); }
+.channel-settings.cs-tg .cs-list-group { display: grid; overflow: hidden; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.channel-settings.cs-tg .cs-list-row,
+.channel-settings.cs-tg .cs-list-switch { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; min-height: 50px; padding: 10px 16px; border: 0; border-radius: 0; background: none; color: var(--text); font: inherit; font-size: 14.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.channel-settings.cs-tg .cs-list-group > * + * { border-top: 1px solid var(--line); }
+.channel-settings.cs-tg .cs-list-row:hover,
+.channel-settings.cs-tg .cs-list-switch:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.channel-settings.cs-tg .cs-list-row > svg:first-child,
+.channel-settings.cs-tg .cs-list-switch > svg:first-child { color: var(--text-soft); }
+.channel-settings.cs-tg .cs-list-row > small { color: var(--accent); font-size: 13.5px; font-weight: 600; }
+.channel-settings.cs-tg .cs-list-row > em { padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-size: 9.5px; font-style: normal; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.channel-settings.cs-tg .cs-list-row > svg:last-child { color: var(--muted); }
+.channel-settings.cs-tg .cs-list-row.danger,
+.channel-settings.cs-tg .cs-list-row.danger > svg { color: var(--danger, #e5484d); }
+.channel-settings.cs-tg .cs-list-switch { grid-template-columns: 22px minmax(0, 1fr) auto; }
+.channel-settings.cs-tg .cs-list-switch > span strong { font-size: 14.5px; font-weight: 500; }
+
+.channel-settings.cs-tg .cs-back { display: flex; align-items: center; gap: 10px; width: fit-content; margin: 2px 0 2px -4px; padding: 6px 10px 6px 6px; border: 0; border-radius: 10px; background: none; color: var(--accent); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.channel-settings.cs-tg .cs-back:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.channel-settings.cs-tg .cs-body h5 { margin: 6px 4px 0; color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+
+/* Switch rows: label left, switch right, rows stacked inside one card. */
+.channel-settings.cs-tg .cs-toggle { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 54px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.channel-settings.cs-tg .cs-body > .cs-toggle + .cs-toggle { margin-top: -12px; border-top-left-radius: 0; border-top-right-radius: 0; }
+.channel-settings.cs-tg .cs-body > .cs-toggle:has(+ .cs-toggle) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.channel-settings.cs-tg .cs-toggle input[type="checkbox"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.channel-settings.cs-tg .cs-toggle strong { font-size: 14.5px; font-weight: 500; }
+.channel-settings.cs-tg .cs-switch { position: relative; width: 42px; height: 24px; border-radius: 999px; background: var(--line-strong); transition: background-color .18s ease; }
+.channel-settings.cs-tg .cs-switch b { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .18s ease; }
+.channel-settings.cs-tg .cs-toggle:has(input:checked) .cs-switch { background: var(--accent); }
+.channel-settings.cs-tg .cs-toggle:has(input:checked) .cs-switch b { transform: translateX(18px); }
+.channel-settings.cs-tg .cs-toggle:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Fields as card rows too. */
+.channel-settings.cs-tg .cs-field { padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.channel-settings.cs-tg .cs-field > span { color: var(--accent); font-size: 13px; font-weight: 700; }
+.channel-settings.cs-tg .cs-field input,
+.channel-settings.cs-tg .cs-field select,
+.channel-settings.cs-tg .cs-field textarea { border: 0; border-bottom: 1.5px solid var(--line-strong); border-radius: 0; background: transparent; padding: 8px 2px; font-size: 14.5px; }
+.channel-settings.cs-tg .cs-field input:focus-visible,
+.channel-settings.cs-tg .cs-field select:focus-visible,
+.channel-settings.cs-tg .cs-field textarea:focus-visible { outline: 0; border-bottom-color: var(--accent); }
+.channel-settings.cs-tg .cs-member,
+.channel-settings.cs-tg .cs-audit li,
+.channel-settings.cs-tg .cs-stats > div { background: var(--surface); }
+
+.channel-settings.cs-tg .cs-actions { grid-column: auto; flex: 0 0 auto; padding: 12px 16px; }
+.channel-settings.cs-tg .cs-actions .button { min-height: 38px; }
+.modal-md:has(.channel-settings.cs-tg) { width: min(100%, 460px); padding: 0; overflow: hidden; }
+.modal-md:has(.channel-settings.cs-tg) > .modal-header { padding: 16px 20px; min-height: 0; }
+.channel-settings.cs-tg .cs-requests { display: grid; gap: 8px; }
+.channel-settings.cs-tg .cs-request-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.channel-settings.cs-tg .cs-request-actions button { min-height: 32px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--text-soft); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; }
+.channel-settings.cs-tg .cs-request-actions button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+/* A height-capped grid squeezed the overflow-hidden cards and cut rows off;
+   a column of non-shrinking cards scrolls instead. */
+.channel-settings.cs-tg .cs-list { display: flex; flex-direction: column; }
+.channel-settings.cs-tg .cs-list > * { flex: none; }
+.channel-settings.cs-tg .cs-body { display: flex; flex-direction: column; }
+.channel-settings.cs-tg .cs-body > * { flex: none; }
+.channel-settings.cs-tg .cs-body > .cs-toggle + .cs-toggle { margin-top: -12px; }
+.channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 22px minmax(0, 1fr) auto; min-height: 50px; padding: 10px 16px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+
+/* "Kimga ochiq" as three tiles: a big tinted icon per audience, the chosen
+   one lifted with a coloured ring and a check badge; the radio itself hidden. */
+.meet-visibility.meet-visibility-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.meet-visibility-cards legend { grid-column: 1 / -1; }
+.meet-visibility-cards label { --tone: #2563eb; position: relative; display: grid; justify-items: start; align-content: start; gap: 10px; min-height: 148px; padding: 14px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--surface); transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background-color .15s ease; }
+.meet-visibility-cards label.tone-public { --tone: #16a34a; }
+.meet-visibility-cards label.tone-private { --tone: #d97706; }
+.meet-visibility-cards label.tone-invite_only { --tone: #7c3aed; }
+.meet-visibility-cards label:hover { border-color: color-mix(in srgb, var(--tone) 45%, var(--line)); transform: translateY(-1px); }
+.meet-visibility-cards label.selected { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 7%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent), 0 10px 24px color-mix(in srgb, var(--tone) 16%, transparent); }
+.meet-visibility-cards input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.meet-visibility-cards label:has(input:focus-visible) { outline: 2px solid var(--tone); outline-offset: 2px; }
+.meet-visibility-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); transition: background-color .15s ease, color .15s ease; }
+.meet-visibility-cards label.selected .meet-visibility-icon { background: var(--tone); color: #fff; }
+.meet-visibility-check { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--line-strong); border-radius: 50%; background: var(--surface); color: transparent; transition: all .15s ease; }
+.meet-visibility-cards label.selected .meet-visibility-check { border-color: var(--tone); background: var(--tone); color: #fff; }
+.meet-visibility-cards span strong { font-size: 14.5px; }
+@media (max-width: 560px) {
+  .meet-visibility.meet-visibility-cards { grid-template-columns: minmax(0, 1fr); }
+  .meet-visibility-cards label { min-height: 0; grid-template-columns: 44px minmax(0, 1fr); align-items: center; padding-right: 44px; }
+  .meet-visibility-cards label > span { grid-column: 2; }
+  .meet-visibility-cards .meet-visibility-check { top: 50%; transform: translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) { .meet-visibility-cards label { transition: none; } }
+
+/* Settings polish: a room card on top, colour-coded icon tiles per row. */
+.channel-settings.cs-tg .cs-hero { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 70%); }
+.channel-settings.cs-tg .cs-hero-avatar { display: grid; place-items: center; width: 54px; height: 54px; flex: none; overflow: hidden; border-radius: 50%; background: var(--accent); color: #fff; font-size: 22px; font-weight: 700; }
+.channel-settings.cs-tg .cs-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.channel-settings.cs-tg .cs-hero-text { display: grid; gap: 3px; min-width: 0; }
+.channel-settings.cs-tg .cs-hero-text strong { overflow: hidden; font-size: 17px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings.cs-tg .cs-hero-text small { display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.channel-settings.cs-tg .cs-list-row, .channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 30px minmax(0, 1fr) auto auto; }
+.channel-settings.cs-tg .cs-list-group > .cs-list-switch { grid-template-columns: 30px minmax(0, 1fr) auto; }
+.channel-settings.cs-tg .cs-row-icon { --tile: #3b82f6; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--tile); color: #fff !important; }
+.channel-settings.cs-tg .cs-row-icon svg { color: #fff !important; }
+.channel-settings.cs-tg .cs-back .cs-row-icon { width: 26px; height: 26px; border-radius: 8px; }
+.channel-settings.cs-tg .tone-blue { --tile: #3b82f6; }
+.channel-settings.cs-tg .tone-violet { --tile: #8b5cf6; }
+.channel-settings.cs-tg .tone-green { --tile: #22c55e; }
+.channel-settings.cs-tg .tone-orange { --tile: #f97316; }
+.channel-settings.cs-tg .tone-red { --tile: #ef4444; }
+.channel-settings.cs-tg .tone-teal { --tile: #14b8a6; }
+.channel-settings.cs-tg .tone-indigo { --tile: #6366f1; }
+.channel-settings.cs-tg .tone-sky { --tile: #0ea5e9; }
+.channel-settings.cs-tg .tone-slate { --tile: #64748b; }
+.channel-settings.cs-tg .tone-amber { --tile: #f59e0b; }
+.channel-settings.cs-tg .tone-pink { --tile: #ec4899; }
+.channel-settings.cs-tg .cs-list-row.danger > span:nth-child(2) { color: var(--danger, #e5484d); }
+.channel-settings.cs-tg .cs-list-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Dialogs sit above the top bar and the dock, so the blur covers them too. */
+:root[data-theme] body .modal-layer { z-index: 4000; }
+:root[data-theme] body .reactors-popover { z-index: 4100; }
+/* Roles list: the role picker sat on top of the name (a global select width). */
+.channel-settings.cs-tg .cs-member { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.channel-settings.cs-tg .cs-member > span:first-child { min-width: 0; }
+.channel-settings.cs-tg .cs-member select { width: auto !important; min-width: 0; max-width: 150px; min-height: 34px; padding: 4px 28px 4px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background-color: var(--surface-muted); font-size: 13px; font-weight: 600; }
+.channel-settings.cs-tg .cs-members { gap: 8px; }
+.channel-settings.cs-tg .cs-members h5 { margin: 6px 4px 2px; }
+
+/* Account avatar in the top bar and its menu. */
+.account-menu-wrap { position: relative; display: inline-flex; }
+.account-avatar-button { position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 2px solid transparent; border-radius: 50%; background: none; cursor: pointer; transition: border-color .15s ease; }
+.account-avatar-button:hover, .account-avatar-button[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.account-avatar-button > :first-child { width: 34px !important; height: 34px !important; border-radius: 50% !important; }
+.account-avatar-button > .status-dot { position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border: 2px solid var(--surface); border-radius: 50%; }
+.account-menu-scrim { position: fixed; inset: 0; z-index: 60; border: 0; background: transparent; cursor: default; }
+.account-menu { position: absolute; top: calc(100% + 10px); right: 0; z-index: 61; width: 248px; padding: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: 0 18px 44px rgba(20, 24, 50, .18); animation: upm-in .14s ease-out; }
+.account-menu-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.account-menu-head > span { display: grid; min-width: 0; }
+.account-menu-head strong { overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu-head small { color: var(--muted); font-size: 12.5px; }
+.account-menu > button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 42px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.account-menu > button:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.account-menu > button svg { color: var(--muted); }
+.account-menu > button.danger, .account-menu > button.danger svg { color: var(--danger, #e5484d); }
+.account-menu-status { display: flex; justify-content: space-between; gap: 4px; margin: 4px 0; padding: 8px 10px; border-block: 1px solid var(--line); }
+.account-menu-status button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.account-menu-status button.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.account-menu-status .status-dot { width: 12px; height: 12px; border-radius: 50%; }
+/* One meeting at a time: other meetings' Join is visibly unavailable. */
+.meet-row-join.is-blocked, .meet-row-main[aria-disabled="true"] { opacity: .42; cursor: not-allowed !important; filter: saturate(.6); }
+.meet-row-join.is-blocked:hover { transform: none !important; box-shadow: none !important; }
+.meet-row-join.is-here { background: #16a34a !important; border-color: #16a34a !important; color: #fff !important; }
+.account-status-dot { display: block; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; }
+.account-status-dot.status-away { background: #f59e0b; }
+.account-status-dot.status-busy { background: #ef4444; }
+.account-status-dot.status-dnd { background: #dc2626; box-shadow: inset 0 0 0 3px #dc2626, inset 0 0 0 5px #fff; }
+.account-status-dot.status-invisible { background: transparent; box-shadow: inset 0 0 0 2px #94a3b8; }
+.account-avatar-button > .account-status-dot { position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border: 2px solid var(--surface); }
+.account-menu.align-start { right: auto; left: 0; }
+.chat-sidebar-header .account-menu-wrap { flex: none; }
+
+/* ── Admin panel ─────────────────────────────────────────────────────────── */
+.admin-page { display: grid; gap: 18px; padding-bottom: 120px; }
+.admin-head { display: flex; align-items: center; gap: 14px; }
+.admin-head > div { flex: 1; }
+.admin-head h1 { margin: 0; font-size: 1.6rem; }
+.admin-head p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.admin-head-icon { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 16px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; box-shadow: 0 10px 24px rgba(79, 70, 229, .3); }
+.admin-refresh { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text-soft); cursor: pointer; }
+.admin-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); scrollbar-width: none; }
+.admin-tabs button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: none; color: var(--text-soft); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.admin-tabs button.active { background: var(--accent); color: #fff; }
+.admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.admin-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); }
+.admin-search input { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; outline: none; box-shadow: none !important; color: var(--text); font: inherit; font-size: 15px; }
+.admin-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-chips button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.admin-chips button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.admin-chips button.type:first-of-type { margin-left: 8px; }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.admin-stats article { display: grid; gap: 6px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.admin-stats article span { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.admin-stats article strong { font-size: 30px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.admin-stats article small { color: var(--muted); font-size: 12.5px; }
+.admin-stats article.accent { border-color: transparent; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; }
+.admin-stats article.accent span { color: rgba(255, 255, 255, .9); }
+.admin-stats article.danger strong { color: var(--danger, #e5484d); }
+.admin-list { display: grid; gap: 8px; }
+.admin-list article { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.admin-list.compact article { padding: 10px 12px; }
+.admin-list article.is-blocked { border-color: color-mix(in srgb, var(--danger, #e5484d) 40%, var(--line)); background: color-mix(in srgb, var(--danger, #e5484d) 5%, var(--surface)); }
+.admin-avatar { position: relative; flex: none; }
+.admin-avatar > i { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border: 2px solid var(--surface); border-radius: 50%; background: #22c55e; }
+.admin-room-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.admin-room-icon.live { background: color-mix(in srgb, #ef4444 14%, transparent); color: #ef4444; }
+.admin-room-icon.danger { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
+.admin-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.admin-main strong { display: flex; align-items: center; gap: 8px; overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-main strong em { padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 11px; font-style: normal; font-weight: 750; }
+.admin-main strong em.scope { background: var(--surface-muted); color: var(--muted); }
+.admin-main small { overflow: hidden; color: var(--muted); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-actions { display: flex; flex: none; gap: 6px; }
+.admin-btn { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.admin-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.admin-btn.danger { color: var(--danger, #e5484d); }
+.admin-btn.danger:hover:not(:disabled) { border-color: var(--danger, #e5484d); background: color-mix(in srgb, var(--danger, #e5484d) 8%, transparent); color: var(--danger, #e5484d); }
+.admin-btn:disabled { opacity: .5; cursor: default; }
+.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.admin-columns h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 15px; }
+.admin-columns h2 b { padding: 1px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; }
+.admin-empty { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 30px; color: var(--muted); }
+.admin-pager { display: flex; justify-content: center; align-items: center; gap: 12px; }
+.admin-pager button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.admin-pager button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 640px) {
+  .admin-list article { flex-wrap: wrap; }
+  .admin-actions, .admin-list article > .admin-btn { margin-left: 50px; }
+}
+.room-blocked-state svg { color: var(--danger, #e5484d); }
+/* Optima admin badge (profile page and profile card). */
+.super-admin-badge { display: inline-flex; align-items: center; gap: 5px; width: fit-content; margin: 4px auto 0; padding: 3px 10px; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font-size: 12px; font-weight: 750; letter-spacing: .01em; box-shadow: 0 4px 12px rgba(79, 70, 229, .3); }
+/* The admin tick next to a name (like a verified mark), "Optima admin" on hover. */
+.admin-tick { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 6px; vertical-align: -3px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; box-shadow: 0 2px 6px rgba(79, 70, 229, .35); flex: none; }
+.upm-name { display: inline-flex; align-items: center; justify-content: center; gap: 0; }
+.super-admin-badge { display: none; }

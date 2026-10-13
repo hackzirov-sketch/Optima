@@ -42,6 +42,8 @@ export interface LiveKitHandlers {
   onRemote(userId: string, stream: MediaStream | null, media: MediaFlags): void;
   onState(state: LiveKitState): void;
   onData(fromUserId: string, text: string): void;
+  /** Who is talking, loudest first — measured by the SFU, so the browser runs no audio analysis. */
+  onSpeakers?(userIds: string[]): void;
   /** The session ended for good (kicked, room closed, duplicate identity). */
   onDisconnected?(reason?: DisconnectReason): void;
 }
@@ -59,9 +61,12 @@ const PUBLISH_DEFAULTS = {
   videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
   videoEncoding: { ...VideoPresets.h720.encoding, priority: "medium" as RTCPriorityType },
   screenShareEncoding: ScreenSharePresets.h1080fps15.encoding,
-  audioPreset: AudioPresets.speech,
+  // 48 kbps (speech was 24): clearer voices, still small next to any video.
+  audioPreset: AudioPresets.music,
   red: true,
-  dtx: true,
+  // DTX stops sending in "silence"; with background noise it clipped the
+  // starts of words and made speech choppy. Off — RED covers packet loss.
+  dtx: false,
   degradationPreference: "maintain-framerate" as RTCDegradationPreference,
 };
 
@@ -103,6 +108,7 @@ export class LiveKitMeeting {
       .on(RoomEvent.ParticipantDisconnected, (participant) =>
         this.handlers.onRemote(participant.identity, null, { audio: false, video: false, screen: false }))
       .on(RoomEvent.ConnectionStateChanged, (state) => this.handlers.onState(mapState(state)))
+      .on(RoomEvent.ActiveSpeakersChanged, (speakers) => this.handlers.onSpeakers?.(speakers.map((speaker) => speaker.identity)))
       .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
         if (topic !== CHAT_TOPIC || !participant) return;
         this.handlers.onData(participant.identity, this.dec.decode(payload));

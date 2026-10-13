@@ -29,5 +29,7 @@
     "typescript": "~5.9.2",
     "vite": "^7.3.2",
     "vitest": "^4.1.7"
-  }
+  },
+  "license": "MIT",
+  "author": "Elbek Rustamjanov"
 }

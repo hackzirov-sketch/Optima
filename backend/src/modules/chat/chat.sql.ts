@@ -8,6 +8,7 @@ export const CHAT_ROOM_COLUMNS_SQL = `
   public_id AS "publicId", slug,
   is_system AS "isSystem", membership_locked AS "membershipLocked",
   posting_mode AS "postingMode", linked_room_id AS "linkedRoomId",
+  blocked_at AS "blockedAt",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -90,7 +91,9 @@ export class RoomVoiceChatService {
         WHERE chat_room_id = $1
           AND (status = $2::meeting_status_enum
                OR (status IN ($3::meeting_status_enum, 'scheduled'::meeting_status_enum)
-                   AND last_activity_at > now() - make_interval(mins => $4)))
+                   AND last_activity_at > now() - make_interval(mins => $4)
+                   -- A chat scheduled for later isn't running yet.
+                   AND start_time <= now() + interval '1 minute'))
         ORDER BY created_at ASC
         LIMIT 1`,
       [roomId, MeetingStatus.LIVE, MeetingStatus.INACTIVE, IDLE_MINUTES],
@@ -193,6 +196,93 @@ export class RoomVoiceChatService {
     }
     await this.meetings.join(meeting.id, userId);
     return { started, chat: await this.describe(meeting, room, userId) };
+  }
+
+  /** The next scheduled (not yet started) video chat of the room, or null. */
+  async scheduled(roomId: string, userId: string) {
+    const room = await this.room(roomId, userId);
+    const rows = await this.db.query<{ meetingId: string; title: string; startTime: Date; hostId: string }>(
+      `SELECT id AS "meetingId", title, start_time AS "startTime", host_id AS "hostId"
+         FROM meetings
+        WHERE chat_room_id = $1 AND status = 'scheduled'::meeting_status_enum
+          AND start_time > now() + interval '1 minute'
+        ORDER BY start_time ASC LIMIT 1`,
+      [roomId],
+    );
+    const next = rows[0];
+    return next ? { ...next, canCancel: this.isAdmin(room) || next.hostId === userId } : null;
+  }
+
+  /**
+   * Plan a video chat for later. It starts by itself at that time (see
+   * MeetingLifecycleProcessor 'start-room-voice-chat'): members are told and
+   * the room's banner offers to join. Channel streams: admins only.
+   */
+  async schedule(roomId: string, userId: string, startTime: Date, title?: string) {
+    const room = await this.room(roomId, userId);
+    if (room.type === 'channel' ? !this.isAdmin(room) : false)
+      throw new ForbiddenException({
+        code: ErrorCode.INSUFFICIENT_PERMISSIONS,
+        message: 'Only channel admins can schedule a live stream',
+      });
+    const at = startTime.getTime();
+    if (!Number.isFinite(at) || at < Date.now() + 60_000 || at > Date.now() + 60 * 86400_000)
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Pick a time between one minute and 60 days from now',
+      });
+    const existing = await this.scheduled(roomId, userId);
+    if (existing)
+      throw new BadRequestException({
+        code: 'VOICE_CHAT_ALREADY_SCHEDULED',
+        message: 'A video chat is already scheduled for this chat',
+      });
+    const created = await this.meetings.create(null, userId, {
+      title: (title?.trim() || room.name || 'Video chat').slice(0, 200),
+      startTime: startTime.toISOString(),
+      scope: RoomScope.INVITE_ONLY,
+      joinPolicy: MeetingJoinPolicy.AUTO,
+      maxParticipants: SFU_MAX_PARTICIPANTS,
+    } as never);
+    const listenOnly = room.type === 'channel';
+    await this.db.query(
+      `UPDATE meetings
+          SET chat_room_id = $2, last_activity_at = start_time,
+              allow_microphone = NOT $3, allow_video = NOT $3, allow_screen_share = NOT $3
+        WHERE id = $1`,
+      [created.id, roomId, listenOnly],
+    );
+    await this.meetings.scheduleRoomVoiceStart(created.id, at - Date.now());
+    return this.scheduled(roomId, userId);
+  }
+
+  /** Call off a scheduled chat — room admins, or whoever scheduled it. */
+  async cancelScheduled(roomId: string, userId: string) {
+    const next = await this.scheduled(roomId, userId);
+    if (!next)
+      throw new NotFoundException({ code: ErrorCode.MEETING_NOT_FOUND, message: 'Nothing is scheduled' });
+    if (!next.canCancel)
+      throw new ForbiddenException({ code: ErrorCode.INSUFFICIENT_PERMISSIONS, message: 'Only admins can cancel it' });
+    await this.db.query(
+      `UPDATE meetings SET status = 'ended'::meeting_status_enum, end_time = now() WHERE id = $1`,
+      [next.meetingId],
+    );
+    return { meetingId: next.meetingId };
+  }
+
+  /**
+   * Fired at the scheduled time: the chat becomes the room's live one (open
+   * to join for the usual idle window). Returns its room, or null if it was
+   * cancelled meanwhile.
+   */
+  async startScheduled(meetingId: string) {
+    const rows = await this.db.query<{ roomId: string }>(
+      `UPDATE meetings SET last_activity_at = now()
+        WHERE id = $1 AND status = 'scheduled'::meeting_status_enum AND chat_room_id IS NOT NULL
+        RETURNING chat_room_id AS "roomId"`,
+      [meetingId],
+    );
+    return rows[0]?.roomId ?? null;
   }
 
   /** End for everyone — room admins, or whoever started it. */

@@ -15,6 +15,11 @@ function socketServerUrl(): string {
   return window.location.origin;
 }
 
+/** The socket if one exists — without creating or connecting it. */
+export function currentSocket(): Socket | null {
+  return socket;
+}
+
 export function getSocket(): Socket {
   if (!socket) {
     socket = io(socketServerUrl(), {
@@ -34,8 +39,17 @@ export function getSocket(): Socket {
       // the page was reloaded. Backoff stays at socket.io's 5s ceiling.
       reconnectionAttempts: Infinity,
     });
+    // A disconnect the server initiated (expired or revoked token, a deploy)
+    // is never retried by socket.io on its own — lib/socketAuth.ts refreshes
+    // the session and reconnects.
+    socket.on("disconnect", (reason) => {
+      if (reason === "io server disconnect") window.dispatchEvent(new Event("optima:socket-kicked"));
+    });
   }
-  if (!socket.connected && !(import.meta.env.DEV && isLocalPreview())) socket.connect();
+  // `active` is true while connecting/reconnecting too: calling connect()
+  // then sent a second CONNECT on the same transport, the server dropped the
+  // connection, and that half-registered socket left presence stuck.
+  if (!socket.active && !(import.meta.env.DEV && isLocalPreview())) socket.connect();
   return socket;
 }
 

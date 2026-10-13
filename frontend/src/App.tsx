@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Route, Switch, useLocation } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/ui";
 import { useAuth } from "./lib/auth";
@@ -10,12 +10,14 @@ import { AiPage } from "./pages/AiPage";
 import { YoutubePage } from "./pages/YoutubePage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import { UsageTracker } from "./components/UsageTracker";
-import { DashboardPage } from "./pages/DashboardPage";
 import { MeetingRoomPage } from "./pages/MeetingRoomPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
+import { UserProfileModal } from "./components/UserProfileModal";
+import { AdminPage } from "./pages/AdminPage";
+import { openProfile } from "./lib/profileModal";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
 
@@ -39,18 +41,26 @@ function WorkspaceLoading() {
 
 export function App() {
   const { ready, user, group } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   useEffect(() => {
     document.documentElement.dataset.theme = user
       ? localStorage.getItem("optima-theme") === "dark" ? "dark" : "light"
       : "light";
   }, [user]);
+  const profileRoute = location.match(/^\/(?:profile|user)\/([^/?#]+)$/)?.[1];
+  useEffect(() => {
+    if (!user || !profileRoute) return;
+    openProfile(decodeURIComponent(profileRoute));
+    navigate("/chat", { replace: true });
+  }, [user, profileRoute, navigate]);
   if (!ready) return <LoadingScreen />;
   // /profile/:id is the public profile view. /user/:id is kept as a legacy alias
   // (old shared links) — it used to also serve /u/:id, but that prefix now opens
   // a DM (see chatUserMatch below), per the chat route redesign.
   const publicProfileMatch = location.match(/^\/(?:profile|user)\/([^/?#]+)$/);
-  if (publicProfileMatch) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
+  // Signed in, a profile link opens the profile card over the app (see the
+  // effect above); only a visitor without an account gets the standalone page.
+  if (publicProfileMatch && !user) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
   if (!user) return <AuthPage />;
 
   const chatInviteMatch = location.match(/^\/join\/chat\/([^/?#]+)$/);
@@ -88,14 +98,16 @@ export function App() {
       <div className="route-transition" key={isEducation ? "/education" : section}>
         {isEducation ? <EducationPage /> : isChat ? null : (
           <Switch>
-            <Route path="/ai" component={AiPage} />
+            <Route path="/ai/:id?" component={AiPage} />
             <Route path="/youtube/:slug?" component={YoutubePage} />
             <Route path="/statistics" component={StatisticsPage} />
-            <Route path="/" component={DashboardPage} />
+            <Route path="/"><Redirect to="/chat" /></Route>
             <Route path="/meetings" component={MeetingsPage} />
             <Route path="/library/:slug?/:mode?" component={LibraryPage} />
             <Route path="/profile" component={ProfilePage} />
-            <Route><DashboardPage /></Route>
+            <Route path="/admin" component={AdminPage} />
+            {/* /meet/:code, /meetings/:id …: the meeting page draws itself on top. */}
+            <Route>{null}</Route>
           </Switch>
         )}
       </div>
@@ -106,6 +118,7 @@ export function App() {
     <>
       {mainContent}
       <UsageTracker />
+      <UserProfileModal />
       {/* MeetingRoomPage (no meetingId prop = the standalone instance) is
           mounted here unconditionally, same reasoning as ChatPage below: it
           renders its own full-screen UI on top of everything via CSS when

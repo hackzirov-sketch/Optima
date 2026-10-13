@@ -70,7 +70,13 @@ export class ChatPresenceService {
     const client = this.redisService.getClient();
     if (!client) return { status: PresenceStatus.ONLINE, isNewlyOnline: true };
 
-    const wasOnline = (await this.countFreshSockets(userId)) > 0;
+    const stored = await client.hget(key(userId), 'status');
+    // A stored "offline" (or none) next to fresh sockets is a leftover of a
+    // disconnect racing this connect — treat it as not online yet.
+    const wasOnline =
+      (await this.countFreshSockets(userId)) > 0 &&
+      !!stored &&
+      stored !== PresenceStatus.OFFLINE;
     const pipeline = client.pipeline();
     pipeline.hset(socketsKey(userId), socketId, Date.now());
     pipeline.expire(socketsKey(userId), TTL_SECONDS);
@@ -79,8 +85,7 @@ export class ChatPresenceService {
     await pipeline.exec();
 
     const status = wasOnline
-      ? ((await client.hget(key(userId), 'status')) as PresenceStatus) ||
-        PresenceStatus.ONLINE
+      ? (stored as PresenceStatus)
       : PresenceStatus.ONLINE;
     return { status, isNewlyOnline: !wasOnline };
   }
@@ -92,6 +97,9 @@ export class ChatPresenceService {
     const pipeline = client.pipeline();
     pipeline.hset(socketsKey(userId), socketId, Date.now());
     pipeline.expire(socketsKey(userId), TTL_SECONDS);
+    // A connected user always has a status: if a racing disconnect wiped it
+    // (or it expired), heal it back to online instead of reading as offline.
+    pipeline.hsetnx(key(userId), 'status', PresenceStatus.ONLINE);
     pipeline.expire(key(userId), TTL_SECONDS);
     await pipeline.exec();
   }
@@ -148,7 +156,12 @@ export class ChatPresenceService {
     if (fresh === 0)
       return { status: PresenceStatus.OFFLINE, lastSeenAt: null };
     const status = (await client.hget(key(userId), 'status')) as PresenceStatus;
-    return { status: status || PresenceStatus.ONLINE, lastSeenAt: null };
+    return {
+      status: this.maskForOthers(
+        status && status !== PresenceStatus.OFFLINE ? status : PresenceStatus.ONLINE,
+      ),
+      lastSeenAt: null,
+    };
   }
 
   /** Batched lookup for a room's member list / a DM header — one Redis round trip for the status hashes. */
@@ -168,10 +181,15 @@ export class ChatPresenceService {
     const responses = await pipeline.exec();
     userIds.forEach((id, i) => {
       const status = (responses?.[i]?.[1] as string | null) ?? null;
+      // Fresh sockets mean connected, whatever the status hash says: a
+      // missing or stale "offline" there (a disconnect that raced a reconnect)
+      // used to hide a connected user until they reconnected again.
       result[id] =
-        freshCounts[i] === 0 || !status
+        freshCounts[i] === 0
           ? PresenceStatus.OFFLINE
-          : this.maskForOthers(status as PresenceStatus);
+          : !status || status === PresenceStatus.OFFLINE
+            ? PresenceStatus.ONLINE
+            : this.maskForOthers(status as PresenceStatus);
     });
     return result;
   }

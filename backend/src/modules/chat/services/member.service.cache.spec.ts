@@ -6,9 +6,13 @@ function fakeRedis() {
   const store = new Map<string, unknown>();
   return {
     store,
-    getJson: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+    // The room-blocked flag (checked before membership) is always warm and
+    // kept out of `store`, so these tests count only membership entries/queries.
+    getJson: jest.fn((key: string) =>
+      Promise.resolve(key.startsWith('room:blocked:') ? { blocked: false } : store.get(key) ?? null),
+    ),
     setJson: jest.fn((key: string, value: unknown) => {
-      store.set(key, value);
+      if (!key.startsWith('room:blocked:')) store.set(key, value);
       return Promise.resolve();
     }),
     drop: jest.fn((...keys: string[]) => {

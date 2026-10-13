@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, Bot, ChevronRight, FileText, GraduationCap, Info, LayoutGrid, Loader2, Lock, Megaphone,
-  MessageSquare, Plug, Save, ScrollText, Shield, ShieldAlert, Sparkles, Users, Video
+  ArrowLeft, Bot, ChevronRight, Heart, FileText, GraduationCap, Info, LayoutGrid, Loader2, Lock, Megaphone,
+  MessageSquare, Plug, Save, ScrollText, Shield, ShieldAlert, Sparkles, UserPlus, Users, Video
 } from "lucide-react";
 import { api } from "../lib/api";
 import { useToast } from "./Toast";
@@ -21,11 +21,12 @@ const PREVIEW_SECTIONS = new Set(["meeting", "ai", "integrations", "education"])
 type SectionId =
   | "general" | "privacy" | "permissions" | "moderation" | "notifications"
   | "content" | "analytics" | "files" | "security" | "meeting" | "ai"
-  | "integrations" | "education" | "danger";
+  | "integrations" | "education" | "danger" | "requests";
 
 const SECTIONS: Array<{ id: SectionId; icon: typeof Info }> = [
   { id: "general", icon: Info },
   { id: "privacy", icon: Lock },
+  { id: "requests", icon: UserPlus },
   { id: "permissions", icon: Users },
   { id: "moderation", icon: Shield },
   { id: "notifications", icon: MessageSquare },
@@ -39,6 +40,13 @@ const SECTIONS: Array<{ id: SectionId; icon: typeof Info }> = [
   { id: "education", icon: GraduationCap },
   { id: "danger", icon: Megaphone }
 ];
+
+/** Telegram-style coloured icon tile per settings row. */
+const SECTION_TONES: Record<SectionId, string> = {
+  general: "blue", privacy: "violet", requests: "green", content: "orange", notifications: "red",
+  permissions: "teal", moderation: "indigo", files: "sky", security: "slate", analytics: "amber",
+  meeting: "green", ai: "pink", integrations: "slate", education: "orange", danger: "red",
+};
 
 /**
  * Audit actions are stored as stable machine strings (`chat_room.deleted`), so
@@ -59,6 +67,8 @@ const AUTO_DELETE = [null, 1, 7, 30, 90, 365];
 
 interface Props {
   room: ChatRoom;
+  /** Open straight on one section (e.g. the join requests from the chat's banner). */
+  initialSection?: "requests";
   onClose: () => void;
   onSaved: () => void;
 }
@@ -71,11 +81,11 @@ interface RoomMember {
   role: string;
 }
 
-export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
+export function ChannelSettingsPanel({ room, onClose, onSaved, initialSection }: Props) {
   const { t } = useI18n();
   const { show } = useToast();
-  const [section, setSection] = useState<SectionId>("general");
-  const [sectionOpen, setSectionOpen] = useState(false);
+  // null = the Telegram-style main list; a section id = that sub-page.
+  const [section, setSection] = useState<SectionId | null>(initialSection ?? null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRole] = useState<RoomRole>("member");
@@ -89,6 +99,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
   // "Member" even when they were an admin.
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof api.chat.channelStats>> | null>(null);
+  const [requests, setRequests] = useState<Awaited<ReturnType<typeof api.chat.joinRequests>>>([]);
   const [audit, setAudit] = useState<Awaited<ReturnType<typeof api.chat.channelSettingsAudit>> | null>(null);
 
   useEffect(() => {
@@ -102,6 +113,22 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
       .catch((error) => show(error instanceof Error ? error.message : t("channelSettings.loadFailed"), "error"))
       .finally(() => setLoading(false));
   }, [room.id, show, t]);
+
+  useEffect(() => {
+    if (!canAdminister) return;
+    void api.chat.joinRequests(room.id).then(setRequests).catch(() => setRequests([]));
+  }, [room.id, canAdminister]);
+
+  async function resolveRequest(requestId: string, approve: boolean) {
+    try {
+      await api.chat.resolveJoinRequest(room.id, requestId, approve);
+      setRequests((current) => current.filter((entry) => entry.id !== requestId));
+      show(t(approve ? "channelSettings.requestApproved" : "channelSettings.requestDeclined"));
+      if (approve) onSaved();
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("channelSettings.saveFailed"), "error");
+    }
+  }
 
   useEffect(() => {
     if (!canAdminister) return;
@@ -131,12 +158,14 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
    * sections would produce empty panels.
    */
   const visibleSections = useMemo(
-    () => canAdminister ? SECTIONS : SECTIONS.filter((entry) => entry.id === "general" || entry.id === "content"),
+    // Preview-only sections stay hidden until something actually enforces them.
+    () => (canAdminister ? SECTIONS : SECTIONS.filter((entry) => entry.id === "general" || entry.id === "content"))
+      .filter((entry) => !PREVIEW_SECTIONS.has(entry.id)),
     [canAdminister]
   );
 
   useEffect(() => {
-    if (!visibleSections.some((entry) => entry.id === section)) setSection(visibleSections[0].id);
+    if (section && !visibleSections.some((entry) => entry.id === section)) setSection(null);
   }, [visibleSections, section]);
 
   function set<K extends keyof ChannelSettings>(key: K, next: ChannelSettings[K]) {
@@ -173,11 +202,27 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
     }
   }
 
+  /** The value Telegram shows at the right of each row in the main list. */
+  function summaryFor(id: SectionId): string {
+    switch (id) {
+      case "privacy": return room.scope === "public" ? t("chat.visibilityPublicShort") : t("chat.visibilityPrivateShort");
+      case "moderation": {
+        const seconds = value.slowModeSeconds ?? 0;
+        return seconds === 0 ? t("channelSettings.off") : seconds < 60 ? `${seconds}s` : `${seconds / 60}m`;
+      }
+      case "content": return value.welcomeMessage ? t("channelSettings.on") : t("channelSettings.off");
+      case "notifications": return value.defaultNotifications ? t("channelSettings.on") : t("channelSettings.off");
+      case "requests": return requests.length ? String(requests.length) : "";
+      default: return "";
+    }
+  }
+
   const Toggle = ({ field, label, hint }: { field: keyof ChannelSettings; label: string; hint?: string }) => (
     <label className="cs-toggle">
-      <input type="checkbox" checked={Boolean(value[field])} disabled={!canAdminister}
-             onChange={(event) => set(field, event.target.checked as never)} />
       <span><strong>{label}</strong>{hint && <small>{hint}</small>}</span>
+      <input type="checkbox" role="switch" checked={Boolean(value[field])} disabled={!canAdminister}
+             onChange={(event) => set(field, event.target.checked as never)} />
+      <i className="cs-switch" aria-hidden="true"><b /></i>
     </label>
   );
 
@@ -196,25 +241,48 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
   if (loading) return <div className="cs-loading"><Loader2 className="spin" size={22} /></div>;
 
   return (
-    <div className={`channel-settings ${sectionOpen ? "is-section-open" : ""}`}>
-      <nav className="cs-nav" aria-label={t(room.type === "channel" ? "channelSettings.title" : "channelSettings.groupTitle")}>
-        {visibleSections.map((entry) => {
-          const Icon = entry.icon;
-          return (
-            <button key={entry.id} className={section === entry.id ? "active" : ""}
-                    onClick={() => { setSection(entry.id); setSectionOpen(true); }}
-                    aria-current={section === entry.id ? "page" : undefined}>
-              <Icon size={16} />
-              <span>{t(`channelSettings.section.${entry.id}`)}</span>
-              {PREVIEW_SECTIONS.has(entry.id) && <em>{t("channelSettings.previewBadge")}</em>}
-              <ChevronRight size={17} className="cs-section-chevron" />
-            </button>
-          );
-        })}
-      </nav>
+    <div className="channel-settings cs-tg">
+      {section === null && <div className="cs-list">
+        <div className="cs-hero">
+          <span className="cs-hero-avatar">{room.avatarUrl ? <img src={room.avatarUrl} alt="" /> : (room.name || "?").trim().charAt(0).toUpperCase()}</span>
+          <span className="cs-hero-text">
+            <strong>{room.name}</strong>
+            <small>{room.type === "channel" ? <Megaphone size={13} /> : <Users size={13} />}{room.scope === "public" ? t("chat.visibilityPublicShort") : t("chat.visibilityPrivateShort")}{room.scope === "public" && room.slug ? ` · ${window.location.host}/${room.type === "channel" ? "ch" : "g"}/${room.slug}` : ""}</small>
+          </span>
+        </div>
+        {[
+          ["general", "privacy", "requests", "content", "notifications"],
+          ["permissions", "moderation", "files", "security"],
+          ["analytics", "meeting", "ai", "integrations", "education"],
+          ["danger"],
+        ].map((group) => group.filter((id) => visibleSections.some((entry) => entry.id === id))).filter((group) => group.length > 0).map((group) => (
+          <div className="cs-list-group" key={group[0]}>
+            {group.map((id) => {
+              const entry = SECTIONS.find((item) => item.id === id)!;
+              const Icon = entry.icon;
+              return (
+                <button key={id} type="button" className={`cs-list-row${id === "danger" ? " danger" : ""}`} onClick={() => setSection(entry.id)}>
+                  <span className={`cs-row-icon tone-${SECTION_TONES[entry.id]}`}><Icon size={17} /></span>
+                  <span>{t(`channelSettings.section.${entry.id}`)}</span>
+                  {PREVIEW_SECTIONS.has(entry.id) ? <em>{t("channelSettings.previewBadge")}</em> : <small>{summaryFor(entry.id)}</small>}
+                  <ChevronRight size={17} />
+                </button>
+              );
+            })}
+            {group[0] === "permissions" && canAdminister && (
+              <label className="cs-toggle cs-list-switch">
+                <span className="cs-row-icon tone-pink"><Heart size={17} /></span>
+                <span><strong>{t("channelSettings.reactions")}</strong></span>
+                <input type="checkbox" role="switch" checked={Boolean(value.reactionsEnabled)} onChange={(event) => set("reactionsEnabled", event.target.checked)} />
+                <i className="cs-switch" aria-hidden="true"><b /></i>
+              </label>
+            )}
+          </div>
+        ))}
+      </div>}
 
-      <div className="cs-body">
-        <button type="button" className="cs-section-back" onClick={() => setSectionOpen(false)}><ArrowLeft size={18} />{t("common.back")}</button>
+      {section !== null && <div className="cs-body">
+        <button type="button" className="cs-back" onClick={() => setSection(null)}><ArrowLeft size={18} /><span className={`cs-row-icon tone-${SECTION_TONES[section]}`}>{(() => { const Icon = SECTIONS.find((item) => item.id === section)!.icon; return <Icon size={15} />; })()}</span>{t(`channelSettings.section.${section}`)}</button>
         {PREVIEW_SECTIONS.has(section) && (
           <p className="cs-preview-note">
             <Info size={15} />
@@ -223,7 +291,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         )}
 
         {section === "general" && <>
-          <h4>{t("channelSettings.section.general")}</h4>
           <label className="cs-field"><span>{t("channelSettings.bannerUrl")}</span>
             <input value={value.bannerUrl ?? ""} disabled={!canAdminister} placeholder="https://…"
                    onChange={(event) => set("bannerUrl", event.target.value || null)} /></label>
@@ -236,18 +303,33 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
           <label className="cs-field"><span>{t("channelSettings.category")}</span>
             <input value={value.category ?? ""} disabled={!canAdminister} maxLength={40}
                    onChange={(event) => set("category", event.target.value || null)} /></label>
-          <p className="cs-readonly">{t("channelSettings.publicLink")}: <code>{window.location.origin}/{room.type === "channel" ? "ch" : "g"}/{room.slug || room.publicId}</code></p>
+          {room.scope === "public" && room.slug && <p className="cs-readonly">{t("channelSettings.publicLink")}: <code>{window.location.host}/{room.type === "channel" ? "ch" : "g"}/{room.slug}</code></p>}
+        </>}
+
+        {section === "requests" && <>
+          {requests.length === 0
+            ? <p className="cs-readonly">{t("channelSettings.noRequests")}</p>
+            : <div className="cs-requests">
+                {requests.map((entry) => (
+                  <div key={entry.id} className="cs-member">
+                    <span><strong>{`${entry.firstName} ${entry.lastName}`.trim()}</strong>
+                      <small>{entry.username ? `@${entry.username} · ` : ""}{new Date(entry.createdAt).toLocaleString()}</small></span>
+                    <span className="cs-request-actions">
+                      <button type="button" className="ghost" onClick={() => void resolveRequest(entry.id, false)}>{t("channelSettings.decline")}</button>
+                      <button type="button" className="primary" onClick={() => void resolveRequest(entry.id, true)}>{t("channelSettings.approve")}</button>
+                    </span>
+                  </div>
+                ))}
+              </div>}
         </>}
 
         {section === "privacy" && <>
-          <h4>{t("channelSettings.section.privacy")}</h4>
           <Toggle field="discoverable" label={t("channelSettings.discoverable")} hint={t("channelSettings.discoverableHint")} />
           <Toggle field="allowInviteLinks" label={t("channelSettings.allowInviteLinks")} />
           <Toggle field="joinRequiresApproval" label={t("channelSettings.joinApproval")} />
         </>}
 
         {section === "permissions" && <>
-          <h4>{t("channelSettings.section.permissions")}</h4>
           <AudienceSelect field="whoCanPost" label={t("channelSettings.whoCanPost")} />
           <label className="cs-field"><span>{t("channelSettings.whoCanComment")}</span>
             <select value={String(value.whoCanComment ?? "subscribers")} disabled={!canAdminister}
@@ -284,7 +366,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "moderation" && <>
-          <h4>{t("channelSettings.section.moderation")}</h4>
           <label className="cs-field"><span>{t("channelSettings.slowMode")}</span>
             <select value={String(value.slowModeSeconds ?? 0)} disabled={!canAdminister}
                     onChange={(event) => set("slowModeSeconds", Number(event.target.value))}>
@@ -314,7 +395,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "notifications" && <>
-          <h4>{t("channelSettings.section.notifications")}</h4>
           <Toggle field="defaultNotifications" label={t("channelSettings.defaultNotifications")} />
           <Toggle field="mentionNotifications" label={t("channelSettings.mentionNotifications")} />
           <Toggle field="eventNotifications" label={t("channelSettings.eventNotifications")} />
@@ -322,7 +402,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "content" && <>
-          <h4>{t("channelSettings.section.content")}</h4>
           <label className="cs-field"><span>{t("channelSettings.welcomeMessage")}</span>
             <textarea rows={3} maxLength={2000} disabled={!canAdminister} value={value.welcomeMessage ?? ""}
                       onChange={(event) => set("welcomeMessage", event.target.value || null)} /></label>
@@ -335,7 +414,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "analytics" && <>
-          <h4>{t("channelSettings.section.analytics")}</h4>
           {stats === null
             ? <div className="cs-loading"><Loader2 className="spin" size={20} /></div>
             : <>
@@ -372,7 +450,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "files" && <>
-          <h4>{t("channelSettings.section.files")}</h4>
           <label className="cs-field"><span>{t("channelSettings.maxUpload")}</span>
             <select value={value.maxUploadBytes === null || value.maxUploadBytes === undefined ? "" : String(value.maxUploadBytes)}
                     disabled={!canAdminister}
@@ -389,7 +466,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "security" && <>
-          <h4>{t("channelSettings.section.security")}</h4>
           <Toggle field="requireAdmin2fa" label={t("channelSettings.require2fa")} />
           <h5>{t("channelSettings.auditLog")}</h5>
           {audit === null
@@ -414,7 +490,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "meeting" && <>
-          <h4>{t("channelSettings.section.meeting")}</h4>
           <Toggle field="allowMeetings" label={t("channelSettings.allowMeetings")} />
           <Toggle field="allowLiveStream" label={t("channelSettings.allowLiveStream")} />
           <Toggle field="allowScreenShare" label={t("channelSettings.allowScreenShare")} />
@@ -423,7 +498,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "ai" && <>
-          <h4>{t("channelSettings.section.ai")}</h4>
           <Toggle field="aiModeration" label={t("channelSettings.aiModeration")} />
           <Toggle field="aiSummary" label={t("channelSettings.aiSummary")} />
           <Toggle field="aiTags" label={t("channelSettings.aiTags")} />
@@ -432,7 +506,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "integrations" && <>
-          <h4>{t("channelSettings.section.integrations")}</h4>
           {["github", "googleCalendar", "youtube", "webhook"].map((provider) => (
             <label className="cs-field" key={provider}>
               <span>{t(`channelSettings.provider.${provider}`)}</span>
@@ -448,7 +521,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "education" && <>
-          <h4>{t("channelSettings.section.education")}</h4>
           <Toggle field="trackProgress" label={t("channelSettings.trackProgress")} />
           <Toggle field="autoPostTasks" label={t("channelSettings.autoPostTasks")} />
           <label className="cs-field"><span>{t("channelSettings.minReputation")}</span>
@@ -462,7 +534,6 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
         </>}
 
         {section === "danger" && <>
-          <h4>{t("channelSettings.section.danger")}</h4>
           <p className="cs-readonly">{t("channelSettings.dangerNote")}</p>
           {isOwner
             ? <div className="cs-danger">
@@ -483,7 +554,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
               </div>
             : <p className="cs-readonly">{t("channelSettings.ownerOnly")}</p>}
         </>}
-      </div>
+      </div>}
 
       <footer className="cs-actions">
         {!canAdminister && <span className="cs-readonly"><Bot size={14} /> {t("channelSettings.readOnlyNote")}</span>}

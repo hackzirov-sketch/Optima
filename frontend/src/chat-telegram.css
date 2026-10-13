@@ -310,3 +310,156 @@ button.tg-edit-row:hover { background: color-mix(in srgb, var(--accent) 6%, tran
 /* "Draft:" in the room list, Telegram red. */
 .chat-page .room-draft { color: #e53935; font-weight: 600; }
 :root[data-theme="dark"] .chat-page .room-draft { color: #ff6b6b; }
+
+/* Sender avatar / name open the profile card. */
+.message-avatar-button { flex: none; align-self: flex-end; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.message-avatar-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.message-sender-link { cursor: pointer; }
+.message-sender-link:hover { text-decoration: underline; }
+
+/* Profile card (UserProfileModal): Telegram's centered user popup. */
+.upm-layer { z-index: 1200; }
+.upm { position: relative; width: min(100% - 32px, 400px); max-height: min(86vh, 720px); overflow-y: auto; border-radius: 16px; background: var(--surface-muted); color: var(--text); box-shadow: 0 24px 60px rgba(0, 0, 0, .3); animation: upm-in .16s ease-out; }
+.upm > section, .upm > .tg-info-actions { background: var(--surface); }
+.upm > .tg-info-section { margin-top: 8px; }
+.upm-close { position: absolute; top: 10px; right: 10px; z-index: 1; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.upm-close:hover { background: var(--surface-muted); color: var(--text); }
+.upm-hero { padding-top: 26px; }
+.upm-avatar { position: relative; display: inline-block; margin-bottom: 8px; }
+.upm-avatar > i { position: absolute; right: 6px; bottom: 6px; width: 16px; height: 16px; border: 3px solid var(--surface); border-radius: 50%; background: #22c55e; }
+.upm-loading { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; background: var(--surface); color: var(--muted); text-align: center; }
+.upm-loading strong { color: var(--text); }
+@keyframes upm-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .upm { animation: none; } }
+
+/* Reaction chips: your own reaction is filled; ≤3 reactors show as faces. */
+.message-reactions button.mine { border-color: var(--accent) !important; background: var(--accent) !important; color: #fff !important; }
+.message-reactions button { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.reaction-faces { display: inline-flex; align-items: center; margin-left: 2px; }
+.reaction-faces > * { width: 20px !important; height: 20px !important; min-width: 20px; font-size: 8px !important; border: 1.5px solid var(--surface); border-radius: 50%; }
+.message-reactions button.mine .reaction-faces > * { border-color: var(--accent); }
+.reaction-faces > * + * { margin-left: -7px; }
+
+/* Who-reacted popover. */
+.reactors-popover { position: fixed; z-index: 1300; width: min(300px, calc(100vw - 16px)); max-height: min(380px, 70vh); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 18px 48px rgba(0, 0, 0, .22); animation: upm-in .14s ease-out; }
+.reactors-popover > header { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 8px; border-bottom: 1px solid var(--line); }
+.reactors-tabs { flex: 1; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.reactors-tabs button { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--text-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.reactors-tabs button.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.reactors-tabs button img, .reactors-tabs button .tg-emoji { width: 18px; height: 18px; }
+.reactors-close { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.reactors-popover ul { margin: 0; padding: 4px 0; list-style: none; overflow-y: auto; }
+.reactors-popover li button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.reactors-popover li button:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.reactors-popover li span { flex: 1; min-width: 0; display: grid; }
+.reactors-popover li strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.reactors-popover li small { color: var(--muted); font-size: 12px; }
+.reactors-popover li em { flex: none; font-style: normal; font-size: 20px; line-height: 1; }
+.reactors-popover li em img, .reactors-popover li em .tg-emoji { width: 22px; height: 22px; }
+.reactors-empty { padding: 22px; color: var(--muted); font-size: 13px; text-align: center; }
+.reactors-popover li button > :first-child { flex: none; width: 34px; height: 34px; }
+/* Profile card: compact action tiles, channel card, no link row. */
+.upm-actions { grid-auto-columns: minmax(0, 92px); justify-content: center; margin-top: 0; }
+.upm-actions > button { min-height: 58px; padding: 8px 6px; font-size: 12px; }
+.upm-channel { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 18px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.upm-channel:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.upm-channel-avatar { display: grid; place-items: center; width: 42px; height: 42px; flex: none; overflow: hidden; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; }
+.upm-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.upm-channels small { color: var(--accent) !important; }
+
+/* Ask-to-join banner at the top of a room (admins): faces · count · close. */
+.join-requests-bar { position: relative; z-index: 3; display: flex; align-items: center; gap: 6px; margin: 8px 12px 0; padding: 6px 6px 6px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 78%, transparent); color: #fff; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.join-requests-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.join-requests-main strong { flex: 1; overflow: hidden; font-size: 14.5px; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.join-requests-faces { display: inline-flex; flex: none; }
+.join-requests-faces > * { width: 34px !important; height: 34px !important; border: 2px solid color-mix(in srgb, var(--text) 78%, #000); border-radius: 50%; }
+.join-requests-faces > * + * { margin-left: -10px; }
+.join-requests-close { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer; }
+.join-requests-close:hover { background: rgba(255, 255, 255, .14); }
+:root[data-theme="dark"] .join-requests-bar { background: rgba(255, 255, 255, .12); }
+
+/* Video chat: "Start now / Schedule" menu under the header button. */
+.vc-start-wrap { position: relative; display: inline-flex; }
+.vc-start-scrim { position: fixed; inset: 0; z-index: 40; }
+.vc-start-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 41; display: grid; min-width: 200px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 16px 40px rgba(0, 0, 0, .18); animation: upm-in .12s ease-out; }
+.vc-start-menu button { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.vc-start-menu button:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--accent); }
+.vc-scheduled-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.vc-scheduled-cancel { flex: none; min-height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: none; color: var(--text-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.vc-schedule-form { display: grid; gap: 14px; }
+.vc-schedule-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
+.vc-schedule-form input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 15px; }
+.vc-schedule-form footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+
+/* ── One-handed chat on phones ─────────────────────────────────────────────
+   The message list scrolls on its own (no page bounce, momentum on iOS),
+   the ↓ button sits low in thumb reach and counts what arrived below, and
+   the room list flips tabs with a sideways swipe. */
+.message-list { overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.room-list { overscroll-behavior-y: contain; touch-action: pan-y; }
+.scroll-bottom { position: sticky; z-index: 5; }
+.scroll-bottom > b { position: absolute; top: -7px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, .2); }
+.scroll-bottom.has-unseen { color: var(--accent); }
+@media (max-width: 820px) {
+  .scroll-bottom { width: 48px !important; height: 48px !important; bottom: 12px !important; left: calc(100% - 60px) !important; }
+  .message-list { scroll-padding-bottom: 24px; }
+}
+.room-list[data-swipe="next"] { animation: room-tab-next .22s ease-out; }
+.room-list[data-swipe="prev"] { animation: room-tab-prev .22s ease-out; }
+@keyframes room-tab-next { from { opacity: .4; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes room-tab-prev { from { opacity: .4; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .room-list[data-swipe] { animation: none; } }
+
+/* The emoji button now sits at the right end of the composer: open the
+   picker leftwards from it, never past the window edge. */
+@media (min-width: 821px) {
+  .chat-page .composer .emoji-menu-wrap > .emoji-picker,
+  .chat-page .composer .emoji-menu-wrap > .telegram-emoji-picker { left: auto !important; right: 0 !important; max-width: calc(100vw - 24px); }
+}
+/* Home is gone (the dock is the way around): no "back to home" / minimize. */
+.chat-minimize-button { display: none !important; }
+/* Profile card header icons (edit/share for yourself, close) — Telegram style. */
+.upm-top-actions { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; gap: 2px; }
+.upm-top-actions button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.upm-top-actions button:hover { background: var(--surface-muted); color: var(--accent); }
+.upm-close { display: none; }
+.upm-hero { padding-top: 30px !important; padding-bottom: 20px !important; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 75%) !important; }
+.upm-hero .upm-avatar > :first-child { width: 104px !important; height: 104px !important; font-size: 34px !important; border: 3px solid var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .14); }
+.upm-hero > strong { font-size: 20px !important; }
+.upm-hero.is-me { padding-bottom: 22px !important; }
+.upm > .tg-info-section + .tg-info-section { margin-top: 8px; }
+
+/* Phones: the bottom bar stays on the chat list (it is the way out now that
+   Home is gone); inside a conversation the composer owns the bottom. */
+@media (max-width: 820px) {
+  :root[data-theme] body:has(.chat-page:not(.chat-room-open)) .app-shell-chat .mobile-nav { display: grid !important; z-index: 60; }
+  :root[data-theme] body:has(.app-shell-chat) .chat-page:not(.chat-room-open) .room-list { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .chat-home-back { display: none !important; }
+}
+
+/* Desktop chat list header: back · avatar menu · title · new. */
+@media (min-width: 821px) {
+  .chat-sidebar-header { grid-template-columns: auto auto minmax(0, 1fr) auto !important; column-gap: 10px; }
+}
+
+/* Chat list foot: the other sections of Optima as a row of icons. */
+.chat-elsewhere { display: flex; justify-content: space-around; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--surface); }
+.chat-elsewhere button { display: grid; place-items: center; width: 40px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--text-soft); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.chat-elsewhere button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+@media (max-width: 820px) { .chat-elsewhere { display: none; } }
+.details-more { display: block; width: calc(100% - 32px); margin: 8px 16px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent); font: inherit; font-weight: 650; cursor: pointer; }
+
+/* The chat screen never grows past the window: the sidebar (header, search,
+   tabs, list, section icons, status) and the conversation share one row, and
+   only the room list / message list scroll. When the sidebar's content was
+   taller, the grid row grew with it and a scrollIntoView pushed the whole
+   page up — the headers vanished and nothing could scroll them back. */
+.chat-page { grid-template-rows: minmax(0, 1fr) !important; overflow: hidden; }
+.chat-page > .chat-sidebar, .chat-page > .conversation { min-height: 0; max-height: 100%; }
+.chat-page > .chat-sidebar > .room-list { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.chat-page > .chat-sidebar > :not(.room-list) { flex: none; }
+/* Admin ghost view: instead of the composer, a quiet note and a Join button. */
+.ghost-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; padding: 10px 16px; border-top: 1px solid var(--line); background: color-mix(in srgb, #7c3aed 8%, var(--surface)); color: var(--text-soft); font-size: 14px; }
+.ghost-bar span { display: flex; align-items: center; gap: 8px; }
+.ghost-bar svg { color: #7c3aed; flex: none; }
+.ghost-bar button { min-height: 38px; padding: 0 18px; border: 0; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }

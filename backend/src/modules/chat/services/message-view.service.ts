@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import {
   Injectable,
   Logger,
@@ -74,6 +75,8 @@ export class MessageViewService implements OnModuleInit, OnModuleDestroy {
         WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL AND status = 'active'`,
       [roomId, userId],
     );
+    // An admin looking in as a ghost leaves no views behind.
+    if (!member[0] && isSuperAdmin(userId)) return { buffered: 0 };
     if (!member[0])
       throw new ForbiddenException({
         code: ErrorCode.NOT_ROOM_MEMBER,

@@ -1,4 +1,5 @@
-import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, History, Keyboard, Link2, MoreVertical, Plus, Radio, Trash2, Video } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, ChevronLeft, ChevronRight, Copy, Globe2, History, Keyboard, Link2, Lock, MoreVertical, Plus, Radio, Ticket, Trash2, Video } from "lucide-react";
+import { getActiveMeeting, useActiveMeeting } from "../lib/activeMeeting";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button, Modal, Skeleton } from "../components/ui";
@@ -13,7 +14,7 @@ import type { Meeting, MeetingVisibility } from "../types";
 import { MESH_MAX_PARTICIPANTS, clampParticipants } from "../lib/meeting-limits";
 import { clock, dayLabel, dayTitle, shortDate, weekdayShort } from "../lib/meetDates";
 
-const VISIBILITY_OPTIONS: MeetingVisibility[] = ["group_only", "private", "public", "invite_only"];
+const VISIBILITY_OPTIONS: MeetingVisibility[] = ["public", "private", "invite_only"];
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function dayKey(date: Date) {
@@ -56,7 +57,7 @@ export function MeetingsPage() {
   const [maxAllowed, setMaxAllowed] = useState(MESH_MAX_PARTICIPANTS);
   const [laterMeeting, setLaterMeeting] = useState<Meeting | null>(null);
   const [copied, setCopied] = useState(false);
-  const [visibility, setVisibility] = useState<MeetingVisibility>("group_only");
+  const [visibility, setVisibility] = useState<MeetingVisibility>("public");
   const [joinPolicy, setJoinPolicy] = useState<"auto" | "request_approval">("auto");
   const newBarRef = useRef<HTMLButtonElement>(null);
   const newEmptyRef = useRef<HTMLButtonElement>(null);
@@ -139,7 +140,7 @@ export function MeetingsPage() {
         joinPolicy: visibility === "invite_only" || visibility === "private" ? undefined : joinPolicy,
       });
       setCreateMode(null);
-      setVisibility("group_only");
+      setVisibility("public");
       setJoinPolicy("auto");
       setMeetings((current) => [meeting, ...current]);
       if (mode === "instant") {
@@ -163,6 +164,7 @@ export function MeetingsPage() {
     event.preventDefault();
     const value = code.trim();
     if (!value) return;
+    if (getActiveMeeting()) { show(t("meetingRoom.alreadyInMeeting"), "error"); return; }
     const id = value.match(UUID)?.[0];
     if (id && /\/meetings\//.test(value)) {
       navigate(`/meetings/${id}`);
@@ -325,11 +327,13 @@ export function MeetingsPage() {
             {createMode === "schedule" && <label>{t("meetings.startTimeLabel")}<input name="startTime" type="datetime-local" defaultValue={localInput(defaultStart)} required /></label>}
             <label>{t("meetings.maxParticipantsLabel")}<input name="maxParticipants" type="number" min={2} max={maxAllowed} defaultValue={Math.min(maxAllowed, 25)} required /><small className="field-hint">{t("meet.maxHint", { max: maxAllowed })}</small></label>
           </div>
-          <fieldset className="meet-visibility">
+          <fieldset className="meet-visibility meet-visibility-cards">
             <legend>{t("meetings.visibilityLabel")}</legend>
             {VISIBILITY_OPTIONS.map((option) => (
-              <label key={option} className={visibility === option ? "selected" : ""}>
+              <label key={option} className={`tone-${option} ${visibility === option ? "selected" : ""}`}>
                 <input type="radio" name="visibility" value={option} checked={visibility === option} onChange={() => setVisibility(option)} />
+                <b className="meet-visibility-icon" aria-hidden="true">{option === "public" ? <Globe2 size={22} /> : option === "private" ? <Lock size={22} /> : <Ticket size={22} />}</b>
+                <i className="meet-visibility-check" aria-hidden="true"><Check size={13} strokeWidth={3} /></i>
                 <span><strong>{({ group_only: t("meetings.visibilityWorkspace"), private: t("meetings.visibilityPrivate"), public: t("meetings.visibilityPublic"), invite_only: t("meetings.visibilityInviteOnly") })[option]}</strong>
                   <small>{({ group_only: t("meetings.visibilityWorkspaceHint"), private: t("meetings.visibilityPrivateHint"), public: t("meetings.visibilityPublicHint"), invite_only: t("meetings.visibilityInviteOnlyHint") })[option]}</small></span>
               </label>
@@ -362,17 +366,22 @@ function MeetingRow({ meeting, locale, canDelete, onOpen, onCopyLink, onCopyCode
   const trigger = useRef<HTMLButtonElement>(null);
   const start = new Date(meeting.startTime);
   const ended = meeting.status === "ended" || meeting.status === "cancelled";
+  // In another meeting already: this one can't be joined until that one is left.
+  const active = useActiveMeeting();
+  const blocked = !!active && active.id !== meeting.id;
+  const here = active?.id === meeting.id;
   return (
     <article className={`meet-row ${meeting.status === "live" ? "live" : ""}`}>
       <time dateTime={meeting.startTime}>
         <strong>{clock(start, locale)}</strong>
         {ended && <small>{shortDate(start, locale)}</small>}
       </time>
-      <button type="button" className="meet-row-main" onClick={onOpen}>
+      <button type="button" className="meet-row-main" onClick={blocked ? undefined : onOpen} aria-disabled={blocked}>
         <strong>{meeting.title}</strong>
         <small>{meeting.code} · {t("meet.participantsShort", { count: meeting.participantCount })}</small>
       </button>
-      {!ended && <button type="button" className="meet-row-join" onClick={onOpen}>{t("meet.join")}</button>}
+      {!ended && <button type="button" className={`meet-row-join ${blocked ? "is-blocked" : ""} ${here ? "is-here" : ""}`} onClick={blocked ? undefined : onOpen}
+        aria-disabled={blocked} title={blocked ? t("meetingRoom.alreadyInMeeting") : undefined}>{here ? t("meet.returnToMeeting") : t("meet.join")}</button>}
       <span className="meet-anchor">
         <button ref={trigger} type="button" className="meet-icon-button" aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("meet.itemMenu")} onClick={() => setMenuOpen((open) => !open)}><MoreVertical size={20} /></button>
         <MeetMenu open={menuOpen} onClose={() => setMenuOpen(false)} triggerRef={trigger} placement="bottom" align="end" label={t("meet.itemMenu")} className="meet-menu-light" items={[

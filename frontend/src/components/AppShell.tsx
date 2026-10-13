@@ -9,6 +9,7 @@ import { Avatar, DisplayName, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
 import { NotificationsMenu } from "./NotificationsMenu";
 import { useOutsideClose } from "../lib/useOutsideClose";
+import { AccountMenu } from "./AccountMenu";
 
 const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_meeting">; dotClass: string }> = [
   { value: "online", dotClass: "status-dot-online" },
@@ -21,7 +22,6 @@ const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_mee
 type TextKey = "home" | "chat" | "meetings" | "statistics" | "ai" | "youtube" | "library" | "education" | "profile";
 
 const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
-  { href: "/", key: "home", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageCircle },
   { href: "/meetings", key: "meetings", icon: Video },
   { href: "/statistics", key: "statistics", icon: BarChart3 },
@@ -29,13 +29,11 @@ const nav: { href: string; key: TextKey; icon: typeof LayoutDashboard }[] = [
   { href: "/youtube", key: "youtube", icon: Youtube },
   { href: "/library", key: "library", icon: BookOpen },
   { href: "/education", key: "education", icon: GraduationCap },
-  { href: "/profile", key: "profile", icon: UserRound },
 ];
 
 /** The phone drawer: the destinations people reach from the menu button. */
 type DrawerKey = TextKey | "channels" | "groups" | "settings";
 const drawerNav: { href: string; key: DrawerKey; icon: typeof LayoutDashboard; activeKey?: TextKey }[] = [
-  { href: "/", key: "home", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageCircle },
   { href: "/chat?tab=channel", key: "channels", icon: Megaphone },
   { href: "/chat?tab=group", key: "groups", icon: UsersRound },
@@ -81,6 +79,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // for everyone (including the owner) since it can't tell who's asking, so
   // the only reliable "what did I pick" source is the choice itself.
   const [myStatus, setMyStatus] = useState<Exclude<PresenceStatus, "offline" | "in_meeting">>("online");
+  // Where "back" from the full-screen chat returns to: the last page visited outside it.
+  useEffect(() => {
+    // Only real pages — not "/" (it just redirects to the chat) or a meeting link.
+    if (location !== "/" && !/^\/(chat|u|g|ch|meet|join)(\/|$)/.test(location)) {
+      try { sessionStorage.setItem("optima:last-page", location); } catch { /* storage off */ }
+    }
+  }, [location]);
   const active = (href: string) =>
     href === "/"
       ? location === "/"
@@ -196,7 +201,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-body">
         <header className="topbar">
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(true)} aria-label={t("shell.openMenu")}><Menu size={21} /></button>
-          <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{t(`shell.${nav.find((item) => active(item.href))?.key || "home"}`)}</strong><small>{group?.name}</small></div>
+          <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{location.startsWith("/profile") ? t("shell.settingsMenu") : t(`shell.${nav.find((item) => active(item.href))?.key || "chat"}`)}</strong><small>{group?.name}</small></div>
           <div className="topbar-actions">
             <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={theme === "light" ? t("shell.themeToDark") : t("shell.themeToLight")} title={theme === "light" ? t("shell.themeDark") : t("shell.themeLight")}>{theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
             <div className="language-switcher" ref={languageMenuRef}>
@@ -215,6 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </div>
             <NotificationsMenu />
+            <AccountMenu status={myStatus} />
           </div>
         </header>
         <main className="app-main">{children}</main>

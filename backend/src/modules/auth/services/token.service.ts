@@ -1,4 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { currentDeviceId, currentRequestMeta } from '../../../common/context/request-context';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
@@ -14,6 +15,7 @@ interface TokenContext {
   userAgent?: string;
   deviceName?: string;
   provider?: string;
+  deviceId?: string;
 }
 
 @Injectable()
@@ -49,7 +51,23 @@ export class TokenService {
     return { accessToken, refreshToken, jti };
   }
 
-  async generateTokens(user: User, ctx: TokenContext = {}, groupId?: string) {
+  async generateTokens(user: User, given: TokenContext = {}, groupId?: string) {
+    // The one choke point every login, OAuth, refresh and group switch goes
+    // through: a blocked (inactive) account gets no session from any of them.
+    if (user.isActive === false)
+      throw new UnauthorizedException({
+        code: ErrorCode.ACCOUNT_INACTIVE,
+        message: 'This account is blocked',
+      });
+    // Fill what the caller didn't pass from the live request: the newest IP
+    // and browser, and the device id that makes one browser one session.
+    const live = currentRequestMeta();
+    const ctx: TokenContext = {
+      ...given,
+      ip: live.ip ?? given.ip,
+      userAgent: given.userAgent ?? live.userAgent,
+      deviceId: currentDeviceId() ?? undefined,
+    };
     const refreshExpires =
       this.configService.get<string>('jwt.refreshExpires') || '7d';
     const expiresAt = new Date(Date.now() + ms(refreshExpires as any));

@@ -53,7 +53,23 @@ export class CommunityService {
     limit = 30,
   ) {
     await this.members.assertRoomMember(roomId, userId);
-    const safeLimit = Math.min(Math.max(limit || 30, 1), 100);
+    // A channel's subscriber list is for its owner and admins only — like
+    // Telegram, subscribers see the count, never each other.
+    const [access] = await this.dataSource.query<{ type: string; role: string | null }>(
+      `SELECT r.type, m.role FROM chat_rooms r
+         LEFT JOIN chat_members m ON m.room_id = r.id AND m.user_id = $2 AND m.left_at IS NULL
+        WHERE r.id = $1`,
+      [roomId, userId],
+    );
+    if (access?.type === 'channel' && !['owner', 'admin'].includes(access.role ?? '')) {
+      const [count] = await this.dataSource.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM chat_members WHERE room_id = $1 AND status = 'active' AND left_at IS NULL`,
+        [roomId],
+      );
+      return { items: [], page: 1, limit: 0, total: count?.total ?? 0, hidden: true };
+    }
+    // Twenty people per page at most; the client pages through the rest.
+    const safeLimit = Math.min(Math.max(limit || 20, 1), 20);
     const safePage = Math.max(page || 1, 1);
     const params: unknown[] = [roomId, safeLimit, (safePage - 1) * safeLimit];
     const search = query.trim();

@@ -176,7 +176,8 @@ export class UsersController {
   @Get('search')
   @ApiOperation({ summary: 'Search users (global) - minimal public fields' })
   async searchUsers(@Query('q') q: string, @Query('limit') limitStr?: string) {
-    const limit = Math.min(50, Number(limitStr) || 20);
+    // At most 20 people per request — search is for finding someone, not listing everyone.
+    const limit = Math.min(20, Number(limitStr) || 20);
     if (!q || q.trim().length < 2) return { data: [] };
     const rows = await this.usersService.searchPublic(q.trim(), limit);
     return { data: rows };

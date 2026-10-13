@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import {
   Injectable,
   ForbiddenException,
@@ -48,9 +49,20 @@ export class ChatMemberService {
     roomId: string,
     userId: string,
   ): Promise<RoomMembership> {
+    const superAdmin = isSuperAdmin(userId);
+    // A group/channel blocked by an Optima admin is closed to everyone else.
+    if (!superAdmin && (await this.isRoomBlocked(roomId)))
+      throw new ForbiddenException({
+        code: 'ROOM_BLOCKED',
+        message: 'This chat has been blocked by Optima',
+      });
+    // A super admin who is in the room acts as its owner.
+    const asOwner = (membership: RoomMembership) =>
+      superAdmin ? { ...membership, role: 'owner' } : membership;
+
     const key = RedisKeys.roomMember(roomId, userId);
     const cached = await this.redis.getJson<RoomMembership>(key);
-    if (cached) return cached;
+    if (cached) return asOwner(cached);
 
     const rows = await this.dataSource.query<RoomMembership>(
       `SELECT id, room_id AS "roomId", user_id AS "userId", role, status
@@ -60,7 +72,18 @@ export class ChatMemberService {
     );
     if (rows[0]) {
       await this.redis.setJson(key, rows[0], ROOM_MEMBERSHIP_TTL_SECONDS);
-      return rows[0];
+      return asOwner(rows[0]);
+    }
+    // Ghost view: an Optima admin may look into any group/channel without
+    // joining — no membership row, so nothing shows up in member lists, view
+    // counts or "joined" notices. Sending still needs a real (visible) join.
+    if (superAdmin) {
+      const [room] = await this.dataSource.query<{ type: string }>(
+        `SELECT type FROM chat_rooms WHERE id = $1`,
+        [roomId],
+      );
+      if (room && room.type !== 'direct')
+        return { id: 'ghost', roomId, userId, role: 'owner', status: 'active', ghost: true } as RoomMembership;
     }
     // Not active. Distinguish "invited, hasn't accepted" from "not involved
     // at all" so the client can offer the accept action.
@@ -80,6 +103,24 @@ export class ChatMemberService {
       code: ErrorCode.NOT_ROOM_MEMBER,
       message: 'Not a member of this chat room',
     });
+  }
+
+  /** Whether an admin blocked this room (cached a minute; dropped on (un)block). */
+  async isRoomBlocked(roomId: string): Promise<boolean> {
+    const key = `room:blocked:${roomId}`;
+    const cached = await this.redis.getJson<{ blocked: boolean }>(key);
+    if (cached) return cached.blocked;
+    const rows = await this.dataSource.query<{ blocked: boolean }>(
+      `SELECT blocked_at IS NOT NULL AS blocked FROM chat_rooms WHERE id = $1`,
+      [roomId],
+    );
+    const blocked = !!rows[0]?.blocked;
+    await this.redis.setJson(key, { blocked }, 60);
+    return blocked;
+  }
+
+  async forgetRoomBlocked(roomId: string) {
+    await this.redis.drop(`room:blocked:${roomId}`);
   }
 
   /**

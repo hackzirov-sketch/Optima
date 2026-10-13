@@ -46,6 +46,53 @@ export class ChatReactionService {
     return rows[0] ?? null;
   }
 
+  /**
+   * Who reacted with what, and when — the list behind a reaction chip. In a
+   * channel only its owner/admins may see it: subscribers react anonymously.
+   */
+  async listReactors(messageId: string, userId: string) {
+    const message = await this.findMessage(messageId);
+    if (!message || message.deletedAt)
+      throw new NotFoundException({
+        code: ErrorCode.MESSAGE_NOT_FOUND,
+        message: 'Message not found',
+      });
+    const rows = await this.dataSource.query<{ type: string; role: string }>(
+      `SELECT r.type, m.role FROM chat_rooms r
+         JOIN chat_members m ON m.room_id = r.id AND m.user_id = $2
+                            AND m.left_at IS NULL AND m.status = 'active'
+        WHERE r.id = $1`,
+      [message.roomId, userId],
+    );
+    const membership = rows[0];
+    if (!membership)
+      throw new ForbiddenException({
+        code: ErrorCode.NOT_ROOM_MEMBER,
+        message: 'Not a member of this chat room',
+      });
+    if (membership.type === 'channel' && !['owner', 'admin'].includes(membership.role))
+      return [];
+    return this.dataSource.query<{
+      userId: string;
+      emoji: string;
+      createdAt: Date;
+      firstName: string;
+      lastName: string;
+      avatarUrl: string | null;
+      username: string | null;
+    }>(
+      `SELECT r.user_id AS "userId", r.emoji, r.created_at AS "createdAt",
+              u.first_name AS "firstName", u.last_name AS "lastName",
+              u.avatar_url AS "avatarUrl", u.username
+         FROM chat_reactions r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.message_id = $1
+        ORDER BY r.created_at DESC
+        LIMIT 500`,
+      [messageId],
+    );
+  }
+
   private async assertMember(roomId: string, userId: string): Promise<void> {
     const rows = await this.dataSource.query<{ id: string }>(
       `SELECT id FROM chat_members

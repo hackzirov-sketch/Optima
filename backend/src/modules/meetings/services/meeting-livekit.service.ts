@@ -178,6 +178,28 @@ export class MeetingLiveKitService {
     }
   }
 
+  /**
+   * Is this person still connected to the meeting's media room? A phone that
+   * puts the browser in the background often loses the signalling socket
+   * while LiveKit keeps the call (they still hear everyone). null = unknown
+   * (LiveKit off or unreachable).
+   */
+  async isInRoom(meetingId: string, userId: string): Promise<boolean | null> {
+    if (!this.isEnabled()) return null;
+    try {
+      this.rooms ??= new RoomServiceClient(
+        this.url.replace(/^ws/, 'http'),
+        this.apiKey,
+        this.apiSecret,
+      );
+      const participants = await this.rooms.listParticipants(MeetingLiveKitService.roomName(meetingId));
+      return participants.some((participant) => participant.identity === userId);
+    } catch (err) {
+      this.logger.debug(`LiveKit presence check for ${meetingId} failed: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
   async applyPermissions(meetingId: string): Promise<void> {
     if (!this.isEnabled()) return;
     try {

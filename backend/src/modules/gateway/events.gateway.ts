@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../common/super-admin';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -193,7 +194,12 @@ const ALLOWED_MEETING_REACTIONS = new Set([
 // "left the meeting" — give it a window to reconnect and rejoin before the
 // participant is marked as having left in the DB (which can in turn trigger
 // meeting auto-end if they were the last one present).
-const MEETING_RECONNECT_GRACE_MS = 30_000;
+const MEETING_RECONNECT_GRACE_MS = 12_000;
+
+// One meeting per person at a time: Redis holds the meeting each user is in,
+// refreshed by the socket heartbeat, so a crashed tab frees it by itself.
+const ACTIVE_MEETING_TTL_SECONDS = 120;
+const activeMeetingKey = (userId: string) => `meeting:active-user:${userId}`;
 
 // How often a live socket's handshake token is re-checked (expiry, logout
 // blacklist, session block, account status). Short enough that a revoked
@@ -299,7 +305,11 @@ export class EventsGateway
     // browser attaches it automatically on the handshake request as long as
     // the client connects with withCredentials:true, so there's nothing for
     // frontend JS to read or hand us explicitly anymore.
-    const rawCookie = client.handshake.headers?.cookie;
+    return this.userFromCookieHeader(client.handshake.headers?.cookie);
+  }
+
+  /** The access-token cookie in a Cookie header → the socket's auth, or null. */
+  userFromCookieHeader(rawCookie: string | undefined): WsUser | null {
     const token = rawCookie ? parseCookie(rawCookie)[ACCESS_COOKIE] : undefined;
 
     if (!token) return null;
@@ -383,6 +393,30 @@ export class EventsGateway
     return true;
   }
 
+  /**
+   * Moves a live socket onto a freshly refreshed access token. The socket
+   * authenticated with the cookie it had at handshake and is cut off when that
+   * token expires; the client refreshes its cookie every few minutes and then
+   * calls POST /realtime/renew, which arrives here with the new cookie. The
+   * socket stays open (no meeting/chat blip), and from now on its checks —
+   * expiry, logout blacklist, session cutoff — run against the new token.
+   * Only the socket's own user can renew it.
+   */
+  async renewSocketAuth(socketId: string, cookieHeader: string | undefined): Promise<boolean> {
+    const fresh = this.userFromCookieHeader(cookieHeader);
+    if (!fresh) return false;
+    // Nest hands the gateway the root Namespace (its `sockets` is the Map);
+    // a Server's would be one level down. Handle both.
+    const holder = this.server as unknown as { sockets?: Map<string, AppSocket> | { sockets?: Map<string, AppSocket> } };
+    const sockets = holder?.sockets instanceof Map ? holder.sockets : holder?.sockets?.sockets;
+    const client = sockets?.get(socketId);
+    if (!client || client.data?.userId !== fresh.id) return false;
+    const previous = client.data.auth;
+    client.data.auth = { ...fresh, groupIds: previous?.groupIds ?? fresh.groupIds };
+    if (!(await this.revalidateSocket(client))) return false;
+    return true;
+  }
+
   private disconnectUnauthorized(
     client: AppSocket,
     code: string,
@@ -444,9 +478,22 @@ export class EventsGateway
       user.id,
       client.id,
     );
+    // The client may already be gone (a tab closed mid-handshake): its
+    // disconnect handler ran before the entry above was written, so remove it
+    // here or it keeps the user "online" until the TTL runs out.
+    if (client.disconnected) {
+      await this.presenceService.disconnect(user.id, client.id).catch(() => undefined);
+      return;
+    }
     if (isNewlyOnline) {
       this.emitPresence(client, user.id, this.presenceService.maskForOthers(status));
     }
+    // Engine.io's ping/pong keeps flowing while a background tab's timers
+    // (and so the app-level heartbeat) are throttled — a minimized window
+    // stays online as long as its connection does.
+    client.conn.on('heartbeat', () => {
+      void this.presenceService.refresh(user.id, client.id).catch(() => undefined);
+    });
 
     // Bulk presence snapshot for everyone in my groups and chats, in one shot.
     const peerIds = new Set<string>(client.data.presencePeers);
@@ -472,6 +519,11 @@ export class EventsGateway
     const userId = client.data?.userId;
     if (!userId) return;
     await this.presenceService.refresh(userId, client.id);
+    if (client.data?.meetingId)
+      await this.redisService
+        .getClient()
+        ?.expire(activeMeetingKey(userId), ACTIVE_MEETING_TTL_SECONDS)
+        .catch(() => undefined);
     // Cheap, already-debounced (30s) DB write - keeps users.last_seen fresh
     // for the "last seen" history column without hammering Postgres.
     void this.usersService.updateLastSeen(userId);
@@ -565,6 +617,7 @@ export class EventsGateway
         .fetchSockets();
       if (stillPresent.length === 0) {
         await this.meetingsService.leave(meetingId, userId).catch(() => {});
+        await this.clearActiveMeeting(userId, meetingId);
         this.server
           .to(`meeting:${meetingId}`)
           .emit('meeting:user-left', { meetingId, userId });
@@ -645,11 +698,20 @@ export class EventsGateway
       [data.roomId, userId],
     );
     const member = chatMemberRows[0];
-    if (!member)
+    if (!member) {
+      // An admin looking in as a ghost gets the live feed silently.
+      if (isSuperAdmin(userId)) {
+        const [room] = await this.dataSource.query<{ type: string }>(`SELECT type FROM chat_rooms WHERE id = $1`, [data.roomId]);
+        if (room && room.type !== 'direct') {
+          await client.join(`room:${data.roomId}`);
+          return { event: 'joined', roomId: data.roomId, ghost: true };
+        }
+      }
       throw new WsException({
         code: 'WS_NOT_ROOM_MEMBER',
         message: 'Not a room member',
       });
+    }
 
     await client.join(`room:${data.roomId}`);
     client.to(`room:${data.roomId}`).emit('user_joined_room', {
@@ -1027,6 +1089,24 @@ export class EventsGateway
     // this was the root cause of "users can't join each other's meetings"
     // (the participant list / permission checks read from the DB, which
     // stayed empty because only the WS room existed).
+    // Already in another meeting from a different tab or device? Refuse —
+    // one meeting at a time; they have to leave that one first.
+    const redis = this.redisService.getClient();
+    const otherMeeting = await redis?.get(activeMeetingKey(userId)).catch(() => null);
+    if (otherMeeting && otherMeeting !== meetingId && otherMeeting !== client.data?.meetingId) {
+      const elsewhere = (await this.server.in(`meeting:${otherMeeting}:user:${userId}`).fetchSockets())
+        .filter((socket) => socket.id !== client.id);
+      if (elsewhere.length > 0) {
+        client.emit('meeting:error', {
+          code: 'MEETING_BUSY_ELSEWHERE',
+          message: 'You are already in another meeting',
+          otherMeetingId: otherMeeting,
+          fatal: true,
+        });
+        return;
+      }
+    }
+
     try {
       await this.meetingsService.join(meetingId, userId);
     } catch (err) {
@@ -1051,6 +1131,9 @@ export class EventsGateway
 
     // Register in meeting presence
     client.data.meetingId = meetingId;
+    await redis
+      ?.set(activeMeetingKey(userId), meetingId, 'EX', ACTIVE_MEETING_TTL_SECONDS)
+      .catch(() => undefined);
     await client.join(`meeting:${meetingId}`);
     await client.join(`meeting:${meetingId}:user:${userId}`);
 
@@ -1613,6 +1696,7 @@ export class EventsGateway
       // Swallow errors: the participant row may not exist if this socket
       // never completed a validated join (e.g. it disconnected mid-join).
       await this.meetingsService.leave(meetingId, userId).catch(() => {});
+      await this.clearActiveMeeting(userId, meetingId);
       // A departed participant shouldn't linger in the raised-hands list —
       // best-effort clear, mirrors the resilience of the leave() call above.
       await this.meetingsService
@@ -1629,6 +1713,14 @@ export class EventsGateway
       // call silently made an invisible user visible again.
       await this.restorePresenceAfterMeeting(client, userId);
     }
+  }
+
+  /** Frees the one-meeting lock, but only if it still points at this meeting. */
+  private async clearActiveMeeting(userId: string, meetingId: string) {
+    const redis = this.redisService.getClient();
+    if (!redis) return;
+    const current = await redis.get(activeMeetingKey(userId)).catch(() => null);
+    if (current === meetingId) await redis.del(activeMeetingKey(userId)).catch(() => undefined);
   }
 
   /** Clears IN_MEETING, leaving any manually chosen status alone. */
@@ -1660,13 +1752,22 @@ export class EventsGateway
     return rows.map((row) => row.userId);
   }
 
-  /** One presence change to the user's groups and chat partners (each socket once). */
+  /**
+   * One presence change to the user's groups and chat partners (each socket
+   * once). Chat partners are looked up now, not taken from connect time —
+   * someone who started a DM after this socket connected must hear it too.
+   */
   private emitPresence(client: AppSocket, userId: string, status: PresenceStatus) {
-    const rooms = [
-      ...(client.data?.groupIds ?? []).map((groupId) => `group:${groupId}`),
-      ...(client.data?.presencePeers ?? []).map((peerId) => `user:${peerId}`),
-    ];
-    if (rooms.length) this.server.to(rooms).emit('presence_update', { userId, status });
+    void this.chatPresencePeers(userId)
+      .catch(() => client.data?.presencePeers ?? [])
+      .then((peers) => {
+        if (client.data) client.data.presencePeers = peers;
+        const rooms = [
+          ...(client.data?.groupIds ?? []).map((groupId) => `group:${groupId}`),
+          ...peers.map((peerId) => `user:${peerId}`),
+        ];
+        if (rooms.length) this.server.to(rooms).emit('presence_update', { userId, status });
+      });
   }
 
   /** Server-side room cleanup after a host explicitly ends a meeting for everyone. */
