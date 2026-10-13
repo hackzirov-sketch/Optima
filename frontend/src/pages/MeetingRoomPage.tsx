@@ -2060,7 +2060,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     { key: "details", label: t("meet.details"), icon: <Info size={20} />, onSelect: () => togglePanel("info") },
     { key: "layout", label: gridViewForced ? t("meet.layoutAuto") : t("meet.layoutGrid"), icon: <LayoutGrid size={20} />, onSelect: () => setGridViewForced((value) => !value) },
     { key: "link", label: t("meet.copyLink"), icon: <Link2 size={20} />, onSelect: copyLink },
-    { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/meet") },
+    // { key: "minimize", label: t("meet.minimize"), icon: <Minus size={20} />, onSelect: () => navigate("/meet") },
     ...(isHost ? [{ key: "end", label: t("meet.endForAll"), icon: <PhoneOff size={20} />, danger: true, onSelect: () => void endMeetingForAll() }] : []),
   ];
 
