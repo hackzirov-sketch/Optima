@@ -51,6 +51,21 @@ export interface LibraryReviews {
   saved?: boolean;
   items: Array<{ id: string; rating: number; body: string; createdAt: string; updatedAt: string; mine: boolean; author: { id: string; firstName: string; lastName: string; username: string | null; avatarUrl: string | null } }>;
 }
+export interface AdminOverview {
+  onlineNow: number;
+  users: { total: number; blocked: number; newToday: number; activeToday: number };
+  rooms: { groups: number; channels: number; direct: number; blocked: number };
+  meetings: { live: number; inCalls: number };
+  requests: { chat: number; meeting: number };
+  ai: { messagesToday: number };
+}
+export interface AdminUser { id: string; firstName: string; lastName: string; username: string | null; email: string; avatarUrl: string | null; createdAt: string; lastSeen: string | null; isActive: boolean; blockedAt: string | null; blockedReason: string | null; online: boolean; superAdmin: boolean }
+export interface AdminRoom { id: string; name: string | null; type: "group" | "channel"; scope: string; slug: string | null; avatarUrl: string | null; createdAt: string; blockedAt: string | null; blockedReason: string | null; lastMessageAt: string | null; memberCount: number; pendingRequests: number; ownerFirstName: string | null; ownerLastName: string | null; ownerUsername: string | null }
+export interface AdminChatRequest { id: string; createdAt: string; roomId: string; roomName: string | null; roomType: string; userId: string; firstName: string; lastName: string; username: string | null }
+export interface AdminMeetingRequest { id: string; createdAt: string; meetingId: string; meetingTitle: string; code: string; userId: string; firstName: string; lastName: string; username: string | null }
+export interface AdminMeeting { id: string; title: string; code: string; scope: string; startTime: string; chatRoomId: string | null; hostFirstName: string; hostLastName: string; participants: number }
+export interface AdminAuditEntry { id: string; action: string; targetType: string; targetId: string | null; details: Record<string, string>; createdAt: string; actorFirstName: string | null; actorLastName: string | null; targetName: string | null }
+
 export interface AiReplyResult { reply: string; provider: "gemini" | "groq"; grounded: boolean; sources: Array<{ title: string; url: string }> }
 
 /** The watch page's description card. */
@@ -424,6 +439,19 @@ export const api = {
     }>>("/auth/sessions"),
     revokeSession: (id: string) => apiFetch(`/auth/sessions/${id}`, { method: "DELETE" }),
     revokeAllSessions: () => apiFetch("/auth/sessions", { method: "DELETE" }),
+  },
+  admin: {
+    overview: () => apiFetch<AdminOverview>("/admin/overview"),
+    users: (q = "", filter = "", page = 1) => apiFetch<{ total: number; page: number; items: AdminUser[] }>(`/admin/users?${new URLSearchParams({ q, filter, page: String(page) })}`),
+    blockUser: (id: string, reason?: string) => apiFetch(`/admin/users/${id}/block`, { method: "POST", body: JSON.stringify({ reason }) }),
+    unblockUser: (id: string) => apiFetch(`/admin/users/${id}/unblock`, { method: "POST" }),
+    rooms: (q = "", type = "", filter = "", page = 1) => apiFetch<{ total: number; page: number; items: AdminRoom[] }>(`/admin/rooms?${new URLSearchParams({ q, type, filter, page: String(page) })}`),
+    blockRoom: (id: string, reason?: string) => apiFetch(`/admin/rooms/${id}/block`, { method: "POST", body: JSON.stringify({ reason }) }),
+    unblockRoom: (id: string) => apiFetch(`/admin/rooms/${id}/unblock`, { method: "POST" }),
+    joinRoom: (id: string) => apiFetch(`/admin/rooms/${id}/join`, { method: "POST" }),
+    requests: () => apiFetch<{ chat: AdminChatRequest[]; meeting: AdminMeetingRequest[] }>("/admin/requests"),
+    meetings: () => apiFetch<AdminMeeting[]>("/admin/meetings"),
+    audit: (page = 1) => apiFetch<AdminAuditEntry[]>(`/admin/audit?page=${page}`),
   },
   users: {
     me: () => apiFetch<User>("/users/me"),

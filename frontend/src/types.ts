@@ -24,6 +24,8 @@ export interface User {
   timezone?: string;
   theme?: UserTheme;
   isVerified?: boolean;
+  /** One of Optima's admins (server env SUPER_ADMIN_USER_IDS). */
+  isSuperAdmin?: boolean;
   notificationsEnabled?: boolean;
   emailNotifications?: boolean;
   pushNotifications?: boolean;
@@ -78,6 +80,8 @@ export interface ChatRoom {
   avatarUrl?: string | null;
   createdById: string;
   memberIds: string[];
+  /** Blocked by an Optima admin. */
+  blocked?: boolean;
   memberProfiles?: Array<Pick<User, "id" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "publicId" | "nameEmoji">>;
   memberCount: number;
   unreadCount: number;

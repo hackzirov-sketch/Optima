@@ -52,6 +52,13 @@ export class TokenService {
   }
 
   async generateTokens(user: User, given: TokenContext = {}, groupId?: string) {
+    // The one choke point every login, OAuth, refresh and group switch goes
+    // through: a blocked (inactive) account gets no session from any of them.
+    if (user.isActive === false)
+      throw new UnauthorizedException({
+        code: ErrorCode.ACCOUNT_INACTIVE,
+        message: 'This account is blocked',
+      });
     // Fill what the caller didn't pass from the live request: the newest IP
     // and browser, and the device id that makes one browser one session.
     const live = currentRequestMeta();

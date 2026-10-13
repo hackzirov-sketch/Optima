@@ -290,6 +290,8 @@ export class ChatRoomInviteService {
         return lockedRoom;
       }
 
+      if ((lockedRoom as { blockedAt?: Date | null }).blockedAt)
+        throw new ForbiddenException({ code: 'ROOM_BLOCKED', message: 'This chat has been blocked by Optima' });
       if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
         throw new BadRequestException({
           code: ErrorCode.INVITE_CODE_EXHAUSTED,

@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import {
   Injectable,
   NotFoundException,
@@ -76,6 +77,8 @@ export interface ChatRoomDto {
    * input to everyone and let the send fail.
    */
   myRole: 'member' | 'admin' | 'owner';
+  /** Blocked by an Optima admin: read-only shell, nothing loads. */
+  blocked?: boolean;
   isMuted: boolean;
   memberCount: number;
   backgroundUrl: string | null;
@@ -229,9 +232,11 @@ export class ChatRoomService {
         publicId: m.publicId,
       })),
       memberStatus: (myMembership?.status as 'pending' | 'active') ?? 'active',
-      myRole:
-        (myMembership?.role as 'member' | 'admin' | 'owner' | undefined) ??
-        'member',
+      myRole: isSuperAdmin(userId)
+        ? 'owner'
+        : (myMembership?.role as 'member' | 'admin' | 'owner' | undefined) ??
+          'member',
+      blocked: Boolean((room as { blockedAt?: Date | null }).blockedAt),
       isMuted: myMembership?.isMuted ?? false,
       memberCount: members.length,
       backgroundUrl: room.backgroundUrl ?? null,
@@ -389,8 +394,10 @@ export class ChatRoomService {
         memberIds: hideSubscribers(room) ? [] : roomMemberIds,
         memberProfiles: hideSubscribers(room) ? [] : profilesByRoom.get(room.id) ?? [],
         memberStatus: (room.myStatus as 'pending' | 'active') ?? 'active',
-        myRole:
-          (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
+        myRole: isSuperAdmin(userId)
+          ? 'owner'
+          : (room.myRole as 'member' | 'admin' | 'owner' | undefined) ?? 'member',
+        blocked: Boolean((room as { blockedAt?: Date | null }).blockedAt),
         isMuted: room.myIsMuted ?? false,
         memberCount: roomMemberIds.length,
         backgroundUrl: room.backgroundUrl ?? null,
@@ -571,6 +578,8 @@ export class ChatRoomService {
         code: ErrorCode.ROOM_NOT_PUBLIC,
         message: 'Room is not public',
       });
+    if ((room as { blockedAt?: Date | null }).blockedAt)
+      throw new ForbiddenException({ code: 'ROOM_BLOCKED', message: 'This chat has been blocked by Optima' });
 
     // "Public" inside a group means public *to that group* — which is
     // exactly how discoverRooms and listPublicRooms present it. This endpoint

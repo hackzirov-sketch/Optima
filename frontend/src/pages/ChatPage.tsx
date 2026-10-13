@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowLeft,
   AtSign,
+  Ban,
   BarChart3,
   BookOpen,
   GraduationCap,
@@ -250,7 +251,7 @@ type ChatRouteTarget = { type: "direct" | "group" | "channel"; identifier: strin
 
 export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget }) {
   // Workspaces were renamed to groups; the page still calls the current one `workspace`.
-  const { user, group: workspace } = useAuth();
+  const { user, group: workspace, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
@@ -1334,6 +1335,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       if (payload.approved) void loadRooms();
     };
     socket.on("chat:join_request", onJoinRequest);
+    // An Optima admin blocked this account: say so and sign out.
+    const onAccountBlocked = () => { show(t("admin.accountBlocked"), "error"); void logout(); };
+    socket.on("account:blocked", onAccountBlocked);
     socket.on("chat:join_request_resolved", onJoinResolved);
     if (socket.connected) onConnect();
     return () => {
@@ -1356,6 +1360,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       socket.off("room_voice_chat", onRoomVoiceChat);
       socket.off("room_keys_shared", onRoomKeysShared);
       socket.off("chat:join_request", onJoinRequest);
+      socket.off("account:blocked", onAccountBlocked);
       socket.off("chat:join_request_resolved", onJoinResolved);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2999,7 +3004,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               </button>
               <button type="button" className="join-requests-close" onClick={() => setHiddenRequestBars((current) => ({ ...current, [requestsRoomId ?? ""]: pendingRequests.length }))} aria-label={t("chat.joinRequestsHide")} title={t("chat.joinRequestsHide")}><X size={18} /></button>
             </div>}
-            {selectedRoom.memberStatus === "pending" ? (
+            {selectedRoom.blocked && !user?.isSuperAdmin ? (
+              <div className="invite-state room-blocked-state"><Ban size={28} /><h3>{t("admin.roomBlocked")}</h3><p>{t("admin.roomBlockedDesc")}</p></div>
+            ) : selectedRoom.memberStatus === "pending" ? (
               <div className="invite-state"><UsersRound size={28} /><h3>{t("chat.conversationInviteTitle")}</h3>
                 <p>{t("chat.conversationInviteDesc")}</p><Button onClick={() => void acceptInvite()} icon={<Check
                   size={17} />}>{t("chat.acceptButton")}</Button></div>

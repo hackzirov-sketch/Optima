@@ -36,6 +36,23 @@ export class ChatRealtimeBridge {
     }
   }
 
+  /** An Optima admin blocked an account: cut every socket it has open. */
+  @OnEvent('admin.user_blocked')
+  onUserBlocked(payload: { userId: string }) {
+    try {
+      this.gateway.server?.to(`user:${payload.userId}`).emit('account:blocked', {});
+      this.gateway.server?.in(`user:${payload.userId}`).disconnectSockets(true);
+    } catch (err) {
+      this.logger.warn(`Failed to disconnect blocked user: ${(err as Error).message}`);
+    }
+  }
+
+  /** A group/channel was (un)blocked: members' clients reload it. */
+  @OnEvent('admin.room_blocked')
+  onRoomBlocked(payload: { roomId: string; blocked: boolean }) {
+    this.toRoom(payload.roomId, 'room_settings_updated', { roomId: payload.roomId, blocked: payload.blocked });
+  }
+
   /** Someone asked to join a private room: tell its owner and admins. */
   @OnEvent('chat.join_request_created')
   async onJoinRequestCreated(payload: { roomId: string; userId: string }) {

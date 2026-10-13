@@ -1,4 +1,4 @@
-import { LogOut, Settings, UserRound } from "lucide-react";
+import { LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
@@ -39,6 +39,7 @@ export function AccountMenu({ status = "online", align = "end" }: { status?: Sta
                   </div>
                   <button type="button" role="menuitem" onClick={() => { setOpen(false); openProfile(user?.username || user?.publicId); }}><UserRound size={18} />{t("shell.myProfile")}</button>
                   <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><Settings size={18} />{t("shell.settingsMenu")}</button>
+                  {user?.isSuperAdmin && <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={18} />{t("admin.title")}</button>}
                   <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); void logout(); }}><LogOut size={18} />{t("shell.logout")}</button>
                 </div>
               </>}

@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '../../../common/super-admin';
 import {
   ConflictException,
   Injectable,
@@ -148,7 +149,9 @@ export class UsersService {
       ),
     ]);
 
-    return { ...user, settings: settings[0] ?? null, groups: memberships };
+    // isSuperAdmin: from the server env (see common/super-admin), so the app
+    // can show the admin panel; the server checks it again on every call.
+    return { ...user, settings: settings[0] ?? null, groups: memberships, isSuperAdmin: isSuperAdmin(user.id) };
   }
 
   /** Bulk last_seen lookup — the durable "history" half of presence (see ChatPresenceService for the live half). */

@@ -2039,7 +2039,8 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     </div>
   );
 
-  const isHost = meeting.hostId === user?.id;
+  // Optima's super admins moderate every meeting (the server agrees: see isSuperAdmin).
+  const isHost = meeting.hostId === user?.id || Boolean(user?.isSuperAdmin);
   const timeLabel = clock(now, locale);
   const showReady = isHost && remoteEntries.length === 0 && !readyDismissed;
   const firstRequest = canManageWaitingRoom && sidePanel !== "participants" ? waitingRequests[0] : undefined;

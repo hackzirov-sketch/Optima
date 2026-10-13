@@ -16,6 +16,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { InvitePage } from "./pages/InvitePage";
 import { PublicProfilePage } from "./pages/PublicProfilePage";
 import { UserProfileModal } from "./components/UserProfileModal";
+import { AdminPage } from "./pages/AdminPage";
 import { openProfile } from "./lib/profileModal";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
@@ -104,6 +105,7 @@ export function App() {
             <Route path="/meetings" component={MeetingsPage} />
             <Route path="/library/:slug?/:mode?" component={LibraryPage} />
             <Route path="/profile" component={ProfilePage} />
+            <Route path="/admin" component={AdminPage} />
             {/* /meet/:code, /meetings/:id …: the meeting page draws itself on top. */}
             <Route>{null}</Route>
           </Switch>
