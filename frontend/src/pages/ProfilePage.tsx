@@ -1,5 +1,6 @@
-import { AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
+import { ArrowLeft, AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Pencil, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Avatar, Button, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -58,12 +59,15 @@ function Row({ field, editing, onEdit, notSet, icon, label, value, children }: {
 }
 
 export function ProfilePage() {
-  const { user, group: workspace, refreshUser, logout } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const { show } = useToast();
   const confirm = useConfirm();
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState<Draft>(() => draftOf(user));
   const [editing, setEditing] = useState<Field | null>(null);
+  const [accountEditing, setAccountEditing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const editField = (field: Field) => { setAccountEditing(true); setEditing(field); };
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBackground, setUploadingBackground] = useState(false);
@@ -117,6 +121,7 @@ export function ProfilePage() {
     try {
       await api.users.update(patch as Partial<User>);
       setEditing(null);
+      setAccountEditing(false);
       await refreshUser();
       show(t("profile.profileSaved"));
     } catch (error) {
@@ -260,8 +265,10 @@ export function ProfilePage() {
   ];
 
   return (
-    <div className="page profile-page tgp-page">
-      <header className="tgp-heading"><span>{workspace?.name}</span><h1>{t("profile.pageTitle")}</h1></header>
+    <div className={`page profile-page tgp-page ${accountEditing ? "is-editing-profile" : ""} ${settingsOpen ? "is-settings-open" : ""} ${changed.length ? "has-unsaved" : ""}`}>
+      <header className="tgp-heading"><h1>{t("profile.pageTitle")}</h1><button type="button" className="tgp-edit-command" onClick={() => { setAccountEditing(!accountEditing); setEditing(accountEditing ? null : "name"); setSettingsOpen(false); }}>
+        {accountEditing ? <ArrowLeft size={18} /> : <Pencil size={18} />}{t(accountEditing ? "common.back" : "common.edit")}
+      </button></header>
       <div className="tgp-layout">
         <aside className="tgp-card" aria-label={t("profile.personalInfoTitle")}>
           <div className="tgp-hero">
@@ -274,34 +281,34 @@ export function ProfilePage() {
               </label>
               <span className="tgp-online" aria-label={t("profile.online")} />
             </div>
-            <button type="button" className="tgp-name" onClick={() => setEditing("name")} title={t("profile.editNameHint")}>
+            <button type="button" className="tgp-name" onClick={() => editField("name")} title={t("profile.editNameHint")}>
               {`${draft.firstName} ${draft.lastName}`.trim() || t("profile.notSet")}
             </button>
             <small className="tgp-status">{t("profile.online")}</small>
           </div>
 
           <section className="tgp-group">
-            <label className="tgp-bio">
-              <textarea value={draft.bio} maxLength={BIO_LIMIT} rows={2} placeholder={t("profile.bioPlaceholder")} onChange={(event) => set("bio", event.target.value)} />
+            {accountEditing ? <label className="tgp-bio">
+              <textarea aria-label={t("profile.bioPlaceholder")} value={draft.bio} maxLength={BIO_LIMIT} rows={2} placeholder={t("profile.bioPlaceholder")} onChange={(event) => set("bio", event.target.value)} />
               <span className={BIO_LIMIT - draft.bio.length < 15 ? "low" : ""}>{BIO_LIMIT - draft.bio.length}</span>
-            </label>
+            </label> : <button type="button" className="tgp-bio-preview" onClick={() => setAccountEditing(true)}><UserRound size={20} /><span>{draft.bio || t("profile.notSet")}</span><ChevronRight size={16} /></button>}
           </section>
-          <p className="tgp-hint">{t("profile.bioHint")}</p>
+          {accountEditing && <p className="tgp-hint">{t("profile.bioHint")}</p>}
 
           <section className="tgp-group">
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="name" icon={<UserRound size={20} />} label={t("profile.nameRow")} value={`${draft.firstName} ${draft.lastName}`.trim()}>
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="name" icon={<UserRound size={20} />} label={t("profile.nameRow")} value={`${draft.firstName} ${draft.lastName}`.trim()}>
               <div className="tgp-two">
-                <input autoFocus value={draft.firstName} maxLength={50} placeholder={t("profile.firstNameLabel")} onChange={(event) => set("firstName", event.target.value)} />
-                <input value={draft.lastName} maxLength={50} placeholder={t("profile.lastNameLabel")} onChange={(event) => set("lastName", event.target.value)} />
+                <input autoFocus aria-label={t("profile.firstNameLabel")} value={draft.firstName} maxLength={50} placeholder={t("profile.firstNameLabel")} onChange={(event) => set("firstName", event.target.value)} />
+                <input aria-label={t("profile.lastNameLabel")} value={draft.lastName} maxLength={50} placeholder={t("profile.lastNameLabel")} onChange={(event) => set("lastName", event.target.value)} />
               </div>
             </Row>
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="phoneNumber" icon={<Phone size={20} />} label={t("profile.phoneLabel")} value={draft.phoneNumber ? `+${draft.phoneNumber.replace(/\D/g, "")}` : ""}>
-              <input autoFocus inputMode="tel" value={draft.phoneNumber} placeholder="998901234567" onChange={(event) => set("phoneNumber", event.target.value.replace(/[^\d+ ]/g, ""))} />
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="phoneNumber" icon={<Phone size={20} />} label={t("profile.phoneLabel")} value={draft.phoneNumber ? `+${draft.phoneNumber.replace(/\D/g, "")}` : ""}>
+              <input autoFocus aria-label={t("profile.phoneLabel")} inputMode="tel" value={draft.phoneNumber} placeholder="998901234567" onChange={(event) => set("phoneNumber", event.target.value.replace(/[^\d+ ]/g, ""))} />
             </Row>
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="username" icon={<AtSign size={20} />} label={t("profile.usernameLabel")} value={draft.username ? `@${draft.username.replace(/^@/, "")}` : ""}>
-              <input autoFocus value={draft.username} maxLength={51} placeholder={t("profile.usernamePlaceholder")} onChange={(event) => set("username", event.target.value.replace(/\s/g, ""))} />
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="username" icon={<AtSign size={20} />} label={t("profile.usernameLabel")} value={draft.username ? `@${draft.username.replace(/^@/, "")}` : ""}>
+              <input autoFocus aria-label={t("profile.usernameLabel")} value={draft.username} maxLength={51} placeholder={t("profile.usernamePlaceholder")} onChange={(event) => set("username", event.target.value.replace(/\s/g, ""))} />
             </Row>
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="birthday" icon={<Gift size={20} />} label={t("profile.birthdayLabel")} value={birthdayLabel(draft.birthday)}>
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="birthday" icon={<Gift size={20} />} label={t("profile.birthdayLabel")} value={birthdayLabel(draft.birthday)}>
               <div className="tgp-two">
                 <input autoFocus type="date" value={draft.birthday} max={new Date().toISOString().slice(0, 10)} min="1900-01-01" onChange={(event) => set("birthday", event.target.value)} />
                 {draft.birthday && <button type="button" className="tgp-clear" onClick={() => set("birthday", "")} aria-label={t("profile.clearBirthday")}><X size={16} /></button>}
@@ -311,28 +318,28 @@ export function ProfilePage() {
           <p className="tgp-hint">{t("profile.usernameHint")}</p>
 
           <section className="tgp-group">
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="occupation" icon={<Briefcase size={20} />} label={t("profile.occupationLabel")} value={t(`common.occupations.${draft.occupation}`)}>
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="occupation" icon={<Briefcase size={20} />} label={t("profile.occupationLabel")} value={t(`common.occupations.${draft.occupation}`)}>
               <select autoFocus value={draft.occupation} onChange={(event) => set("occupation", event.target.value)}>{occupationValues.map((value) => <option key={value} value={value}>{t(`common.occupations.${value}`)}</option>)}</select>
             </Row>
-            <Row editing={editing} onEdit={setEditing} notSet={t("profile.notSet")} field="timezone" icon={<Clock3 size={20} />} label={t("profile.timezoneLabel")} value={timezones.find(([value]) => value === draft.timezone)?.[1] ?? draft.timezone}>
+            <Row editing={editing} onEdit={editField} notSet={t("profile.notSet")} field="timezone" icon={<Clock3 size={20} />} label={t("profile.timezoneLabel")} value={timezones.find(([value]) => value === draft.timezone)?.[1] ?? draft.timezone}>
               <select autoFocus value={draft.timezone} onChange={(event) => set("timezone", event.target.value)}>{timezones.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             </Row>
             <div className="tgp-row"><Mail size={20} /><div className="tgp-row-main static"><strong>{user?.email}</strong><small>{t("profile.email")}</small></div><ShieldCheck size={16} className="tgp-verified" aria-label={t("profile.verified")} /></div>
           </section>
 
-          {changed.length > 0 && <div className="tgp-savebar" role="region" aria-label={t("profile.unsavedChanges")}>
+          {changed.length > 0 && createPortal(<div className="tgp-savebar" role="region" aria-label={t("profile.unsavedChanges")}>
             <span>{t("profile.unsavedChanges")}</span>
             <button type="button" onClick={discard} disabled={saving}>{t("common.cancel")}</button>
             <button type="button" className="primary" onClick={() => void saveAll()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}{t("common.save")}</button>
-          </div>}
+          </div>, document.body)}
 
           <button type="button" className="tgp-logout" onClick={() => void logout()}><LogOut size={18} />{t("profile.logoutButton")}</button>
         </aside>
 
-        <div className="tgp-settings">
+        <div className={`tgp-settings ${settingsOpen ? "is-section-open" : ""}`}>
           <nav className="tgp-nav" aria-label={t("profile.sectionsAria")}>
             {sections.map((item) => (
-              <button key={item.key} type="button" className={section === item.key ? "active" : ""} onClick={() => setSection(item.key)}>
+              <button key={item.key} type="button" className={settingsOpen && section === item.key ? "active" : ""} onClick={() => { setSection(item.key); setSettingsOpen(true); }} aria-pressed={settingsOpen && section === item.key}>
                 <span className={`tgp-nav-icon tone-${item.tone}`}>{item.icon}</span>
                 <span className="tgp-nav-text"><strong>{item.title}</strong><small>{item.hint}</small></span>
                 <ChevronRight size={18} className="tgp-nav-chevron" />
@@ -341,6 +348,7 @@ export function ProfilePage() {
           </nav>
 
           <section className="tgp-panel" key={section}>
+            <button type="button" className="tgp-panel-back" onClick={() => setSettingsOpen(false)}><ArrowLeft size={18} />{t("common.back")}</button>
             {section === "notifications" && <>
               <header><h2>{t("profile.notificationsTitle")}</h2><p>{t("profile.notificationsDesc")}</p></header>
               <div className="toggle-list">

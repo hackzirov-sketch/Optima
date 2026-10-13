@@ -1,5 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 import { envUrl } from "./env-url";
+import { isLocalPreview } from "./localPreview";
 
 let socket: Socket | null = null;
 
@@ -34,7 +35,7 @@ export function getSocket(): Socket {
       reconnectionAttempts: Infinity,
     });
   }
-  if (!socket.connected) socket.connect();
+  if (!socket.connected && !(import.meta.env.DEV && isLocalPreview())) socket.connect();
   return socket;
 }
 

@@ -6,9 +6,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import { formatPresenceLabel, isPresenceActive, usePresence } from "../lib/presence";
-import type { User } from "../types";
-
-type PublicProfile = Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji">;
+type PublicProfile = Awaited<ReturnType<typeof api.users.publicProfile>>;
 
 export function PublicProfilePage({ identifier }: { identifier: string }) {
   const { user, group } = useAuth();
@@ -53,6 +51,7 @@ export function PublicProfilePage({ identifier }: { identifier: string }) {
           <p>{profile.username ? `@${profile.username}` : t("publicProfile.usernameNotSet")}</p>
           <p className="public-profile-status">{formatPresenceLabel(presence, t)}</p>
         </div>
+        {profile.bio && <p className="public-profile-bio">{profile.bio}</p>}
         {user && <button className="public-profile-message" onClick={openChat} disabled={!group}>
           <MessageCircle size={19} />
           <span><strong>{t("publicProfile.chatTitle")}</strong><small>{String(profile.publicId) === String(user.publicId) ? t("publicProfile.backToChats") : t("publicProfile.openPersonalChat")}</small></span>

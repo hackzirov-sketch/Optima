@@ -18,6 +18,7 @@ import type {
   GroupMember,
 } from "../types";
 import { session } from "./session";
+import { isLocalPreview } from "./localPreview";
 
 export interface RoomVoiceChat {
   meetingId: string;
@@ -106,6 +107,7 @@ const CLIENT_HEADER = "X-UPZ-Client";
 const CLIENT_HEADER_VALUE = "web";
 
 export function oauthStartUrl(provider: OAuthProvider): string {
+  if (import.meta.env.DEV && isLocalPreview()) return "/";
   return `${API_URL}/auth/${provider}`;
 }
 
@@ -177,6 +179,7 @@ interface RefreshResult {
  * function to read, compare, or store; it only needs to know whether the
  * rotation succeeded. */
 async function renewSession(): Promise<RefreshResult> {
+  if (import.meta.env.DEV && isLocalPreview()) return { ok: true, networkError: false };
   if (!session.isActive()) return { ok: false, networkError: false };
   let response: Response;
   try {
@@ -295,6 +298,10 @@ async function decryptRoomPreviews(rooms: ChatRoom[]): Promise<ChatRoom[]> {
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  if (import.meta.env.DEV && isLocalPreview()) {
+    const { localPreviewRequest } = await import("./localPreviewData");
+    return localPreviewRequest<T>(path, options);
+  }
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
   headers.set(CLIENT_HEADER, CLIENT_HEADER_VALUE);

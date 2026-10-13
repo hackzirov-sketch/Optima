@@ -577,6 +577,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const sectionLabel = (kind: "media" | "files" | "links" | "music" | "voice") => ({
     media: t("chat.mediaTab"), files: t("chat.filesTab"), links: t("chat.linksTab"), music: t("chat.musicTab"), voice: t("chat.voiceTab"),
   })[kind];
+  const detailsNavigation = <nav className="tg-info-tabs" aria-label={t("chat.sharedContentFallback")}>
+    <button type="button" aria-pressed={detailsSection === null} className={detailsSection === null ? "active" : ""} onClick={() => { setDetailsSection(null); setDetailsTab("members"); }}>
+      {t(selectedRoom?.type === "direct" ? "chat.profileTitle" : "chat.membersTab")}
+    </button>
+    {(["media", "files", "links", "voice", "music"] as const).map(kind => <button key={kind} type="button" aria-pressed={detailsSection === kind} className={detailsSection === kind ? "active" : ""} onClick={() => { setDetailsSection(kind); setDetailsTab(kind); }}>{sectionLabel(kind)}</button>)}
+  </nav>;
   const roomLink = (room: ChatRoom) =>
     `${window.location.origin}/${room.type === "channel" ? "ch" : "g"}/${encodeURIComponent(room.slug || String(room.publicId))}`;
   async function copyText(text: string) {
@@ -3128,6 +3134,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         {selectedRoom && <div className={`tg-info details-${selectedRoom.type}`}>
           {detailsSection ? <>
             <button type="button" className="tg-info-back" onClick={() => { setDetailsSection(null); setDetailsTab("members"); }}><ArrowLeft size={18} />{t("chat.backToInfo")}</button>
+            {detailsNavigation}
             <div className="tg-info-list">
               {detailsLoading && <div className="center-loader"><LoaderCircle className="spin" size={22} /></div>}
               {!detailsLoading && sharedItems.map((item) => {
@@ -3172,14 +3179,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 <button className="tg-info-row" onClick={() => void copyText(roomLink(selectedRoom))}><Link2 size={20} /><span className="tg-info-text"><strong className="link">{roomLink(selectedRoom).replace(/^https?:\/\//, "")}</strong><small>{t("chat.linkLabel")}</small></span><Copy size={16} /></button>
               </>}
             </section>
-            <section className="tg-info-section">
-              {(["media", "files", "links", "voice", "music"] as const).map((kind) => (
-                <button key={kind} className="tg-info-row" onClick={() => { setDetailsSection(kind); setDetailsTab(kind); }}>
-                  {kind === "media" ? <ImageIcon size={20} /> : kind === "files" ? <FileText size={20} /> : kind === "links" ? <Link2 size={20} /> : kind === "voice" ? <Mic size={20} /> : <Music size={20} />}
-                  <span className="tg-info-text"><strong>{sectionLabel(kind)}</strong></span><ChevronRight size={18} />
-                </button>
-              ))}
-            </section>
+            {detailsNavigation}
             {selectedRoom.type !== "direct" && <section className="tg-info-section tg-info-members">
               <header><strong>{selectedRoom.type === "channel" ? t("chat.subscribersTab") : t("chat.membersTab")}</strong><span>{detailMemberTotal}</span></header>
               <label className="details-member-search"><Search size={17} /><input value={detailMemberSearch} onChange={(event) => setDetailMemberSearch(event.target.value)} placeholder={selectedRoom.type === "channel" ? t("chat.searchSubscribersPlaceholder") : t("chat.searchMembersPlaceholder")} /></label>
@@ -3248,7 +3248,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       </Modal>
 
       <Modal open={channelSettingsOpen} onClose={() => setChannelSettingsOpen(false)}
-             title={t("channelSettings.title")}
+             title={t(selectedRoom?.type === "channel" ? "channelSettings.title" : "channelSettings.groupTitle")}
              description={selectedRoom?.name ?? ""} width="lg">
         {selectedRoom && channelSettingsOpen && <ChannelSettingsPanel
           room={selectedRoom}
@@ -3309,7 +3309,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                 <input ref={roomBackgroundInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(event) => void uploadRoomBackground(event.target.files?.[0])} />
               </div>
               <button type="button" className="tg-edit-row tg-edit-row-link" onClick={() => { setRoomSettingsOpen(false); setChannelSettingsOpen(true); }}>
-                <Sliders size={20} /><span className="tg-edit-row-label"><strong>{t("channelSettings.title")}</strong><small>{t("channelSettings.entryHint")}</small></span><ChevronRight size={18} />
+                <Sliders size={20} /><span className="tg-edit-row-label"><strong>{t(selectedRoom?.type === "channel" ? "channelSettings.title" : "channelSettings.groupTitle")}</strong><small>{t("channelSettings.entryHint")}</small></span><ChevronRight size={18} />
               </button>
             </section>
             <p className="tg-edit-note">{t("chat.adminsOnlyDesc")}</p>

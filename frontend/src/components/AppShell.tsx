@@ -1,5 +1,5 @@
 import { BarChart3, BookOpen, BrainCircuit, Check, ChevronDown, Crown, Globe2, GraduationCap, LayoutDashboard, LogOut, Megaphone, Menu, MessageCircle, Moon, Settings, Sun, UserRound, UsersRound, Video, X, Youtube } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../lib/auth";
 import { useUnreadTotal } from "../lib/chatUnread";
@@ -8,6 +8,7 @@ import { setMyPresenceStatus, type PresenceStatus } from "../lib/presence";
 import { Avatar, DisplayName, Logo } from "./ui";
 import { FlagIcon } from "./FlagIcon";
 import { NotificationsMenu } from "./NotificationsMenu";
+import { useOutsideClose } from "../lib/useOutsideClose";
 
 const STATUS_OPTIONS: Array<{ value: Exclude<PresenceStatus, "offline" | "in_meeting">; dotClass: string }> = [
   { value: "online", dotClass: "status-dot-online" },
@@ -57,6 +58,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, group, groups, selectWorkspace, logout } = useAuth();
   const unreadTotal = useUnreadTotal();
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+  useOutsideClose(groupMenuRef, groupOpen, () => setWorkspaceOpen(false));
+  useOutsideClose(languageMenuRef, languageOpen, () => setLanguageOpen(false));
+  useOutsideClose(statusMenuRef, statusMenuOpen, () => setStatusMenuOpen(false));
+  useEffect(() => {
+    setMobileOpen(false);
+    setWorkspaceOpen(false);
+    setLanguageOpen(false);
+    setStatusMenuOpen(false);
+  }, [location]);
+  useEffect(() => {
+    const closeDrawer = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", closeDrawer);
+    return () => window.removeEventListener("keydown", closeDrawer);
+  }, []);
   // Not read back from the server: /chat/presence masks INVISIBLE -> OFFLINE
   // for everyone (including the owner) since it can't tell who's asking, so
   // the only reliable "what did I pick" source is the choice itself.
@@ -105,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="drawer-brand-copy"><strong>Optima</strong><span>{t("shell.brandLine")}</span><small>{t("shell.brandTagline")}</small></span>
           <button className="icon-button mobile-only" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X size={20} /></button>
         </div>
-        <div className="group-switcher">
+        <div className="group-switcher" ref={groupMenuRef}>
           <button className="group-button" onClick={() => setWorkspaceOpen((value) => !value)} aria-expanded={groupOpen}>
             <span className="group-avatar">{group?.name?.[0]?.toUpperCase() || "O"}</span>
             <span><small>{t("shell.group")}</small><strong>{group?.name || "Optima"}</strong></span>
@@ -153,7 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
             <span><strong><DisplayName firstName={user?.firstName} lastName={user?.lastName} nickname={user?.nickname} nameEmoji={user?.nameEmoji} /></strong><small>@{user?.username}</small></span>
           </Link>
-          <div className="status-picker">
+          <div className="status-picker" ref={statusMenuRef}>
             <button className="icon-button" onClick={() => setStatusMenuOpen((value) => !value)} aria-label={t("shell.statusPicker")} title={t(`presence.${myStatus === "dnd" ? "dnd" : myStatus}`)} aria-expanded={statusMenuOpen}>
               <i className={`status-dot status-dot-${myStatus}`} aria-hidden="true" />
             </button>
@@ -179,10 +199,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="topbar-context"><Logo /><span className="topbar-divider" /><strong>{t(`shell.${nav.find((item) => active(item.href))?.key || "home"}`)}</strong><small>{group?.name}</small></div>
           <div className="topbar-actions">
             <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={theme === "light" ? t("shell.themeToDark") : t("shell.themeToLight")} title={theme === "light" ? t("shell.themeDark") : t("shell.themeLight")}>{theme === "light" ? <Moon size={19} /> : <Sun size={19} />}</button>
-            <div className="language-switcher">
+            <div className="language-switcher" ref={languageMenuRef}>
               <button className="icon-button language-toggle" onClick={() => setLanguageOpen((value) => !value)} aria-label={t("shell.language")} title={t("shell.language")} aria-expanded={languageOpen}>
                 <FlagIcon locale={locale} />
-                <span className="language-code">{localeMeta[locale].short}</span>
               </button>
               {languageOpen && (
                 <div className="language-menu" role="menu">

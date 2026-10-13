@@ -1,0 +1,382 @@
+/* Cool daylight glass and neutral night glass share the same geometry. */
+:root {
+  --canvas: var(--action-bg);
+  --bg: var(--canvas);
+  --surface: #e7f1f8;
+  --card: var(--surface);
+  --surface-muted: #c7deee;
+  --text: #1d3545;
+  --text-soft: #415b6d;
+  --muted: #536c7e;
+  --line: rgb(66 106 133 / .16);
+  --line-strong: rgb(66 106 133 / .32);
+  --accent: #2d678e;
+  --accent-hover: #245677;
+  --accent-ink: #244a65;
+  --accent-soft: rgb(75 134 175 / .1);
+  --op-indigo: #2d678e;
+  --op-indigo-deep: #244a65;
+  --op-mist: #c7dfef;
+  --op-mist-strong: #7396b3;
+  --action-bg: #bdd9eb;
+  --action-text: #17384e;
+  --call-off-ink: #ad2438;
+  --message-own: rgb(199 225 242 / .72);
+  --message-own-border: rgb(75 119 150 / .24);
+  --message-own-text: #1d3545;
+  --message-meta: #536c7e;
+  --glass-chrome: rgb(222 239 250 / .76);
+  --glass-panel: rgb(240 248 253 / .98);
+  --glass-control: rgb(239 248 255 / .5);
+  --glass-section: rgb(244 250 255 / .62);
+  --glass-message: rgb(240 249 255 / .76);
+  --glass-edge: rgb(255 255 255 / .78);
+  --glass-stroke: rgb(63 101 131 / .4);
+  --glass-veil: rgb(237 247 254 / .82);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / .9);
+  --glass-surface-depth: var(--glass-highlight), 0 2px 10px rgb(35 72 99 / .08);
+  --glass-elevation: 0 10px 32px rgb(28 37 48 / .09);
+  --glass-control-radius: 14px;
+  --glass-tool-radius: 16px;
+  --liquid-body-fill: 24%;
+  --liquid-panel-fill: 98%;
+  --liquid-control-fill: 46%;
+  --liquid-navigation-fill: 78%;
+  --liquid-action-fill: 76%;
+  --liquid-rim: rgb(255 255 255 / .8);
+  --liquid-shadow: 0 6px 18px rgb(28 37 48 / .1);
+  --liquid-depth: inset 0 1px 0 rgb(255 255 255 / .75), inset 0 -1px 0 rgb(31 40 49 / .08), 0 10px 30px rgb(28 37 48 / .1);
+}
+:root[data-theme="dark"] {
+  --canvas: #0e1115;
+  --surface: #242a31;
+  --surface-muted: #303840;
+  --text: #f3f5f7;
+  --text-soft: #d0d6dd;
+  --muted: #adb7c2;
+  --line: rgb(219 228 238 / .13);
+  --line-strong: rgb(219 228 238 / .28);
+  --accent: #b6b9f4;
+  --accent-hover: #c4cff0;
+  --accent-ink: #e7ebfa;
+  --op-indigo: #45429a;
+  --op-indigo-deep: #292760;
+  --op-mist: #bac6ea;
+  --op-mist-strong: #8296d3;
+  --accent-soft: rgb(182 185 244 / .1);
+  --action-bg: #455b70;
+  --action-text: #f3f9ff;
+  --call-off-ink: #ff99a5;
+  --message-own: rgb(62 74 87 / .7);
+  --message-own-border: rgb(177 191 206 / .17);
+  --message-own-text: #f3f5f7;
+  --message-meta: #b6c3cf;
+  --glass-chrome: rgb(35 41 48 / .48);
+  --glass-panel: rgb(29 34 41 / .98);
+  --glass-control: rgb(216 228 242 / .07);
+  --glass-section: rgb(35 41 48 / .42);
+  --glass-message: rgb(35 41 48 / .76);
+  --glass-edge: rgb(220 232 247 / .15);
+  --glass-stroke: rgb(193 211 230 / .24);
+  --glass-veil: rgb(24 29 35 / .8);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / .06);
+  --glass-elevation: 0 12px 36px rgb(0 0 0 / .25);
+  --liquid-body-fill: 24%;
+  --liquid-control-fill: 32%;
+  --liquid-navigation-fill: 66%;
+  --liquid-action-fill: 58%;
+  --liquid-rim: rgb(255 255 255 / .14);
+  --liquid-shadow: 0 7px 22px rgb(0 0 0 / .22);
+  --liquid-depth: inset 0 1px 0 rgb(255 255 255 / .2), inset 0 -1px 0 rgb(255 255 255 / .05), 0 12px 32px rgb(0 0 0 / .26);
+}
+
+body .liquid-surface {
+  background-color: transparent !important;
+  background-image: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  isolation: auto !important;
+}
+:where([data-liquid-stack]) { z-index: 0; }
+body .liquid-surface > .liquid-material {
+  position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit !important; pointer-events: none;
+  overflow: hidden;
+  background: transparent;
+}
+body .liquid-surface > .liquid-material > :is(.ql-lens, .ql-tint) { border-radius: inherit !important; }
+/* Tint belongs above the refracted backdrop, so semantic colors stay visible. */
+body .liquid-surface > .liquid-material > .ql-tint { background: color-mix(in srgb, var(--liquid-base) var(--liquid-body-fill), transparent) !important; }
+body .liquid-surface[data-liquid-kind="panel"] > .liquid-material { --liquid-body-fill: var(--liquid-panel-fill); }
+body .liquid-surface[data-liquid-kind="control"] > .liquid-material { --liquid-body-fill: var(--liquid-control-fill); }
+body .liquid-surface[data-liquid-kind="navigation"] > .liquid-material { --liquid-body-fill: var(--liquid-navigation-fill); }
+body .liquid-surface:is(.button-primary, .send-button, .gm-join-btn, .gm-hangup, .gm-ctl.danger, .meet-new, .standalone-ai > form > button, .tgp-savebar button.primary) > .liquid-material { --liquid-body-fill: var(--liquid-action-fill); }
+body .reference-dock .dock-ai .dock-icon > .liquid-material { --liquid-base: var(--surface); --liquid-body-fill: 60%; }
+body .liquid-surface.button-primary > .liquid-material { --liquid-base: var(--action-bg); }
+:root[data-theme] body .liquid-surface:is([data-liquid-kind="chrome"], [data-liquid-kind="navigation"]) { box-shadow: var(--liquid-depth); }
+body .liquid-surface[data-liquid-kind="chrome"] { overflow: visible; }
+
+/* Stable shapes and shared feedback, with stronger optics reserved for floating controls. */
+body .liquid-control {
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms var(--glass-ease), background-color 160ms var(--glass-ease), border-color 160ms var(--glass-ease), box-shadow 180ms var(--glass-ease);
+}
+:root[data-theme] body .liquid-control:is(.button, .group-button, .meet-new, .meet-row-join, .gm-join-btn, .yt-pill) { border-radius: var(--glass-control-radius); }
+:root[data-theme] body .liquid-control:is(.icon-button, .send-button, .meet-icon-button) { border-radius: 50%; }
+:root[data-theme] body .liquid-control.button-primary { color: var(--action-text) !important; border-color: transparent; }
+:root[data-theme] body .liquid-control.button-primary:not(.liquid-surface) { background: var(--action-bg) !important; }
+:root[data-theme] body .liquid-control.button-primary:hover:not(:disabled) { filter: none; }
+body .liquid-control:not(.liquid-surface):not(:disabled):not(.icon-button):not(.meet-icon-button) { box-shadow: var(--glass-highlight); }
+body .liquid-control:is(.active, .selected, [aria-pressed="true"]) { box-shadow: var(--glass-highlight), var(--liquid-shadow); }
+body .liquid-control:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+body .liquid-control:disabled { cursor: not-allowed; }
+body .liquid-control > svg { transform-origin: center; transition: transform 220ms var(--glass-ease); }
+body .liquid-control:active:not(:disabled) > svg { transform: scale(.94); }
+body .liquid-control.liquid-surface:hover:not(:disabled) > .liquid-material > .ql-tint { background: color-mix(in srgb, color-mix(in srgb, var(--liquid-base) 94%, var(--text) 6%) var(--liquid-body-fill), transparent) !important; }
+body :is(.chat-catalog, .tgp-nav) .liquid-control:not(.active) { box-shadow: none; }
+
+/* The lens follows the icon's shape, not the rectangular navigation hit target. */
+:root[data-theme] body .reference-dock {
+  --dock-ai-ink: var(--text);
+  width: min(820px, calc(100vw - 48px)); height: 78px;
+  padding: 6px 12px; gap: 2px; border-radius: 24px;
+  border-color: var(--glass-stroke) !important;
+  background: var(--glass-chrome) !important;
+  box-shadow: var(--liquid-depth) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(112%) !important;
+  backdrop-filter: blur(30px) saturate(112%) !important;
+}
+/* Frost the host too: the optical lens alone can retain readable background text. */
+:root[data-theme] body .reference-dock.liquid-surface { -webkit-backdrop-filter: blur(30px) saturate(112%) !important; backdrop-filter: blur(30px) saturate(112%) !important; }
+:root[data-theme] body .reference-dock a { height: 64px; min-height: 64px; padding: 5px 1px; gap: 5px; border-radius: 16px; }
+:root[data-theme] body .reference-dock a:not(.dock-ai) .dock-icon {
+  width: 48px; height: 36px; flex-basis: 36px; border-radius: 14px; isolation: auto;
+  border: 1px solid var(--liquid-rim); background: var(--glass-control);
+  box-shadow: var(--glass-highlight), inset 0 -1px 0 var(--line), 0 2px 6px rgb(28 37 48 / .06);
+  color: var(--text-soft);
+  transition: border-color 180ms var(--glass-ease), color 180ms var(--glass-ease), box-shadow 180ms var(--glass-ease);
+}
+:root[data-theme] body .reference-dock a.active:not(.dock-ai) .dock-icon {
+  background: color-mix(in srgb, var(--action-bg) 62%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--liquid-rim));
+  box-shadow: var(--glass-highlight), inset 0 -1px 0 var(--line-strong), 0 3px 9px rgb(28 37 48 / .12);
+  color: var(--accent-ink);
+}
+:root[data-theme] body .reference-dock a.active:not(.dock-ai) .dock-icon > .liquid-material { --liquid-base: var(--action-bg); --liquid-body-fill: 72%; }
+:root[data-theme] body .reference-dock a:not(.dock-ai) .dock-icon::before { display: none; }
+:root[data-theme] body .reference-dock a:not(.dock-ai) .dock-icon svg { color: inherit; }
+:root[data-theme] body .reference-dock a .dock-label { color: var(--text-soft); }
+:root[data-theme] body .reference-dock a.active .dock-label { color: var(--accent-ink); font-weight: 700; }
+:root[data-theme] body .reference-dock a:not(.dock-ai):hover .dock-icon { border-color: var(--accent); color: var(--accent-ink); }
+:root[data-theme] body .reference-dock .dock-ai .dock-icon {
+  top: -18px; width: 58px; height: 58px; flex-basis: 58px; padding: 0;
+  border: 1px solid var(--glass-stroke); border-radius: 50%;
+  background: var(--glass-chrome); box-shadow: var(--glass-highlight), var(--glass-elevation);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+:root[data-theme] body .reference-dock .dock-ai .dock-icon.liquid-surface { -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-theme] body .reference-dock .dock-ai svg { width: 25px; height: 25px; color: var(--text); }
+:root[data-theme] body .reference-dock .dock-ai .dock-label { top: 45px; color: var(--muted); font-size: 11px; line-height: 14px; }
+:root[data-theme] body .reference-dock .dock-ai.active .dock-label { color: var(--accent); }
+:root[data-theme] body .reference-dock .dock-ai:is(:hover, .active) .dock-icon { box-shadow: var(--glass-highlight), var(--glass-elevation); }
+body .reference-dock .dock-label { letter-spacing: 0 !important; }
+body .reference-dock > a:focus-visible { outline-offset: -3px; }
+
+/* Chrome, forms and sheets use the same frost in both modes. */
+:root[data-theme] body .app-shell .topbar { border-radius: 20px; border-color: var(--glass-edge); }
+:root[data-theme] body .app-shell .topbar .icon-button { width: 40px; height: 40px; min-width: 40px; border-radius: 50%; background: var(--glass-control); }
+:root[data-theme] body .app-shell .topbar .language-toggle { padding: 0; gap: 0; flex-shrink: 0; }
+:root[data-theme] body .app-shell > .sidebar { background: var(--glass-veil); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border-color: var(--glass-edge); }
+:root[data-theme] body .app-shell > .sidebar .main-nav a.active { background: var(--glass-control); color: var(--text); box-shadow: var(--glass-highlight); }
+:root[data-theme] body .app-shell > .sidebar .main-nav a.active svg { color: var(--accent); }
+:root[data-theme] body .sidebar-scrim { background: rgb(15 19 24 / .28); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+:root[data-theme] body :is(.modal, .telegram-emoji-picker, .meet-popover, .notification-panel, .message-menu-floating, .header-more-menu, .room-context-menu) { border-radius: var(--glass-tool-radius); color: var(--text); border-color: var(--glass-edge); }
+:root[data-theme] body :is(.search-field, .youtube-search, .meet-join-field, .standalone-ai > form) { border-radius: var(--glass-control-radius); }
+:root[data-theme] body :is(.search-field, .youtube-search, .meet-join-field, .standalone-ai > form):focus-within { border-color: var(--accent); }
+body :is(input, textarea, [contenteditable="true"]) { caret-color: var(--accent); }
+body :is(.app-main, .modal) ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); }
+body .statistics-page :is(strong, b, time, .statistics-service-meta) { font-variant-numeric: tabular-nums; }
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai > form) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea):is(:focus, :focus-visible) {
+  outline: none !important; border-color: transparent !important; box-shadow: none !important; background: transparent !important;
+}
+:root[data-theme] body .youtube-page .youtube-search { min-height: 52px; padding: 6px 12px; border-width: 1px; }
+:root[data-theme] body .youtube-page .youtube-search .icon-button { border-radius: 50%; box-shadow: none; }
+:root[data-theme] body .yt-topics button { border-width: 1px; border-radius: var(--glass-control-radius); box-shadow: var(--glass-highlight); }
+
+/* Sections remain unframed; repeated content and tools carry the translucent surfaces. */
+:root[data-theme] body .dashboard-welcome { background: transparent; border-color: var(--line); }
+:root[data-theme] body .welcome-facts > span { background: var(--glass-section); border-color: var(--glass-edge); box-shadow: var(--glass-highlight); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+:root[data-theme] body .welcome-ai-link { background: var(--glass-control); border-color: var(--glass-edge); color: var(--text); border-radius: var(--glass-control-radius); }
+:root[data-theme] body .dashboard-page .metric-card { background: var(--glass-section) !important; border-color: var(--glass-edge) !important; box-shadow: var(--glass-highlight) !important; -webkit-backdrop-filter: blur(16px) !important; backdrop-filter: blur(16px) !important; border-radius: 8px; }
+:root[data-theme] body .dashboard-page .education-dashboard { background: transparent !important; border: 0 !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+:root[data-theme] body .dashboard-page :is(.education-donut-card, .education-bars-card) { background: var(--glass-section) !important; border-color: var(--glass-edge) !important; border-radius: 8px; box-shadow: var(--glass-highlight) !important; -webkit-backdrop-filter: blur(14px) !important; backdrop-filter: blur(14px) !important; }
+:root[data-theme] body .standalone-ai > header { border-radius: var(--glass-tool-radius); padding: 14px 16px; border: 1px solid var(--glass-edge); background: var(--glass-chrome); }
+:root[data-theme] body .standalone-ai > form { background: var(--glass-chrome); border-color: var(--glass-edge); padding: 10px 12px; }
+:root[data-theme] body .standalone-ai textarea { height: 64px; min-height: 64px; padding: 8px 6px; scrollbar-width: thin; outline: none; box-shadow: none; border: 0; background: transparent; }
+body .standalone-ai textarea::-webkit-scrollbar-button { display: none; }
+:root[data-theme] body .standalone-ai form button { background: var(--action-bg); color: var(--action-text); border-radius: 50%; }
+
+/* Reading surfaces are frosted rather than optically distorted. */
+:root[data-theme] body .chat-page .chat-sidebar { background: var(--glass-veil); }
+:root[data-theme] body .chat-page .chat-catalog .catalog-indicator { background: var(--glass-control); box-shadow: var(--glass-highlight); border: 1px solid var(--glass-edge); }
+:root[data-theme] body .chat-page .room-item.active { background: var(--glass-control); box-shadow: var(--glass-highlight); }
+:root[data-theme] body .chat-page .composer:not(.ai-composer) > .rich-message-input { background: var(--glass-control) !important; border-radius: var(--glass-control-radius); }
+:root[data-theme] body .chat-page .conversation > .message-list .message-bubble:not(:has(> .message-custom-emoji)) { background: var(--glass-message); border-color: var(--line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:root[data-theme] body .chat-page .conversation > .message-list .message-mine .message-bubble:not(:has(> .message-custom-emoji)) { background: var(--message-own); border-color: var(--message-own-border); color: var(--message-own-text); }
+
+/* Live video stays unfiltered. Only the meeting's floating tools use the material. */
+:root[data-theme] body .gm-room {
+  --gm-bg: var(--canvas); --gm-surface: var(--surface); --gm-surface-hover: var(--surface-muted);
+  --gm-panel: var(--surface); --gm-panel-2: var(--surface-muted); --gm-text: var(--text); --gm-text-2: var(--muted);
+  --gm-line: var(--line); --gm-active: var(--action-bg); --gm-on-active: var(--action-text);
+  background: var(--canvas);
+}
+:root[data-theme] body .meet-home-bar { border-radius: var(--glass-tool-radius); border: 1px solid var(--glass-edge); }
+:root[data-theme] body .meet-new, :root[data-theme] body .gm-join-btn { background: var(--action-bg); color: var(--action-text); }
+:root[data-theme] body .meet-row { background: var(--glass-section); border-color: var(--line); box-shadow: var(--glass-highlight); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+:root[data-theme] body .gm-room .gm-bar { border-radius: 20px; border-color: var(--glass-edge); }
+:root[data-theme] body .gm-room .gm-ctl:not(.gm-hangup) { width: 48px; height: 48px; border-radius: 50%; }
+:root[data-theme] body .gm-room .gm-hangup { border-radius: 24px; }
+:root[data-theme] body .gm-room .gm-split { border-radius: 24px; }
+:root[data-theme] body .gm-room .gm-ctl.active { background: var(--action-bg); color: var(--action-text); border-color: var(--glass-edge); }
+:root[data-theme] body .gm-room .gm-split.off { background: color-mix(in srgb, var(--gm-red) 12%, var(--surface)); }
+:root[data-theme] body .gm-room .gm-split.off :is(.gm-ctl, .gm-split-more) { color: var(--call-off-ink); }
+body .gm-split.off.liquid-surface > .liquid-material,
+body .gm-split.off .gm-ctl.liquid-surface > .liquid-material { --liquid-base: var(--gm-red); --liquid-body-fill: 12%; }
+:root[data-theme] body .gm-room .gm-hangup { background: var(--gm-red); color: #ffffff; }
+body .gm-hangup.liquid-surface > .liquid-material { --liquid-base: var(--gm-red); --liquid-body-fill: 92%; }
+
+@media (max-width: 820px) {
+  :root[data-theme] body .app-shell .topbar,
+  :root[data-theme] body .app-shell:has(.dashboard-page) .topbar { width: calc(100% - 24px); margin: 10px 12px 0; min-height: 56px; height: 56px; border: 1px solid var(--glass-stroke); border-radius: 20px; padding-inline: 10px; background: var(--glass-chrome); box-shadow: var(--glass-highlight); }
+  :root[data-theme] body .app-shell .topbar > .mobile-only { border-radius: 50%; background: var(--glass-control); }
+  :root[data-theme] body .mobile-nav.reference-dock { bottom: calc(8px + env(safe-area-inset-bottom)); width: calc(100% - 16px); height: 72px; padding: 4px 4px; border-radius: 22px; }
+  :root[data-theme] body .mobile-nav.reference-dock a { min-height: 62px; height: 62px; gap: 4px; }
+  :root[data-theme] body .mobile-nav.reference-dock .dock-ai .dock-icon { top: -17px; width: 54px; height: 54px; }
+  :root[data-theme] body .mobile-nav.reference-dock .dock-ai .dock-label { top: 44px; font-size: 10.5px; line-height: 13px; }
+  :root[data-theme] body .dashboard-page .metric-card { background: transparent !important; border-radius: 0; border-color: var(--line) !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  :root[data-theme] body .standalone-ai > header { padding: 12px; }
+  :root[data-theme] body .standalone-ai > form { padding: 8px 10px; }
+  :root[data-theme] body .chat-page .conversation-tools .icon-button { width: 40px; min-width: 40px; height: 40px; flex-basis: 40px; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > :is(.icon-button, .send-button),
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .emoji-menu-wrap > .icon-button { width: 44px; min-width: 44px; height: 44px; flex-basis: 44px; }
+}
+
+/* Every existing framed surface has the same material, even outside the optical budget. */
+:root[data-theme] body :is(.dashboard-page .metric-card, .education-donut-card, .education-bars-card, .education-video-card, .education-picker-grid > button, .education-teachers article, .book-card, .tgp-card, .tgp-nav, .tgp-panel, .settings-panel, .profile-summary, .youtube-page .youtube-video, .meeting-card) {
+  min-width: 0; border: 1px solid var(--glass-stroke) !important; border-radius: 8px;
+  background: var(--glass-section) !important; box-shadow: var(--glass-surface-depth) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(112%) !important; backdrop-filter: blur(16px) saturate(112%) !important;
+}
+:root[data-theme] body .tgp-card :is(.tgp-hero, .tgp-group) { background: transparent; }
+:root[data-theme] body .welcome-facts > span { border-color: var(--glass-stroke); border-radius: 8px; }
+:root[data-theme] body :is(.app-body, .app-main, .topbar-context, .tgp-layout, .tgp-settings) { min-width: 0; }
+:root[data-theme] body .app-shell > .sidebar :is(.main-nav, .sidebar-brand, .drawer-promo, .sidebar-profile) { flex-shrink: 0; }
+:root[data-theme] body .app-shell > .sidebar .main-nav { gap: 6px; }
+:root[data-theme] body .app-shell > .sidebar .main-nav > a {
+  min-height: 48px; border: 1px solid var(--glass-stroke) !important; border-radius: var(--glass-control-radius);
+  background: var(--glass-control); box-shadow: var(--glass-highlight) !important; color: var(--text);
+}
+:root[data-theme] body .app-shell > .sidebar .main-nav > a:not(.liquid-surface) { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+:root[data-theme] body .app-shell > .sidebar .main-nav > a > span { min-width: 0; overflow-wrap: anywhere; }
+:root[data-theme] body .app-shell > .sidebar .main-nav > a:is(:hover, .active) { border-color: color-mix(in srgb, var(--accent) 48%, var(--glass-stroke)) !important; background: var(--accent-soft); transform: none; }
+:root[data-theme] body .app-shell > .sidebar .main-nav > a:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }
+:root[data-theme] body .app-shell > .sidebar .drawer-promo { background: var(--glass-section); border-color: var(--glass-stroke); border-radius: 8px; box-shadow: var(--glass-highlight); }
+:root[data-theme] body .app-shell > .sidebar .icon-button { border: 1px solid var(--glass-stroke); background: var(--glass-control); }
+:root[data-theme] body .liquid-control:not(.dock-icon):not(.gm-ctl):not(.gm-split) { border: 1px solid var(--glass-stroke); }
+:root[data-theme] body .liquid-control:not(.liquid-surface):not(.dock-icon):not(.button-primary):not(.send-button):not(.meet-new):not(.gm-join-btn):not(.gm-ctl):not(.gm-split):not(.danger):not(.button-danger):not(.off):not(.primary) { background: var(--glass-control); }
+:root[data-theme] body :is(.library-categories, .lib2-shelves, .lib2-langs, .yt-topics, .statistics-periods) button:is(.active, .selected, [aria-pressed="true"], [aria-selected="true"]) { color: var(--accent-ink); border-color: var(--accent) !important; background: var(--accent-soft); }
+:root[data-theme] body .liquid-control:not(.liquid-surface):not(.dock-icon) { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:root[data-theme] body :is(.search-field, .youtube-search, .meet-join-field, .standalone-ai > header, .standalone-ai > form, .welcome-ai-link) { border-color: var(--glass-stroke); }
+:root[data-theme] body :is(.button-primary, .send-button:not(.recording), .meet-new, .gm-join-btn, .standalone-ai > form > button, .tgp-savebar button.primary) { color: var(--action-text) !important; }
+body .tgp-savebar button.primary > .liquid-material { --liquid-base: var(--action-bg); }
+:root[data-theme] body .tgp-savebar button.primary:not(.liquid-surface) { background: var(--action-bg); }
+:root[data-theme] body .chat-page .chat-sidebar .search-field { border-radius: var(--glass-control-radius); border-color: var(--glass-stroke); }
+:root[data-theme] body .chat-page .room-item { border: 1px solid var(--glass-stroke); background: var(--glass-section); }
+:root[data-theme] body .chat-page .room-list { gap: 6px; }
+:root[data-theme] body .youtube-page .youtube-video { border-bottom-width: 1px; }
+:root[data-theme] body .youtube-page .youtube-video:active { margin-bottom: 0; border-bottom-width: 1px; transform: none; }
+:root[data-theme] body .youtube-page .youtube-search .icon-button { width: 40px; height: 40px; }
+:root[data-theme] body .app-shell > .sidebar { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; overscroll-behavior: contain; }
+@media (max-width: 820px) {
+  :root[data-theme] body .app-shell > .sidebar { width: min(340px, calc(100vw - 20px)); border-radius: 0 24px 24px 0; border-right-color: var(--glass-stroke); }
+  :root[data-theme] body .app-shell > .sidebar .drawer-brand-copy { letter-spacing: 0; }
+  :root[data-theme] body .app-shell > .sidebar .drawer-brand-copy strong { letter-spacing: 0; }
+  :root[data-theme] body .app-shell > .sidebar .main-nav > a { padding-inline: 12px; gap: 12px; }
+  :root[data-theme] body .dashboard-page .metric-grid { gap: 8px; }
+  :root[data-theme] body .dashboard-page .metric-card { padding-inline: 12px; }
+  :root[data-theme] body .app-shell .topbar-context strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Both home themes share the lens, with separate readable material tints. */
+:root[data-theme="light"] body .dashboard-page {
+  --home-glass-fill: rgb(244 250 255 / .28);
+  --home-glass-border: rgb(255 255 255 / .52);
+  --home-glass-depth: inset 0 1px 0 rgb(255 255 255 / .72), inset 0 -1px 0 rgb(63 101 131 / .1), 0 3px 14px rgb(35 72 99 / .05);
+  --home-liquid-fill: 14%;
+  --home-reflection: rgb(255 255 255 / .38);
+}
+:root[data-theme="dark"] body .dashboard-page {
+  --home-glass-fill: rgb(66 77 89 / .16);
+  --home-glass-border: rgb(220 232 247 / .16);
+  --home-glass-depth: inset 0 1px 0 rgb(255 255 255 / .07), 0 6px 20px rgb(0 0 0 / .18);
+  --home-liquid-fill: 16%;
+  --home-reflection: transparent;
+}
+:root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) {
+  background: var(--home-glass-fill) !important;
+  border: 1px solid var(--home-glass-border) !important;
+  border-radius: 8px;
+  box-shadow: var(--home-glass-depth) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(112%) !important;
+  backdrop-filter: blur(26px) saturate(112%) !important;
+}
+:root[data-theme="light"] body .dashboard-page .dashboard-list-row {
+  background: rgb(244 250 255 / .14);
+  border-color: rgb(63 101 131 / .12);
+}
+:root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span).liquid-surface {
+  background: transparent !important;
+  -webkit-backdrop-filter: blur(28px) saturate(125%) !important;
+  backdrop-filter: blur(28px) saturate(125%) !important;
+}
+:root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) > .liquid-material {
+  --liquid-body-fill: var(--home-liquid-fill);
+  --liquid-base: var(--surface);
+}
+/* A broad reflection still reads as glass on a nearly uniform backdrop. */
+:root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) > .liquid-material::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(135deg, var(--home-reflection), transparent 38%, transparent 65%, var(--home-reflection));
+  background-size: 180% 180%; background-position: 0% 0%;
+  box-shadow: inset 0 1px 0 var(--home-glass-border), inset 1px 0 0 var(--home-glass-border);
+  transition: background-position 420ms var(--glass-ease);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span):hover > .liquid-material::after { background-position: 65% 65%; }
+}
+:root[data-theme="dark"] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) > .liquid-material::after { display: none; }
+
+@supports not (backdrop-filter: blur(1px)) {
+  :root[data-theme] body .dashboard-page { --home-glass-fill: var(--surface); }
+  :root, :root[data-theme="dark"] { --glass-chrome: var(--surface); --glass-control: var(--surface-muted); --glass-section: var(--surface); --glass-message: var(--surface); --glass-veil: var(--surface); --liquid-body-fill: 100%; --liquid-control-fill: 100%; --liquid-navigation-fill: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body .liquid-control, body .liquid-control > svg { transition: none !important; animation: none !important; }
+  body .liquid-control:active > svg { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme] body .dashboard-page { --home-glass-fill: var(--surface); }
+  :root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  :root, :root[data-theme="dark"] { --glass-chrome: var(--surface); --glass-panel: var(--surface); --glass-control: var(--surface-muted); --glass-section: var(--surface); --glass-message: var(--surface); --glass-veil: var(--surface); --message-own: var(--surface-muted); }
+  body [data-liquid-kind], body .message-bubble, body .welcome-facts > span,
+  :root[data-theme] body :is(.reference-dock, .reference-dock .dock-ai .dock-icon, .app-shell > .sidebar, .sidebar-scrim),
+  :root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card),
+  :root[data-theme] body .meet-row,
+  :root[data-theme] body .liquid-control:not(.liquid-surface):not(.dock-icon),
+  :root[data-theme] body .app-shell > .sidebar .main-nav > a:not(.liquid-surface) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+@media (forced-colors: active) {
+  body .liquid-material { display: none; }
+  body .liquid-surface { background: Canvas !important; border-color: ButtonText; }
+}

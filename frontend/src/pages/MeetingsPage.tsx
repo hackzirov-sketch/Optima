@@ -265,6 +265,7 @@ export function MeetingsPage() {
               </h1>
               <div className="meet-week" role="group" aria-label={t("meet.pickDate")}>
                 <button type="button" className="meet-icon-button" onClick={() => shiftWeek(-1)} aria-label={t("meet.prevWeek")}><ChevronLeft size={22} /></button>
+                <div className="meet-week-days">
                 {week.map((day) => {
                   const selected = dayKey(day) === dayKey(selectedDay);
                   return (
@@ -275,6 +276,7 @@ export function MeetingsPage() {
                     </button>
                   );
                 })}
+                </div>
                 <button type="button" className="meet-icon-button" onClick={() => shiftWeek(1)} aria-label={t("meet.nextWeek")}><ChevronRight size={22} /></button>
               </div>
             </div>

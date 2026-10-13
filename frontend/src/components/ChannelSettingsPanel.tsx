@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Bot, FileText, GraduationCap, Info, LayoutGrid, Loader2, Lock, Megaphone,
+  ArrowLeft, Bot, ChevronRight, FileText, GraduationCap, Info, LayoutGrid, Loader2, Lock, Megaphone,
   MessageSquare, Plug, Save, ScrollText, Shield, ShieldAlert, Sparkles, Users, Video
 } from "lucide-react";
 import { api } from "../lib/api";
@@ -75,6 +75,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
   const { t } = useI18n();
   const { show } = useToast();
   const [section, setSection] = useState<SectionId>("general");
+  const [sectionOpen, setSectionOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRole] = useState<RoomRole>("member");
@@ -195,23 +196,25 @@ export function ChannelSettingsPanel({ room, onClose, onSaved }: Props) {
   if (loading) return <div className="cs-loading"><Loader2 className="spin" size={22} /></div>;
 
   return (
-    <div className="channel-settings">
-      <nav className="cs-nav" aria-label={t("channelSettings.title")}>
+    <div className={`channel-settings ${sectionOpen ? "is-section-open" : ""}`}>
+      <nav className="cs-nav" aria-label={t(room.type === "channel" ? "channelSettings.title" : "channelSettings.groupTitle")}>
         {visibleSections.map((entry) => {
           const Icon = entry.icon;
           return (
             <button key={entry.id} className={section === entry.id ? "active" : ""}
-                    onClick={() => setSection(entry.id)}
+                    onClick={() => { setSection(entry.id); setSectionOpen(true); }}
                     aria-current={section === entry.id ? "page" : undefined}>
               <Icon size={16} />
               <span>{t(`channelSettings.section.${entry.id}`)}</span>
               {PREVIEW_SECTIONS.has(entry.id) && <em>{t("channelSettings.previewBadge")}</em>}
+              <ChevronRight size={17} className="cs-section-chevron" />
             </button>
           );
         })}
       </nav>
 
       <div className="cs-body">
+        <button type="button" className="cs-section-back" onClick={() => setSectionOpen(false)}><ArrowLeft size={18} />{t("common.back")}</button>
         {PREVIEW_SECTIONS.has(section) && (
           <p className="cs-preview-note">
             <Info size={15} />

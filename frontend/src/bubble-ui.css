@@ -1,0 +1,127 @@
+/* Shared bubble geometry; optical layers inherit the host's final silhouette. */
+:root {
+  --bubble-widget: 24px;
+  --bubble-sheet: 28px;
+  --glass-control-radius: 20px;
+  --glass-tool-radius: 24px;
+}
+:root[data-theme] body .dashboard-page :is(.metric-card, .education-donut-card, .education-bars-card, .dashboard-grid > .panel, .welcome-facts > span) {
+  border-radius: var(--bubble-widget) !important;
+  min-width: 0;
+}
+:root[data-theme] body :is(.book-card, .education-video-card, .education-picker-grid > button, .education-teachers article, .meeting-card, .meet-row, .youtube-video, .tgp-card, .tgp-nav, .tgp-panel, .settings-panel, .profile-summary, .statistics-grid article) {
+  border-radius: var(--bubble-widget) !important;
+  min-width: 0;
+}
+:root[data-theme] body :is(.modal, .auth-card, .telegram-emoji-picker, .notification-panel, .lib2-detail, .gm-panel, .meeting-chat-panel) { border-radius: var(--bubble-sheet) !important; }
+:root[data-theme] body :is(.button, .group-button, .meet-new, .meet-row-join, .gm-join-btn, .yt-pill, .library-categories button, .lib2-langs button, .lib2-shelves button, .yt-topics button, .statistics-periods button) { border-radius: 999px !important; }
+:root[data-theme] body :is(.search-field, .youtube-search, .meet-join-field, .standalone-ai > header, .standalone-ai > form) { border-radius: 24px !important; }
+:root[data-theme] body :is(.book-card .cover, .youtube-thumbnail) { border-radius: 20px; }
+:root[data-theme] body .app-shell > .sidebar .main-nav > a { border-radius: 22px !important; }
+:root[data-theme] body .app-shell > .sidebar .drawer-promo { border-radius: 24px; }
+:root[data-theme] body .dashboard-page :is(.education-donut-card, .education-bars-card, .dashboard-grid > .panel) { padding: 20px; }
+:root[data-theme] body .dashboard-page .education-donut-copy { min-width: 0; }
+:root[data-theme] body .dashboard-page .education-donut-copy h3 { line-height: 1.4; overflow-wrap: anywhere; }
+:root[data-theme] body .dashboard-page .panel-header { gap: 12px; align-items: flex-start; }
+:root[data-theme] body .dashboard-page .panel-header > div { min-width: 0; }
+:root[data-theme] body .dashboard-page .panel-header > a { flex-shrink: 0; max-width: 110px; line-height: 1.5; }
+
+/* Week arrows stay reachable; only the date strip scrolls on narrow screens. */
+:root[data-theme] body .meet-week { min-width: 0; max-width: 100%; gap: 6px; }
+:root[data-theme] body .meet-week-days { display: flex; min-width: 0; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; padding: 4px 2px; }
+:root[data-theme] body .meet-week .meet-icon-button { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; }
+:root[data-theme] body .meet-week-days .meet-day { flex: 0 0 44px; width: 44px; min-width: 44px; height: 58px; border-radius: 18px; scroll-snap-align: center; }
+:root[data-theme] body .meet-day.selected { color: var(--action-text); border: 1px solid var(--accent); background: var(--action-bg); }
+:root[data-theme] body .meet-day.selected :is(small, strong) { color: inherit; }
+:root[data-theme] body .meet-day.selected > .liquid-material { --liquid-base: var(--action-bg); --liquid-body-fill: 72%; }
+:root[data-theme] body :is(.meet-row-join, .meet-new) { color: var(--action-text); background: var(--action-bg); }
+:root[data-theme] body .meet-row-join > .liquid-material { --liquid-base: var(--action-bg); --liquid-body-fill: 72%; }
+:root[data-theme] body .meet-row-main { min-height: 44px; }
+:root[data-theme] body .gm-lobby {
+  --meet-bg: var(--canvas); --meet-text: var(--text); --meet-text-2: var(--muted);
+  --meet-line: var(--glass-stroke); --meet-blue: var(--accent); --meet-blue-soft: var(--accent-soft);
+  background: var(--canvas); color: var(--text);
+}
+:root[data-theme] body .gm-lobby-bar { background: var(--glass-chrome); border-bottom: 1px solid var(--glass-stroke); border-radius: 0 0 24px 24px; -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+:root[data-theme] body .gm-lobby .gm-lobby-preview { border-radius: 28px; border: 1px solid var(--glass-stroke); }
+:root[data-theme] body .gm-device-row label { min-height: 44px; background: var(--glass-control); border-color: var(--glass-stroke); border-radius: 22px; }
+:root[data-theme] body .gm-device-row select { min-height: 44px; cursor: pointer; }
+:root[data-theme] body .gm-notice { border-radius: 20px; align-items: flex-start; background: color-mix(in srgb, var(--call-off-ink) 8%, var(--surface)); color: var(--call-off-ink); }
+:root[data-theme] body .gm-notice svg { flex-shrink: 0; margin-top: 3px; }
+
+/* Text stays outside the lens. Long conversations use inexpensive static frost. */
+:root[data-theme] body .chat-page {
+  --glass-message: rgb(239 248 255 / .45);
+  --message-own: rgb(189 217 235 / .6);
+  --message-sheen: linear-gradient(135deg, rgb(255 255 255 / .32), transparent 58%);
+}
+:root[data-theme="dark"] body .chat-page {
+  --glass-message: rgb(42 51 63 / .45);
+  --message-own: rgb(65 82 103 / .55);
+  --message-sheen: linear-gradient(135deg, rgb(224 238 255 / .1), transparent 58%);
+}
+:root[data-theme] body .chat-page .conversation > .message-list .message-bubble:not(:has(> .message-custom-emoji)) {
+  border-radius: 24px 24px 24px 8px;
+  padding: 12px 16px 9px;
+  border-color: var(--glass-stroke);
+  box-shadow: var(--glass-highlight), 0 3px 12px rgb(0 0 0 / .06);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+:root[data-theme] body .chat-page .conversation > .message-list .message-mine .message-bubble:not(:has(> .message-custom-emoji)) { border-radius: 24px 24px 8px 24px; }
+:root[data-theme] body .chat-page .conversation > .message-list .message-bubble:not(:has(> .message-custom-emoji)),
+:root[data-theme] body .chat-page .conversation > .message-list .message-mine .message-bubble:not(:has(> .message-custom-emoji)) { background-image: var(--message-sheen); }
+:root[data-theme] body .chat-page .room-item { border-radius: 22px; }
+:root[data-theme] body .chat-page .chat-catalog { border-radius: 24px; }
+:root[data-theme] body .chat-page .conversation-header { border-radius: 0 0 24px 24px; }
+:root[data-theme] body .chat-page .composer:not(.ai-composer) {
+  border: 1px solid var(--glass-stroke);
+  border-radius: 28px;
+  margin: 8px;
+  width: calc(100% - 16px);
+  padding: 8px;
+  flex-shrink: 0;
+  -webkit-backdrop-filter: blur(28px) saturate(120%) !important;
+  backdrop-filter: blur(28px) saturate(120%) !important;
+}
+:root[data-theme] body .chat-page .composer:not(.ai-composer) > .rich-message-input {
+  border-radius: 22px !important;
+  min-width: 0;
+  padding-inline: 14px;
+}
+:root[data-theme] body .chat-page .conversation > .message-list .message-bubble:has(> .message-custom-emoji) { border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (max-width: 820px) {
+  :root { --bubble-widget: 22px; --bubble-sheet: 24px; }
+  :root[data-theme] body .dashboard-page .metric-card { padding: 14px; }
+  :root[data-theme] body .dashboard-page .welcome-facts > span { padding: 12px 10px; }
+  :root[data-theme] body .dashboard-page .education-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) { margin: 6px; width: calc(100% - 12px); padding: 6px; gap: 2px; border-radius: 26px; }
+  :root[data-theme] body .chat-page .conversation > .message-list .message-bubble:not(:has(> .message-custom-emoji)) { max-width: min(90%, 36rem); padding: 11px 14px 8px; }
+  :root[data-theme] body .chat-page .conversation-header { border-radius: 0 0 20px 20px; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > :is(.icon-button, .send-button),
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .emoji-menu-wrap > .icon-button { width: 44px; min-width: 44px; height: 44px; flex-basis: 44px; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .rich-message-input:empty::before { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  :root[data-theme] body .app-shell .topbar .icon-button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  :root[data-theme] body .meet-day-row { padding-inline: 0; }
+  :root[data-theme] body .meet-week { width: 100%; justify-content: flex-start; }
+  :root[data-theme] body .meet-week-days { flex: 1 1 0; }
+  :root[data-theme] body .meet-home-main { min-width: 0; }
+  :root[data-theme] body .meet-row { grid-template-columns: 64px minmax(0, 1fr) 44px; gap: 8px; padding: 12px; }
+  :root[data-theme] body .meet-row time strong { font-size: 12px; white-space: nowrap; }
+  :root[data-theme] body .meet-row-main strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+  :root[data-theme] body .meet-row .meet-icon-button { width: 44px; min-width: 44px; height: 44px; }
+  :root[data-theme] body .dashboard-page :is(.education-donut-card, .education-bars-card, .dashboard-grid > .panel) { padding: 18px; }
+  :root[data-theme] body .gm-lobby-main { gap: 24px; padding-inline: 12px; }
+  :root[data-theme] body .gm-lobby-join .gm-join-btn { width: min(100%, 320px); min-width: 0; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme] body .chat-page { --glass-message: var(--surface); --message-own: var(--surface-muted); }
+  :root[data-theme] body .chat-page .conversation > .message-list .message-bubble,
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  :root[data-theme] body .chat-page { --glass-message: var(--surface); --message-own: var(--surface-muted); }
+}

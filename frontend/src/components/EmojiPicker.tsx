@@ -108,15 +108,15 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
   return (
     <span className="emoji-menu-wrap" ref={wrapRef}>
       <button type="button" className={`icon-button ${open ? "active" : ""}`}
-              onClick={() => setOpen((value) => !value)} aria-label="Telegram emoji tanlash"
+              onClick={() => setOpen((value) => !value)} aria-label="Emoji tanlash"
               aria-expanded={open} aria-haspopup="dialog">
         <Smile size={20} />
       </button>
       {open && (
-        <div className="emoji-picker telegram-emoji-picker" role="dialog" aria-label="Telegram emojilari">
+        <div className="emoji-picker telegram-emoji-picker" role="dialog" aria-label="Emojilar">
           <div className="telegram-emoji-head">
             <span><strong>{pack === 0 ? "So‘nggi ishlatilganlar" : activePack?.name || "Custom emojilar"}</strong>
-              <small>{assets.length ? `${packAssets.length} ta · jami ${assets.length}` : "Telegram to‘plami"}</small></span>
+              <small>{assets.length ? `${packAssets.length} ta · jami ${assets.length}` : "Emoji to‘plami"}</small></span>
             <button type="button" onClick={() => setOpen(false)} aria-label="Yopish"><X size={16} /></button>
           </div>
           <div className="telegram-emoji-packs" role="tablist" aria-label="Emoji to‘plamlari">

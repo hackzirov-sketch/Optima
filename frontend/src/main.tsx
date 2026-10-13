@@ -5,6 +5,9 @@ import { AuthProvider } from "./lib/auth";
 import { I18nProvider } from "./lib/i18n/i18n";
 import { ToastProvider } from "./components/Toast";
 import { ConfirmProvider } from "./components/ConfirmDialog";
+import { LiquidUI } from "./components/LiquidUI";
+import { isLocalPreview } from "./lib/localPreview";
+import { session } from "./lib/session";
 import "./styles.css";
 import "./premium.css";
 // Order matters: each layer refines the ones above it. A merge once dropped
@@ -23,6 +26,14 @@ import "./youtube-watch.css";
 import "./book-reader.css";
 import "./mobile-shell.css";
 import "./focus.css";
+import "./glass-ui.css";
+import "./liquid-ui.css";
+import "./bubble-ui.css";
+import "./chat-flow.css";
+
+if (import.meta.env.DEV && isLocalPreview()) session.markActive();
+// Entry-level updates can recreate auth contexts; reload instead of retaining stale providers.
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -31,6 +42,7 @@ createRoot(document.getElementById("root")!).render(
         <ConfirmProvider>
           <AuthProvider>
             <App />
+            <LiquidUI />
           </AuthProvider>
         </ConfirmProvider>
       </ToastProvider>

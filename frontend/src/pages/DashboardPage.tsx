@@ -78,7 +78,10 @@ export function DashboardPage() {
           <span className="welcome-brand">Optima Aloqa</span>
           <h2 id="welcome-heading">{t("dashboard.greetingWithName", { greeting: greeting(), name: user?.firstName || "" })}</h2>
           <p>{t("dashboard.description")}</p>
-          <Link href="/ai" className="welcome-ai-link" aria-label="Optima AI" title="Optima AI"><Sparkles size={20} /></Link>
+          <div className="welcome-actions">
+            <Link href="/chat" className="welcome-chat-link"><MessageCircle size={19} />{t("shell.chat")}</Link>
+            <Link href="/ai" className="welcome-ai-link" aria-label="Optima AI" title="Optima AI"><Sparkles size={20} /></Link>
+          </div>
           <div className="welcome-facts">
             <span><GraduationCap size={20} /><span><small>{t("dashboard.completedLabel")}</small><strong>{education.completed}</strong></span></span>
             <span><Target size={20} /><span><small>{t("dashboard.avgProgress")}</small><strong>{education.completionRate}%</strong></span></span>
