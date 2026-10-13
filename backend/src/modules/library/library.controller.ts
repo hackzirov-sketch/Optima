@@ -43,8 +43,9 @@ export class LibraryController {
     @Query('lang') lang?: LibraryLanguage,
     @Query('subject') subject?: LibrarySubject,
     @Query('page') page?: string,
+    @Query('readable') readable?: string,
   ) {
-    return this.library.search({ q, lang, subject, page: Number(page) || 1 });
+    return this.library.search({ q, lang, subject, page: Number(page) || 1, readableOnly: readable !== '0' });
   }
 
   @Get('books/:key/reviews')

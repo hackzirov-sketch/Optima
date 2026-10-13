@@ -359,7 +359,8 @@
     "passwordSignsOut": "Değiştirince tüm cihazlardan çıkış yapılır.",
     "changePasswordButton": "Şifreyi değiştir",
     "passwordChanged": "Şifre değiştirildi. Tekrar giriş yapın.",
-    "passwordChangeFailed": "Şifre değiştirilemedi"
+    "passwordChangeFailed": "Şifre değiştirilemedi",
+    "superAdminBadge": "Optima yöneticisi"
   },
   "invite": {
     "eyebrow": "OPTIMA DAVETİ",
@@ -545,7 +546,8 @@
     "readingTitle": "Kaldığın yerden devam et",
     "finishedTitle": "Bitirdiğin kitaplar",
     "readingEmpty": "Henüz bir kitaba başlamadın",
-    "finishedEmpty": "Henüz biten kitap yok"
+    "finishedEmpty": "Henüz biten kitap yok",
+    "readableOnly": "Yalnızca Optima'da okunabilenler"
   },
   "education": {
     "openLessonAria": "{{title}} dersini aç",

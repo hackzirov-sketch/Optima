@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { AtSign, Info, LoaderCircle, MessageCircle, Pencil, Phone, Share2, UserRound, X } from "lucide-react";
+import { AtSign, Info, LoaderCircle, MessageCircle, Pencil, Phone, Share2, ShieldCheck, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
@@ -73,6 +73,7 @@ export function UserProfileModal() {
         <section className={`tg-info-hero upm-hero ${isMe ? "is-me" : ""}`}>
           <span className="upm-avatar"><Avatar firstName={profile.firstName} lastName={profile.lastName} url={profile.avatarUrl} size="xl" />{isPresenceActive(presence) && <i />}</span>
           <strong><DisplayName firstName={profile.firstName} lastName={profile.lastName} nickname={profile.nickname} nameEmoji={profile.nameEmoji} /></strong>
+          {profile.isSuperAdmin && <span className="super-admin-badge"><ShieldCheck size={14} />{t("profile.superAdminBadge")}</span>}
           <small className={isPresenceActive(presence) || isMe ? "online" : ""}>{isMe ? t("presence.online") : formatPresenceLabel(presence, t)}</small>
         </section>
         {!isMe && <div className="tg-info-actions upm-actions">

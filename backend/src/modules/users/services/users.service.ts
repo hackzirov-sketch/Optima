@@ -105,6 +105,7 @@ export class UsersService {
         message: 'User not found',
       });
     }
+    user.isSuperAdmin = isSuperAdmin(user.id) || undefined;
     // Only public channels with a username (slug): those are the ones with a
     // shareable address, the same rule the room drawer uses for its link.
     user.channels = await this.dataSource.query(

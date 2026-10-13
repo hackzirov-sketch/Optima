@@ -1,0 +1,47 @@
+:root { --bg: #f5f6fa; --surface: #fff; --text: #16182a; --muted: #6b7086; --line: #e3e5ee; --accent: #4f46e5; --red: #dc2626; --green: #16a34a; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1020; --surface: #181a2e; --text: #eceefa; --muted: #9a9fb8; --line: #2a2d47; --accent: #818cf8; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.app { max-width: 1280px; margin: 0 auto; padding: 16px; }
+.center { display: grid; place-items: center; gap: 8px; min-height: 100vh; padding: 16px; text-align: center; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.top strong { font-size: 18px; }
+.top .me { flex: 1; color: var(--muted); }
+.top a, .center a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.tabs button, .pager button, td button, .button { min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+.tabs button.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.tabs .refresh { margin-left: auto; }
+.button { border-color: var(--accent); background: var(--accent); color: #fff !important; }
+.button.small { min-height: 30px; font-size: 13px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.toolbar input { flex: 1 1 260px; min-height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.toolbar select { min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.count { color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.card { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.card small { color: var(--muted); font-weight: 600; }
+.card b { font-size: 28px; }
+.card span { color: var(--muted); font-size: 12.5px; }
+.card.green { border-color: var(--green); background: color-mix(in srgb, var(--green) 10%, var(--surface)); }
+.card.red b { color: var(--red); }
+table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+tr:last-child td { border-bottom: 0; }
+tr.blocked { background: color-mix(in srgb, var(--red) 6%, var(--surface)); }
+small { color: var(--muted); }
+.actions { white-space: nowrap; text-align: right; }
+.actions button, .actions .button { margin-left: 6px; }
+button.danger { border-color: color-mix(in srgb, var(--red) 50%, var(--line)); color: var(--red); }
+.red { color: var(--red); }
+.online { color: var(--green); font-weight: 600; }
+.tag { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; font-style: normal; }
+.error { padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--red) 12%, var(--surface)); color: var(--red); }
+.notice { padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--green) 12%, var(--surface)); color: var(--green); }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.split h2 { font-size: 15px; }
+.muted { color: var(--muted); }
+.pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 14px 0; }
+.pager button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 760px) { table { display: block; overflow-x: auto; } }

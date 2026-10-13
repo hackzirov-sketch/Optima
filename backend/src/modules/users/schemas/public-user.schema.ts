@@ -15,4 +15,6 @@ export interface PublicUserDto {
   lastSeen: Date | null;
   /** 'private': the card hides the username from others. */
   accountVisibility?: 'public' | 'private';
+  /** An Optima admin — shown as a badge on the profile card. */
+  isSuperAdmin?: boolean;
 }

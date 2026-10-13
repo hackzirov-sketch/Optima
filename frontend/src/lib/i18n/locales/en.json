@@ -359,7 +359,8 @@
     "passwordSignsOut": "Changing it signs you out on every device.",
     "changePasswordButton": "Change password",
     "passwordChanged": "Password changed. Please sign in again.",
-    "passwordChangeFailed": "Couldn’t change the password"
+    "passwordChangeFailed": "Couldn’t change the password",
+    "superAdminBadge": "Optima admin"
   },
   "invite": {
     "eyebrow": "OPTIMA INVITE",
@@ -545,7 +546,8 @@
     "readingTitle": "Pick up where you left off",
     "finishedTitle": "Books you finished",
     "readingEmpty": "You haven’t started a book yet",
-    "finishedEmpty": "No finished books yet"
+    "finishedEmpty": "No finished books yet",
+    "readableOnly": "Readable in Optima only"
   },
   "education": {
     "openLessonAria": "Open lesson {{title}}",

@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { useI18n } from "../lib/i18n/i18n";
 import type { PresenceStatus } from "../lib/presence";
 import { openProfile } from "../lib/profileModal";
+import { adminSiteUrl } from "../lib/cdn";
 import { Avatar, DisplayName } from "./ui";
 
 type Status = Exclude<PresenceStatus, "offline" | "in_meeting">;
@@ -39,7 +40,7 @@ export function AccountMenu({ status = "online", align = "end" }: { status?: Sta
                   </div>
                   <button type="button" role="menuitem" onClick={() => { setOpen(false); openProfile(user?.username || user?.publicId); }}><UserRound size={18} />{t("shell.myProfile")}</button>
                   <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate("/profile"); }}><Settings size={18} />{t("shell.settingsMenu")}</button>
-                  {user?.isSuperAdmin && <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate("/admin"); }}><ShieldCheck size={18} />{t("admin.title")}</button>}
+                  {user?.isSuperAdmin && <button type="button" role="menuitem" onClick={() => { setOpen(false); const url = adminSiteUrl(); if (url.startsWith("http")) window.open(url, "_blank", "noopener"); else navigate(url); }}><ShieldCheck size={18} />{t("admin.title")}</button>}
                   <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); void logout(); }}><LogOut size={18} />{t("shell.logout")}</button>
                 </div>
               </>}

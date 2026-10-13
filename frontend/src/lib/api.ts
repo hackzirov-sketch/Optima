@@ -455,7 +455,7 @@ export const api = {
   },
   users: {
     me: () => apiFetch<User>("/users/me"),
-    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { accountVisibility?: "public" | "private"; channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
+    publicProfile: (identifier: string) => apiFetch<Pick<User, "id" | "publicId" | "firstName" | "lastName" | "username" | "nickname" | "avatarUrl" | "nameEmoji" | "bio"> & { accountVisibility?: "public" | "private"; isSuperAdmin?: boolean; channels?: Array<{ id: string; name: string; slug: string | null; avatarUrl: string | null; memberCount: number }> }>(`/users/profile/${encodeURIComponent(identifier)}`),
     update: (data: Partial<User>) =>
       apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
     uploadAvatar: (file: File) => {
@@ -758,8 +758,8 @@ export const api = {
   },
   library: {
     read: (url: string) => apiFetch<{ content: string; contentType: string }>(`/library/read?url=${encodeURIComponent(url)}`),
-    search: (params: { q?: string; lang: string; subject: string; page: number }) =>
-      apiFetch<{ total: number; items: LibraryBook[]; page: number; hasMore: boolean }>(`/library/search?${new URLSearchParams({ q: params.q ?? "", lang: params.lang, subject: params.subject, page: String(params.page) })}`),
+    search: (params: { q?: string; lang: string; subject: string; page: number; readable?: boolean }) =>
+      apiFetch<{ total: number; items: LibraryBook[]; page: number; hasMore: boolean }>(`/library/search?${new URLSearchParams({ q: params.q ?? "", lang: params.lang, subject: params.subject, page: String(params.page), readable: params.readable === false ? "0" : "1" })}`),
     reviews: (bookKey: string) => apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`),
     saveReview: (bookKey: string, rating: number, body: string) =>
       apiFetch<LibraryReviews>(`/library/books/${encodeURIComponent(bookKey)}/reviews`, { method: "PUT", body: JSON.stringify({ rating, body }) }),

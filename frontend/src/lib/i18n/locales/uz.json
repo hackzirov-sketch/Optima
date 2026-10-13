@@ -359,7 +359,8 @@
     "passwordSignsOut": "Parol o‘zgargach, barcha qurilmalardan chiqib ketasiz.",
     "changePasswordButton": "Parolni o‘zgartirish",
     "passwordChanged": "Parol o‘zgartirildi. Qayta kiring.",
-    "passwordChangeFailed": "Parolni o‘zgartirib bo‘lmadi"
+    "passwordChangeFailed": "Parolni o‘zgartirib bo‘lmadi",
+    "superAdminBadge": "Optima admin"
   },
   "invite": {
     "eyebrow": "OPTIMA TAKLIFI",
@@ -545,7 +546,8 @@
     "readingTitle": "Davom ettiring",
     "finishedTitle": "O‘qib tugatilgan kitoblar",
     "readingEmpty": "Hali o‘qishni boshlagan kitobingiz yo‘q",
-    "finishedEmpty": "Hali tugatilgan kitob yo‘q"
+    "finishedEmpty": "Hali tugatilgan kitob yo‘q",
+    "readableOnly": "Faqat Optima’da o‘qiladiganlar"
   },
   "education": {
     "openLessonAria": "{{title}} darsini ochish",

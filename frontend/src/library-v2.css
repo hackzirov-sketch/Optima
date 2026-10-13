@@ -176,3 +176,6 @@
   clip-path: inset(0 0 0 0 round 3px 0 0 3px);
 }
 .lib2 .book-cover { box-shadow: 5px 8px 0 -2px var(--book-page), 5px 11px 0 -2px var(--book-page-edge), 2px 20px 24px -8px var(--book-floor) !important; }
+.library-categories .library-readable-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.library-categories .library-readable-toggle.active { border-color: #16a34a !important; background: color-mix(in srgb, #16a34a 12%, var(--surface)) !important; color: #15803d !important; }
+:root[data-theme="dark"] .library-categories .library-readable-toggle.active { color: #4ade80 !important; }

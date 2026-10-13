@@ -277,6 +277,7 @@ export function ProfilePage() {
             <button type="button" className="tgp-name" onClick={() => setEditing("name")} title={t("profile.editNameHint")}>
               {`${draft.firstName} ${draft.lastName}`.trim() || t("profile.notSet")}
             </button>
+            {user?.isSuperAdmin && <span className="super-admin-badge"><ShieldCheck size={14} />{t("profile.superAdminBadge")}</span>}
             <small className="tgp-status">{t("profile.online")}</small>
           </div>
 

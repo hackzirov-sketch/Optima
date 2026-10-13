@@ -40,6 +40,8 @@ export function LibraryPage() {
   const { show } = useToast();
   const [lang, setLang] = useState<Lang>(() => (["uz", "en", "ru", "tr"].includes(locale) ? locale as Lang : "uz"));
   const [subject, setSubject] = useState<Subject>("all");
+  // On by default: only books that open in Optima's own reader, not links out.
+  const [readableOnly, setReadableOnly] = useState(() => { try { return localStorage.getItem("optima-library-readable") !== "0"; } catch { return true; } });
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [books, setBooks] = useState<LibraryBook[]>([]);
@@ -83,22 +85,23 @@ export function LibraryPage() {
   useOutsideClose(panelRef, Boolean(selected) && !reader, closePanel);
 
   useEffect(() => { const timer = window.setTimeout(() => setDebounced(query.trim()), 400); return () => clearTimeout(timer); }, [query]);
-  useEffect(() => { setPage(1); }, [lang, subject, debounced]);
+  useEffect(() => { setPage(1); }, [lang, subject, debounced, readableOnly]);
 
   useEffect(() => {
     const sequence = ++request.current;
     setLoading(true);
     setFailed(false);
-    api.library.search({ q: debounced, lang, subject, page })
+    api.library.search({ q: debounced, lang, subject, page, readable: readableOnly })
       .then((result) => {
         if (sequence !== request.current) return;
-        setBooks((current) => page === 1 ? result.items : [...current, ...result.items.filter((book) => !current.some((item) => item.key === book.key))]);
+        const items = readableOnly ? result.items.filter((book) => book.readable) : result.items;
+        setBooks((current) => page === 1 ? items : [...current, ...items.filter((book) => !current.some((item) => item.key === book.key))]);
         setTotal(result.total);
         setHasMore(result.hasMore);
       })
       .catch(() => { if (sequence === request.current) { setFailed(true); if (page === 1) setBooks([]); } })
       .finally(() => { if (sequence === request.current) setLoading(false); });
-  }, [lang, subject, debounced, page]);
+  }, [lang, subject, debounced, page, readableOnly]);
 
   useEffect(() => {
     if (!selected) return;
@@ -337,6 +340,10 @@ export function LibraryPage() {
       <button type="button" className={shelf === "saved" ? "active" : ""} onClick={() => setShelf("saved")}><Bookmark size={16} />{t("library.shelfSaved")}{saved.length ? <b>{saved.length}</b> : null}</button>
     </nav>
     {shelf === "browse" && <nav className="library-categories">
+      <button type="button" className={`library-readable-toggle ${readableOnly ? "active" : ""}`} aria-pressed={readableOnly}
+        onClick={() => setReadableOnly((value) => { const next = !value; try { localStorage.setItem("optima-library-readable", next ? "1" : "0"); } catch { /* storage off */ } return next; })}>
+        <BookOpen size={15} />{t("library.readableOnly")}
+      </button>
       {subjects.map((item) => <button key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
     </nav>}
     <section className="library-section">

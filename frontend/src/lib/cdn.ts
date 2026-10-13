@@ -21,3 +21,8 @@ export function cdnImage(url: string | null | undefined): string {
   if (!match) return url;
   return `${apiOrigin}/cdn/${match[1].toLowerCase().startsWith("covers") ? "ol" : "pg"}/${match[2]}`;
 }
+
+/** The separate admin site, on the API host (nginx serves it at /admin/). */
+export function adminSiteUrl(): string {
+  return apiOrigin ? `${apiOrigin}/admin/` : "/admin";
+}

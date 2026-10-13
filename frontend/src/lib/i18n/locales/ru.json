@@ -359,7 +359,8 @@
     "passwordSignsOut": "После смены вы выйдете на всех устройствах.",
     "changePasswordButton": "Сменить пароль",
     "passwordChanged": "Пароль изменён. Войдите снова.",
-    "passwordChangeFailed": "Не удалось сменить пароль"
+    "passwordChangeFailed": "Не удалось сменить пароль",
+    "superAdminBadge": "Админ Optima"
   },
   "invite": {
     "eyebrow": "ПРИГЛАШЕНИЕ OPTIMA",
@@ -545,7 +546,8 @@
     "readingTitle": "Продолжите чтение",
     "finishedTitle": "Прочитанные книги",
     "readingEmpty": "Вы ещё не начали ни одной книги",
-    "finishedEmpty": "Прочитанных книг пока нет"
+    "finishedEmpty": "Прочитанных книг пока нет",
+    "readableOnly": "Только читаемые в Optima"
   },
   "education": {
     "openLessonAria": "Открыть урок {{title}}",
