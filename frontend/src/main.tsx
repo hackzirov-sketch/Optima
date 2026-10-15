@@ -32,6 +32,7 @@ import "./glass-ui.css";
 import "./liquid-ui.css";
 import "./bubble-ui.css";
 import "./chat-flow.css";
+import "./responsive-controls.css";
 
 if (import.meta.env.DEV && isLocalPreview()) session.markActive();
 // Entry-level updates can recreate auth contexts; reload instead of retaining stale providers.

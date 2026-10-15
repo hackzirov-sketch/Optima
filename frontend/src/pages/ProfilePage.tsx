@@ -67,13 +67,15 @@ export function ProfilePage() {
   const [editing, setEditing] = useState<Field | null>(null);
   const [accountEditing, setAccountEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const editField = (field: Field) => { setAccountEditing(true); setEditing(field); };
+  const enterAccountEditing = () => { setSettingsOpen(false); setAccountEditing(true); };
+  const editField = (field: Field) => { enterAccountEditing(); setEditing(field); };
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [section, setSection] = useState<Section>("notifications");
+  const [savingNotification, setSavingNotification] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [revokingAll, setRevokingAll] = useState(false);
   const [notifications, setNotifications] = useState({
@@ -203,6 +205,8 @@ export function ProfilePage() {
   }
 
   async function toggleNotification(key: keyof typeof notifications) {
+    if (savingNotification) return;
+    setSavingNotification(true);
     const next = { ...notifications, [key]: !notifications[key] };
     setNotifications(next);
     try {
@@ -211,6 +215,8 @@ export function ProfilePage() {
     } catch (error) {
       setNotifications(notifications);
       show(error instanceof Error ? error.message : t("profile.settingNotSaved"), "error");
+    } finally {
+      setSavingNotification(false);
     }
   }
 
@@ -292,7 +298,7 @@ export function ProfilePage() {
             {accountEditing ? <label className="tgp-bio">
               <textarea aria-label={t("profile.bioPlaceholder")} value={draft.bio} maxLength={BIO_LIMIT} rows={2} placeholder={t("profile.bioPlaceholder")} onChange={(event) => set("bio", event.target.value)} />
               <span className={BIO_LIMIT - draft.bio.length < 15 ? "low" : ""}>{BIO_LIMIT - draft.bio.length}</span>
-            </label> : <button type="button" className="tgp-bio-preview" onClick={() => setAccountEditing(true)}><UserRound size={20} /><span>{draft.bio || t("profile.notSet")}</span><ChevronRight size={16} /></button>}
+            </label> : <button type="button" className="tgp-bio-preview" onClick={enterAccountEditing}><UserRound size={20} /><span>{draft.bio || t("profile.notSet")}</span><ChevronRight size={16} /></button>}
           </section>
           {accountEditing && <p className="tgp-hint">{t("profile.bioHint")}</p>}
 
@@ -358,7 +364,7 @@ export function ProfilePage() {
                   const on = !!notifications[key];
                   // With everything muted the per-channel switches have no effect — show them as such.
                   const muted = !master && !notifications.notificationsEnabled;
-                  return <button key={key} type="button" role="switch" aria-checked={on} disabled={muted} className="tgp-notify-row" onClick={() => void toggleNotification(key)}>
+                  return <button key={key} type="button" role="switch" aria-checked={on} aria-label={title} aria-busy={savingNotification || undefined} disabled={muted || savingNotification} className="tgp-notify-row" onClick={() => void toggleNotification(key)}>
                     <span className={`tgp-notify-icon tone-${tone}`}>{icon}</span>
                     <span className="tgp-notify-text"><strong>{title}</strong><small>{hint}</small></span>
                     <span className={`tgp-switch${on ? " on" : ""}`} aria-hidden="true"><b /></span>

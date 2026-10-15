@@ -10,8 +10,12 @@ export function installKeyboardClass() {
     const typing = document.activeElement instanceof HTMLElement && document.activeElement.matches("input, textarea, [contenteditable='true'], [contenteditable='']");
     const open = typing && window.innerHeight - viewport.height > 150;
     document.documentElement.classList.toggle("keyboard-open", open);
+    document.documentElement.style.setProperty("--visual-height", `${viewport.height}px`);
+    document.documentElement.style.setProperty("--visual-top", `${viewport.offsetTop}px`);
   };
   viewport.addEventListener("resize", update);
+  viewport.addEventListener("scroll", update);
   document.addEventListener("focusin", update);
   document.addEventListener("focusout", () => window.setTimeout(update, 50));
+  update();
 }

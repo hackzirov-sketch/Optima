@@ -3,6 +3,16 @@ import { isLocalPreviewEnvironment } from "./localPreview";
 import { localPreviewRequest } from "./localPreviewData";
 
 describe("local preview isolation", () => {
+  it("returns AI lists, reply history and library collections in their API shapes", async () => {
+    expect(Array.isArray(await localPreviewRequest("/chat/ai/conversations"))).toBe(true);
+    const reply = await localPreviewRequest<{ conversationId: string; sources: unknown[] }>("/chat/ai", { method: "POST", body: JSON.stringify({ message: "Salom" }) });
+    expect(reply.sources).toEqual([]);
+    const history = await localPreviewRequest<{ messages: unknown[] }>(`/chat/ai/conversations/${reply.conversationId}`);
+    expect(history.messages).toHaveLength(2);
+    const books = await localPreviewRequest<{ items: unknown[] }>("/library/search?lang=uz");
+    expect(Array.isArray(books.items)).toBe(true);
+    expect(Array.isArray(await localPreviewRequest("/library/me/reading"))).toBe(true);
+  });
   it("requires development, loopback and an enabled setting", () => {
     expect(isLocalPreviewEnvironment(true, "127.0.0.1")).toBe(true);
     expect(isLocalPreviewEnvironment(false, "127.0.0.1")).toBe(false);

@@ -30,7 +30,7 @@
 :root[data-theme] body .meet-week { min-width: 0; max-width: 100%; gap: 6px; }
 :root[data-theme] body .meet-week-days { display: flex; min-width: 0; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; padding: 4px 2px; }
 :root[data-theme] body .meet-week .meet-icon-button { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; }
-:root[data-theme] body .meet-week-days .meet-day { flex: 0 0 44px; width: 44px; min-width: 44px; height: 58px; border-radius: 18px; scroll-snap-align: center; }
+:root[data-theme] body .meet-week-days .meet-day { flex: 0 0 56px; width: 56px; min-width: 56px; height: 56px; min-height: 56px; padding: 5px; border-radius: 50%; aspect-ratio: 1; scroll-snap-align: center; gap: 2px; }
 :root[data-theme] body .meet-day.selected { color: var(--action-text); border: 1px solid var(--accent); background: var(--action-bg); }
 :root[data-theme] body .meet-day.selected :is(small, strong) { color: inherit; }
 :root[data-theme] body .meet-day.selected > .liquid-material { --liquid-base: var(--action-bg); --liquid-body-fill: 72%; }

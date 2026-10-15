@@ -1,4 +1,6 @@
 const now = () => new Date().toISOString();
+const aiConversations: Array<{ id: string; title: string; updatedAt: string; messages: Array<{ id: string; role: string; text: string; hasImage: boolean; sources: unknown[]; createdAt: string }> }> = [];
+let aiMemory = { content: "", enabled: true, updatedAt: null as string | null };
 const user = { id: "local-user", publicId: "1000001", firstName: "Ahmadjon", lastName: "Zokirov", nickname: "Ahmadjon", username: "ahmadjon", email: "local@example.test", theme: "dark", language: "uz", isVerified: true };
 const colleague = { id: "local-colleague", publicId: "1000002", firstName: "Ali", lastName: "", username: "ali", avatarUrl: null };
 const group = { id: "local-workspace", ownerId: user.id, name: "OPTIMA", slug: "local", visibility: "private" };
@@ -77,7 +79,33 @@ export async function localPreviewRequest<T>(path: string, options: RequestInit 
   else if (p === "/library/me/marks") data = { liked: [], saved: [] };
   else if (p === "/youtube/status") data = { enabled: true };
   else if (p.startsWith("/youtube/")) data = { items: [], hasMore: false, nextPageToken: null };
-  else if (p.includes("/ai/") || p.includes("/mentor/chat")) data = { reply: "Bu local dizayn sinovi. Haqiqiy AI serveriga so'rov yuborilmadi.", provider: "local", contextSources: [] };
+  else if (p === "/chat/ai/conversations") data = aiConversations;
+  else if (p.startsWith("/chat/ai/conversations/")) {
+    const id = p.split("/").at(-1);
+    const conversation = aiConversations.find(item => item.id === id);
+    if (!conversation) throw new Error("Suhbat topilmadi.");
+    if (method === "PATCH") conversation.title = String(body.title ?? conversation.title);
+    if (method === "DELETE") aiConversations.splice(aiConversations.indexOf(conversation), 1);
+    data = conversation;
+  }
+  else if (p === "/chat/ai/memory") {
+    if (method === "PATCH") aiMemory = { ...aiMemory, ...body, updatedAt: now() };
+    data = aiMemory;
+  }
+  else if (p === "/chat/ai" || p === "/chat/ai/image" || p.includes("/mentor/chat")) {
+    let conversation = aiConversations.find(item => item.id === body.conversationId);
+    if (!conversation) {
+      conversation = { id: crypto.randomUUID(), title: String(body.message ?? "Yangi suhbat").slice(0, 60), updatedAt: now(), messages: [] };
+      aiConversations.push(conversation);
+    }
+    const reply = "Bu local dizayn sinovi. Haqiqiy AI serveriga so'rov yuborilmadi.";
+    conversation.updatedAt = now();
+    conversation.messages.push(
+      { id: crypto.randomUUID(), role: "user", text: String(body.message ?? ""), hasImage: false, sources: [], createdAt: now() },
+      { id: crypto.randomUUID(), role: "model", text: reply, hasImage: false, sources: [], createdAt: now() },
+    );
+    data = { reply, provider: "local", sources: [], grounded: false, conversationId: conversation.id, title: conversation.title };
+  }
   else if (p.includes("/presign") || p.endsWith("/upload")) throw new Error("Local test rejimida bulutga yuklash o'chirilgan.");
   return structuredClone(data) as T;
 }

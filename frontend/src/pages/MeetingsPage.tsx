@@ -241,7 +241,7 @@ export function MeetingsPage() {
             <button ref={newBarRef} type="button" className="meet-new" aria-haspopup="menu" aria-expanded={newOpen === "bar"} disabled={creating} onClick={() => setNewOpen((open) => open === "bar" ? null : "bar")}>
               <Video size={20} aria-hidden="true" /> {t("meet.new")}
             </button>
-            <MeetMenu open={newOpen === "bar"} onClose={() => setNewOpen(null)} triggerRef={newBarRef} items={newItems} placement="bottom" align="start" label={t("meet.newMenuLabel")} className="meet-menu-light" />
+            <MeetMenu open={newOpen === "bar"} onClose={() => setNewOpen(null)} triggerRef={newBarRef} items={newItems} placement="bottom" align="end" label={t("meet.newMenuLabel")} className="meet-menu-light" />
           </span>
         </div>
       </header>

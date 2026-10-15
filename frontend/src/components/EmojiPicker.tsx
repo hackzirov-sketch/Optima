@@ -45,7 +45,14 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
   const wrapRef = useRef<HTMLSpanElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  useOutsideClose(wrapRef, open, () => setOpen(false));
+  const dismiss = useCallback(() => {
+    const picker = wrapRef.current?.querySelector('[role="dialog"]');
+    if (picker?.contains(document.activeElement)) {
+      wrapRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+    setOpen(false);
+  }, []);
+  useOutsideClose(wrapRef, open, dismiss);
 
   useEffect(() => {
     if (!open || assets.length || failed) return;
@@ -108,6 +115,7 @@ export function EmojiPickerButton({ onSelect }: { onSelect: (emojiId: string) =>
   return (
     <span className="emoji-menu-wrap" ref={wrapRef}>
       <button type="button" className={`icon-button ${open ? "active" : ""}`}
+              onPointerDown={(event) => { if (document.activeElement?.closest(".composer")) event.preventDefault(); }}
               onClick={() => setOpen((value) => !value)} aria-label="Emoji tanlash"
               aria-expanded={open} aria-haspopup="dialog">
         <Smile size={20} />

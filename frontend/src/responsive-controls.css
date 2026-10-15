@@ -1,0 +1,171 @@
+/* Borderless chat tabs: selection is carried by the label glow. */
+:root[data-theme] body .meet-home-bar { position: relative; z-index: 30; }
+:root[data-theme] body .meet-menu { background: var(--surface); color: var(--text); border: 1px solid var(--glass-stroke); border-radius: 18px; overflow: hidden; max-width: calc(100vw - 24px); }
+:root[data-theme] body .meet-menu button { color: var(--text); white-space: normal; min-height: 48px; padding-block: 12px; line-height: 1.45; }
+:root[data-theme] body .meet-menu button .meet-menu-icon { color: var(--muted); flex-shrink: 0; }
+:root[data-theme] body .meet-menu button:is(:hover, :focus-visible) { background: var(--accent-soft); color: var(--text); }
+:root[data-theme] body .meet-menu button.danger { color: #b72f38; }
+:root[data-theme="dark"] body .meet-menu button.danger { color: #ff929a; }
+:root[data-theme] body .meet-menu button.danger .meet-menu-icon { color: inherit; }
+:root[data-theme] body .meet-visibility-cards { min-width: 0; width: 100%; }
+:root[data-theme] body .meet-visibility-cards > label { min-width: 0; display: grid; grid-template-columns: 44px minmax(0, 1fr) 22px; align-items: center; align-content: center; gap: 12px; padding: 16px; min-height: 96px; border: 1px solid var(--glass-stroke); border-radius: 18px; background: var(--glass-control); color: var(--text); box-shadow: none; }
+:root[data-theme] body .meet-visibility-cards > label > span { grid-column: 2; min-width: 0; }
+:root[data-theme] body .meet-visibility-cards strong { color: var(--text); overflow-wrap: anywhere; line-height: 1.4; }
+:root[data-theme] body .meet-visibility-cards small { color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
+:root[data-theme] body .meet-visibility-cards .meet-visibility-icon { grid-column: 1; grid-row: 1; width: 44px; height: 44px; }
+:root[data-theme] body .meet-visibility-cards .meet-visibility-check { position: static; grid-column: 3; grid-row: 1; transform: none; width: 22px; height: 22px; }
+:root[data-theme] body .meet-visibility-cards > label.selected { border-color: var(--accent-ink); background: var(--accent-soft); box-shadow: none; }
+:root[data-theme] body .meet-visibility-cards input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; margin: 0; padding: 0; z-index: 2; }
+:root[data-theme] body .meet-visibility.meet-visibility-cards { grid-template-columns: minmax(0, 1fr); }
+/* AI owns one scroll area and one composer outline, above the navigation. */
+:root[data-theme] body .app-body:has(.standalone-ai) { min-height: 0; }
+:root[data-theme] body .app-main:has(.standalone-ai) { overflow: hidden; min-height: 0; }
+:root[data-theme] body .standalone-ai .ai-main { min-height: 0; overflow: hidden; }
+:root[data-theme] body .standalone-ai .standalone-ai-messages { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+:root[data-theme] body .standalone-ai .ai-main > form { flex: 0 0 auto; min-width: 0; display: flex; align-items: flex-end; gap: 8px; padding: 8px; border: 1px solid var(--glass-stroke); border-radius: 24px; background: var(--glass-control); box-shadow: none; }
+:root[data-theme] body .standalone-ai .ai-main > form textarea,
+:root[data-theme] body .standalone-ai .ai-main > form textarea:is(:focus, :focus-visible, :hover) { flex: 1 1 0; min-width: 0; min-height: 44px; max-height: min(120px, 25dvh); padding: 10px 6px; border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important; border-radius: 0; font-size: 16px; line-height: 24px; resize: none; }
+:root[data-theme] body .standalone-ai .ai-main > form:focus-within { border-color: var(--accent-ink); box-shadow: none !important; }
+:root[data-theme] body .standalone-ai .ai-main > form textarea:focus:focus,
+:root[data-theme] body .standalone-ai .ai-main > form textarea:focus-visible:focus-visible { outline: 0 !important; border: 0 !important; box-shadow: none !important; }
+:root[data-theme] body .standalone-ai .ai-main > form > button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
+@media (max-width: 820px) {
+  :root[data-theme] body .standalone-ai.has-sessions { top: 78px; bottom: auto; height: max(160px, calc(var(--visual-height, 100dvh) - 174px - env(safe-area-inset-bottom))); }
+  :root.keyboard-open[data-theme] body .standalone-ai.has-sessions { top: calc(var(--visual-top, 0px) + 8px); height: calc(var(--visual-height, 100dvh) - 16px); z-index: 90; }
+  :root[data-theme] body .standalone-ai .ai-main > form { padding: 6px; gap: 6px; }
+}
+:root[data-theme] body .chat-page .chat-catalog { border: 0; box-shadow: none; background: transparent; border-radius: 0; padding-bottom: 10px; }
+:root[data-theme] body .chat-page .chat-catalog .catalog-indicator { display: none; }
+:root[data-theme] body .chat-page .chat-catalog button,
+:root[data-theme] body .chat-page .chat-catalog button.active { position: relative; border: 0 !important; background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; border-radius: 16px; text-shadow: none; transition: color 180ms ease; }
+:root[data-theme] body .chat-page .chat-catalog button > .liquid-material,
+:root[data-theme] body .chat-page .chat-catalog button::before,
+:root[data-theme] body .chat-page .chat-catalog button::after { display: none !important; }
+:root[data-theme] body .chat-page .chat-catalog button.active { color: #006aa8; font-weight: 650; }
+:root[data-theme="dark"] body .chat-page .chat-catalog button.active { color: #a2eaff; }
+:root[data-theme] body .chat-page .chat-catalog button.active > span { color: inherit; text-shadow: 0 0 4px rgb(0 159 255 / 75%), 0 0 12px rgb(0 159 255 / 65%), 0 0 26px rgb(0 159 255 / 48%); }
+:root[data-theme="dark"] body .chat-page .chat-catalog button.active > span { text-shadow: 0 0 4px rgb(67 210 255 / 95%), 0 0 13px rgb(40 196 255 / 85%), 0 0 28px rgb(32 180 255 / 65%); }
+:root[data-theme] body .chat-page .chat-catalog button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme] body .chat-page .chat-catalog button { transition: none; }
+}
+:root[data-theme] body .button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+:root[data-theme] body .button > svg { flex: 0 0 auto; }
+:root[data-theme] body :is(.icon-button, .tgp-name, .ai-new-chat, .ai-memory-open, .ai-sessions-close) { min-height: 44px; }
+:root[data-theme] body :is(.library-categories, .lib2-shelves, .lib2-langs) { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scroll-padding-inline: 12px; }
+:root[data-theme] body :is(.library-categories, .lib2-shelves, .lib2-langs) > button { min-height: 44px; flex-shrink: 0; }
+:root[data-theme] body :is(.tgp-two, .tgp-heading, .welcome-actions, .detail-actions) { min-width: 0; }
+:root[data-theme] body :is(.tgp-heading, .welcome-actions, .detail-actions) { flex-wrap: wrap; }
+:root[data-theme] body .tgp-heading h1 { min-width: 0; overflow-wrap: anywhere; }
+:root[data-theme] body button:focus-visible { outline: 2px solid var(--accent-ink, var(--accent)); outline-offset: 3px; }
+
+/* Notification settings: one master switch and a compact channel list. */
+:root[data-theme] body .tgp-notify { display: grid; gap: 18px; width: 100%; min-width: 0; }
+:root[data-theme] body .tgp-notify-card { border: 1px solid var(--glass-stroke); border-radius: 22px; overflow: hidden; background: var(--glass-control); backdrop-filter: blur(20px); }
+:root[data-theme] body .tgp-notify-card.master { background: color-mix(in srgb, var(--accent) 8%, var(--glass-control)); }
+:root[data-theme] body .tgp-notify-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; width: 100%; min-height: 88px; padding: 18px 20px; gap: 16px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--text); text-align: left; }
+:root[data-theme] body .tgp-notify-row + .tgp-notify-row { border-top: 1px solid var(--glass-stroke); }
+:root[data-theme] body .tgp-notify-icon { width: 48px; height: 48px; border-radius: 16px; color: #fff; }
+:root[data-theme] body .tgp-notify-icon svg { width: 23px; height: 23px; }
+:root[data-theme] body .tgp-notify-icon.tone-violet { background: #5149a8; }
+:root[data-theme] body .tgp-notify-icon.tone-red { background: #c83f3f; }
+:root[data-theme] body .tgp-notify-icon.tone-blue { background: #0869c5; }
+:root[data-theme] body .tgp-notify-icon.tone-green { background: #19763b; }
+:root[data-theme] body .tgp-notify-text { gap: 5px; min-width: 0; }
+:root[data-theme] body .tgp-notify-text strong { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+:root[data-theme] body .tgp-notify-text small { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+:root[data-theme] body .tgp-switch { display: block; width: 48px; height: 28px; border-radius: 999px; background: var(--line-strong); }
+:root[data-theme] body .tgp-switch b { width: 22px; height: 22px; top: 3px; left: 3px; }
+:root[data-theme] body .tgp-switch.on { background: #5149a8; }
+:root[data-theme] body .tgp-switch.on b { transform: translateX(20px); }
+:root[data-theme] body .tgp-notify-row:focus-visible { outline-offset: -4px; }
+:root[data-theme] body .tgp-panel > header { margin-bottom: 22px; }
+:root[data-theme] body .tgp-panel > header p { line-height: 1.55; }
+
+@media (max-width: 600px) {
+  :root[data-theme] body .tgp-notify { gap: 12px; }
+  :root[data-theme] body .tgp-notify-row { grid-template-columns: 36px minmax(0, 1fr) 44px; gap: 10px; padding: 14px 12px; min-height: 82px; }
+  :root[data-theme] body .tgp-notify-icon { width: 36px; height: 36px; border-radius: 12px; }
+  :root[data-theme] body .tgp-notify-icon svg { width: 20px; height: 20px; }
+  :root[data-theme] body .tgp-notify-text strong { font-size: 14px; }
+  :root[data-theme] body .tgp-notify-text small { font-size: 12px; }
+  :root[data-theme] body .tgp-switch { width: 44px; height: 26px; }
+  :root[data-theme] body .tgp-switch b { width: 20px; height: 20px; }
+  :root[data-theme] body .tgp-switch.on b { transform: translateX(18px); }
+  :root[data-theme] body .tgp-panel { min-width: 0; padding-inline: 12px; }
+  :root[data-theme] body .tgp-savebar .button { flex: 1 1 100px; }
+  :root[data-theme] body .detail-actions { gap: 8px; }
+  :root[data-theme] body .modal { max-width: calc(100vw - 24px); }
+  :root[data-theme] body .modal :is(input, textarea, select) { min-width: 0; max-width: 100%; }
+}
+
+@media (max-width: 820px) {
+  :root[data-theme] body .tgp-savebar { bottom: max(calc(104px + env(safe-area-inset-bottom)), calc(100% - var(--visual-top, 0px) - var(--visual-height, 100dvh) + 8px)); }
+  :root[data-theme] body .chat-page.chat-room-open { top: var(--visual-top, 0px); bottom: auto; height: var(--visual-height, 100dvh); max-height: var(--visual-height, 100dvh); }
+  :root[data-theme] body .chat-room-open .conversation { min-height: 0; }
+  :root[data-theme] body .chat-room-open .message-list { min-height: 0; overscroll-behavior-y: contain; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); border-radius: 24px; isolation: isolate; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .rich-message-input { flex: 0 0 100%; order: 0; min-width: 0; width: 100%; min-height: 44px; max-height: min(128px, 24dvh); overflow-y: auto; font-size: 16px; padding: 10px 12px; box-sizing: border-box; overflow-wrap: anywhere; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .composer-attach { grid-column: 1; order: 1; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .composer-ai-trigger { grid-column: 2; order: 1; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .emoji-menu-wrap { position: static; grid-column: 3; order: 1; width: 44px; height: 44px; }
+  :root[data-theme] body .chat-page .composer:not(.ai-composer) > .send-button { order: 1; margin-left: auto; }
+  :root[data-theme] body .chat-page .composer > :is(.composer-staged, .composer-ai-assist, .composer-mode, .recording-status) { flex: 0 0 100%; min-width: 0; }
+  /* Overlay the composer so short keyboard viewports retain a usable emoji grid. */
+  :root[data-theme] body .chat-page .composer .emoji-menu-wrap > .telegram-emoji-picker { position: absolute; inset: auto 0 0 auto !important; width: 100%; max-width: 100%; height: min(340px, calc(var(--visual-height, 100dvh) - 88px)); max-height: calc(var(--visual-height, 100dvh) - 88px); min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); z-index: 70; transform: none; border-radius: 22px; overflow: hidden; }
+  :root[data-theme] body .chat-page .telegram-emoji-head { min-height: 44px; padding: 8px 12px; }
+  :root[data-theme] body .chat-page .telegram-emoji-head > span { min-width: 0; }
+  :root[data-theme] body .chat-page .telegram-emoji-head strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block; }
+  :root[data-theme] body .chat-page .telegram-emoji-head > button { width: 44px; height: 44px; flex: 0 0 44px; }
+  :root[data-theme] body .chat-page .telegram-emoji-packs { min-height: 48px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+  :root[data-theme] body .chat-page .telegram-emoji-grid { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); padding: 6px; gap: 3px; }
+  :root[data-theme] body .chat-page .telegram-emoji-grid button { min-height: 40px; }
+  :root.keyboard-open[data-theme] body .chat-page .composer:not(.ai-composer) { padding-bottom: 8px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme] body .tgp-notify-card { background: var(--surface); backdrop-filter: none; }
+}
+
+@media (max-width: 820px) {
+  :root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"]) { font-size: 16px; }
+  :root[data-theme] body .topbar { gap: 8px; padding-inline: 10px; min-height: 60px; }
+  :root[data-theme] body .topbar-context { flex: 1 1 auto; min-width: 0; }
+  :root[data-theme] body .topbar-context > strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; font-size: 14px; }
+  :root[data-theme] body .topbar-actions { flex: 0 0 auto; gap: 4px; }
+  :root[data-theme] body .topbar :is(.icon-button, .account-menu-trigger) { flex-shrink: 0; }
+  :root[data-theme] body .mobile-nav.reference-dock { bottom: calc(8px + env(safe-area-inset-bottom)); }
+  :root[data-theme] body .mobile-nav.reference-dock a { min-width: 0; min-height: 48px; touch-action: manipulation; }
+  :root[data-theme] body .app-shell > .sidebar { max-width: calc(100vw - 32px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  :root[data-theme] body .dashboard-list-row { flex-wrap: wrap; gap: 10px; }
+  :root[data-theme] body .dashboard-list-row .row-main { min-width: 100px; flex: 1 1 100px; }
+  :root[data-theme] body .dashboard-list-row .row-main strong { overflow-wrap: anywhere; }
+  :root[data-theme] body .row-delete-button { width: 44px; height: 44px; flex: 0 0 44px; }
+  :root[data-theme] body .meet-home-bar { flex-wrap: wrap; gap: 12px; }
+  :root[data-theme] body .meet-home-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+  :root[data-theme] body .meet-join { min-width: 0; flex: 1 1 180px; }
+  :root[data-theme] body .meet-join-field { min-width: 0; width: 100%; }
+  :root[data-theme] body .meet-join-field input { min-width: 0; width: 100%; }
+  :root[data-theme] body .meet-new { min-height: 44px; }
+  :root[data-theme] body :is(.meet-row, .tgp-nav > button) { min-width: 0; }
+  :root[data-theme] body .tgp-nav-text { min-width: 0; }
+  :root[data-theme] body .tgp-nav strong { overflow-wrap: anywhere; }
+  :root[data-theme] body :is(.standalone-ai form, .chat-page .composer) { min-width: 0; }
+  :root[data-theme] body .standalone-ai form textarea { flex: 1 1 0; min-width: 60px; }
+  :root[data-theme] body .standalone-ai form > button { flex-shrink: 0; }
+  :root[data-theme] body :is(.library-categories, .lib2-shelves, .lib2-langs, .meet-week-days, .tg-info-tabs) { -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  :root[data-theme] body :is(.library-categories, .lib2-shelves, .lib2-langs) > button { scroll-snap-align: start; }
+}
+@media (max-width: 360px) {
+  :root[data-theme] body .topbar { padding-inline: 6px; gap: 4px; }
+  :root[data-theme] body .topbar-actions { gap: 2px; }
+  :root[data-theme] body .tgp-panel { padding-inline: 8px; }
+  :root[data-theme] body .tgp-notify-row { grid-template-columns: 30px minmax(0, 1fr) 44px; gap: 8px; padding-inline: 10px; }
+  :root[data-theme] body .tgp-notify-icon { width: 30px; height: 34px; border-radius: 10px; }
+  :root[data-theme] body .tgp-notify-text strong { font-size: 13px; }
+  :root[data-theme] body .welcome-actions { width: 100%; }
+  :root[data-theme] body .welcome-actions > :is(a, button) { flex: 1 1 120px; justify-content: center; }
+}
+@media (max-width: 820px) and (max-height: 500px) {
+  :root[data-theme] body .modal { max-height: calc(100dvh - 16px); overflow-y: auto; }
+  :root[data-theme] body .app-shell > .sidebar { padding-top: 8px; }
+}
