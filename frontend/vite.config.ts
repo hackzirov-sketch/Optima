@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
+import { devPwaRecovery } from "./dev/pwa-recovery";
 
 // Backend the dev server proxies to. Defaults to the shared API; point it at a
 // local backend with e.g. `API_PROXY_TARGET=http://localhost:8080 npm run dev`.
@@ -15,7 +16,7 @@ const https =
     : undefined;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [devPwaRecovery(), react()],
   server: {
     port: Number(process.env.PORT || 5173),
     strictPort: true,
