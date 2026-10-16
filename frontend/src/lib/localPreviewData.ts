@@ -64,6 +64,8 @@ export async function localPreviewRequest<T>(path: string, options: RequestInit 
   } else if (p.endsWith("/appearance") || p.endsWith("/voice-chat")) data = null;
   else if (p.includes("/chat/") && p.endsWith("/members")) data = { items: [{ ...user, role: "owner" }, { ...colleague, role: "member" }], total: 2 };
   else if (p.endsWith("/settings")) data = { settings: { roomId: room.id, whoCanPost: "members", reactionsEnabled: true, allowMeetings: true }, role: "owner", canAdminister: true };
+  else if (p.endsWith("/settings/stats")) data = { subscribers: 2, messages: messages.length, views: 0, reach: 0, reactions: 0, storageBytes: 0, files: 0, engagement: 0, topPosts: [], growth: [] };
+  else if (p.endsWith("/invite-code")) data = { code: "local-preview-invite" };
   else if (p.endsWith("/presence")) data = { [user.id]: { status: "online" }, [colleague.id]: { status: "online" } };
   else if (p === "/notifications") data = { data: [], items: [], total: 0, page: 1, limit: 20 };
   else if (p.endsWith("/unread-count")) data = { count: 0 };

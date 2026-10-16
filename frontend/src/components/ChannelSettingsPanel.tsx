@@ -99,6 +99,8 @@ export function ChannelSettingsPanel({ room, onClose, onSaved, initialSection }:
   // "Member" even when they were an admin.
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof api.chat.channelStats>> | null>(null);
+  const [statsFailed, setStatsFailed] = useState(false);
+  const [statsAttempt, setStatsAttempt] = useState(0);
   const [requests, setRequests] = useState<Awaited<ReturnType<typeof api.chat.joinRequests>>>([]);
   const [audit, setAudit] = useState<Awaited<ReturnType<typeof api.chat.channelSettingsAudit>> | null>(null);
 
@@ -141,13 +143,20 @@ export function ChannelSettingsPanel({ room, onClose, onSaved, initialSection }:
   // opened — both are heavier than the settings row and most visits never
   // look at them.
   useEffect(() => {
-    if (section === "analytics" && stats === null && canAdminister) {
-      void api.chat.channelStats(room.id).then(setStats).catch(() => setStats(null));
-    }
+    if (!canAdminister || (section !== "analytics" && section !== "files")) return;
+    let active = true;
+    setStats(null);
+    setStatsFailed(false);
+    void api.chat.channelStats(room.id).then(result => { if (active) setStats(result); })
+      .catch(() => { if (active) setStatsFailed(true); });
+    return () => { active = false; };
+  }, [section, room.id, canAdminister, statsAttempt]);
+
+  useEffect(() => {
     if (section === "security" && audit === null && canAdminister) {
       void api.chat.channelSettingsAudit(room.id).then(setAudit).catch(() => setAudit([]));
     }
-  }, [section, room.id, canAdminister, stats, audit]);
+  }, [section, room.id, canAdminister, audit]);
 
   const value = useMemo(() => ({ ...settings, ...patch }), [settings, patch]);
   const isOwner = role === "owner";
@@ -414,7 +423,7 @@ export function ChannelSettingsPanel({ room, onClose, onSaved, initialSection }:
         </>}
 
         {section === "analytics" && <>
-          {stats === null
+          {statsFailed ? <div className="cs-stats-error" role="alert"><p>{t("channelSettings.loadFailed")}</p><Button variant="secondary" onClick={() => setStatsAttempt(attempt => attempt + 1)}>{t("common.retry")}</Button></div> : stats === null
             ? <div className="cs-loading"><Loader2 className="spin" size={20} /></div>
             : <>
               <div className="cs-stats">

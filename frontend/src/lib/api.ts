@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { session } from "./session";
 import { isLocalPreview } from "./localPreview";
+import { normalizeRoomStats } from "./roomStats";
 
 export interface RoomVoiceChat {
   meetingId: string;
@@ -656,7 +657,7 @@ export const api = {
         storageBytes: number; files: number; engagement: number;
         topPosts: Array<{ id: string; content: string | null; viewCount: number; createdAt: string }>;
         growth: Array<{ day: string; joined: number }>;
-      }>(`/chat/rooms/${roomId}/settings/stats`),
+      }>(`/chat/rooms/${roomId}/settings/stats`).then(normalizeRoomStats),
     // One shared trail: the same audit_logs rows a group's activity feed
     // reads, filtered to this room.
     channelSettingsAudit: (roomId: string) =>

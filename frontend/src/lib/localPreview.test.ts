@@ -14,9 +14,10 @@ describe("local preview isolation", () => {
     expect(Array.isArray(await localPreviewRequest("/library/me/reading"))).toBe(true);
   });
   it("requires development, loopback and an enabled setting", () => {
-    expect(isLocalPreviewEnvironment(true, "127.0.0.1")).toBe(true);
-    expect(isLocalPreviewEnvironment(false, "127.0.0.1")).toBe(false);
-    expect(isLocalPreviewEnvironment(true, "optima.honeymedia.uz")).toBe(false);
+    expect(isLocalPreviewEnvironment(true, "127.0.0.1", true)).toBe(true);
+    expect(isLocalPreviewEnvironment(true, "127.0.0.1")).toBe(false);
+    expect(isLocalPreviewEnvironment(false, "127.0.0.1", true)).toBe(false);
+    expect(isLocalPreviewEnvironment(true, "optima.honeymedia.uz", true)).toBe(false);
     expect(isLocalPreviewEnvironment(true, "localhost", false)).toBe(false);
   });
   it("returns a test account and saves messages without network access", async () => {

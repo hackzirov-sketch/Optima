@@ -2319,7 +2319,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!drawerRoomId || drawerInviteLink?.roomId === drawerRoomId) return;
     let cancelled = false;
     void api.chat.inviteCode(drawerRoomId)
-      .then(({ code }) => { if (!cancelled) setDrawerInviteLink({ roomId: drawerRoomId, url: new URL(`/join/chat/${code}`, window.location.origin).toString() }); })
+      .then(({ code }) => { if (!cancelled && typeof code === "string" && code.trim()) setDrawerInviteLink({ roomId: drawerRoomId, url: new URL(`/join/chat/${encodeURIComponent(code)}`, window.location.origin).toString() }); })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [drawerRoomId, drawerInviteLink?.roomId]);
