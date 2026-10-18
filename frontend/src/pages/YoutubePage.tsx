@@ -98,6 +98,12 @@ export function YoutubePage() {
   // The open video is our own record (/youtube/:slug) — it carries live views and likes.
   const [media, setMedia] = useState<MediaPage | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  const openingGeneration = useRef(0);
+  const openingPending = useRef(false);
+  useEffect(() => {
+    setOpening(null); openingPending.current = false;
+    return () => { openingGeneration.current++; openingPending.current = false; };
+  }, [slug, query]);
   const [copied, setCopied] = useState(false);
   const counted = useRef<string | null>(null);
   const selected = slug && media?.slug === slug
@@ -173,17 +179,20 @@ export function YoutubePage() {
   }
 
   async function openVideo(youtubeId: string) {
-    if (opening) return;
+    if (openingPending.current) return;
+    const generation = openingGeneration.current;
+    openingPending.current = true;
     setOpening(youtubeId);
     try {
       const page = await api.media.youtube(youtubeId);
+      if (generation !== openingGeneration.current) return;
       setMedia(page);
       setCopied(false);
       navigate(`/youtube/${page.slug}`);
     } catch (cause) {
-      show(cause instanceof Error ? cause.message : t("youtube.loadFailed"), "error");
+      if (generation === openingGeneration.current) show(cause instanceof Error ? cause.message : t("youtube.loadFailed"), "error");
     } finally {
-      setOpening(null);
+      if (generation === openingGeneration.current) { openingPending.current = false; setOpening(null); }
     }
   }
 

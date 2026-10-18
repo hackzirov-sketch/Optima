@@ -592,6 +592,7 @@
     "personalNoteDesc": "Bu not yalnızca size görünür.",
     "notePlaceholder": "Önemli bir fikri, formülü ya da yeni kelimeyi yazın...",
     "saveNote": "Notu kaydet",
+    "noteSaveFailed": "Not kaydedilemedi. Lütfen tekrar deneyin.",
     "aiMentor": "AI Mentor",
     "mentorSubtitle": "Video meta verilerine dayalı",
     "promptSimple": "Basitçe açıkla",

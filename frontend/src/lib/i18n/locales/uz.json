@@ -592,6 +592,7 @@
     "personalNoteDesc": "Bu note faqat sizga ko‘rinadi.",
     "notePlaceholder": "Muhim fikr, formula yoki yangi so‘zni yozing...",
     "saveNote": "Note saqlash",
+    "noteSaveFailed": "Qaydni saqlab bo‘lmadi. Qayta urinib ko‘ring.",
     "aiMentor": "AI Mentor",
     "mentorSubtitle": "Video metadata asosida",
     "promptSimple": "Sodda tushuntir",

@@ -592,6 +592,7 @@
     "personalNoteDesc": "This note is visible only to you.",
     "notePlaceholder": "Write down a key idea, formula or new word...",
     "saveNote": "Save note",
+    "noteSaveFailed": "Could not save the note. Please try again.",
     "aiMentor": "AI Mentor",
     "mentorSubtitle": "Based on video metadata",
     "promptSimple": "Explain simply",

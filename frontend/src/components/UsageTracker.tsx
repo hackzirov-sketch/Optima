@@ -7,7 +7,7 @@ export function UsageTracker() {
   const { user } = useAuth();
   useEffect(() => {
     if (!user) return;
-    const service: UsageService | null = /^\/meetings(?:\/|$)/.test(path) ? "meetings" : /^\/(chat|u|g|ch)(\/|$)/.test(path) ? "chat" : path.startsWith("/library") ? "library" : path.startsWith("/education") ? "education" : null;
+    const service: UsageService | null = /^\/(meetings|meet)(?:\/|$)/.test(path) ? "meetings" : /^\/(chat|u|g|ch)(\/|$)/.test(path) ? "chat" : path.startsWith("/library") ? "library" : path.startsWith("/education") ? "education" : null;
     if (!service) return;
     recordUsage(user.id, service, 0, 1);
     let last = performance.now();
