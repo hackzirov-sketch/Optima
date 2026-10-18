@@ -112,6 +112,12 @@ export function ProfilePage() {
     if (!draft.firstName.trim()) { show(t("profile.firstNameRequired"), "error"); setEditing("name"); return; }
     if (draft.username && !/^[A-Za-z0-9_-]{3,50}$/.test(draft.username.replace(/^@/, ""))) { show(t("profile.usernameInvalid"), "error"); setEditing("username"); return; }
     const phone = draft.phoneNumber.replace(/\D/g, "");
+    if (changed.includes("phoneNumber") && !phone && saved.phoneNumber) {
+      show(t("profile.phoneRemovalUnsupported"), "error"); setEditing("phoneNumber"); return;
+    }
+    if (changed.includes("phoneNumber") && !/^[1-9]\d{10,14}$/.test(phone)) {
+      show(t("profile.phoneInvalid"), "error"); setEditing("phoneNumber"); return;
+    }
     const patch: Record<string, unknown> = {};
     for (const key of changed) {
       if (key === "phoneNumber") { if (phone) patch.phoneNumber = Number(phone); continue; }

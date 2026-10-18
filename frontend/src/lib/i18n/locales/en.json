@@ -336,6 +336,8 @@
     "otherSessionsCloseFailed": "Couldn’t close sessions",
     "firstNameRequired": "First name can’t be empty",
     "usernameInvalid": "Username must be 3–50 Latin letters, digits, _ or -",
+    "phoneRemovalUnsupported": "Removing a phone number is not supported yet. Replace it with another number or cancel the change.",
+    "phoneInvalid": "Enter 11–15 digits including the country code.",
     "online": "online",
     "editNameHint": "Click to change your name",
     "bioPlaceholder": "Bio",

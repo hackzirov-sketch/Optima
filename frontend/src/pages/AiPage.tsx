@@ -7,7 +7,8 @@ import { useI18n } from "../lib/i18n/i18n";
 import { StarfieldBackground } from "../components/StarfieldBackground";
 import { AiMemoryPanel } from "../components/AiMemoryPanel";
 
-type Message = { role: "user" | "model"; text: string; image?: string; hasImage?: boolean; sources?: Array<{ title: string; url: string }> };
+type AiRequest = { id: string; prompt: string; image: { file: File; url: string } | null; history: Array<{ role: "user" | "model"; text: string }> };
+type Message = { id?: string; role: "user" | "model"; text: string; image?: string; hasImage?: boolean; failed?: AiRequest; sources?: Array<{ title: string; url: string }> };
 type Conversation = { id: string; title: string; updatedAt: string };
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -79,15 +80,17 @@ export function AiPage() {
     setImage((current) => { if (current) URL.revokeObjectURL(current.url); return { file, url: URL.createObjectURL(file) }; });
   }
 
-  async function send() {
-    const prompt = draft.trim();
-    if ((!prompt && !image) || busy) return;
+  async function send(retry?: AiRequest) {
+    const prompt = retry ? retry.prompt : draft.trim();
+    const sentImage = retry ? retry.image : image;
+    if ((!prompt && !sentImage) || busy) return;
     const generation = requestGeneration.current;
-    const history = messages.slice(-30).map(({ role, text }) => ({ role, text }));
-    const sentImage = image;
+    const history = retry?.history ?? messages.filter(message => !message.failed).slice(-30).map(({ role, text }) => ({ role, text }));
+    const request: AiRequest = retry ?? { id: crypto.randomUUID(), prompt, image: sentImage, history };
     follow.current = true;
-    setMessages(current => [...current, { role: "user", text: prompt, image: sentImage?.url }]);
-    setDraft(""); setImage(null); setBusy(true); setError("");
+    setMessages(current => retry ? current.map(message => message.id === retry.id ? { ...message, failed: undefined } : message) : [...current, { id: request.id, role: "user", text: prompt, image: sentImage?.url }]);
+    if (!retry) { setDraft(""); setImage(null); }
+    setBusy(true); setError("");
     try {
       const result = sentImage
         ? await api.chat.aiImage(sentImage.file, prompt, history, conversationId ?? undefined)
@@ -103,9 +106,7 @@ export function AiPage() {
     } catch (cause) {
       if (generation !== requestGeneration.current) return;
       setError(cause instanceof Error ? cause.message : t("chat.aiNotResponding"));
-      setMessages(current => current.slice(0, -1));
-      setDraft(prompt);
-      if (sentImage) setImage(sentImage);
+      setMessages(current => current.map(message => message.id === request.id ? { ...message, failed: request } : message));
     } finally { if (generation === requestGeneration.current) setBusy(false); }
   }
 
@@ -170,7 +171,14 @@ export function AiPage() {
       <div ref={list} className="standalone-ai-messages" onScroll={() => { const node = list.current; if (node) follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100; }}>
         {loadingConversation && <div className="standalone-ai-status"><LoaderCircle className="spin" size={18} /></div>}
         {!messages.length && !loadingConversation && <div className="standalone-ai-empty"><Sparkles size={40} /><h2>Optima AI</h2><p>{t("chat.aiEmptyDesc")}</p></div>}
-        {messages.map((message, index) => <article key={index} className={`standalone-ai-message ${message.role}`}><small>{message.role === "model" ? "Optima AI" : user?.firstName}</small>{message.image && <img className="standalone-ai-image" src={message.image} alt="" />}{!message.image && message.hasImage && <span className="standalone-ai-image-note"><ImageIcon size={14} />{t("chat.aiImageSent")}</span>}{message.text && <p>{message.text}</p>}{message.sources?.map(source => /^https?:\/\//i.test(source.url) && <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</article>)}
+        {messages.map((message, index) => <article key={message.id ?? index} className={`standalone-ai-message ${message.role}`}>
+          <small>{message.role === "model" ? "Optima AI" : user?.firstName}</small>
+          {message.image && <img className="standalone-ai-image" src={message.image} alt="" />}
+          {!message.image && message.hasImage && <span className="standalone-ai-image-note"><ImageIcon size={14} />{t("chat.aiImageSent")}</span>}
+          {message.text && <p>{message.text}</p>}
+          {message.failed && <button type="button" className="ai-message-retry" disabled={busy} onClick={() => void send(message.failed)}><ArrowUp size={16} />{t("common.retry")}</button>}
+          {message.sources?.map(source => /^https?:\/\//i.test(source.url) && <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}
+        </article>)}
         {busy && <div role="status" className="standalone-ai-status"><LoaderCircle className="spin" size={18} />{t("chat.aiThinkingStatus")}</div>}
       </div>
       {error && <p role="alert" className="standalone-ai-error">{error}</p>}

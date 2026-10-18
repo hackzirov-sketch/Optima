@@ -336,6 +336,8 @@
     "otherSessionsCloseFailed": "Sessiyalar yopilmadi",
     "firstNameRequired": "Ism bo‘sh bo‘lishi mumkin emas",
     "usernameInvalid": "Username 3–50 ta lotin harfi, raqam, _ yoki - bo‘lishi kerak",
+    "phoneRemovalUnsupported": "Hozircha telefon raqamini o‘chirish mumkin emas. Uni yangisiga almashtiring yoki o‘zgarishni bekor qiling.",
+    "phoneInvalid": "Telefon raqami davlat kodi bilan 11–15 ta raqamdan iborat bo‘lishi kerak.",
     "online": "onlayn",
     "editNameHint": "Ismni o‘zgartirish uchun bosing",
     "bioPlaceholder": "O‘zingiz haqingizda",

@@ -60,7 +60,11 @@ export function LibraryPage() {
   // Reading position: shown as "continue reading", saved every 2 minutes and on leaving.
   const [bookProgress, setBookProgress] = useState<ReadingProgress | null>(null);
   const [readerStart, setReaderStart] = useState<number | null>(null);
-  const position = useRef<{ slug: string; progress: ReadingProgress; saved: number } | null>(null);
+  const position = useRef<{ slug: string; bookKey: string; progress: ReadingProgress; saved: number } | null>(null);
+  const readerRequest = useRef(0);
+  const reviewRequest = useRef(0);
+  const selectedKey = useRef(selected?.key);
+  selectedKey.current = selected?.key;
   const fromStart = useRef(false);
   const [reviews, setReviews] = useState<LibraryReviews | null>(null);
   const [myRating, setMyRating] = useState(0);
@@ -104,16 +108,20 @@ export function LibraryPage() {
   }, [lang, subject, debounced, page, readableOnly]);
 
   useEffect(() => {
+    const generation = ++reviewRequest.current;
+    setSavingReview(false);
     if (!selected) return;
     setReviews(null);
     setMyRating(0);
     setMyText("");
     api.library.reviews(selected.key).then((result) => {
+      if (generation !== reviewRequest.current || selectedKey.current !== selected.key) return;
       setReviews(result);
       const mine = result.items.find((item) => item.mine);
       if (mine) { setMyRating(mine.rating); setMyText(mine.body); }
-    }).catch(() => setReviews({ count: 0, average: null, items: [] }));
-  }, [selected]);
+    }).catch(() => { if (generation === reviewRequest.current && selectedKey.current === selected.key) setReviews({ count: 0, average: null, items: [] }); });
+    return () => { reviewRequest.current++; };
+  }, [selected?.key]);
 
   useEffect(() => {
     api.library.marks().then((marks) => { setSaved(marks.saved); setLiked(marks.liked); }).catch(() => undefined);
@@ -174,7 +182,7 @@ export function LibraryPage() {
     setSaved((current) => on ? [...current, book.key] : current.filter((key) => key !== book.key));
     try {
       if (on) await api.library.save(book); else await api.library.unsave(book.key);
-      if (reviews && selected?.key === book.key) setReviews({ ...reviews, saved: on });
+      if (selectedKey.current === book.key) setReviews(current => current ? { ...current, saved: on } : current);
       show(on ? t("library.savedToast") : t("library.unsavedToast"));
     } catch (error) {
       setSaved((current) => on ? current.filter((key) => key !== book.key) : [...current, book.key]);
@@ -187,7 +195,7 @@ export function LibraryPage() {
     setLiked((current) => on ? [...current, book.key] : current.filter((key) => key !== book.key));
     try {
       const result = on ? await api.library.like(book.key, book) : await api.library.unlike(book.key);
-      if (reviews && selected?.key === book.key) setReviews({ ...reviews, liked: result.liked, likes: result.likes });
+      if (selectedKey.current === book.key) setReviews(current => current ? { ...current, liked: result.liked, likes: result.likes } : current);
     } catch {
       setLiked((current) => on ? current.filter((key) => key !== book.key) : [...current, book.key]);
     }
@@ -202,12 +210,12 @@ export function LibraryPage() {
     void api.media.progress(current.slug, current.progress).catch(() => { current.saved = -1; });
   }, []);
   const onPosition = useCallback((value: number, pageNumber: number, totalPages: number) => {
-    if (!position.current) return;
+    if (!position.current || position.current.bookKey !== reader?.key) return;
     position.current.progress = { position: value, page: pageNumber, totalPages };
     setBookProgress(position.current.progress);
     // Every turn is kept on this device at once; the server gets it every 2 minutes / on leaving.
     try { localStorage.setItem(`optima-read:${position.current.slug}`, JSON.stringify({ position: value, at: Date.now() })); } catch { /* storage off */ }
-  }, []);
+  }, [reader?.key]);
   useEffect(() => {
     if (!reader) return;
     const timer = window.setInterval(savePosition, 2 * 60 * 1000);
@@ -242,61 +250,77 @@ export function LibraryPage() {
       fromStart.current = false;
     }
     if (mode !== "read" && reader) setReader(null);
-  }, [mode, selected?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      readerRequest.current++;
+      savePosition();
+      position.current = null;
+    };
+  }, [mode, selected?.key, slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** `startOver`: ignore the saved position. */
   async function startReader(book: LibraryBook, startOver = false) {
+    const generation = ++readerRequest.current;
+    const current = () => generation === readerRequest.current;
+    savePosition();
     setReader(book);
     position.current = null;
     setReaderStart(null);
     // The book's record carries the saved position (and gives progress a place to go).
     api.library.open(book).then((page) => {
+      if (!current()) return;
       // The newer of this device's position and the server's (another device may be ahead).
       const local = localPosition(page.slug);
       const server = page.progress;
       const newest = local && (!server?.updatedAt || local.at > Date.parse(server.updatedAt)) ? local.position : server?.position ?? 0;
       const start = startOver ? 0 : newest;
-      position.current = { slug: page.slug, progress: { position: start, page: server?.page ?? 0, totalPages: server?.totalPages ?? 0 }, saved: server?.position ?? -1 };
+      position.current = { slug: page.slug, bookKey: book.key, progress: { position: start, page: server?.page ?? 0, totalPages: server?.totalPages ?? 0 }, saved: server?.position ?? -1 };
       setReaderStart(start);
-    }).catch(() => setReaderStart(0)); // read anyway; the position just won't be kept
+    }).catch(() => { if (current()) setReaderStart(0); }); // read anyway; the position just won't be kept
     setReaderText("");
     setReaderFailed(false);
-    if (!book.textUrl) return; // Open Library scans open in the embedded reader.
+    if (!book.textUrl) { setReaderLoading(false); return; } // Scans use the embedded reader.
     setReaderLoading(true);
     try {
       const result = await api.library.read(book.textUrl);
+      if (!current()) return;
       const raw = result.content;
       const text = result.contentType.includes("html") || raw.trimStart().startsWith("<") ? new DOMParser().parseFromString(raw, "text/html").body.innerText : raw;
       setReaderText(text.replace(/\n{4,}/g, "\n\n\n"));
     } catch {
-      setReaderFailed(true);
+      if (current()) setReaderFailed(true);
     } finally {
-      setReaderLoading(false);
+      if (current()) setReaderLoading(false);
     }
   }
 
   async function submitReview(event: FormEvent) {
     event.preventDefault();
     if (!selected || !myRating) { show(t("library.pickRating"), "error"); return; }
+    const generation = reviewRequest.current;
     setSavingReview(true);
     try {
-      setReviews(await api.library.saveReview(selected.key, myRating, myText));
+      const result = await api.library.saveReview(selected.key, myRating, myText);
+      if (generation !== reviewRequest.current || selectedKey.current !== selected.key) return;
+      setReviews(result);
       show(t("library.reviewSaved"));
     } catch (error) {
-      show(error instanceof Error ? error.message : t("library.reviewFailed"), "error");
+      if (generation === reviewRequest.current) show(error instanceof Error ? error.message : t("library.reviewFailed"), "error");
     } finally {
-      setSavingReview(false);
+      if (generation === reviewRequest.current) setSavingReview(false);
     }
   }
 
   async function removeReview() {
     if (!selected) return;
+    const generation = reviewRequest.current;
     try {
-      setReviews(await api.library.deleteReview(selected.key));
+      const result = await api.library.deleteReview(selected.key);
+      if (generation !== reviewRequest.current || selectedKey.current !== selected.key) return;
+      setReviews(result);
       setMyRating(0);
       setMyText("");
     } catch (error) {
-      show(error instanceof Error ? error.message : t("library.reviewFailed"), "error");
+      if (generation === reviewRequest.current) show(error instanceof Error ? error.message : t("library.reviewFailed"), "error");
     }
   }
 

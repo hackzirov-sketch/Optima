@@ -336,6 +336,8 @@
     "otherSessionsCloseFailed": "Oturumlar kapatılamadı",
     "firstNameRequired": "Ad boş olamaz",
     "usernameInvalid": "Kullanıcı adı 3–50 Latin harf, rakam, _ veya - olmalı",
+    "phoneRemovalUnsupported": "Telefon numarası henüz kaldırılamıyor. Başka bir numarayla değiştirin veya değişikliği iptal edin.",
+    "phoneInvalid": "Ülke kodu dahil 11–15 rakam girin.",
     "online": "çevrimiçi",
     "editNameHint": "Adınızı değiştirmek için tıklayın",
     "bioPlaceholder": "Hakkında",

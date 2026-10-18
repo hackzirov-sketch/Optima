@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatPage } from "./ChatPage";
 import { AiPage } from "./AiPage";
+import { ProfilePage } from "./ProfilePage";
 import { UserProfileModal } from "../components/UserProfileModal";
 import { MeetingChat } from "../components/MeetingChat";
 import { useMeetingChat } from "../lib/meetingChat";
@@ -12,7 +13,7 @@ import { LiveKitMeeting } from "../lib/liveKitMeeting";
 import { ConnectionState } from "livekit-client";
 
 const mocks = vi.hoisted(() => {
-  const user = { id: "me", publicId: 7777777, firstName: "Test", lastName: "User", email: "test@example.invalid" };
+  const user = { id: "me", publicId: 7777777, firstName: "Test", lastName: "User", email: "test@example.invalid", phoneNumber: 998901234567 };
   const rooms = ["A", "B"].map(id => ({ id, name: id, type: "group", memberIds: ["me"], memberProfiles: [], memberStatus: "active", memberCount: 1, unreadCount: 0, createdById: "me", role: "owner", scope: "public" }));
   const empty = () => Promise.resolve([]);
   const chat = {
@@ -23,24 +24,25 @@ const mocks = vi.hoisted(() => {
     voiceChat: vi.fn(async () => null), voiceChatScheduled: vi.fn(async () => null),
     resolveRoute: vi.fn(async (_workspace: string, _type: string, id: string) => ({ roomId: id })),
     send: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({})),
+    editMessage: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({})),
     uploadChatFile: vi.fn(async (_room: string, file: File) => ({ storageKey: file.name, storageUrl: `/files/${file.name}`, fileName: file.name, fileSize: file.size, mimeType: file.type })),
     aiConversations: vi.fn(empty), aiConversation: vi.fn(async (_id: string) => ({ messages: [] })),
     ai: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ reply: "answer", conversationId: "created" })),
   };
   return {
-    user, rooms, chat, show: vi.fn(), navigate: vi.fn(), params: {} as { id?: string },
+    user, rooms, chat, show: vi.fn(), navigate: vi.fn(), refreshUser: vi.fn(async () => {}), updateUser: vi.fn(async (_patch: unknown) => ({})), params: {} as { id?: string },
     t: (key: string) => key,
     socket: { connected: false, on: vi.fn(), off: vi.fn(), emit: vi.fn() },
     publicProfile: vi.fn(async () => ({ ...user, id: "other", publicId: 1234567, username: "other", channels: [] })),
   };
 });
 
-vi.mock("../lib/auth", () => ({ useAuth: () => ({ user: mocks.user, group: { id: "workspace" }, logout: vi.fn() }) }));
+vi.mock("../lib/auth", () => ({ useAuth: () => ({ user: mocks.user, group: { id: "workspace" }, refreshUser: mocks.refreshUser, logout: vi.fn() }) }));
 vi.mock("../lib/i18n/i18n", () => ({ useI18n: () => ({ t: mocks.t, locale: "en" }) }));
 vi.mock("../components/Toast", () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock("../components/ConfirmDialog", () => ({ useConfirm: () => vi.fn(async () => true) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/chat", mocks.navigate], useSearch: () => "", useParams: () => mocks.params }));
-vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { publicProfile: mocks.publicProfile }, auth: {} } }));
+vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { publicProfile: mocks.publicProfile, update: mocks.updateUser }, auth: { sessions: async () => [] } } }));
 vi.mock("../lib/socket", () => ({ getSocket: () => mocks.socket, emitWithAck: vi.fn(), isServerRejection: () => false }));
 vi.mock("../lib/drafts", () => ({ DRAFT_CLIENT_ID: "test", openDraft: vi.fn(), saveDraft: vi.fn(async () => {}) }));
 vi.mock("../lib/presence", () => ({ usePresence: () => null, initPresence: vi.fn(), isPresenceActive: () => false, formatPresenceLabel: () => "offline" }));
@@ -66,9 +68,9 @@ const message = (roomId: string) => ({ id: `message-${roomId}`, roomId, senderId
 let host: HTMLDivElement;
 let root: Root;
 async function render(node: ReactNode) { await act(async () => { root.render(node); }); }
-async function input(node: HTMLTextAreaElement, value: string) {
+async function input(node: HTMLTextAreaElement | HTMLInputElement, value: string) {
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(node, value);
+    Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value")!.set!.call(node, value);
     node.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
@@ -158,7 +160,49 @@ describe("chat request ownership", () => {
   });
 });
 
+describe("message edit ownership", () => {
+  async function editMessage() {
+    mocks.chat.messages.mockImplementation(async id => ({ data: [{ ...message(id), senderId: "me" }], total: 1 }));
+    await render(chat("A"));
+    await act(async () => { host.querySelector<HTMLButtonElement>(".message-menu-trigger")!.click(); });
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("[role='menuitem']")].find(button => button.textContent?.includes("chat.editAction"))!.click(); });
+  }
+  it("preserves newer text when an edit finishes and allows saving that revision", async () => {
+    const edited = deferred<unknown>(); mocks.chat.editMessage.mockReturnValue(edited.promise);
+    await editMessage(); await input(composer(), "edit one"); await sendChat();
+    await input(composer(), "edit two");
+    await act(async () => { edited.resolve({ ...message("A"), senderId: "me", content: "edit one" }); });
+    expect(composer().value).toBe("edit two");
+    mocks.chat.editMessage.mockResolvedValue({ ...message("A"), senderId: "me", content: "edit two" });
+    await sendChat();
+    expect(mocks.chat.editMessage.mock.calls.at(-1)?.[1]).toBe("edit two");
+    expect(composer().value).toBe("");
+  });
+  it("ignores an old edit after changing rooms", async () => {
+    const edited = deferred<unknown>(); mocks.chat.editMessage.mockReturnValue(edited.promise);
+    await editMessage(); await input(composer(), "A edit"); await sendChat();
+    await render(chat("B")); await input(composer(), "B draft");
+    await act(async () => { edited.resolve({ ...message("A"), senderId: "me", content: "A edit" }); });
+    expect(composer().value).toBe("B draft");
+  });
+});
+
 describe("AI navigation", () => {
+  it("keeps a new draft and retries a failed question without replacing it", async () => {
+    const reply = deferred<unknown>(); mocks.chat.ai.mockReturnValue(reply.promise);
+    await render(<AiPage />); await input(host.querySelector("textarea")!, "first question");
+    await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    await input(host.querySelector("textarea")!, "second draft");
+    await act(async () => { reply.reject(new Error("offline")); });
+    expect(host.querySelector("textarea")!.value).toBe("second draft");
+    expect(host.querySelector(".standalone-ai-message")?.textContent).toContain("first question");
+    expect(host.querySelector(".ai-message-retry")).not.toBeNull();
+    mocks.chat.ai.mockResolvedValue({ reply: "answer" });
+    await act(async () => { host.querySelector<HTMLButtonElement>(".ai-message-retry")!.click(); });
+    expect(mocks.chat.ai.mock.calls.at(-1)?.[0]).toBe("first question");
+    expect(host.querySelector("textarea")!.value).toBe("second draft");
+    expect(host.querySelector(".ai-message-retry")).toBeNull();
+  });
   it("does not reopen AI when a reply arrives after leaving the page", async () => {
     const reply = deferred<unknown>(); mocks.chat.ai.mockReturnValue(reply.promise);
     await render(<AiPage />);
@@ -275,5 +319,29 @@ describe("profile keyboard focus", () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     expect(document.querySelector(".upm")).toBeNull(); expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+});
+
+describe("profile phone validation", () => {
+  async function phone(value: string) {
+    await render(<ProfilePage />);
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".tgp-row-main")].find(button => button.textContent?.includes("profile.phoneLabel"))!.click(); });
+    await input(host.querySelector<HTMLInputElement>("input[aria-label='profile.phoneLabel']")!, value);
+    await act(async () => { document.querySelector<HTMLButtonElement>(".tgp-savebar .primary")!.click(); });
+  }
+  it("explains unsupported removal without a false success or an empty update", async () => {
+    await phone("");
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+    expect(mocks.show).toHaveBeenLastCalledWith("profile.phoneRemovalUnsupported", "error");
+  });
+  it("rejects a phone number outside the existing API range", async () => {
+    await phone("123");
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+    expect(mocks.show).toHaveBeenLastCalledWith("profile.phoneInvalid", "error");
+  });
+  it("still updates a valid replacement number", async () => {
+    await phone("998909876543");
+    expect(mocks.updateUser).toHaveBeenCalledWith({ phoneNumber: 998909876543 });
+    expect(mocks.show).toHaveBeenLastCalledWith("profile.profileSaved");
   });
 });

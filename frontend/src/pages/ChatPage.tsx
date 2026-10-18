@@ -1562,6 +1562,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   draftRef.current = draft;
   const editingRef = useRef(editing);
   editingRef.current = editing;
+  const editInFlight = useRef(false);
   const draftRoom = useRef<string | null>(null);
 
   const persistDraft = useCallback((roomId: string, text: string) => {
@@ -1614,6 +1615,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (previous === selectedId) return;
     if (previous && !editingRef.current) persistDraft(previous, draftRef.current);
     draftRoom.current = selectedId;
+    setEditing(null);
+    setReplyingTo(null);
     setDraft(selectedId ? drafts[selectedId] ?? "" : "");
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1671,6 +1674,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       return;
     }
     if (editing) {
+      if (editInFlight.current) return;
+      editInFlight.current = true;
+      const generation = messageLoadGeneration.current;
       try {
         // An E2EE message's file keys live in its envelope, so they go back in.
         const keptFiles: OutgoingAttachment[] = (editing.attachments ?? [])
@@ -1678,11 +1684,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
           .map((item) => ({ storageKey: "", storageUrl: item.sourceUrl ?? "", fileName: item.fileName, fileSize: item.fileSize, mimeType: item.mimeType, secret: item.secret }));
         const updated = await api.chat.editMessage(editing.id, content, editing.roomId, keptFiles);
         setMessages((current) => current.map((item) => item.id === editing.id ? updated : item));
-        setDraft("");
-        setEditing(null);
+        if (generation === messageLoadGeneration.current && selectedIdRef.current === editing.roomId && editingRef.current === editing) {
+          if (draftRef.current === draft) { setDraft(""); setEditing(null); }
+          else setEditing(updated);
+        }
       } catch (error) {
         show(error instanceof Error ? error.message : t("chat.editMessageFailed"), "error");
-      }
+      } finally { editInFlight.current = false; }
       return;
     }
     setDraft("");
