@@ -8,7 +8,12 @@ import { UsageTracker } from "../components/UsageTracker";
 
 const mocks = vi.hoisted(() => ({
   path: "/education", params: {} as { slug?: string }, navigate: vi.fn(), show: vi.fn(), t: (key: string) => key,
-  videos: vi.fn(async (_options: { subject?: string; q?: string }): Promise<{ items: unknown[] }> => ({ items: [] })),
+  videos: vi.fn(async (_options: { subject?: string; q?: string; page?: number }): Promise<{ items: unknown[]; hasMore?: boolean }> => ({ items: [] })),
+  save: vi.fn(async () => ({ saved: true })),
+  unsave: vi.fn(async () => ({ saved: false })),
+  complete: vi.fn(async () => ({ completed: true })),
+  like: vi.fn(async () => ({ liked: true, likes: 1 })),
+  unlike: vi.fn(async () => ({ liked: false, likes: 0 })),
   lesson: vi.fn(async (_id: string): Promise<unknown> => ({})),
   mentor: vi.fn(async (_id: string, _question: string): Promise<{ reply: string }> => ({ reply: "answer" })),
   addNote: vi.fn(async (_id: string, _note: string): Promise<unknown> => ({})),
@@ -25,9 +30,10 @@ vi.mock("../lib/api", () => ({ api: {
   education: {
     home: async () => ({ subjects: [{ id: "ielts", name: "IELTS", description: "English" }, { id: "mathematics", name: "Math", description: "Math" }], trustedChannels: [], latest: [], continueLearning: [], saved: [] }),
     videos: mocks.videos, video: mocks.lesson, mentor: mocks.mentor, addNote: mocks.addNote,
+    save: mocks.save, unsave: mocks.unsave, complete: mocks.complete,
   },
   youtube: { status: async () => ({ enabled: true }), feed: async () => ({ items: [{ youtubeVideoId: "abcdefghijk", title: "Video", channelName: "Channel", durationSeconds: 60 }], hasMore: false }), search: async () => ({ items: [], nextPageToken: null }) },
-  media: { youtube: mocks.openVideo },
+  media: { youtube: mocks.openVideo, get: async (slug: string) => ({ slug, externalId: "abcdefghijk", title: "Video", meta: {}, liked: false, likes: 0, views: 0, myViews: 0 }), view: async () => ({ views: 1 }), watch: async () => ({}), like: mocks.like, unlike: mocks.unlike },
 } }));
 
 function deferred<T>() {
@@ -57,6 +63,9 @@ beforeEach(() => {
   mocks.videos.mockResolvedValue({ items: [] });
   mocks.lesson.mockImplementation(async id => video(id));
   mocks.mentor.mockResolvedValue({ reply: "answer" }); mocks.addNote.mockResolvedValue({}); mocks.openVideo.mockResolvedValue({ slug: "watch" });
+  mocks.save.mockResolvedValue({ saved: true }); mocks.complete.mockResolvedValue({ completed: true });
+  mocks.like.mockResolvedValue({ liked: true, likes: 1 });
+  Element.prototype.scrollIntoView = vi.fn();
   localStorage.clear(); localStorage.setItem("optima-education-subject", "ielts");
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.useFakeTimers({ toFake: ["Date", "performance", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
@@ -66,6 +75,58 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("education request ownership", () => {
+  it.each(["save", "complete"])("preserves both results when %s finishes first and blocks duplicate clicks", async first => {
+    const saved = deferred<{ saved: boolean }>(); const completed = deferred<{ completed: boolean }>();
+    mocks.save.mockReturnValue(saved.promise); mocks.complete.mockReturnValue(completed.promise);
+    await render(<EducationPage />, "/education/lesson/A");
+    await act(async () => {
+      const save = host.querySelector<HTMLButtonElement>(".lesson-top > button:last-child")!;
+      const complete = host.querySelector<HTMLButtonElement>(".lesson-complete")!;
+      save.click(); save.click(); complete.click(); complete.click();
+    });
+    expect(mocks.save).toHaveBeenCalledTimes(1); expect(mocks.complete).toHaveBeenCalledTimes(1);
+    if (first === "save") {
+      await act(async () => { saved.resolve({ saved: true }); });
+      await act(async () => { completed.resolve({ completed: true }); });
+    } else {
+      await act(async () => { completed.resolve({ completed: true }); });
+      await act(async () => { saved.resolve({ saved: true }); });
+    }
+    expect(host.querySelector(".lesson-top > button:last-child")?.textContent).toContain("education.saved");
+    expect(host.querySelector<HTMLButtonElement>(".lesson-complete")!.disabled).toBe(true);
+  });
+  it("ignores an old lesson mutation and allows retry after a failure", async () => {
+    const saved = deferred<{ saved: boolean }>(); mocks.save.mockReturnValueOnce(saved.promise);
+    await render(<EducationPage />, "/education/lesson/A");
+    await act(async () => { host.querySelector<HTMLButtonElement>(".lesson-top > button:last-child")!.click(); });
+    await render(<EducationPage />, "/education/lesson/B");
+    await act(async () => { saved.resolve({ saved: true }); });
+    expect(host.querySelector(".lesson-top > button:last-child")?.textContent).toContain("education.saveLesson");
+    mocks.complete.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => { host.querySelector<HTMLButtonElement>(".lesson-complete")!.click(); });
+    expect(mocks.show).toHaveBeenCalledWith("offline", "error");
+    expect(host.querySelector<HTMLButtonElement>(".lesson-complete")!.disabled).toBe(false);
+  });
+  it("loads later lessons, deduplicates them and resets pagination for a new search", async () => {
+    mocks.videos.mockImplementation(async options => ({ items: options.page === 2 ? [video("first"), video("later")] : [video(options.q || "first")], hasMore: options.page !== 2 }));
+    await render(<EducationPage />); await tick();
+    await act(async () => { host.querySelector<HTMLButtonElement>(".education-more")!.click(); }); await tick();
+    expect(host.querySelectorAll(".education-video-card")).toHaveLength(2);
+    expect(host.textContent).toContain("Lesson later");
+    await type(host.querySelector<HTMLInputElement>(".education-toolbar input")!, "new"); await tick();
+    expect(mocks.videos).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, q: "new" }));
+    expect(host.textContent).not.toContain("Lesson later");
+  });
+  it("reports a search failure instead of showing old results and retries the failed query", async () => {
+    await render(<EducationPage />); await tick();
+    mocks.videos.mockRejectedValueOnce(new Error("offline"));
+    await type(host.querySelector<HTMLInputElement>(".education-toolbar input")!, "retry me"); await tick();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("offline");
+    expect(host.querySelector(".education-empty")).toBeNull();
+    mocks.videos.mockResolvedValue({ items: [video("retried")], hasMore: false });
+    await act(async () => { host.querySelector<HTMLButtonElement>('[role="alert"] button')!.click(); }); await tick();
+    expect(host.textContent).toContain("Lesson retried"); expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
   it("keeps the latest search results when older requests finish last", async () => {
     const old = deferred<{ items: unknown[] }>();
     mocks.videos.mockImplementation(async options => options.q === "old" ? old.promise : { items: [video(options.q ?? "initial")] });
@@ -134,6 +195,19 @@ describe("education request ownership", () => {
 });
 
 describe("YouTube opening lifecycle", () => {
+  it("serializes likes and restores the button after errors", async () => {
+    mocks.params = { slug: "watch" };
+    const liked = deferred<{ liked: boolean; likes: number }>(); mocks.like.mockReturnValueOnce(liked.promise);
+    await render(<YoutubePage />, "/youtube/watch");
+    await act(async () => { const button = host.querySelector<HTMLButtonElement>(".yt-like")!; button.click(); button.click(); });
+    expect(mocks.like).toHaveBeenCalledTimes(1); expect(mocks.unlike).not.toHaveBeenCalled();
+    await act(async () => { liked.resolve({ liked: true, likes: 1 }); });
+    expect(host.querySelector(".yt-like")?.getAttribute("aria-pressed")).toBe("true");
+    mocks.unlike.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => { host.querySelector<HTMLButtonElement>(".yt-like")!.click(); });
+    expect(host.querySelector(".yt-like")?.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector<HTMLButtonElement>(".yt-like")!.disabled).toBe(false);
+  });
   async function open() {
     await render(<YoutubePage />, "/youtube");
     await act(async () => { host.querySelector<HTMLButtonElement>(".youtube-video")!.click(); });

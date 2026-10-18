@@ -105,6 +105,8 @@ export function YoutubePage() {
     return () => { openingGeneration.current++; openingPending.current = false; };
   }, [slug, query]);
   const [copied, setCopied] = useState(false);
+  const likePending = useRef(false);
+  const [liking, setLiking] = useState(false);
   const counted = useRef<string | null>(null);
   const selected = slug && media?.slug === slug
     ? { id: media.externalId, title: media.title, channelName: media.subtitle ?? undefined, views: media.meta.youtubeViews ?? null }
@@ -199,7 +201,8 @@ export function YoutubePage() {
   const watch = (item: VideoItem) => void openVideo(item.youtubeVideoId);
 
   async function toggleLike() {
-    if (!media) return;
+    if (!media || likePending.current) return;
+    likePending.current = true; setLiking(true);
     const on = !media.liked;
     setMedia({ ...media, liked: on, likes: Math.max(0, media.likes + (on ? 1 : -1)) });
     try {
@@ -207,6 +210,8 @@ export function YoutubePage() {
       setMedia((current) => current?.slug === media.slug ? { ...current, ...result } : current);
     } catch {
       setMedia((current) => current?.slug === media.slug ? { ...current, liked: !on, likes: media.likes } : current);
+    } finally {
+      likePending.current = false; setLiking(false);
     }
   }
 
@@ -247,7 +252,7 @@ export function YoutubePage() {
           <span className="yt-channel"><b aria-hidden="true">{(selected.channelName || "Y").trim().charAt(0).toUpperCase()}</b><span><strong>{selected.channelName || "YouTube"}</strong><small>{[selected.views != null ? views(selected.views) : "", media ? t("youtube.optimaViews", { count: new Intl.NumberFormat(locale, { notation: "compact" }).format(media.views) }) : ""].filter(Boolean).join(" · ")}</small></span></span>
           <div className="yt-watch-actions">
             <button type="button" className="yt-pill" onClick={closeVideo}><ArrowLeft size={17} />{t("youtube.back")}</button>
-            <button type="button" className={`yt-pill yt-like ${media?.liked ? "is-liked" : ""}`} onClick={() => void toggleLike()} aria-pressed={Boolean(media?.liked)} aria-label={t("youtube.like")}><Heart size={17} />{media?.likes ? new Intl.NumberFormat(locale, { notation: "compact" }).format(media.likes) : t("youtube.like")}</button>
+            <button type="button" className={`yt-pill yt-like ${media?.liked ? "is-liked" : ""}`} disabled={liking} aria-busy={liking || undefined} onClick={() => void toggleLike()} aria-pressed={Boolean(media?.liked)} aria-label={t("youtube.like")}><Heart size={17} />{media?.likes ? new Intl.NumberFormat(locale, { notation: "compact" }).format(media.likes) : t("youtube.like")}</button>
             <a className="yt-pill yt-pill-primary" href={`https://www.youtube.com/watch?v=${selected.id}`} target="_blank" rel="noopener noreferrer"><ExternalLink size={17} />{t("youtube.openOnYoutube")}</a>
             <button type="button" className={`yt-pill ${copied ? "yt-pill-done" : ""}`} onClick={() => void copyLink(selected.id)}>{copied ? <Check size={17} /> : <Link2 size={17} />}{copied ? t("youtube.linkCopied") : t("youtube.copyLink")}</button>
           </div>
