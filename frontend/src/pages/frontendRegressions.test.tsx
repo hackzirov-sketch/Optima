@@ -13,7 +13,7 @@ import { LiveKitMeeting } from "../lib/liveKitMeeting";
 import { ConnectionState } from "livekit-client";
 
 const mocks = vi.hoisted(() => {
-  const user = { id: "me", publicId: 7777777, firstName: "Test", lastName: "User", email: "test@example.invalid", phoneNumber: 998901234567 };
+  const user = { id: "me", publicId: 7777777, firstName: "Test", lastName: "User", email: "test@example.invalid", phoneNumber: 998901234567, notificationsEnabled: true, emailNotifications: true, pushNotifications: true, notifyMentions: true };
   const rooms = ["A", "B"].map(id => ({ id, name: id, type: "group", memberIds: ["me"], memberProfiles: [], memberStatus: "active", memberCount: 1, unreadCount: 0, createdById: "me", role: "owner", scope: "public" }));
   const empty = () => Promise.resolve([]);
   const chat = {
@@ -31,6 +31,9 @@ const mocks = vi.hoisted(() => {
   };
   return {
     user, rooms, chat, show: vi.fn(), navigate: vi.fn(), refreshUser: vi.fn(async () => {}), updateUser: vi.fn(async (_patch: unknown) => ({})), params: {} as { id?: string },
+    sessions: vi.fn(async (): Promise<Array<{ id: string; createdAt: string }>> => []),
+    revokeSession: vi.fn(async (_id: string) => ({})),
+    settings: vi.fn(async (_patch: unknown) => ({})),
     t: (key: string) => key,
     socket: { connected: false, on: vi.fn(), off: vi.fn(), emit: vi.fn() },
     publicProfile: vi.fn(async () => ({ ...user, id: "other", publicId: 1234567, username: "other", channels: [] })),
@@ -42,7 +45,7 @@ vi.mock("../lib/i18n/i18n", () => ({ useI18n: () => ({ t: mocks.t, locale: "en" 
 vi.mock("../components/Toast", () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock("../components/ConfirmDialog", () => ({ useConfirm: () => vi.fn(async () => true) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/chat", mocks.navigate], useSearch: () => "", useParams: () => mocks.params }));
-vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { publicProfile: mocks.publicProfile, update: mocks.updateUser }, auth: { sessions: async () => [] } } }));
+vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { publicProfile: mocks.publicProfile, update: mocks.updateUser, settings: mocks.settings }, auth: { sessions: mocks.sessions, revokeSession: mocks.revokeSession } } }));
 vi.mock("../lib/socket", () => ({ getSocket: () => mocks.socket, emitWithAck: vi.fn(), isServerRejection: () => false }));
 vi.mock("../lib/drafts", () => ({ DRAFT_CLIENT_ID: "test", openDraft: vi.fn(), saveDraft: vi.fn(async () => {}) }));
 vi.mock("../lib/presence", () => ({ usePresence: () => null, initPresence: vi.fn(), isPresenceActive: () => false, formatPresenceLabel: () => "offline" }));
@@ -82,6 +85,9 @@ const chat = (id: string) => <ChatPage routeTarget={{ type: "group", identifier:
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.user = { ...mocks.user, id: "me", firstName: "Test", lastName: "User", notificationsEnabled: true, emailNotifications: true, pushNotifications: true, notifyMentions: true };
+  mocks.sessions.mockResolvedValue([]); mocks.revokeSession.mockResolvedValue({});
+  mocks.settings.mockResolvedValue({}); mocks.refreshUser.mockResolvedValue();
   mocks.params = {};
   mocks.chat.messages.mockImplementation(async () => ({ data: [], total: 0 }));
   mocks.chat.readReceipts.mockImplementation(async () => []);
@@ -319,6 +325,63 @@ describe("profile keyboard focus", () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     expect(document.querySelector(".upm")).toBeNull(); expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+});
+
+describe("profile refresh and sessions", () => {
+  async function openSection(key: string) {
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".tgp-nav button")].find(button => button.textContent?.includes(key))!.click(); });
+  }
+  it("refreshes untouched fields without overwriting an edited field", async () => {
+    await render(<ProfilePage />);
+    await act(async () => { host.querySelector<HTMLButtonElement>(".tgp-row-main")!.click(); });
+    await input(host.querySelector<HTMLInputElement>('input[aria-label="profile.firstNameLabel"]')!, "My draft");
+    mocks.user = { ...mocks.user, firstName: "Server name", lastName: "Updated" };
+    await render(<ProfilePage />);
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="profile.firstNameLabel"]')!.value).toBe("My draft");
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="profile.lastNameLabel"]')!.value).toBe("Updated");
+    await act(async () => { document.querySelector<HTMLButtonElement>(".tgp-savebar button")!.click(); });
+    expect(host.querySelector(".tgp-name")?.textContent).toContain("Server name Updated");
+    expect(document.querySelector(".tgp-savebar")).toBeNull();
+  });
+  it("does not create unsaved edits when a clean profile refreshes", async () => {
+    await render(<ProfilePage />);
+    mocks.user = { ...mocks.user, firstName: "Fresh" };
+    await render(<ProfilePage />);
+    expect(host.querySelector(".tgp-name")?.textContent).toContain("Fresh");
+    expect(document.querySelector(".tgp-savebar")).toBeNull();
+  });
+  it("syncs notification switches and sends the opposite of the refreshed value", async () => {
+    await render(<ProfilePage />); await openSection("profile.tabNotifications");
+    mocks.user = { ...mocks.user, emailNotifications: false };
+    await render(<ProfilePage />);
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="profile.emailNotifications"]')!;
+    expect(button.getAttribute("aria-checked")).toBe("false");
+    await act(async () => { button.click(); });
+    expect(mocks.settings).toHaveBeenCalledWith({ emailNotifications: true });
+  });
+  it("shows a sessions loading error and retries instead of claiming no sessions", async () => {
+    mocks.sessions.mockRejectedValueOnce(new Error("offline"));
+    await render(<ProfilePage />); await openSection("profile.tabSessions");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("offline");
+    expect(host.querySelector(".compact-empty")).toBeNull();
+    mocks.sessions.mockResolvedValue([{ id: "current", createdAt: "2026-10-18T00:00:00Z" }]);
+    await act(async () => { host.querySelector<HTMLButtonElement>('[role="alert"] button')!.click(); });
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelectorAll(".session-row")).toHaveLength(1);
+  });
+  it("removes successful revocations even when another device fails, then retries only failures", async () => {
+    mocks.sessions.mockResolvedValue(["current", "closed", "failed"].map(id => ({ id, createdAt: "2026-10-18T00:00:00Z" })));
+    mocks.revokeSession.mockImplementation(async id => { if (id === "failed") throw new Error("offline"); return {}; });
+    await render(<ProfilePage />); await openSection("profile.tabSessions");
+    await act(async () => { host.querySelector<HTMLButtonElement>(".with-action button")!.click(); });
+    expect(host.querySelectorAll(".session-row")).toHaveLength(2);
+    expect(mocks.show).toHaveBeenLastCalledWith("offline", "error");
+    mocks.revokeSession.mockClear(); mocks.revokeSession.mockResolvedValue({});
+    await act(async () => { host.querySelector<HTMLButtonElement>(".with-action button")!.click(); });
+    expect(mocks.revokeSession).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeSession).toHaveBeenCalledWith("failed");
+    expect(host.querySelectorAll(".session-row")).toHaveLength(1);
   });
 });
 

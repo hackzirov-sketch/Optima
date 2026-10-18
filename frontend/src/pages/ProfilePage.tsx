@@ -1,5 +1,5 @@
 import { ArrowLeft, AtSign, Bell, BellRing, Briefcase, Camera, Check, ChevronRight, Clock3, Gift, Globe2, Image as ImageIcon, KeyRound, Laptop, Lock, LoaderCircle, LogOut, Mail, Pencil, Phone, ShieldCheck, Smartphone, Trash2, UserRound, UsersRound, X } from "lucide-react";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar, Button, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -74,6 +74,8 @@ export function ProfilePage() {
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState("");
+  const [sessionsRetry, setSessionsRetry] = useState(0);
   const [section, setSection] = useState<Section>("notifications");
   const [savingNotification, setSavingNotification] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
@@ -91,11 +93,41 @@ export function ProfilePage() {
   // but never while the user has unsaved edits in it.
   const saved = useMemo(() => draftOf(user), [user]);
   const changed = useMemo(() => (Object.keys(saved) as Array<keyof Draft>).filter((key) => draft[key].trim() !== saved[key].trim()), [draft, saved]);
-  useEffect(() => { if (!changed.length) setDraft(saved); }, [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const previousSaved = useRef(saved);
+  const previousUserId = useRef(user?.id);
+  useEffect(() => {
+    const previous = previousSaved.current;
+    const switched = previousUserId.current !== user?.id;
+    previousSaved.current = saved;
+    previousUserId.current = user?.id;
+    setDraft(current => {
+      if (switched) return saved;
+      const next = { ...current };
+      for (const key of Object.keys(saved) as Array<keyof Draft>) {
+        if (current[key].trim() === previous[key].trim()) next[key] = saved[key];
+      }
+      return next;
+    });
+  }, [saved, user?.id]);
 
   useEffect(() => {
-    api.auth.sessions().then(setSessions).catch(() => setSessions([])).finally(() => setSessionsLoading(false));
-  }, []);
+    if (savingNotification) return;
+    setNotifications({
+      notificationsEnabled: user?.notificationsEnabled ?? true,
+      emailNotifications: user?.emailNotifications ?? true,
+      pushNotifications: user?.pushNotifications ?? true,
+      notifyMentions: user?.notifyMentions ?? true,
+    });
+  }, [user?.id, user?.notificationsEnabled, user?.emailNotifications, user?.pushNotifications, user?.notifyMentions, savingNotification]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSessionsLoading(true); setSessionsError("");
+    api.auth.sessions().then(value => { if (!cancelled) setSessions(value); })
+      .catch(error => { if (!cancelled) setSessionsError(error instanceof Error ? error.message : t("profile.sessionCloseFailed")); })
+      .finally(() => { if (!cancelled) setSessionsLoading(false); });
+    return () => { cancelled = true; };
+  }, [sessionsRetry, user?.id, t]);
 
   function sessionDate(value?: string) {
     if (!value) return t("common.unknown");
@@ -240,8 +272,12 @@ export function ProfilePage() {
     if (!(await confirm({ title: t("profile.closeOthers"), description: t("profile.confirmCloseOthers"), confirmLabel: t("profile.closeOthers") }))) return;
     setRevokingAll(true);
     try {
-      await Promise.all(sessions.slice(1).map((entry) => api.auth.revokeSession(entry.id)));
-      setSessions((current) => current.slice(0, 1));
+      const targets = sessions.slice(1);
+      const results = await Promise.allSettled(targets.map(entry => api.auth.revokeSession(entry.id)));
+      const closed = new Set(targets.filter((_, index) => results[index].status === "fulfilled").map(entry => entry.id));
+      setSessions(current => current.filter(entry => !closed.has(entry.id)));
+      const failed = results.find(result => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
       show(t("profile.otherSessionsClosed"));
     } catch (error) {
       show(error instanceof Error ? error.message : t("profile.otherSessionsCloseFailed"), "error");
@@ -415,7 +451,8 @@ export function ProfilePage() {
               <header className="with-action"><div><h2>{t("profile.sessionsTitle")}</h2><p>{t("profile.sessionsDesc")}</p></div>{sessions.length > 1 && <Button variant="secondary" loading={revokingAll} onClick={() => void revokeOtherSessions()}>{t("profile.closeOthers")}</Button>}</header>
               <div className="session-list">
                 {sessionsLoading && [1, 2].map((item) => <Skeleton key={item} className="skeleton-row" />)}
-                {!sessionsLoading && sessions.length === 0 && <div className="compact-empty"><ShieldCheck size={21} /><span><strong>{t("profile.noActiveSessionsTitle")}</strong><small>{t("profile.noActiveSessionsDesc")}</small></span></div>}
+                {!sessionsLoading && sessionsError && <div role="alert"><p>{sessionsError}</p><Button variant="secondary" onClick={() => setSessionsRetry(current => current + 1)}>{t("education.retry")}</Button></div>}
+                {!sessionsLoading && !sessionsError && sessions.length === 0 && <div className="compact-empty"><ShieldCheck size={21} /><span><strong>{t("profile.noActiveSessionsTitle")}</strong><small>{t("profile.noActiveSessionsDesc")}</small></span></div>}
                 {sessions.map((entry, index) => <div className="session-row" key={entry.id}><span className="session-device">{entry.deviceType?.toLowerCase().includes("mobile") ? <Smartphone size={19} /> : <Laptop size={19} />}</span><span><strong>{entry.deviceName || `${entry.browser || t("profile.browserFallback")} · ${entry.os || t("profile.deviceFallback")}`}</strong><small>{entry.ipAddress || t("profile.ipUnknown")} · {sessionDate(entry.lastUsedAt || entry.createdAt)}</small></span>{index === 0 ? <em><Check size={14} /> {t("profile.current")}</em> : <button className="icon-button" onClick={() => void revoke(entry.id)} aria-label={t("profile.closeSessionAria")}><X size={18} /></button>}</div>)}
               </div>
             </>}
