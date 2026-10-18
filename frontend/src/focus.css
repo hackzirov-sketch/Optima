@@ -37,12 +37,12 @@
 }
 
 /* Underline fields (Telegram-style editors) mark focus with the underline alone. */
-:root[data-theme] body :is(.tgp-row-edit, .tg-edit-name, .tg-edit-slug, .tg-new-field) :is(input, select):is(:focus, :focus-visible) {
+:root[data-theme] body :is(.tg-edit-name, .tg-edit-slug, .tg-new-field) :is(input, select):is(:focus, :focus-visible) {
   border-color: transparent !important;
   border-bottom-color: var(--accent, #4a58b7) !important;
   box-shadow: none !important;
 }
-:root[data-theme] body :is(.tgp-bio, .tg-edit-desc) textarea:is(:focus, :focus-visible) {
+:root[data-theme] body .tg-edit-desc textarea:is(:focus, :focus-visible) {
   border-color: transparent !important;
   box-shadow: none !important;
 }

@@ -34,8 +34,8 @@
 .tgp-group { display: grid; margin-top: 8px; padding: 4px 0; background: var(--surface); }
 .tgp-hint { margin: 0; padding: 8px 20px 4px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
 .tgp-bio { position: relative; display: block; padding: 6px 20px; }
-.tgp-bio textarea { width: 100%; min-height: 0; padding: 8px 40px 8px 0; border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; resize: none; font-size: 15px; line-height: 1.45; }
-.tgp-bio > span { position: absolute; right: 20px; top: 14px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+:root[data-theme] body .tgp-bio textarea { width: 100%; min-height: 76px; padding: 14px 52px 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent) !important; border-radius: 24px !important; background: color-mix(in srgb, var(--accent) 6%, transparent) !important; box-shadow: none !important; resize: vertical; font-size: 15px; line-height: 1.45; }
+.tgp-bio > span { position: absolute; right: 36px; top: 22px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tgp-bio > span.low { color: var(--tg-red); }
 
 .tgp-row { min-height: 58px; display: flex; align-items: center; gap: 20px; padding: 0 16px 0 20px; transition: background-color 120ms ease; }
@@ -49,9 +49,12 @@
 .tgp-row-main small, .tgp-row-edit small { color: var(--muted); font-size: 12.5px; }
 .tgp-row.is-editing { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .tgp-row-edit { flex: 1; min-width: 0; display: grid; gap: 4px; padding: 8px 0; animation: tgp-edit-in 160ms ease-out both; }
-.tgp-row-edit input, .tgp-row-edit select {
-  width: 100%; min-width: 0; min-height: 36px; padding: 4px 0; border: 0 !important; border-bottom: 2px solid var(--accent) !important;
-  border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 15px;
+:root[data-theme] body .tgp-row-edit :is(input, select) {
+  width: 100%; min-width: 0; min-height: 44px; padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--accent) 6%, transparent) !important;
+  box-shadow: none !important; font-size: 15px;
 }
 .tgp-two { display: flex; gap: 12px; align-items: center; }
 .tgp-clear { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
