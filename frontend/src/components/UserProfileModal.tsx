@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { AtSign, Info, LoaderCircle, MessageCircle, Pencil, Phone, Share2, ShieldCheck, UserRound, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -9,6 +9,7 @@ import { formatPresenceLabel, isPresenceActive, usePresence } from "../lib/prese
 import { closeProfile, useOpenProfile } from "../lib/profileModal";
 import { Avatar, DisplayName } from "./ui";
 import { useToast } from "./Toast";
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 type Profile = Awaited<ReturnType<typeof api.users.publicProfile>>;
 
@@ -22,6 +23,8 @@ export function UserProfileModal() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [failed, setFailed] = useState(false);
   const presence = usePresence(profile?.id);
+  const modalRef = useRef<HTMLElement>(null);
+  useDialogFocus(Boolean(identifier), modalRef, closeProfile);
 
   useEffect(() => {
     setProfile(null);
@@ -32,13 +35,6 @@ export function UserProfileModal() {
       .then((result) => { if (!cancelled) setProfile(result); })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [identifier]);
-
-  useEffect(() => {
-    if (!identifier) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeProfile(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, [identifier]);
 
   if (!identifier) return null;
@@ -61,7 +57,7 @@ export function UserProfileModal() {
   }
 
   return createPortal(<div className="modal-layer upm-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeProfile()}>
-    <section className="upm" role="dialog" aria-modal="true" aria-label={profile ? `${profile.firstName} ${profile.lastName}` : t("publicProfile.profileLink")}>
+    <section ref={modalRef} tabIndex={-1} className="upm" role="dialog" aria-modal="true" aria-label={profile ? `${profile.firstName} ${profile.lastName}` : t("publicProfile.profileLink")}>
       <div className="upm-top-actions">
         {isMe && <button type="button" onClick={() => { closeProfile(); navigate("/profile"); }} aria-label={t("publicProfile.editProfile")} title={t("publicProfile.editProfile")}><Pencil size={18} /></button>}
         {isMe && <button type="button" onClick={() => void share()} aria-label={t("publicProfile.share")} title={t("publicProfile.share")}><Share2 size={18} /></button>}

@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, X } from "lucide-react";
 import { useI18n } from "../lib/i18n/i18n";
 import { AnimatedEmoji } from "./AnimatedEmoji";
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -75,40 +76,9 @@ export function EmptyState({ icon, title, description, action }: { icon: ReactNo
 export function Modal({ open, title, description, onClose, children, width = "sm", className = "" }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; width?: "sm" | "md" | "lg"; className?: string }) {
   const { t } = useI18n();
   const modalRef = useRef<HTMLElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const titleId = useId();
   const descriptionId = useId();
-  useEffect(() => {
-    if (!open) return;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const modal = modalRef.current;
-    // Only a field the dialog asks for (autoFocus) gets focus; otherwise the
-    // dialog itself does. Focusing the first input scrolled long dialogs past
-    // their header and popped the keyboard open on phones for no reason.
-    const initialFocus = modal?.querySelector<HTMLElement>("[autofocus]") || modal;
-    window.requestAnimationFrame(() => initialFocus?.focus({ preventScroll: true }));
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCloseRef.current();
-      if (event.key !== "Tab" || !modal) return;
-      const focusable = Array.from(modal.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])"));
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("keydown", handler);
-      previousFocus?.focus();
-    };
-  }, [open]);
+  useDialogFocus(open, modalRef, onClose);
   if (!open) return null;
   // Portalled to <body>: pages render inside an animated (transformed)
   // container, which traps z-index, so in place the dialog slid under the

@@ -1,4 +1,4 @@
-import { ArrowLeft, Bookmark, BookOpen, Check, ExternalLink, Eye, Heart, LoaderCircle, Minus, Moon, Plus, Search, Star, Sun, Trash2, Type, X } from "lucide-react";
+import { ArrowLeft, Bookmark, BookOpen, Check, ChevronDown, ExternalLink, Eye, Heart, LoaderCircle, Minus, Moon, Plus, RotateCcw, Search, SlidersHorizontal, Star, Sun, Trash2, Type, X } from "lucide-react";
 import { cdnImage } from "../lib/cdn";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Avatar } from "../components/ui";
@@ -325,23 +325,37 @@ export function LibraryPage() {
     </div>;
   }
 
-  return <div className="library-page lib2">
+  return <div className="library-page lib2 library-organized">
     <header className="library-heading">
       <div><span>OPTIMA LIBRARY</span><h1>{t("library.pageTitle")}</h1><p>{t("library.pageDescriptionOpen")}</p></div>
-      <label><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.searchPlaceholder")} />{query && <button onClick={() => setQuery("")} aria-label={t("library.clearSearch")}><X /></button>}</label>
+      <label><Search /><input value={query} aria-label={t("library.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} placeholder={t("library.searchPlaceholder")} />{query && <button onClick={() => setQuery("")} aria-label={t("library.clearSearch")}><X /></button>}</label>
     </header>
-    <nav className="lib2-langs" aria-label={t("library.languageAria")}>
-      {languages.map(([value, label]) => <button key={value} type="button" className={lang === value ? "active" : ""} aria-pressed={lang === value} onClick={() => setLang(value)}>{label}</button>)}
-    </nav>
     <nav className="lib2-shelves" aria-label={t("library.shelvesAria")}>
-      <button type="button" className={shelf === "browse" ? "active" : ""} onClick={() => setShelf("browse")}>{t("library.shelfBrowse")}</button>
-      <button type="button" className={shelf === "reading" ? "active" : ""} onClick={() => setShelf("reading")}><BookOpen size={16} />{t("library.shelfReading")}{readingBooks.length ? <b>{readingBooks.length}</b> : null}</button>
-      <button type="button" className={shelf === "finished" ? "active" : ""} onClick={() => setShelf("finished")}><Check size={16} />{t("library.shelfFinished")}{finishedBooks.length ? <b>{finishedBooks.length}</b> : null}</button>
-      <button type="button" className={shelf === "saved" ? "active" : ""} onClick={() => setShelf("saved")}><Bookmark size={16} />{t("library.shelfSaved")}{saved.length ? <b>{saved.length}</b> : null}</button>
+      <button type="button" aria-pressed={shelf === "browse"} className={shelf === "browse" ? "active" : ""} onClick={() => setShelf("browse")}>{t("library.shelfBrowse")}</button>
+      <button type="button" aria-pressed={shelf === "reading"} className={shelf === "reading" ? "active" : ""} onClick={() => setShelf("reading")}><BookOpen size={16} />{t("library.shelfReading")}{readingBooks.length ? <b>{readingBooks.length}</b> : null}</button>
+      <button type="button" aria-pressed={shelf === "finished"} className={shelf === "finished" ? "active" : ""} onClick={() => setShelf("finished")}><Check size={16} />{t("library.shelfFinished")}{finishedBooks.length ? <b>{finishedBooks.length}</b> : null}</button>
+      <button type="button" aria-pressed={shelf === "saved"} className={shelf === "saved" ? "active" : ""} onClick={() => setShelf("saved")}><Bookmark size={16} />{t("library.shelfSaved")}{saved.length ? <b>{saved.length}</b> : null}</button>
     </nav>
-    {shelf === "browse" && <nav className="library-categories">
-      {subjects.map((item) => <button key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
-    </nav>}
+    {shelf === "browse" && <details className="library-filter-panel">
+      <summary>
+        <SlidersHorizontal size={18} /><strong>{t("library.filters")}</strong>
+        <span className="library-filter-summary">{languages.find(([value]) => value === lang)?.[1]}<span aria-hidden="true"> / </span>{t(`library.subject_${subject}`)}</span>
+        <ChevronDown size={18} className="library-filter-chevron" />
+      </summary>
+      <div className="library-filter-body">
+        <fieldset><legend>{t("library.languageAria")}</legend>
+          <nav className="lib2-langs" aria-label={t("library.languageAria")}>
+            {languages.map(([value, label]) => <button key={value} type="button" className={lang === value ? "active" : ""} aria-pressed={lang === value} onClick={() => setLang(value)}>{label}</button>)}
+          </nav>
+        </fieldset>
+        <fieldset><legend>{t("library.genres")}</legend>
+          <nav className="library-categories" aria-label={t("library.genres")}>
+            {subjects.map((item) => <button type="button" key={item} aria-pressed={subject === item} onClick={() => setSubject(item)} className={subject === item ? "active" : ""}>{t(`library.subject_${item}`)}</button>)}
+          </nav>
+        </fieldset>
+        <button type="button" className="library-filter-reset" disabled={subject === "all" && lang === (["uz", "en", "ru", "tr"].includes(locale) ? locale : "uz")} onClick={() => { setSubject("all"); setLang((["uz", "en", "ru", "tr"].includes(locale) ? locale : "uz") as Lang); }}><RotateCcw size={15} />{t("library.resetFilters")}</button>
+      </div>
+    </details>}
     <section className="library-section">
       <header><div><span>{shelf === "saved" ? t("library.shelfSaved") : shelf === "reading" ? t("library.shelfReading") : shelf === "finished" ? t("library.shelfFinished") : lang === "en" ? "Project Gutenberg" : "Open Library"}</span><h2>{shelf === "saved" ? t("library.savedTitle") : shelf === "reading" ? t("library.readingTitle") : shelf === "finished" ? t("library.finishedTitle") : debounced ? t("library.searchResultsFor", { query: debounced }) : lang === "uz" ? t("library.uzbekLiterature") : t("library.openShelfBooks")}</h2></div><small>{shelf !== "browse" ? "" : total ? t("library.bookCount", { count: total.toLocaleString() }) : ""}</small></header>
       {shelf === "browse" && failed && !books.length ? <div className="library-empty">{t("library.sourceUnreachable")}</div>

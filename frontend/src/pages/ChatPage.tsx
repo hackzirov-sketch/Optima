@@ -291,6 +291,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("room"));
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const messageLoadGeneration = useRef(0);
   const [search, setSearch] = useState("");
   const [messageSearch, setMessageSearch] = useState("");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
@@ -341,6 +344,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [roomContext, setRoomContext] = useState<{ roomId: string; x: number; y: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [staged, setStaged] = useState<StagedAttachment[]>([]);
+  const [failedSends, setFailedSends] = useState<Record<string, Array<{ content: string; files: StagedAttachment[]; reply: ChatMessage | null; clientMessageId: string }>>>({});
+  const [retryingSend, setRetryingSend] = useState<string | null>(null);
+  const retryInFlight = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   // New messages that arrived while the reader was scrolled up (the badge on the ↓ button).
   const [unseenBelow, setUnseenBelow] = useState(0);
@@ -1071,10 +1077,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   }, [routeTarget?.type, routeTarget?.identifier, workspace?.id]);
 
   useEffect(() => {
+    const generation = ++messageLoadGeneration.current;
+    let cancelled = false;
+    const current = () => !cancelled && generation === messageLoadGeneration.current && selectedIdRef.current === selectedId;
     shouldStickToMessageBottom.current = true;
+    setMessages([]);
+    setReadReceipts(new Map());
+    setLoadingOlderMessages(false);
+    setHasOlderMessages(false);
     if (!selectedId) {
-      setMessages([]);
-      setReadReceipts(new Map());
+      setLoadingMessages(false);
       return;
     }
     if (selectedRoom?.memberStatus === "pending") {
@@ -1085,16 +1097,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     setLoadingMessages(true);
     api.chat.messages(selectedId)
       .then((result) => {
+        if (!current()) return;
         setMessages([...result.data].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt))));
         setHasOlderMessages((result.total || 0) > result.data.length);
       })
-      .catch((error) => show(error instanceof Error ? error.message : t("chat.loadMessagesFailed"), "error"))
-      .finally(() => setLoadingMessages(false));
+      .catch((error) => { if (current()) show(error instanceof Error ? error.message : t("chat.loadMessagesFailed"), "error"); })
+      .finally(() => { if (current()) setLoadingMessages(false); });
     // Other members' read positions - fetched fresh on open (not just live socket
     // events) so "read" checkmarks survive a reload instead of resetting to unread.
     api.chat.readReceipts(selectedId)
-      .then((rows) => setReadReceipts(new Map(rows.map((row) => [row.userId, row.lastReadSeq]))))
-      .catch(() => setReadReceipts(new Map()));
+      .then((rows) => { if (current()) setReadReceipts(new Map(rows.map((row) => [row.userId, row.lastReadSeq]))); })
+      .catch(() => { if (current()) setReadReceipts(new Map()); });
+    return () => { cancelled = true; };
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
   async function loadOlderMessages() {
@@ -1105,10 +1119,13 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       return;
     }
     const list = messageList.current;
+    const generation = messageLoadGeneration.current;
+    const current = () => selectedIdRef.current === selectedId && generation === messageLoadGeneration.current;
     const previousHeight = list?.scrollHeight || 0;
     setLoadingOlderMessages(true);
     try {
       const result = await api.chat.messages(selectedId, oldestSequence);
+      if (!current()) return;
       setHasOlderMessages(result.data.length === 80);
       preserveMessageScroll.current = true;
       setMessages((current) => {
@@ -1116,12 +1133,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         return [...byId.values()].sort((a, b) => (a.sequence || +new Date(a.createdAt)) - (b.sequence || +new Date(b.createdAt)));
       });
       window.requestAnimationFrame(() => {
-        if (list) list.scrollTop += list.scrollHeight - previousHeight;
+        if (list && current()) list.scrollTop += list.scrollHeight - previousHeight;
       });
     } catch (error) {
-      show(error instanceof Error ? error.message : t("chat.loadOlderFailed"), "error");
+      if (current()) show(error instanceof Error ? error.message : t("chat.loadOlderFailed"), "error");
     } finally {
-      setLoadingOlderMessages(false);
+      if (current()) setLoadingOlderMessages(false);
     }
   }
 
@@ -1144,6 +1161,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         if (selectedId && selectedRoom?.memberStatus !== "pending") {
           const roomId = selectedId;
           void api.chat.messages(roomId).then((result) => {
+            if (selectedIdRef.current !== roomId) return;
             setMessages((current) => {
               if (current.length && current[0].roomId !== roomId) return current;
               const known = new Set(current.map((message) => message.id));
@@ -1669,6 +1687,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     }
     setDraft("");
     setStaged([]);
+    const sentReply = replyingTo;
+    setReplyingTo(null);
     shouldStickToMessageBottom.current = true;
     const clientMessageId = crypto.randomUUID();
     const optimistic: ChatMessage = {
@@ -1719,14 +1739,25 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         setMessages((current) => current.map((item) => item.clientMessageId === clientMessageId ? saved : item));
       } catch (error) {
         setMessages((current) => current.filter((item) => item.clientMessageId !== clientMessageId));
-        setDraft(content);
-        // Put the files back in the composer rather than making the user pick
-        // and re-upload them all after a failed send.
-        setStaged(staged);
+        setFailedSends(current => ({ ...current, [selectedRoom.id]: [...(current[selectedRoom.id] ?? []), { content, files: stagedReady, reply: sentReply, clientMessageId }] }));
         show(error instanceof Error ? error.message : t("chat.sendMessageFailed"), "error");
       }
     }
-    setReplyingTo(null);
+  }
+
+  async function retryFailedSend(roomId: string, failed: (typeof failedSends)[string][number]) {
+    if (retryInFlight.current) return;
+    retryInFlight.current = true;
+    setRetryingSend(failed.clientMessageId);
+    try {
+      const saved = await api.chat.send(roomId, failed.content, failed.clientMessageId, failed.reply?.id, failed.files.map(item => item.attachment!));
+      if (selectedIdRef.current === roomId) {
+        setMessages(current => current.some(item => item.id === saved.id || item.clientMessageId === failed.clientMessageId) ? current : [...current, saved]);
+      }
+      setFailedSends(current => ({ ...current, [roomId]: (current[roomId] ?? []).filter(item => item.clientMessageId !== failed.clientMessageId) }));
+    } catch (error) {
+      show(error instanceof Error ? error.message : t("chat.sendMessageFailed"), "error");
+    } finally { retryInFlight.current = false; setRetryingSend(null); }
   }
 
   function startReplySwipe(event: TouchEvent<HTMLDivElement>, message: ChatMessage) {
@@ -3193,6 +3224,12 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
                     );
                   })}
                   {typingUsers.length > 0 && <div className="typing-bubble"><i /><i /><i /></div>}
+                  {(failedSends[selectedRoom.id] ?? []).map(failed => <div key={failed.clientMessageId} className="chat-send-failure" role="alert">
+                    <strong>{t("chat.sendMessageFailed")}</strong>
+                    {failed.content && <p>{failed.content}</p>}
+                    {failed.files.length > 0 && <p>{failed.files.map(item => item.file.name).join(", ")}</p>}
+                    <Button variant="secondary" icon={<Send size={16} />} loading={retryingSend === failed.clientMessageId} disabled={retryingSend !== null} onClick={() => void retryFailedSend(selectedRoom.id, failed)}>{t("common.retry")}</Button>
+                  </div>)}
                   <div ref={messagesEnd} />
                   {showScrollButton && <button className={`scroll-bottom ${unseenBelow ? "has-unseen" : ""}`} onClick={() => {
                     shouldStickToMessageBottom.current = true;

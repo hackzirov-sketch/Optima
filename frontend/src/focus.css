@@ -9,8 +9,9 @@
  */
 :root { --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent, #4a58b7) 22%, transparent); }
 
-:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):focus,
-:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):focus-visible {
+/* AI's composite composer owns its focus ring, not the inner textarea. */
+:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):not(:where(.standalone-ai .ai-main > form textarea)):focus,
+:root[data-theme] body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, .rich-message-input):not(:where(.standalone-ai .ai-main > form textarea)):focus-visible {
   outline: none !important;
   border-color: color-mix(in srgb, var(--accent, #4a58b7) 70%, transparent) !important;
   box-shadow: var(--focus-ring) !important;

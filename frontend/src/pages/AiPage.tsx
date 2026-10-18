@@ -36,6 +36,8 @@ export function AiPage() {
   // The conversation a just-sent first message created: its route change must
   // not reload (and wipe) the messages already on screen.
   const justCreated = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
+  useEffect(() => () => { requestGeneration.current++; }, [conversationId]);
   useEffect(() => { if (follow.current) list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "auto" }); }, [messages, busy]);
 
   const loadConversations = useCallback(() => {
@@ -46,8 +48,9 @@ export function AiPage() {
   // The route says which conversation is open; /ai alone is a fresh one.
   useEffect(() => {
     setError("");
+    setBusy(false);
     setDrawer(false);
-    if (!conversationId) { setMessages([]); return; }
+    if (!conversationId) { setMessages([]); setLoadingConversation(false); return; }
     if (justCreated.current === conversationId) { justCreated.current = null; return; }
     let cancelled = false;
     setLoadingConversation(true);
@@ -79,6 +82,7 @@ export function AiPage() {
   async function send() {
     const prompt = draft.trim();
     if ((!prompt && !image) || busy) return;
+    const generation = requestGeneration.current;
     const history = messages.slice(-30).map(({ role, text }) => ({ role, text }));
     const sentImage = image;
     follow.current = true;
@@ -88,6 +92,7 @@ export function AiPage() {
       const result = sentImage
         ? await api.chat.aiImage(sentImage.file, prompt, history, conversationId ?? undefined)
         : await api.chat.ai(prompt, history, { conversationId: conversationId ?? undefined });
+      if (generation !== requestGeneration.current) return;
       setMessages(current => [...current, { role: "model", text: result.reply, sources: result.sources }]);
       if (result.conversationId) {
         const id = result.conversationId;
@@ -96,11 +101,12 @@ export function AiPage() {
         if (id !== conversationId) { justCreated.current = id; navigate(`/ai/${id}`, { replace: !conversationId }); }
       }
     } catch (cause) {
+      if (generation !== requestGeneration.current) return;
       setError(cause instanceof Error ? cause.message : t("chat.aiNotResponding"));
       setMessages(current => current.slice(0, -1));
       setDraft(prompt);
       if (sentImage) setImage(sentImage);
-    } finally { setBusy(false); }
+    } finally { if (generation === requestGeneration.current) setBusy(false); }
   }
 
   async function saveRename() {

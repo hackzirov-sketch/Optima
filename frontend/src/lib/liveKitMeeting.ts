@@ -160,12 +160,12 @@ export class LiveKitMeeting {
     else await publication.mute();
   }
 
-  /** Meeting chat over the SFU's reliable data channel; returns how many peers it reached. */
-  sendChat(payload: string): number {
+  /** Resolves after publication; zero means unavailable, one also accepts a local-only empty room. */
+  async sendChat(payload: string): Promise<number> {
     const recipients = this.room.remoteParticipants.size;
-    if (!recipients || this.room.state !== ConnectionState.Connected) return 0;
-    void this.room.localParticipant.publishData(this.enc.encode(payload), { reliable: true, topic: CHAT_TOPIC });
-    return recipients;
+    if (this.room.state !== ConnectionState.Connected) return 0;
+    if (recipients) await this.room.localParticipant.publishData(this.enc.encode(payload), { reliable: true, topic: CHAT_TOPIC });
+    return Math.max(recipients, 1);
   }
 
   /**

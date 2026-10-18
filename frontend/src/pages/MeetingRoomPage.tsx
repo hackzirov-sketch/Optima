@@ -508,6 +508,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   const [meetingChatOpen, setMeetingChatOpen] = useState(false);
   const meetingChat = useMeetingChat(meetingId, user?.id || "");
   const attachMeetingChat = meetingChat.attach;
+  const detachMeetingChat = meetingChat.detach;
   useEffect(() => { if (sidePanel) setMeetingChatOpen(false); }, [sidePanel]);
   const [accessDenied, setAccessDenied] = useState("");
   const [requestState, setRequestState] = useState<"idle" | "requesting" | "pending" | "rejected">("idle");
@@ -968,6 +969,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
   }, [meetingId, receiveMeetingChat, setMeetingChatTransport, show, t]);
 
   const closePeer = useCallback((userId: string) => {
+    detachMeetingChat(userId);
     const timer = disconnectTimers.current.get(userId);
     if (timer) window.clearTimeout(timer);
     disconnectTimers.current.delete(userId);
@@ -984,7 +986,7 @@ export function MeetingRoomPage({ meetingId: meetingIdProp, directMode = false, 
     if (node) audioAnalysers.current.delete(userId);
     speakerStableTicks.current.delete(userId);
     setActiveSpeakerId((current) => (current === userId ? null : current));
-  }, []);
+  }, [detachMeetingChat]);
 
   const createPeer = useCallback((targetUserId: string) => {
     const existing = peers.current.get(targetUserId);
