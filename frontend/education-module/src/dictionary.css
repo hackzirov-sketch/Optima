@@ -1,0 +1,114 @@
+.dictionary-workspace { --text: var(--ink); --on-primary: var(--primary-text); width: 100%; max-width: 1180px; margin: 0 auto; min-width: 0; }
+.lex-heading { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 26px; }
+.lex-kicker { color: var(--primary); font-size: 11px; font-weight: 700; }
+.lex-heading h1 { font-size: 36px; line-height: 1.15; margin: 8px 0 10px; }
+.lex-heading p { color: var(--muted); margin: 0; font-size: 14px; }
+.lex-total { text-align: right; font-size: 27px; font-weight: 700; flex: none; }
+.lex-total small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+.lex-toolbar { margin-bottom: 26px; }
+.dictionary-workspace .lex-search { display: flex; align-items: center; gap: 12px; padding: 0 18px; min-height: 54px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); }
+.lex-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.dictionary-workspace .lex-search input { flex: 1; min-width: 0; width: 100%; background: transparent !important; border: 0 !important; outline: 0 !important; box-shadow: none !important; padding: 14px 0; color: var(--text); font: inherit; }
+.lex-levels { margin-top: 24px; }
+.lex-level-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.lex-level-heading h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.lex-all-levels { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; border: 0; padding: 7px 12px; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; }
+.lex-all-levels strong { font-size: 12px; font-weight: 550; }
+.lex-all-levels small { font-size: 11px; opacity: .8; }
+.lex-all-levels[aria-pressed="true"] { color: var(--accent); background: var(--primary-soft); }
+.lex-level-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lex-level-options > button { --level-tone: #236f5d; --level-bg: #e4f2ec; position: relative; display: flex; gap: 12px; align-items: center; min-width: 0; min-height: 80px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; }
+.lex-level-options > button[data-band="B"] { --level-tone: #326a9f; --level-bg: #e6eff9; }
+.lex-level-options > button[data-band="C"] { --level-tone: #73559d; --level-bg: #f0eafa; }
+.lex-level-options > button:hover { border-color: var(--level-tone); }
+.lex-level-options > button[aria-pressed="true"] { border-color: var(--accent); background: var(--primary-soft); box-shadow: inset 3px 0 var(--accent); }
+.lex-level-symbol { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 8px; background: var(--level-bg); color: var(--level-tone); font-weight: 750; font-size: 18px; }
+.lex-level-name { min-width: 0; display: grid; gap: 5px; }
+.lex-level-name strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.lex-level-name small { font-size: 11px; color: var(--muted); }
+.lex-level-check { margin-left: auto; width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--accent); visibility: hidden; }
+.lex-level-options > button[aria-pressed="true"] .lex-level-check { visibility: visible; }
+:root[data-theme="dark"] .lex-level-options > button { --level-tone: #9bdec4; --level-bg: #213b35; }
+:root[data-theme="dark"] .lex-level-options > button[data-band="B"] { --level-tone: #a7cef4; --level-bg: #25364b; }
+:root[data-theme="dark"] .lex-level-options > button[data-band="C"] { --level-tone: #d6baf6; --level-bg: #3b2f4d; }
+.lex-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; margin-top: 16px; font-size: 12px; }
+.lex-filters label { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.dictionary-workspace .lex-filters select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; min-height: 40px; max-width: 180px; padding: 7px 28px 7px 10px; }
+.lex-filters > span { margin-left: auto; color: var(--muted); }
+.dictionary-workspace .lex-saved input { width: 17px; height: 17px; accent-color: var(--primary); padding: 0; }
+.dictionary-browser { display: grid; grid-template-columns: minmax(230px, 310px) minmax(0, 1fr); gap: 32px; align-items: start; }
+.dictionary-results { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.lex-list-head { display: flex; justify-content: space-between; font-size: 12px; padding: 14px 16px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.lex-word-list { max-height: 640px; overflow-y: auto; overscroll-behavior: contain; }
+.lex-word-list > button { display: flex; align-items: center; gap: 12px; justify-content: space-between; width: 100%; min-height: 66px; padding: 12px 16px; background: transparent; color: var(--text); text-align: left; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.lex-word-list > button:last-child { border-bottom: 0; }
+.lex-word-list > button.is-selected { background: var(--primary-soft); }
+.lex-word-list > button > span:first-child { min-width: 0; }
+.lex-word-list strong { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.lex-word-list small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
+.lex-badge { display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 650; padding: 3px 7px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); flex: none; }
+.lex-pagination { border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 12px; color: var(--muted); }
+.lex-pagination button { display: grid; place-items: center; width: 40px; height: 40px; background: transparent; border: 0; border-radius: 8px; color: var(--text); font-size: 20px; cursor: pointer; }
+.lex-pagination button:disabled { opacity: .35; cursor: default; }
+.dictionary-entry { min-width: 0; padding: 6px 0 20px; overflow-wrap: anywhere; }
+.dictionary-entry:focus { outline: none; }
+.dictionary-entry, .dictionary-results { scroll-margin-top: 92px; }
+.lex-entry-top { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.lex-entry-meta { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.lex-entry-top h2 { font-size: 36px; line-height: 1.2; margin: 12px 0 6px; font-weight: 650; }
+.lex-phonetic { color: var(--muted); margin: 8px 0 0; font-size: 16px; }
+.lex-audio { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--primary-soft); color: var(--primary); flex: none; cursor: pointer; }
+.lex-audio[aria-pressed="true"] { background: var(--primary); color: var(--on-primary, #fff); }
+.lex-pronunciation { display: flex; gap: 14px; align-items: center; margin: 20px 0; font-size: 12px; color: var(--muted); }
+.lex-pronunciation > div { display: flex; gap: 4px; }
+.lex-pronunciation button { border: 0; border-radius: 6px; background: transparent; color: var(--muted); min-height: 36px; padding: 7px 12px; cursor: pointer; }
+.lex-pronunciation button[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); }
+.lex-translation { padding: 20px 0; border-block: 1px solid var(--line); }
+.dictionary-workspace h3 { font-size: 13px; margin: 0 0 12px; font-weight: 650; }
+.lex-translation p { font-size: 20px; line-height: 1.5; margin: 0 0 6px; }
+.lex-translation small { color: var(--muted); font-size: 12px; }
+.lex-save { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; margin-top: 16px; border: 0; border-radius: 8px; background: var(--primary-soft); color: var(--primary); padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.lex-save:disabled { opacity: .7; cursor: default; }
+.lex-meanings { margin-top: 32px; }
+.lex-sense { padding: 16px 0 24px; border-bottom: 1px solid var(--line); }
+.lex-pos { font-size: 12px; color: var(--primary); font-weight: 650; }
+.lex-sense ol { padding-left: 20px; margin: 14px 0 22px; }
+.lex-sense li { padding-left: 6px; margin-bottom: 18px; font-size: 14px; line-height: 1.8; }
+.lex-sense li p { margin: 0; }
+.lex-sense blockquote { margin: 8px 0; padding-left: 12px; border-left: 2px solid var(--line); color: var(--muted); font-size: 13px; }
+.lex-relations { margin-top: 18px; }
+.lex-relations h4 { font-size: 12px; margin: 0 0 9px; }
+.lex-relations > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.lex-relations button { background: transparent; color: var(--primary); border: 0; border-radius: 5px; text-decoration: underline; text-underline-offset: 4px; padding: 6px 8px; min-height: 36px; font-size: 13px; cursor: pointer; }
+.lex-relations p, .lex-error { font-size: 12px; color: var(--muted); }
+.lex-sources { display: flex; flex-wrap: wrap; gap: 10px 18px; padding-top: 20px; color: var(--muted); font-size: 11px; }
+.lex-sources > span { width: 100%; }
+.lex-sources a, .lex-credits a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.lex-credits { margin-top: 32px; padding: 18px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); line-height: 1.8; }
+.lex-credits summary { cursor: pointer; color: var(--text); min-height: 32px; }
+.lex-empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+.lex-empty h2 { color: var(--text); font-size: 22px; }
+.lex-back { display: none; }
+.dictionary-workspace :is(button, a, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 680px) {
+  .lex-heading { align-items: start; gap: 14px; }
+  .lex-heading h1 { font-size: 28px; }
+  .lex-heading p { font-size: 12px; max-width: 220px; }
+  .lex-total { font-size: 21px; }
+  .lex-total small { font-size: 10px; max-width: 92px; }
+  .lex-level-options { gap: 8px; }
+  .lex-level-options > button { flex-direction: column; align-items: start; gap: 10px; padding: 12px 10px; min-height: 124px; }
+  .lex-level-symbol { width: 36px; height: 36px; font-size: 17px; }
+  .lex-level-name strong { font-size: 11px; }
+  .lex-level-name small { font-size: 10px; }
+  .lex-level-check { position: absolute; top: 10px; right: 7px; width: 14px; }
+  .lex-filters { gap: 12px; }
+  .lex-filters > span { width: 100%; margin-left: 0; }
+  .dictionary-browser { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .lex-word-list { max-height: none; }
+  .dictionary-entry { display: none; }
+  .dictionary-browser.has-selection .dictionary-results { display: none; }
+  .dictionary-browser.has-selection .dictionary-entry { display: block; }
+  .lex-back { display: inline-flex; min-height: 44px; margin-bottom: 20px; padding: 8px 0; border: 0; background: transparent; color: var(--primary); font-size: 13px; cursor: pointer; }
+  .lex-entry-top h2 { font-size: 30px; }
+}

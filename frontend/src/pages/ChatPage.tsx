@@ -319,6 +319,8 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [sending, setSending] = useState(false);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAssistPrompt, setAiAssistPrompt] = useState("");
+  const aiAssistPromptRef = useRef(aiAssistPrompt);
+  aiAssistPromptRef.current = aiAssistPrompt;
   const [aiOpen, setAiOpen] = useState(() => new URLSearchParams(window.location.search).get("bot") === "optima-ai");
   const [aiDraft, setAiDraft] = useState("");
   const [aiMessages, setAiMessages] = useState<AiConversationMessage[]>(() => loadAiConversation(user?.id));
@@ -417,6 +419,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   const [uploadingRoomAvatar, setUploadingRoomAvatar] = useState(false);
   const [uploadingRoomBackground, setUploadingRoomBackground] = useState(false);
   const [detailsTab, setDetailsTab] = useState<"members" | "media" | "files" | "links" | "music" | "voice">("members");
+  const detailsGeneration = useRef(0);
   /** A shared-content list opened from the info panel (Telegram's "44 photos" row), or the overview. */
   const [detailsSection, setDetailsSection] = useState<"media" | "files" | "links" | "music" | "voice" | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -1108,7 +1111,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     api.chat.readReceipts(selectedId)
       .then((rows) => { if (current()) setReadReceipts(new Map(rows.map((row) => [row.userId, row.lastReadSeq]))); })
       .catch(() => { if (current()) setReadReceipts(new Map()); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ++messageLoadGeneration.current; };
   }, [selectedId, selectedRoom?.memberStatus, show]);
 
   async function loadOlderMessages() {
@@ -1443,18 +1446,24 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
 
   useEffect(() => {
     if (!detailsOpen || !selectedId) return;
+    ++detailsGeneration.current;
+    let cancelled = false;
     setDetailsLoading(true);
+    setDetailMembers([]); setSharedItems([]); setDetailMemberTotal(0);
     const request = detailsTab === "members"
       ? api.chat.roomMembers(selectedId, detailMemberSearch.trim()).then((result) => {
+        if (cancelled) return;
         setDetailMembers(result.items);
         setDetailMemberTotal(result.total);
         setSharedItems([]);
       })
       : api.chat.shared(selectedId, detailsTab).then((items) => {
+        if (cancelled) return;
         setSharedItems(items);
         setDetailMembers([]);
       });
-    void request.catch((error) => show(error instanceof Error ? error.message : t("chat.loadDetailsFailed"), "error")).finally(() => setDetailsLoading(false));
+    void request.catch((error) => { if (!cancelled) show(error instanceof Error ? error.message : t("chat.loadDetailsFailed"), "error"); }).finally(() => { if (!cancelled) setDetailsLoading(false); });
+    return () => { cancelled = true; ++detailsGeneration.current; };
   }, [detailsOpen, detailsTab, detailMemberSearch, selectedId, show]);
 
   useEffect(() => {
@@ -1473,14 +1482,16 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setSearchingUsers(false);
       return;
     }
+    let cancelled = false;
+    setGlobalUsers([]);
     setSearchingUsers(true);
     const timer = window.setTimeout(() => {
       api.users.search(query)
-        .then((result) => setGlobalUsers(result.data.filter((entry) => entry.id !== user?.id)))
-        .catch((error) => show(error instanceof Error ? error.message : t("chat.usersNotFound"), "error"))
-        .finally(() => setSearchingUsers(false));
+        .then((result) => { if (!cancelled) setGlobalUsers(result.data.filter((entry) => entry.id !== user?.id)); })
+        .catch((error) => { if (!cancelled) show(error instanceof Error ? error.message : t("chat.usersNotFound"), "error"); })
+        .finally(() => { if (!cancelled) setSearchingUsers(false); });
     }, 280);
-    return () => window.clearTimeout(timer);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [createMode, createOpen, memberSearch, show, user?.id]);
 
   // The sidebar box searches people as well as rooms (Telegram behaviour) —
@@ -1494,16 +1505,18 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
       setSidebarSearching(false);
       return;
     }
+    let cancelled = false;
+    setSidebarUsers([]); setSidebarPublicRooms([]);
     setSidebarSearching(true);
     const timer = window.setTimeout(() => {
       // People and joinable channels/groups are two independent lookups —
       // neither should be able to blank out the other by failing.
       void Promise.allSettled([
-        api.users.search(query).then((result) => setSidebarUsers(result.data.filter((entry) => entry.id !== user?.id)), () => setSidebarUsers([])),
-        api.chat.discover(query).then(setSidebarPublicRooms, () => setSidebarPublicRooms([])),
-      ]).finally(() => setSidebarSearching(false));
+        api.users.search(query).then((result) => { if (!cancelled) setSidebarUsers(result.data.filter((entry) => entry.id !== user?.id)); }, () => { if (!cancelled) setSidebarUsers([]); }),
+        api.chat.discover(query).then(result => { if (!cancelled) setSidebarPublicRooms(result); }, () => { if (!cancelled) setSidebarPublicRooms([]); }),
+      ]).finally(() => { if (!cancelled) setSidebarSearching(false); });
     }, 280);
-    return () => window.clearTimeout(timer);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [search, catalog, user?.id]);
 
   /**
@@ -1648,13 +1661,17 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
   async function runComposerAi() {
     const prompt = aiAssistPrompt.trim() || draft.replace(/^\/ai\s*/i, "").trim();
     if (!prompt || aiThinking) return;
+    const generation = messageLoadGeneration.current;
+    const sentDraft = draft;
+    const sentPrompt = aiAssistPrompt;
     setAiThinking(true);
     try {
       const result = await api.chat.ai(t("chat.composerAiPromptTemplate", { prompt }), [], { ephemeral: true });
+      if (generation !== messageLoadGeneration.current || draftRef.current !== sentDraft || aiAssistPromptRef.current !== sentPrompt) return;
       setDraft(result.reply);
       setAiAssistPrompt("");
     } catch (error) {
-      show(error instanceof Error ? error.message : t("chat.aiComposeFailed"), "error");
+      if (generation === messageLoadGeneration.current) show(error instanceof Error ? error.message : t("chat.aiComposeFailed"), "error");
     } finally {
       setAiThinking(false);
     }
@@ -1898,6 +1915,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     if (!selectedRoom || files.length === 0) return;
 
     const room = selectedRoom;
+    const generation = messageLoadGeneration.current;
     const free = MAX_ATTACHMENTS - staged.length;
     if (free <= 0) {
       show(t("chat.attachmentLimit", { count: MAX_ATTACHMENTS }), "error");
@@ -1909,6 +1927,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
     // rest — and for everything in encrypted chats, whose uploads are opaque
     // blobs. Refused here, before minutes of uploading end in an error.
     const encrypted = await isRoomE2ee(room.id).catch(() => false);
+    if (generation !== messageLoadGeneration.current || selectedIdRef.current !== room.id) return;
     const limitFor = (file: File) => (!encrypted && /^(video|audio)\//.test(file.type) ? 100 : 10) * 1024 * 1024;
     const tooBig = files.slice(0, free).filter((file) => file.size > limitFor(file));
     for (const file of tooBig) show(t("chat.fileTooLarge", { name: file.name, limit: Math.round(limitFor(file) / 1024 / 1024) }), "error");
@@ -1932,7 +1951,7 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
         setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, attachment } : entry));
       } catch (error) {
         setStaged((current) => current.map((entry) => entry.id === item.id ? { ...entry, error: true } : entry));
-        show(error instanceof Error ? error.message : t("chat.fileSendFailed"), "error");
+        if (generation === messageLoadGeneration.current) show(error instanceof Error ? error.message : t("chat.fileSendFailed"), "error");
       }
     }));
   }
@@ -3496,8 +3515,9 @@ export function ChatPage({ routeTarget = null }: { routeTarget?: ChatRouteTarget
               ))}
                           {!detailsLoading && detailMembers.length < detailMemberTotal && <button type="button" className="details-more" onClick={() => {
                 const nextPage = Math.floor(detailMembers.length / 20) + 1;
+                const generation = detailsGeneration.current;
                 void api.chat.roomMembers(selectedRoom.id, detailMemberSearch.trim(), nextPage)
-                  .then((result) => setDetailMembers((current) => [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))]))
+                  .then((result) => { if (generation === detailsGeneration.current) setDetailMembers((current) => [...current, ...result.items.filter((item) => !current.some((existing) => existing.id === item.id))]); })
                   .catch(() => undefined);
               }}>{t("chat.showMoreMembers", { count: detailMemberTotal - detailMembers.length })}</button>}
             </section>}

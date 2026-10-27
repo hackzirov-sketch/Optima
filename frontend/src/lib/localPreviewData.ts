@@ -2,6 +2,7 @@ const now = () => new Date().toISOString();
 const aiConversations: Array<{ id: string; title: string; updatedAt: string; messages: Array<{ id: string; role: string; text: string; hasImage: boolean; sources: unknown[]; createdAt: string }> }> = [];
 let aiMemory = { content: "", enabled: true, updatedAt: null as string | null };
 const user = { id: "local-user", publicId: "1000001", firstName: "Ahmadjon", lastName: "Zokirov", nickname: "Ahmadjon", username: "ahmadjon", email: "local@example.test", theme: "dark", language: "uz", isVerified: true };
+if (isDemoMode()) Object.assign(user, { id: "demo-visitor", firstName: "Mehmon", lastName: "", nickname: "Mehmon", username: "demo", email: "demo@example.invalid" });
 const colleague = { id: "local-colleague", publicId: "1000002", firstName: "Ali", lastName: "", username: "ali", avatarUrl: null };
 const group = { id: "local-workspace", ownerId: user.id, name: "OPTIMA", slug: "local", visibility: "private" };
 const room = { id: "local-room", groupId: group.id, type: "group", scope: "public", e2ee: false, name: "Dizayn jamoasi", memberIds: [user.id, colleague.id], memberProfiles: [user, colleague], createdById: user.id, memberCount: 2, unreadCount: 0, isReadOnly: false, myRole: "owner", publicId: 123456, createdAt: now(), lastMessage: null };
@@ -12,6 +13,7 @@ const messages: Record<string, unknown>[] = [
   { id: "local-message-3", roomId: room.id, senderId: user.id, content: "[[optima-emoji:p1-0001]]", sequence: 3, sender: user, createdAt: now(), reactions: [] },
 ];
 const meeting = { id: "11111111-1111-4111-8111-111111111111", groupId: group.id, hostId: user.id, host: user, title: "Dizayn muhokamasi", code: "abc-defg-hij", status: "scheduled", scope: "group_only", joinPolicy: "auto", locked: false, startTime: now(), maxParticipants: 8, participantCount: 0, participants: [], access: { isHost: true, isParticipant: false, canJoin: true, canRequest: false, requestStatus: null } };
+const demoBooks = ["Hikoyalar", "Ilm va izlanish", "Yangi so‘zlar"].map((title, index) => ({ key: `demo-book-${index}`, id: `demo-book-${index}`, title, authors: ["OPTIMA Demo"], languages: ["uz"], year: null, downloads: 0, description: "Kutubxona ko‘rinishi uchun namuna. To‘liq katalog hisobga kirgandan keyin ochiladi.", cover: "", embedUrl: null, textUrl: null, sourceUrl: "", source: "openlibrary", readable: true }));
 
 // Unknown requests never fall through to the real backend in this preview.
 export async function localPreviewRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -77,7 +79,12 @@ export async function localPreviewRequest<T>(path: string, options: RequestInit 
   else if (p === "/education/dashboard") data = { subjects: [], opened: 0, completed: 0, watchSeconds: 0, saved: 0, completionRate: 0 };
   else if (p === "/education/home") data = { subjects: [{ id: "mathematics", name: "Matematika", description: "" }], trustedChannels: [], latest: [], continueLearning: [], saved: [] };
   else if (p === "/education/videos") data = { items: [], page: 1, hasMore: false };
-  else if (p === "/library/search") data = { items: [], total: 0, page: 1, hasMore: false };
+  else if (p === "/library/search") {
+    const q = (url.searchParams.get("q") ?? "").toLocaleLowerCase();
+    const items = isDemoMode() ? demoBooks.filter(book => book.title.toLocaleLowerCase().includes(q)) : [];
+    data = { items, total: items.length, page: 1, hasMore: false };
+  }
+  else if (p.startsWith("/library/books/") && p.endsWith("/reviews")) data = { count: 0, average: null, items: [], liked: false, saved: false };
   else if (p === "/library/me/marks") data = { liked: [], saved: [] };
   else if (p === "/youtube/status") data = { enabled: true };
   else if (p.startsWith("/youtube/")) data = { items: [], hasMore: false, nextPageToken: null };
@@ -111,3 +118,5 @@ export async function localPreviewRequest<T>(path: string, options: RequestInit 
   else if (p.includes("/presign") || p.endsWith("/upload")) throw new Error("Local test rejimida bulutga yuklash o'chirilgan.");
   return structuredClone(data) as T;
 }
+import { isDemoMode } from "./demo";
+

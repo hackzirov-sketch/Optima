@@ -1,0 +1,47 @@
+/* Original production palette; keep the newer responsive geometry without glass. */
+:root {
+  --glass-chrome: var(--surface);
+  --glass-panel: var(--surface);
+  --glass-control: var(--surface-muted);
+  --glass-section: var(--surface);
+  --glass-message: var(--surface);
+  --glass-edge: var(--line);
+  --glass-stroke: var(--line);
+  --glass-veil: var(--surface);
+  --glass-highlight: inset 0 0 0 transparent;
+  --glass-elevation: var(--op-shadow-1);
+  --glass-ease: var(--op-ease);
+  --call-off-ink: var(--op-danger);
+}
+
+:root[data-theme] body *,
+:root[data-theme] body *::before,
+:root[data-theme] body *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+:root[data-theme] body :is(.topbar, .reference-dock, .sidebar, .chat-sidebar, .conversation-header, .composer, .modal, .language-menu, .notification-panel, .group-menu, .gm-lobby-bar) {
+  background-color: var(--surface) !important;
+}
+
+:root[data-theme] body .chat-page {
+  --glass-message: var(--surface);
+  --message-sheen: none;
+}
+:root[data-theme="light"] body .chat-page { --message-own: #e9eafb; }
+:root[data-theme="dark"] body .chat-page { --message-own: #353b63; }
+:root[data-theme] body .chat-page .message-bubble:not(:has(> .message-custom-emoji)) {
+  background-color: var(--surface);
+  background-image: none !important;
+  border-color: var(--line);
+  box-shadow: none !important;
+}
+:root[data-theme] body .chat-page .message-mine .message-bubble:not(:has(> .message-custom-emoji)) {
+  background-color: var(--message-own);
+}
+:root[data-theme] body .tg-new-anchor > button {
+  background: var(--action-bg);
+  color: var(--action-text);
+  border-color: var(--line);
+}

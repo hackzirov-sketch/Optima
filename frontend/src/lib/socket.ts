@@ -49,7 +49,7 @@ export function getSocket(): Socket {
   // `active` is true while connecting/reconnecting too: calling connect()
   // then sent a second CONNECT on the same transport, the server dropped the
   // connection, and that half-registered socket left presence stuck.
-  if (!socket.active && !(import.meta.env.DEV && isLocalPreview())) socket.connect();
+  if (!socket.active && !isLocalPreview()) socket.connect();
   return socket;
 }
 

@@ -1,4 +1,5 @@
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Dismissal every floating surface in Meet shares: a press outside it (but
@@ -72,6 +73,49 @@ export function MeetMenu({ open, onClose, triggerRef, items, placement = "top", 
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(open, onClose, ref, triggerRef);
   const [visible, setVisible] = useState<MeetMenuItem[]>(items);
+  const [position, setPosition] = useState<CSSProperties>({});
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      const menu = ref.current;
+      if (!trigger || !menu) return;
+      const viewport = window.visualViewport;
+      const leftEdge = (viewport?.offsetLeft ?? 0) + 8;
+      const topEdge = (viewport?.offsetTop ?? 0) + 8;
+      const rightEdge = leftEdge + (viewport?.width ?? window.innerWidth) - 16;
+      let bottomEdge = topEdge + (viewport?.height ?? window.innerHeight) - 16;
+      const dock = document.querySelector(".mobile-nav");
+      const dockRect = dock?.getBoundingClientRect();
+      if (dockRect && dockRect.height > 0) bottomEdge = Math.min(bottomEdge, dockRect.top - 8);
+      const anchor = trigger.getBoundingClientRect();
+      const width = Math.min(menu.offsetWidth, rightEdge - leftEdge);
+      const height = Math.min(menu.scrollHeight, bottomEdge - topEdge);
+      const below = bottomEdge - anchor.bottom - 6;
+      const above = anchor.top - topEdge - 6;
+      const useTop = placement === "top" ? above >= height || above > below : below < height && above > below;
+      const desiredTop = useTop ? anchor.top - height - 6 : anchor.bottom + 6;
+      const desiredLeft = align === "end" ? anchor.right - width : align === "center" ? anchor.left + (anchor.width - width) / 2 : anchor.left;
+      setPosition({
+        position: "fixed", zIndex: 1500, left: Math.max(leftEdge, Math.min(desiredLeft, rightEdge - width)),
+        top: Math.max(topEdge, Math.min(desiredTop, bottomEdge - height)),
+        right: "auto", bottom: "auto", translate: "none",
+        maxWidth: rightEdge - leftEdge, maxHeight: Math.max(44, bottomEdge - topEdge), overflowY: "auto",
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+    };
+  }, [open, visible, placement, align, triggerRef]);
 
   // The visible subset depends on the viewport (mobileOnly items).
   useLayoutEffect(() => {
@@ -83,7 +127,8 @@ export function MeetMenu({ open, onClose, triggerRef, items, placement = "top", 
   useEffect(() => {
     if (!open) return;
     // First enabled item, so keyboard users land inside the menu.
-    window.requestAnimationFrame(() => ref.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus());
+    const frame = window.requestAnimationFrame(() => ref.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus({ preventScroll: true }));
+    return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
   const move = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -99,8 +144,8 @@ export function MeetMenu({ open, onClose, triggerRef, items, placement = "top", 
   }, [onClose]);
 
   if (!open) return null;
-  return (
-    <div ref={ref} role="menu" aria-label={label} className={`meet-menu meet-menu-${placement} meet-menu-${align} ${className}`} onKeyDown={move}>
+  return createPortal(
+    <div ref={ref} style={position} role="menu" aria-label={label} className={`meet-menu meet-menu-${placement} meet-menu-${align} ${className}`} onKeyDown={move}>
       {visible.map((item) => (
         <button
           key={item.key}
@@ -115,7 +160,7 @@ export function MeetMenu({ open, onClose, triggerRef, items, placement = "top", 
           <span>{item.label}</span>
         </button>
       ))}
-    </div>
+    </div>, document.fullscreenElement ?? document.body
   );
 }
 

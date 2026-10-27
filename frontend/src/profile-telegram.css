@@ -69,7 +69,7 @@
 .tgp-savebar span { flex: 1; color: var(--muted); font-size: 13.5px; }
 .tgp-savebar button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; color: var(--accent); font-weight: 650; }
 .tgp-savebar button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
-.tgp-savebar button.primary { background: var(--accent); color: #fff; }
+.tgp-savebar button.primary { background: var(--action-bg); color: var(--action-text); }
 .tgp-savebar button:disabled { opacity: .55; }
 @keyframes tgp-bar-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .tgp-logout { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; min-height: 52px; border: 0; background: var(--surface); color: var(--tg-red); font-weight: 600; }

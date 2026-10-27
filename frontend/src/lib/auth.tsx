@@ -3,6 +3,7 @@ import type { AuthResult, User, Group } from "../types";
 import { api, ApiError, refreshSession } from "./api";
 import { session } from "./session";
 import { setE2eeUser } from "./e2ee";
+import { isDemoMode } from "./demo";
 
 interface AuthContextValue {
   ready: boolean;
@@ -223,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [completeAuth]);
 
   const logout = useCallback(async () => {
+    if (isDemoMode()) { window.location.assign("/welcome?demo=0"); return; }
     try {
       await api.auth.logout();
     } finally {
@@ -230,6 +232,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setWorkspaces([]);
       setWorkspace(null);
+      window.history.replaceState({}, "", "/welcome");
+      window.dispatchEvent(new PopStateEvent("popstate"));
       session.notify();
     }
   }, []);

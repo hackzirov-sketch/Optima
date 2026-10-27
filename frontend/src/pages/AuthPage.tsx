@@ -39,7 +39,7 @@ function detailValue(error: ApiError, key: string): string | undefined {
 
 export function AuthPage() {
   const { t } = useI18n();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(() => new URLSearchParams(window.location.search).get("mode") === "register" ? "register" : "login");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");

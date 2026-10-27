@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { session } from "./session";
 import { isLocalPreview } from "./localPreview";
+import { assertDemoRequest, isDemoMode } from "./demo";
 import { normalizeRoomStats } from "./roomStats";
 
 export interface RoomVoiceChat {
@@ -136,7 +137,7 @@ const CLIENT_HEADER = "X-UPZ-Client";
 const CLIENT_HEADER_VALUE = "web";
 
 export function oauthStartUrl(provider: OAuthProvider): string {
-  if (import.meta.env.DEV && isLocalPreview()) return "/";
+  if (isLocalPreview()) return "/";
   return `${API_URL}/auth/${provider}`;
 }
 
@@ -208,7 +209,7 @@ interface RefreshResult {
  * function to read, compare, or store; it only needs to know whether the
  * rotation succeeded. */
 async function renewSession(): Promise<RefreshResult> {
-  if (import.meta.env.DEV && isLocalPreview()) return { ok: true, networkError: false };
+  if (isLocalPreview()) return { ok: true, networkError: false };
   if (!session.isActive()) return { ok: false, networkError: false };
   let response: Response;
   try {
@@ -329,7 +330,8 @@ async function decryptRoomPreviews(rooms: ChatRoom[]): Promise<ChatRoom[]> {
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  if (import.meta.env.DEV && isLocalPreview()) {
+  if (isLocalPreview()) {
+    if (isDemoMode()) assertDemoRequest(new URL(path, window.location.origin).pathname, options.method);
     const { localPreviewRequest } = await import("./localPreviewData");
     return localPreviewRequest<T>(path, options);
   }

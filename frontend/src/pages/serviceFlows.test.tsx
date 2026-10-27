@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EducationPage } from "./EducationPage";
+import { EducationWorkspace } from "./EducationWorkspace";
 import { YoutubePage } from "./YoutubePage";
 import { UsageTracker } from "../components/UsageTracker";
 
@@ -73,6 +74,36 @@ beforeEach(() => {
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+describe("education workspace", () => {
+  it("syncs the outer theme without reloading the education module", async () => {
+    const previousTheme = document.documentElement.dataset.theme;
+    await render(<EducationWorkspace />, "/education");
+    const frame = host.querySelector("iframe")!;
+    const src = frame.getAttribute("src");
+    const post = vi.spyOn(frame.contentWindow!, "postMessage");
+    await act(async () => {
+      document.documentElement.dataset.theme = "dark";
+      frame.dispatchEvent(new Event("load"));
+    });
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: "optima-education-theme", theme: "dark" }), window.location.origin);
+    expect(frame.getAttribute("src")).toBe(src);
+    await act(async () => {
+      if (previousTheme) document.documentElement.dataset.theme = previousTheme;
+      else delete document.documentElement.dataset.theme;
+    });
+  });
+  it("loads the bundled module on this origin with a learner-specific profile", async () => {
+    await render(<EducationWorkspace />, "/education");
+    const frame = host.querySelector("iframe")!;
+    const url = new URL(frame.getAttribute("src")!, window.location.origin);
+    expect(url.origin).toBe(window.location.origin);
+    expect(url.pathname).toBe("/education-app/index.html");
+    expect(url.searchParams.get("learner")).toBe("me");
+    expect(url.searchParams.get("lang")).toBe("en");
+    expect(frame.title).toBe("education.catalog");
+  });
+});
 
 describe("education request ownership", () => {
   it.each(["save", "complete"])("preserves both results when %s finishes first and blocks duplicate clicks", async first => {

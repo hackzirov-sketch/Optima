@@ -33,6 +33,7 @@ export const session = {
    *  from JS, so this is a hint for skipping the bootstrap fetch — never a
    *  substitute for the server's answer. */
   isActive() {
+    if (isDemoMode()) return true;
     return localStorage.getItem(ACTIVE_KEY) === "1";
   },
   /** Call after login/refresh succeeds. Tokens are in cookies already. */
@@ -73,3 +74,5 @@ export const session = {
     };
   },
 };
+import { isDemoMode } from "./demo";
+

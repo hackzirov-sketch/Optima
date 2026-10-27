@@ -1,6 +1,7 @@
 import { api, refreshSession } from "./api";
 import { currentSocket, getSocket } from "./socket";
 import { session } from "./session";
+import { isLocalPreview } from "./localPreview";
 
 /**
  * Keeps the realtime socket authenticated without dropping it.
@@ -16,7 +17,7 @@ import { session } from "./session";
 let installed = false;
 
 export function installSocketAuth() {
-  if (installed || typeof window === "undefined") return;
+  if (installed || typeof window === "undefined" || isLocalPreview()) return;
   installed = true;
 
   window.addEventListener("optima:session-refreshed", () => {

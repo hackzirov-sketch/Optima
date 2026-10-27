@@ -1,0 +1,62 @@
+const PATHS = {
+  home: <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
+  chat: <><path d="M4 5h16v11H9l-5 4z" /><path d="M9 10.5h.01M12 10.5h.01M15 10.5h.01" /></>,
+  book: <><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2z" /><path d="M22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z" /></>,
+  words: <><path d="M3 18l5-12 5 12M5 14h6" /><circle cx="17.5" cy="15.5" r="2.5" /><path d="M20 12v6" /></>,
+  math: <path d="M5 7h6M8 4v6M14 7h5M5 14l5 5M10 14l-5 5M14 15h5M14 19h5" />,
+  dict: <><path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2z" /><path d="M5 18a2 2 0 0 1 2-2h12M9 8h6" /></>,
+  video: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M10 9.5l4.5 2.5-4.5 2.5z" /></>,
+  cap: <><path d="M2 9l10-5 10 5-10 5z" /><path d="M6 11v5c3 2 9 2 12 0v-5" /></>,
+  check: <><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></>,
+  tick: <path d="M5 12l4 4 10-10" />,
+  trophy: <><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8" /></>,
+  bulb: <><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.1v.4h6v-.4c0-.8.4-1.5 1-2.1A6 6 0 0 0 12 3z" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></>,
+  bell: <><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 21h4" /></>,
+  flame: <path d="M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-7 2 1 3 3 3 5 1-2 1-6 1-9z" />,
+  play: <path d="M9 7l8 5-8 5z" />,
+  sound: <><path d="M4 10v4h4l5 4V6L8 10z" /><path d="M16 9a4 4 0 0 1 0 6" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
+  more: <path d="M5 12h.01M12 12h.01M19 12h.01" />,
+  clip: <path d="M20 11l-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7" />,
+  send: <path d="M5 12h14M13 6l6 6-6 6" />,
+  external: <path d="M7 17L17 7M9 7h8v8" />,
+  camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>,
+  heart: <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" />,
+  comment: <path d="M4 5h16v11H9l-5 4z" />,
+  bookmark: <path d="M6 4h12v17l-6-4-6 4z" />,
+  lock: <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
+  clock: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2M9 2h6" /></>,
+  cards: <><rect x="3" y="6" width="14" height="14" rx="2" /><path d="M7 6V4h14v14h-4" /></>,
+  pen: <><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13 7l4 4" /></>,
+  headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><rect x="3" y="14" width="4" height="6" rx="1" /><rect x="17" y="14" width="4" height="6" rx="1" /></>,
+  match: <path d="M4 7h7M4 17h7M15 7h5M15 17h5M11 7l4 10M11 17l4-10" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  smile: <><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5c2 2 5 2 7 0M9 9.5h.01M15 9.5h.01" /></>,
+  game: <><rect x="2" y="7" width="20" height="11" rx="5" /><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01" /></>,
+  alert: <><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></>,
+  pause: <path d="M9 5v14M15 5v14" />,
+  refresh: <><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></>,
+  star: <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" />,
+  user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></>,
+  shield: <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="M9 12l2 2 4-4" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2 20a7 7 0 0 1 14 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M22 20a7 7 0 0 0-5-6.7" /></>,
+  sparkle: <path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2zM19 15l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" />,
+  arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+  translate: <><path d="M3 5h10M8 3v2M5 5c1 4 4 7 7 8M11 5c-1 4-4 8-7 9" /><path d="M13 21l4-9 4 9M14.5 18h5" /></>,
+  heartFill: <path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z" fill="currentColor" stroke="none" />,
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  report: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+};
+
+export default function Icon({ name, size, className = '', style }) {
+  const s = size ? { width: size, height: size, ...style } : style;
+  return (
+    <svg viewBox="0 0 24 24" className={'ic ' + className} style={s} aria-hidden="true">
+      {PATHS[name]}
+    </svg>
+  );
+}

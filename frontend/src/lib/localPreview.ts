@@ -3,5 +3,7 @@ export function isLocalPreviewEnvironment(development: boolean, hostname: string
 }
 
 export function isLocalPreview(): boolean {
-  return isLocalPreviewEnvironment(import.meta.env.DEV, typeof window === "undefined" ? "" : window.location.hostname, import.meta.env.VITE_LOCAL_PREVIEW === "true");
+  return isDemoMode() || isLocalPreviewEnvironment(import.meta.env.DEV, typeof window === "undefined" ? "" : window.location.hostname, import.meta.env.VITE_LOCAL_PREVIEW === "true");
 }
+import { isDemoMode } from "./demo";
+

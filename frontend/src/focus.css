@@ -23,14 +23,20 @@
   border-color: color-mix(in srgb, var(--accent, #4a58b7) 70%, transparent) !important;
   box-shadow: var(--focus-ring) !important;
 }
-:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form) :is(input, textarea):is(:focus, :focus-visible) {
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea),
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea):is(:focus, :focus-visible) {
   outline: none !important;
-  border-color: transparent !important;
+  border: 0 !important;
   box-shadow: none !important;
   background: transparent !important;
 }
 
 /* The dark meet surfaces keep their own blue. */
+:root[data-theme] body :is(.search-field, .conversation-search, .details-member-search, .telegram-emoji-search, .emoji-picker-search, .youtube-search, .meet-join-field, .library-heading > label, .education-toolbar > label, .standalone-ai form):focus-within:has(:focus-visible) {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
 :root[data-theme] body .gm-room :is(input, textarea, select):is(:focus, :focus-visible) {
   border-color: var(--gm-active, #8ab4f8) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--gm-active, #8ab4f8) 35%, transparent) !important;

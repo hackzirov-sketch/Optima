@@ -135,6 +135,10 @@
 
 @media (max-width: 820px) {
   :root[data-theme] body .tgp-savebar { bottom: max(calc(104px + env(safe-area-inset-bottom)), calc(100% - var(--visual-top, 0px) - var(--visual-height, 100dvh) + 8px)); }
+  :root[data-theme] body .tgp-savebar { flex-wrap: nowrap; padding: 8px 12px; gap: 8px; }
+  :root[data-theme] body .tgp-savebar > span { display: none; }
+  :root[data-theme] body .tgp-savebar > button { flex: 1 1 0; min-width: 0; min-height: 44px; justify-content: center; padding-inline: 8px; }
+  :root.keyboard-open[data-theme] body .tgp-savebar { bottom: calc(100% - var(--visual-top, 0px) - var(--visual-height, 100dvh) + 8px); }
   :root[data-theme] body .chat-page.chat-room-open { top: var(--visual-top, 0px); bottom: auto; height: var(--visual-height, 100dvh); max-height: var(--visual-height, 100dvh); }
   :root[data-theme] body .chat-room-open .conversation { min-height: 0; }
   :root[data-theme] body .chat-room-open .message-list { min-height: 0; overscroll-behavior-y: contain; }

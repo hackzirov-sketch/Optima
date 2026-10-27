@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Redirect, Route, Switch, useLocation } from "wouter";
+import { Redirect, Route, Switch, useLocation, useSearch } from "wouter";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/ui";
 import { useAuth } from "./lib/auth";
@@ -20,6 +20,8 @@ import { AdminPage } from "./pages/AdminPage";
 import { openProfile } from "./lib/profileModal";
 import { LibraryPage } from "./pages/LibraryPage";
 import { EducationPage } from "./pages/EducationPage";
+import { EducationWorkspace } from "./pages/EducationWorkspace";
+import { LandingPage } from "./pages/LandingPage";
 
 function LoadingScreen() {
   return <div className="app-loading"><Logo /><LoaderCircle className="spin" size={23} /><span>Group yuklanmoqda</span></div>;
@@ -42,6 +44,7 @@ function WorkspaceLoading() {
 export function App() {
   const { ready, user, group } = useAuth();
   const [location, navigate] = useLocation();
+  const search = useSearch();
   useEffect(() => {
     document.documentElement.dataset.theme = user
       ? localStorage.getItem("optima-theme") === "dark" ? "dark" : "light"
@@ -53,7 +56,9 @@ export function App() {
     openProfile(decodeURIComponent(profileRoute));
     navigate("/chat", { replace: true });
   }, [user, profileRoute, navigate]);
+  if (location === "/welcome") return <LandingPage authenticated={Boolean(user)} />;
   if (!ready) return <LoadingScreen />;
+  if (location === "/login") return <AuthPage key={search} />;
   // /profile/:id is the public profile view. /user/:id is kept as a legacy alias
   // (old shared links) — it used to also serve /u/:id, but that prefix now opens
   // a DM (see chatUserMatch below), per the chat route redesign.
@@ -61,7 +66,7 @@ export function App() {
   // Signed in, a profile link opens the profile card over the app (see the
   // effect above); only a visitor without an account gets the standalone page.
   if (publicProfileMatch && !user) return <PublicProfilePage identifier={decodeURIComponent(publicProfileMatch[1])} />;
-  if (!user) return <AuthPage />;
+  if (!user) return location === "/" ? <LandingPage /> : <AuthPage />;
 
   const chatInviteMatch = location.match(/^\/join\/chat\/([^/?#]+)$/);
   if (chatInviteMatch) return <InvitePage kind="chat" token={decodeURIComponent(chatInviteMatch[1])} />;
@@ -96,7 +101,7 @@ export function App() {
   const mainContent = (
     <AppShell>
       <div className="route-transition" key={isEducation ? "/education" : section}>
-        {isEducation ? <EducationPage /> : isChat ? null : (
+        {isEducation ? (location.startsWith("/education/lesson/") || location === "/education/catalog" ? <EducationPage /> : <EducationWorkspace />) : isChat ? null : (
           <Switch>
             <Route path="/ai/:id?" component={AiPage} />
             <Route path="/youtube/:slug?" component={YoutubePage} />

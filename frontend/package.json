@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:education": "vite build --config education-module/vite.config.js",
+    "predev": "npm run build:education",
+    "predev:lan": "npm run build:education",
     "dev": "vite",
     "dev:lan": "node scripts/dev-lan.mjs",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:education && tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
     "start": "vite preview --host 0.0.0.0",
     "test": "vitest run"
@@ -18,6 +21,7 @@
     "quick-liquid": "0.1.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-router-dom": "^6.30.1",
     "socket.io-client": "^4.8.3",
     "wouter": "^3.3.5"
   },

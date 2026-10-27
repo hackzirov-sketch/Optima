@@ -88,11 +88,49 @@ export function ProfilePage() {
   });
   const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
   const [changingPassword, setChangingPassword] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const savebarRef = useRef<HTMLDivElement>(null);
 
   // A fresh server copy (after a save or an avatar upload) resets the draft —
   // but never while the user has unsaved edits in it.
   const saved = useMemo(() => draftOf(user), [user]);
   const changed = useMemo(() => (Object.keys(saved) as Array<keyof Draft>).filter((key) => draft[key].trim() !== saved[key].trim()), [draft, saved]);
+  const hasChanges = changed.length > 0;
+  useEffect(() => {
+    if (!hasChanges) return;
+    const keepEditorVisible = () => {
+      if (window.innerWidth > 820) return;
+      const editor = document.activeElement;
+      const profile = profileRef.current;
+      const bar = savebarRef.current;
+      if (!(editor instanceof HTMLElement) || !profile?.contains(editor) || !bar || !editor.matches("input, textarea, select")) return;
+      const scroller = profile.closest<HTMLElement>(".app-main");
+      if (!scroller) return;
+      const rect = editor.getBoundingClientRect();
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const top = Math.max(viewportTop + 8, scroller.getBoundingClientRect().top + 8);
+      const bottom = bar.getBoundingClientRect().top - 12;
+      if (rect.bottom > bottom) scroller.scrollTop += rect.bottom - bottom;
+      else if (rect.top < top) scroller.scrollTop -= top - rect.top;
+    };
+    keepEditorVisible();
+    document.addEventListener("focusin", keepEditorVisible);
+    document.addEventListener("animationend", keepEditorVisible);
+    window.addEventListener("resize", keepEditorVisible);
+    window.visualViewport?.addEventListener("resize", keepEditorVisible);
+    window.visualViewport?.addEventListener("scroll", keepEditorVisible);
+    const observer = new ResizeObserver(keepEditorVisible);
+    if (savebarRef.current) observer.observe(savebarRef.current);
+    if (profileRef.current) observer.observe(profileRef.current);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("focusin", keepEditorVisible);
+      document.removeEventListener("animationend", keepEditorVisible);
+      window.removeEventListener("resize", keepEditorVisible);
+      window.visualViewport?.removeEventListener("resize", keepEditorVisible);
+      window.visualViewport?.removeEventListener("scroll", keepEditorVisible);
+    };
+  }, [hasChanges]);
   const previousSaved = useRef(saved);
   const previousUserId = useRef(user?.id);
   useEffect(() => {
@@ -313,7 +351,7 @@ export function ProfilePage() {
   ];
 
   return (
-    <div className={`page profile-page tgp-page ${accountEditing ? "is-editing-profile" : ""} ${settingsOpen ? "is-settings-open" : ""} ${changed.length ? "has-unsaved" : ""}`}>
+    <div ref={profileRef} className={`page profile-page tgp-page ${accountEditing ? "is-editing-profile" : ""} ${settingsOpen ? "is-settings-open" : ""} ${changed.length ? "has-unsaved" : ""}`}>
       <header className="tgp-heading"><h1>{t("profile.pageTitle")}</h1><button type="button" className="tgp-edit-command" onClick={() => { setAccountEditing(!accountEditing); setEditing(accountEditing ? null : "name"); setSettingsOpen(false); }}>
         {accountEditing ? <ArrowLeft size={18} /> : <Pencil size={18} />}{t(accountEditing ? "common.back" : "common.edit")}
       </button></header>
@@ -376,7 +414,7 @@ export function ProfilePage() {
             <div className="tgp-row"><Mail size={20} /><div className="tgp-row-main static"><strong>{user?.email}</strong><small>{t("profile.email")}</small></div><ShieldCheck size={16} className="tgp-verified" aria-label={t("profile.verified")} /></div>
           </section>
 
-          {changed.length > 0 && createPortal(<div className="tgp-savebar" role="region" aria-label={t("profile.unsavedChanges")}>
+          {changed.length > 0 && createPortal(<div ref={savebarRef} className="tgp-savebar" role="region" aria-label={t("profile.unsavedChanges")}>
             <span>{t("profile.unsavedChanges")}</span>
             <button type="button" onClick={discard} disabled={saving}>{t("common.cancel")}</button>
             <button type="button" className="primary" onClick={() => void saveAll()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}{t("common.save")}</button>

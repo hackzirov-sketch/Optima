@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => {
     messages: vi.fn(async (_id: string, _before?: number): Promise<{ data: unknown[]; total: number }> => ({ data: [], total: 0 })),
     readReceipts: vi.fn(empty), drafts: vi.fn(empty), pins: vi.fn(empty),
     joinRequests: vi.fn(empty),
+    inviteCode: vi.fn(async () => ({ code: "test-invite" })),
+    discover: vi.fn(async (_query: string): Promise<unknown[]> => []),
+    roomMembers: vi.fn(async (_room: string, _query?: string): Promise<{ items: unknown[]; total: number }> => ({ items: [], total: 0 })),
+    shared: vi.fn(async (_room: string, _tab: string): Promise<unknown[]> => []),
     voiceChat: vi.fn(async () => null), voiceChatScheduled: vi.fn(async () => null),
     resolveRoute: vi.fn(async (_workspace: string, _type: string, id: string) => ({ roomId: id })),
     send: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({})),
@@ -34,6 +38,8 @@ const mocks = vi.hoisted(() => {
     sessions: vi.fn(async (): Promise<Array<{ id: string; createdAt: string }>> => []),
     revokeSession: vi.fn(async (_id: string) => ({})),
     settings: vi.fn(async (_patch: unknown) => ({})),
+    searchUsers: vi.fn(async (_query: string): Promise<{ data: unknown[] }> => ({ data: [] })),
+    isRoomE2ee: vi.fn(async (_id: string) => false),
     t: (key: string) => key,
     socket: { connected: false, on: vi.fn(), off: vi.fn(), emit: vi.fn() },
     publicProfile: vi.fn(async () => ({ ...user, id: "other", publicId: 1234567, username: "other", channels: [] })),
@@ -45,13 +51,13 @@ vi.mock("../lib/i18n/i18n", () => ({ useI18n: () => ({ t: mocks.t, locale: "en" 
 vi.mock("../components/Toast", () => ({ useToast: () => ({ show: mocks.show }) }));
 vi.mock("../components/ConfirmDialog", () => ({ useConfirm: () => vi.fn(async () => true) }));
 vi.mock("wouter", () => ({ useLocation: () => ["/chat", mocks.navigate], useSearch: () => "", useParams: () => mocks.params }));
-vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { publicProfile: mocks.publicProfile, update: mocks.updateUser, settings: mocks.settings }, auth: { sessions: mocks.sessions, revokeSession: mocks.revokeSession } } }));
+vi.mock("../lib/api", () => ({ api: { chat: mocks.chat, groups: { members: async () => [] }, users: { search: mocks.searchUsers, publicProfile: mocks.publicProfile, update: mocks.updateUser, settings: mocks.settings }, auth: { sessions: mocks.sessions, revokeSession: mocks.revokeSession } } }));
 vi.mock("../lib/socket", () => ({ getSocket: () => mocks.socket, emitWithAck: vi.fn(), isServerRejection: () => false }));
 vi.mock("../lib/drafts", () => ({ DRAFT_CLIENT_ID: "test", openDraft: vi.fn(), saveDraft: vi.fn(async () => {}) }));
 vi.mock("../lib/presence", () => ({ usePresence: () => null, initPresence: vi.fn(), isPresenceActive: () => false, formatPresenceLabel: () => "offline" }));
 vi.mock("../lib/e2ee", () => ({
   decryptEnvelope: vi.fn(), decryptMessage: async (value: unknown) => value, decryptMessages: async (value: unknown) => value,
-  invalidateAllRooms: vi.fn(), isRoomE2ee: async () => false, invalidateRoom: vi.fn(), sendWithE2ee: vi.fn(), serveRoomKeys: () => () => {}, UNDECRYPTABLE_TEXT: "encrypted",
+  invalidateAllRooms: vi.fn(), isRoomE2ee: mocks.isRoomE2ee, invalidateRoom: vi.fn(), sendWithE2ee: vi.fn(), serveRoomKeys: () => () => {}, UNDECRYPTABLE_TEXT: "encrypted",
 }));
 vi.mock("../components/StarfieldBackground", () => ({ StarfieldBackground: () => null }));
 vi.mock("../components/AnimatedEmoji", () => ({ AnimatedEmoji: () => null }));
@@ -88,6 +94,8 @@ beforeEach(() => {
   mocks.user = { ...mocks.user, id: "me", firstName: "Test", lastName: "User", notificationsEnabled: true, emailNotifications: true, pushNotifications: true, notifyMentions: true };
   mocks.sessions.mockResolvedValue([]); mocks.revokeSession.mockResolvedValue({});
   mocks.settings.mockResolvedValue({}); mocks.refreshUser.mockResolvedValue();
+  mocks.isRoomE2ee.mockResolvedValue(false); mocks.searchUsers.mockResolvedValue({ data: [] });
+  mocks.chat.discover.mockResolvedValue([]); mocks.chat.roomMembers.mockResolvedValue({ items: [], total: 0 }); mocks.chat.shared.mockResolvedValue([]);
   mocks.params = {};
   mocks.chat.messages.mockImplementation(async () => ({ data: [], total: 0 }));
   mocks.chat.readReceipts.mockImplementation(async () => []);
@@ -328,7 +336,91 @@ describe("profile keyboard focus", () => {
   });
 });
 
+describe("chat delayed responses", () => {
+  async function pause() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 310)); }); }
+  it("does not stage a file after the room changes during its encryption check", async () => {
+    const checked = deferred<boolean>(); mocks.isRoomE2ee.mockReturnValueOnce(checked.promise);
+    await render(chat("A"));
+    const fileInput = host.querySelector<HTMLInputElement>('input[type="file"][multiple]')!;
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", { configurable: true, value: [new File(["secret"], "private.txt", { type: "text/plain" })] });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await render(chat("B"));
+    await act(async () => { checked.resolve(false); });
+    expect(mocks.chat.uploadChatFile).not.toHaveBeenCalled();
+    expect(host.querySelector(".composer-staged")).toBeNull();
+  });
+  it.each(["new text", "different chat"])("does not overwrite %s with an old composer AI answer", async mode => {
+    const answer = deferred<unknown>(); mocks.chat.ai.mockReturnValueOnce(answer.promise);
+    await render(chat("A")); await input(composer(), "/ai draft");
+    await input(host.querySelector<HTMLTextAreaElement>(".ai-assist-input textarea")!, "improve this");
+    await act(async () => { host.querySelector<HTMLFormElement>(".composer-ai-assist")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    if (mode === "different chat") await render(chat("B"));
+    await input(composer(), "keep my new draft");
+    await act(async () => { answer.resolve({ reply: "old AI answer" }); });
+    expect(composer().value).toBe("keep my new draft");
+  });
+  it("ignores old sidebar searches after a new query and after clearing", async () => {
+    const old = deferred<{ data: unknown[] }>(); const oldRooms = deferred<unknown[]>();
+    mocks.searchUsers.mockImplementation(async query => query === "old" ? old.promise : { data: [{ id: "new", firstName: "Fresh", lastName: "Person", publicId: 123 }] });
+    mocks.chat.discover.mockImplementation(async query => query === "old" ? oldRooms.promise : []);
+    await render(chat("A"));
+    const search = host.querySelector<HTMLInputElement>('input[aria-label="chat.searchChatPlaceholder"]')!;
+    await input(search, "old"); await pause(); await input(search, "new"); await pause();
+    await act(async () => { old.resolve({ data: [{ id: "old", firstName: "Stale", lastName: "Person" }] }); oldRooms.resolve([]); });
+    expect(host.textContent).toContain("Fresh"); expect(host.textContent).not.toContain("Stale");
+    await input(search, ""); await pause();
+    expect(host.textContent).not.toContain("Fresh");
+  });
+  it("ignores old members when another room profile opens", async () => {
+    const old = deferred<{ items: unknown[]; total: number }>();
+    mocks.chat.roomMembers.mockImplementation(async room => room === "A" ? old.promise : { items: [{ id: "fresh", publicId: 123, firstName: "Fresh", lastName: "Member", role: "member" }], total: 1 });
+    await render(chat("A"));
+    await act(async () => { host.querySelector<HTMLButtonElement>(".conversation-title")!.click(); });
+    await render(chat("B"));
+    await act(async () => { old.resolve({ items: [{ id: "old", publicId: 456, firstName: "Stale", lastName: "Member", role: "member" }], total: 1 }); });
+    expect(document.querySelector(".tg-info-modal")?.textContent).toContain("Fresh");
+    expect(document.querySelector(".tg-info-modal")?.textContent).not.toContain("Stale");
+  });
+  it("keeps the latest member picker results when an older search finishes last", async () => {
+    const old = deferred<{ data: unknown[] }>();
+    mocks.searchUsers.mockImplementation(async query => query === "old" ? old.promise : { data: [{ id: "fresh", firstName: "Fresh", lastName: "Person", email: "fresh@example.invalid" }] });
+    await render(chat("A"));
+    await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="chat.newConversationAria"]')!.click(); });
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent?.includes("chat.newMessageItem"))!.click(); });
+    const search = document.querySelector<HTMLInputElement>('input[aria-label="chat.searchUserAria"]')!;
+    await input(search, "old"); await pause(); await input(search, "new"); await pause();
+    await act(async () => { old.resolve({ data: [{ id: "stale", firstName: "Stale", lastName: "Person" }] }); });
+    expect(document.querySelector(".tg-new-members")?.textContent).toContain("Fresh");
+    expect(document.querySelector(".tg-new-members")?.textContent).not.toContain("Stale");
+  });
+  it("still applies an AI answer to an unchanged draft", async () => {
+    mocks.chat.ai.mockResolvedValueOnce({ reply: "Improved draft" });
+    await render(chat("A")); await input(composer(), "/ai draft");
+    await input(host.querySelector<HTMLTextAreaElement>(".ai-assist-input textarea")!, "improve");
+    await act(async () => { host.querySelector<HTMLFormElement>(".composer-ai-assist")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(composer().value).toBe("Improved draft");
+  });
+});
+
 describe("profile refresh and sessions", () => {
+  it.each([[390, 72], [1360, 0]])("keeps a focused editor above the save panel at width %s without moving desktop", async (width, expectedScroll) => {
+    vi.stubGlobal("innerWidth", width);
+    host.className = "app-main";
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const top = this.classList.contains("tgp-savebar") ? 200 : this.matches(".tgp-row-edit input") ? 216 : 0;
+      const height = this.matches(".tgp-row-edit input") ? 44 : 60;
+      return { top, bottom: top + height, left: 0, right: 300, x: 0, y: top, width: 300, height, toJSON() {} };
+    });
+    await render(<ProfilePage />);
+    await act(async () => { host.querySelector<HTMLButtonElement>(".tgp-row-main")!.click(); });
+    const editor = host.querySelector<HTMLInputElement>('input[aria-label="profile.firstNameLabel"]')!;
+    editor.focus();
+    await input(editor, "Unsaved draft");
+    await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
+    expect(host.scrollTop).toBe(expectedScroll);
+  });
   async function openSection(key: string) {
     await act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".tgp-nav button")].find(button => button.textContent?.includes(key))!.click(); });
   }

@@ -61,6 +61,9 @@
 .public-profile-bio { margin: 0 0 18px; padding: 16px 0; border-block: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 
 @media (max-width: 820px) {
+  :root[data-theme] body .tgp-page { padding-bottom: 16px; }
+  :root[data-theme] body .tgp-card { position: static; top: auto; }
+  :root[data-theme] body .tgp-page.has-unsaved { padding-bottom: 88px; }
   :root[data-theme] body .tgp-layout { grid-template-columns: minmax(0, 1fr); }
   :root[data-theme] body .tgp-settings:not(.is-section-open) .tgp-panel { display: none; }
   :root[data-theme] body .tgp-settings.is-section-open .tgp-nav { display: none; }
@@ -71,7 +74,8 @@
   :root[data-theme] body .cs-nav { display: flex; flex-direction: column; overflow: visible; padding: 8px; gap: 4px; }
   :root[data-theme] body .cs-nav > button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; text-align: left; }
   :root[data-theme] body .cs-actions { flex-wrap: wrap; }
-  :root[data-theme] body .tgp-two { grid-template-columns: minmax(0, 1fr); }
+  :root[data-theme] body .tgp-two { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; gap: 10px; }
+  :root[data-theme] body .tgp-two:has(> .tgp-clear) { grid-template-columns: minmax(0, 1fr) 32px; }
   :root[data-theme] body .tg-info-actions { grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); }
 }
 @media (prefers-reduced-transparency: reduce) {
